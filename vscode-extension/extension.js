@@ -1,17 +1,30 @@
-// Chronicle for VS Code: the coding-agent sessions that read or changed the open file, and the workspace's files that
+// Interlatch for VS Code: the coding-agent sessions that read or changed the open file, and the workspace's files that
 // sessions touched, from the local dashboard's API (GET /api/file, /api/files). No dependencies and no build step;
 // VS Code's own Node provides fetch.
 const vscode = require("vscode");
 
 const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "Copilot", bob: "IBM Bob", antigravity: "Antigravity", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
 
-const setting = (key, fallback) => vscode.workspace.getConfiguration("chronicle").get(key, fallback);
-// Without a chronicle.url of your own: the default port, then 8765, the port older installs keep in config.toml
+// The extension was called Chronicle until 0.2.0: its settings (chronicle.*) still count where the interlatch.* one
+// isn't set, and its id is how we spot it still installed.
+const OLD_SECTION = "chronicle";
+const OLD_ID = "chatixia.chronicle-sessions";
+
+// A value you set for interlatch.<key>, else for chronicle.<key>; undefined when neither is set.
+const configured = (key) => {
+  for (const section of ["interlatch", OLD_SECTION]) {
+    const i = vscode.workspace.getConfiguration(section).inspect(key);
+    const v = i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue;
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+};
+const setting = (key, fallback) => configured(key) ?? fallback;
+// Without a url of your own: the default port, then 8765, the port older installs keep in config.toml
 const DEFAULT_URLS = ["http://127.0.0.1:11524", "http://127.0.0.1:8765"];
 let answered = null; // the default address that answered last
 const ownUrl = () => {
-  const i = vscode.workspace.getConfiguration("chronicle").inspect("url");
-  const v = i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue;
+  const v = configured("url");
   return v ? String(v).replace(/\/+$/, "") : null;
 };
 const baseUrl = () => ownUrl() || answered || DEFAULT_URLS[0];
@@ -29,11 +42,11 @@ async function api(path) {
       continue; // nothing there: try the next address
     }
     if (!own) answered = url;
-    if (res.status === 404) return { error: "This Chronicle is too old for the extension: update it (uv tool upgrade agents-chronicle)." };
-    if (!res.ok) return { error: `Chronicle answered ${res.status}: check chronicle.url in Settings.` };
+    if (res.status === 404) return { error: "This dashboard is too old for the extension: install Interlatch (uv tool install interlatch)." };
+    if (!res.ok) return { error: `Interlatch answered ${res.status}: check interlatch.url in Settings.` };
     return { data: await res.json() };
   }
-  return { error: `Chronicle isn't running at ${urls.join(" or ")}. Start it with: chronicle ui` };
+  return { error: `Interlatch isn't running at ${urls.join(" or ")}. Start it with: interlatch ui` };
 }
 
 function ago(iso) {
@@ -77,7 +90,7 @@ function sessionItem(s, scope) {
   item.session = s;
   item.description = ago(s.started_at);
   item.iconPath = new vscode.ThemeIcon(f.changes ? "edit" : "eye");
-  item.contextValue = "chronicleSession";
+  item.contextValue = "interlatchSession";
   const lines = f.added || f.removed ? `+${f.added || 0} −${f.removed || 0}` : "";
   const tip = new vscode.MarkdownString();
   tip.appendMarkdown(`**${md(item.label)}**\n\n`);
@@ -114,8 +127,8 @@ function sessionDetails(s) {
                         exploratory: "search" }[s.outcome] || "question";
   if (s.outcome) rows.push(row(`Outcome: ${s.outcome}`, outcomeIcon));
   wrap(s.summary || "").forEach((line, i) => rows.push(row(line, i ? "blank" : "note", s.summary)));
-  const open = row("Open in Chronicle", "link-external");
-  open.command = { command: "chronicle.openSession", title: "Open Session in Chronicle", arguments: [s.id] };
+  const open = row("Open in Interlatch", "link-external");
+  open.command = { command: "interlatch.openSession", title: "Open Session in Interlatch", arguments: [s.id] };
   rows.push(open);
   return rows;
 }
@@ -129,7 +142,7 @@ async function fileSessions(path) {
   return { items: sessions.map((s) => sessionItem(s, path)), more };
 }
 
-// "Chronicle: This File": the sessions for whichever file the editor shows.
+// "Interlatch: This File": the sessions for whichever file the editor shows.
 class ThisFile {
   constructor() {
     this.changed = new vscode.EventEmitter();
@@ -161,7 +174,7 @@ class ThisFile {
     const seq = ++this.seq;
     if (!uri) return this.show([], "Open a file to see the sessions that read or changed it.", "");
     const name = uri.path.split("/").pop();
-    if (uri.scheme !== "file") return this.show([], "Chronicle only knows files on this computer.", name);
+    if (uri.scheme !== "file") return this.show([], "Interlatch only knows files on this computer.", name);
     const { items, more, error } = await fileSessions(uri.fsPath);
     if (seq !== this.seq) return;
     if (error) return this.show([], error, name);
@@ -188,7 +201,7 @@ function summarize(node) {
   }
 }
 
-// "Chronicle: Files in Workspace": the files sessions touched, as a folder tree like the Explorer's; expand a file for its
+// "Interlatch: Files in Workspace": the files sessions touched, as a folder tree like the Explorer's; expand a file for its
 // sessions.
 class WorkspaceFiles {
   constructor() {
@@ -283,21 +296,38 @@ class WorkspaceFiles {
       it.iconPath = vscode.ThemeIcon.File;
       it.description = `${plural(f.ids.length, "session")} · ${ago(f.last)}`;
       it.tooltip = `${f.path}\n${plural(f.sessions, "session")}: ${f.changed} changed it, ${f.sessions - f.changed} only read it`;
-      it.contextValue = "chronicleFile";
+      it.contextValue = "interlatchFile";
       return it;
     });
     return [...folders, ...files];
   }
 }
 
+// Once: the Chronicle extension, still installed, shows the same sections again under its old name. Offer to uninstall
+// it.
+async function suggestUninstallingChronicle(context) {
+  const key = "suggestedUninstallingChronicle";
+  if (!vscode.extensions.getExtension(OLD_ID) || context.globalState.get(key)) return;
+  await context.globalState.update(key, true);
+  const uninstall = "Uninstall Chronicle";
+  const pick = await vscode.window.showInformationMessage(
+    "Interlatch replaces the Chronicle extension, which is still installed. Uninstall it?", uninstall);
+  if (pick !== uninstall) return;
+  try {
+    await vscode.commands.executeCommand("workbench.extensions.uninstallExtension", OLD_ID);
+  } catch {
+    vscode.commands.executeCommand("workbench.extensions.search", `@installed ${OLD_ID}`);
+  }
+}
+
 function activate(context) {
   const thisFile = new ThisFile();
-  const fileView = vscode.window.createTreeView("chronicle.fileSessions", { treeDataProvider: thisFile });
+  const fileView = vscode.window.createTreeView("interlatch.fileSessions", { treeDataProvider: thisFile });
   thisFile.attach(fileView);
   thisFile.uri = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.uri;
 
   const workspace = new WorkspaceFiles();
-  const filesView = vscode.window.createTreeView("chronicle.workspaceFiles", { treeDataProvider: workspace });
+  const filesView = vscode.window.createTreeView("interlatch.workspaceFiles", { treeDataProvider: workspace });
   workspace.attach(filesView);
 
   const refresh = () => { thisFile.load(); workspace.refresh(); };
@@ -310,18 +340,19 @@ function activate(context) {
     fileView.onDidChangeVisibility((e) => e.visible && thisFile.load()),
     filesView.onDidChangeVisibility((e) => e.visible && workspace.refresh()),
     vscode.workspace.onDidChangeWorkspaceFolders(() => workspace.refresh()),
-    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration("chronicle") && refresh()),
-    vscode.commands.registerCommand("chronicle.refresh", refresh),
-    vscode.commands.registerCommand("chronicle.openFile", (item) => item && vscode.window.showTextDocument(vscode.Uri.file(item.filePath))),
-    vscode.commands.registerCommand("chronicle.openDashboard", () => vscode.env.openExternal(vscode.Uri.parse(`${baseUrl()}/`))),
+    vscode.workspace.onDidChangeConfiguration((e) => (e.affectsConfiguration("interlatch") || e.affectsConfiguration(OLD_SECTION)) && refresh()),
+    vscode.commands.registerCommand("interlatch.refresh", refresh),
+    vscode.commands.registerCommand("interlatch.openFile", (item) => item && vscode.window.showTextDocument(vscode.Uri.file(item.filePath))),
+    vscode.commands.registerCommand("interlatch.openDashboard", () => vscode.env.openExternal(vscode.Uri.parse(`${baseUrl()}/`))),
     // an id from a details row, or the session row itself from its inline button
-    vscode.commands.registerCommand("chronicle.openSession", (arg) => {
+    vscode.commands.registerCommand("interlatch.openSession", (arg) => {
       const id = typeof arg === "string" ? arg : arg && arg.session && arg.session.id;
       if (id) vscode.env.openExternal(vscode.Uri.parse(`${baseUrl()}/#/session/${encodeURIComponent(id)}`));
     }),
     { dispose: () => clearTimeout(timer) },
   );
   if (fileView.visible) thisFile.load();
+  suggestUninstallingChronicle(context);
 }
 
 function deactivate() {}
