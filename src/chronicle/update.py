@@ -147,13 +147,14 @@ def move_steps(kind: str, tool: str, extras: list[str]) -> list[list[str]]:
     agents-chronicle (the one that depends on interlatch and carries its files) installs the same `interlatch` and `chronicle` commands.
     With uv: install interlatch over them first (nothing is lost when that fails), remove agents-chronicle, which takes
     the commands with it, then install interlatch once more, which puts them back from what the first step fetched.
-    pipx can't install the second package over the first's commands, so it removes agents-chronicle first. pip keeps
+    Both installs force: without it the second one finds interlatch installed and does nothing, and the commands stay
+    gone (launchd's agents, the hooks and the MCP server all run them). pipx can't install the second package over the first's commands, so it removes agents-chronicle first. pip keeps
     both in one environment, sharing the module and the commands: reinstalling interlatch after removing the other
     brings back what that removal took."""
     want = f"{DIST}[{','.join(sorted(extras))}]" if extras else DIST
     if kind == "uv":
-        install = [tool, "tool", "install", "--python", f"{sys.version_info[0]}.{sys.version_info[1]}", want]
-        return [[*install[:3], "--force", *install[3:]], [tool, "tool", "uninstall", LEGACY_DIST], install]
+        install = [tool, "tool", "install", "--force", "--python", f"{sys.version_info[0]}.{sys.version_info[1]}", want]
+        return [install, [tool, "tool", "uninstall", LEGACY_DIST], install]
     if kind == "pipx":
         return [[tool, "uninstall", LEGACY_DIST], [tool, "install", want]]
     pip = [tool, "-m", "pip"]
@@ -358,6 +359,8 @@ def run_update(progress) -> str:
         if r.returncode:
             raise RuntimeError(out.splitlines()[-1] if out else f"{step[0]} exited with {r.returncode}")
     if m.get("move"):
+        if not _which("interlatch"):  # a restart would start nothing: launchd's agent runs that command
+            raise RuntimeError(f"the move left no interlatch command; run {shlex.join(steps[-1])} in a terminal")
         new = _new_version() or "?"
     else:
         new = subprocess.run([sys.executable, "-c", f"import importlib.metadata as m; print(m.version({DIST!r}))"],

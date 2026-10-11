@@ -239,11 +239,12 @@ def test_a_uv_tool_named_interlatch_upgrades(tmp_path, monkeypatch):
 def test_a_uv_tool_named_agents_chronicle_moves_to_interlatch(tmp_path, monkeypatch):
     _receipt(tmp_path, monkeypatch, "agents-chronicle", ["team", "app"])
     py = f"{sys.version_info[0]}.{sys.version_info[1]}"
-    install = ["/opt/uv", "tool", "install", "--python", py, "interlatch[app,team]"]
+    # both installs force: uv answers a second plain install with "already installed" and links nothing, so the
+    # commands the uninstall took stay gone
+    install = ["/opt/uv", "tool", "install", "--force", "--python", py, "interlatch[app,team]"]
     m = dict(update.install_method())
     assert m["move"] and m["extras"] == ["team", "app"]
-    assert m["steps"] == [["/opt/uv", "tool", "install", "--force", "--python", py, "interlatch[app,team]"],
-                          ["/opt/uv", "tool", "uninstall", "agents-chronicle"], install]
+    assert m["steps"] == [install, ["/opt/uv", "tool", "uninstall", "agents-chronicle"], install]
 
     def pypi(req, timeout):
         return io.BytesIO(json.dumps({"info": {"version": __version__}}).encode())
@@ -261,6 +262,19 @@ def test_a_uv_tool_named_agents_chronicle_moves_to_interlatch(tmp_path, monkeypa
     monkeypatch.setattr(update, "RESTARTABLE", False)
     assert update.run_update(lambda message: None) == "Updated to Interlatch 9.9.9; quit and reopen Interlatch to use it"
     assert ran == m["steps"]
+
+
+def test_a_move_that_leaves_no_command_fails_instead_of_restarting(tmp_path, monkeypatch):
+    _receipt(tmp_path, monkeypatch, "agents-chronicle", ["app"])
+    update.install_method()
+    monkeypatch.setattr(update, "_which", lambda name: None)  # the uninstall took the commands, nothing put them back
+    monkeypatch.setattr(update.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+    restarts = []
+    monkeypatch.setattr(update, "RESTARTABLE", True)
+    monkeypatch.setattr(update, "restart", lambda: restarts.append(1))
+    with pytest.raises(RuntimeError, match=r"no interlatch command; run /opt/uv tool install --force .*'interlatch\[app\]'"):
+        update.run_update(lambda message: None)
+    assert not restarts
 
 
 def test_a_failed_step_stops_the_move(tmp_path, monkeypatch):

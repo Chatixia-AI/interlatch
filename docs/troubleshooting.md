@@ -111,6 +111,16 @@ in Docker) so the hub tells visitors apart rather than counting them all as the 
 [Moving from Chronicle](moving-from-chronicle.md) says what the move changes. Each one is recorded in
 `~/.interlatch/logs/migrate.log`, and `interlatch migrate --dry-run` shows what is still to do.
 
+**After Update, the dashboard never came back, and `interlatch` is "command not found".** Update in 0.22.0 removed
+`agents-chronicle`, which took the `interlatch` and `chronicle` commands with it, and didn't put them back. The
+background agents, the session hooks and the MCP server all run that command, so they stopped too. Put the commands
+back with the extras you had (`uv tool list --show-extras` shows them), then restart the dashboard:
+
+```bash
+uv tool install --force --python 3.13 'interlatch[app]'   # or plain interlatch, without the desktop app
+launchctl kickstart -k gui/$(id -u)/com.interlatch.ui     # Linux: systemctl --user restart interlatch-ui.service
+```
+
 **The data folder is still `~/.claude-chronicle`.** The move runs when the dashboard, the background sync,
 `interlatch install` or the app starts; run `interlatch migrate` to do it now. It leaves the folder where it is when
 `CHRONICLE_HOME` or `INTERLATCH_HOME` names another folder (it says so), when `~/.interlatch` already exists as well

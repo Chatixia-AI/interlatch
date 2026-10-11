@@ -106,6 +106,16 @@ ID でそのコンピューター専用の招待を作り（`interlatch hub invi
 移行で何が変わるかは[Chronicle からの移行](moving-from-chronicle.md)にあります。行った変更はすべて
 `~/.interlatch/logs/migrate.log` に記録され、`interlatch migrate --dry-run` でまだ残っている作業を確認できます。
 
+**Update のあとダッシュボードが戻らず、`interlatch` が「command not found」になる。** 0.22.0 の Update は
+`agents-chronicle` をアンインストールしたときに `interlatch` と `chronicle` のコマンドも消し、元に戻しませんでした。
+バックグラウンドのエージェント、セッションのフック、MCP サーバーはどれもこのコマンドを実行するので、これらも止まっています。
+使っていた extras を付けて（`uv tool list --show-extras` で確認できます）コマンドを戻し、ダッシュボードを再起動します。
+
+```bash
+uv tool install --force --python 3.13 'interlatch[app]'   # デスクトップアプリなしなら interlatch だけ
+launchctl kickstart -k gui/$(id -u)/com.interlatch.ui     # Linux: systemctl --user restart interlatch-ui.service
+```
+
 **データフォルダーが `~/.claude-chronicle` のまま。** 移行は、ダッシュボード、バックグラウンドの同期、`interlatch install`、
 アプリが始まるときに行われます。今すぐ行うには `interlatch migrate` を実行します。次の場合はフォルダーを移動しません。
 `CHRONICLE_HOME` か `INTERLATCH_HOME` が別のフォルダーを指しているとき（そう表示します）、`~/.interlatch` もすでにあるとき
