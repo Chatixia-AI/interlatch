@@ -91,7 +91,7 @@ def wait_for(fn, seconds: float, every: float = 2):
 def api(path: str, body: dict | None = None) -> dict | None:
     """The dashboard's JSON, or None while it does not answer. A POST carries the header its page sends."""
     req = urllib.request.Request(BASE + path, data=None if body is None else json.dumps(body).encode(),
-                                 headers={"X-Chronicle": "1", "Content-Type": "application/json"})
+                                 headers={"X-Interlatch": "1", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return json.load(r)

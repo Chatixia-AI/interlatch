@@ -254,7 +254,7 @@ AGENT_MANAGERS = ("launchctl", "systemctl", "schtasks")
 
 @pytest.fixture(autouse=True)
 def no_real_background_agents(tmp_path_factory, monkeypatch):
-    """No test reaches this computer's own launchd, systemd or Task Scheduler agents: `chronicle install --no-ui` in a
+    """No test reaches this computer's own launchd, systemd or Task Scheduler agents: `interlatch install --no-ui` in a
     test once booted out the developer's real dashboard. Agent files go to a scratch folder, and launchctl, systemctl
     and schtasks are never run (a test that wants to see those calls patches subprocess.run itself, over this)."""
     import subprocess
