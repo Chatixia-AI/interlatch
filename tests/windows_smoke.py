@@ -103,6 +103,14 @@ def dashboard_up() -> bool:
     return api("/api/jobs") is not None
 
 
+def listener() -> str:
+    """The pid of the process serving :11524 ("" for none). A dashboard restarting is seen by this changing, not by
+    a gap: Windows retries a refused connection to localhost for about 2 seconds, longer than the restart takes."""
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", "(Get-NetTCPConnection -LocalPort 11524 -State Listen "
+                          "-ErrorAction SilentlyContinue).OwningProcess"], capture_output=True, text=True).stdout.split()
+    return out[0] if out else ""
+
+
 def update_job() -> dict | None:
     """The Update job once it has finished (done or error)."""
     job = ((api("/api/jobs") or {}).get("jobs") or {}).get("update")
@@ -170,12 +178,14 @@ def main() -> int:
     mcp = subprocess.Popen([exe, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(3)
+        before = listener()
         started = api("/api/update", {})
         check(bool(started and started.get("started")), "the dashboard's Update starts", str(started))
         job = wait_for(update_job, 600, every=0.25)
         check(bool(job and job["state"] == "done"), "the update ran while interlatch.exe and the dashboard run", str(job))
-        check(wait_for(lambda: not dashboard_up(), 30, every=0.25), "the dashboard restarts after it (went away)")
-        check(wait_for(dashboard_up, 90), "... and came back")
+        check(bool(wait_for(lambda: listener() not in ("", before), 90)), "the dashboard restarts after it",
+              f"still pid {before}")
+        check(wait_for(dashboard_up, 30), "... and answers")
     finally:
         mcp.stdin.close()
         mcp.wait(timeout=30)
