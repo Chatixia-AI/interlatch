@@ -87,6 +87,8 @@ calls it.
 
 ## The VS Code extension
 
-The [extension](vscode.md) keeps its Chronicle name for now and works with Interlatch as it is: nothing to do.
+The Chronicle extension keeps working with Interlatch. Its successor is the Interlatch extension, with **Interlatch: …**
+sections and `interlatch.*` settings: [install it](vscode.md#install), and while the old one is still there it offers
+once to uninstall it. The `chronicle.*` settings you made keep applying until you set their `interlatch.*` ones.
 
 Something not working? See [Troubleshooting](troubleshooting.md#moving-from-chronicle).

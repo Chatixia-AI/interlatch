@@ -5,7 +5,7 @@ const vscode = require("vscode");
 
 const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "Copilot", bob: "IBM Bob", antigravity: "Antigravity", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
 
-// The extension was called Chronicle until 0.2.0: its settings (chronicle.*) still count where the interlatch.* one
+// The extension was called Chronicle through 0.2.0: its settings (chronicle.*) still count where the interlatch.* one
 // isn't set, and its id is how we spot it still installed.
 const OLD_SECTION = "chronicle";
 const OLD_ID = "chatixia.chronicle-sessions";
