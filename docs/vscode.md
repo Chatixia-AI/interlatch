@@ -26,7 +26,10 @@ over `http://127.0.0.1:11524` (or `:8765`, where older installs run it). It send
 
 ## Install
 
-The extension isn't on the Marketplace yet. Build it from the repository and install the file:
+Install **Interlatch** from VS Code's Extensions view (search for Interlatch), or from its
+[Marketplace page](https://marketplace.visualstudio.com/items?itemName=Chatixia-AI.interlatch). Editors that don't use
+the Marketplace (Cursor, Windsurf, Antigravity and VSCodium install from Open VSX) take the file built from the
+repository, installed with their own command (`cursor --install-extension …`, for example):
 
 ```bash
 cd vscode-extension

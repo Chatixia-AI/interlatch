@@ -26,7 +26,10 @@ Interlatch 拡張機能は、VS Code のエクスプローラーに 2 つのセ�
 
 ## インストール
 
-拡張機能はまだ Marketplace にありません。リポジトリからビルドして、ファイルをインストールします。
+VS Code の拡張機能ビューで Interlatch を検索するか、
+[Marketplace のページ](https://marketplace.visualstudio.com/items?itemName=Chatixia-AI.interlatch)からインストールします。
+Marketplace を使わないエディター（Cursor、Windsurf、Antigravity、VSCodium は Open VSX からインストールします）では、
+リポジトリからビルドしたファイルを、そのエディターのコマンド（たとえば `cursor --install-extension …`）でインストールします。
 
 ```bash
 cd vscode-extension

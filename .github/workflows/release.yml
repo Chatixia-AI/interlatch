@@ -6,7 +6,8 @@ name: Release
 # added since the previous tag), publishes interlatch to PyPI (trusted publishing, no token) and then agents-chronicle
 # at the same version (its name before the rename, which installs interlatch: packaging/agents-chronicle-farewell),
 # publishes the hub's image ghcr.io/chatixia-ai/interlatch-hub (docker/, built from that PyPI release; also as
-# chronicle-hub, its name before the rename), attaches Interlatch-X.Y.Z-arm64.dmg, and opens a pull request that moves
+# chronicle-hub, its name before the rename), attaches Interlatch-X.Y.Z-arm64.dmg, publishes the VS Code
+# extension when its own version went up (the vscode job says what it needs), and opens a pull request that moves
 # those files' lines into CHANGELOG.md under "## X.Y.Z (date)". The next release doesn't wait for that pull request: a
 # file merged after the tag is simply new since it.
 # "dry run" (the default) runs the tests and keeps the DMG as a workflow artifact, publishing nothing.
@@ -245,6 +246,50 @@ jobs:
             ${{ env.OLD_IMAGE }}:${{ needs.plan.outputs.version }}
             ${{ env.OLD_IMAGE }}:latest
           push: true
+
+  vscode:
+    # The VS Code extension (vscode-extension/): Chatixia-AI.interlatch on the Marketplace, and on Open VSX for the
+    # editors that install from there (Cursor, Windsurf, Antigravity, VSCodium). It has its own version, in its
+    # package.json: a version already published is skipped, so a release publishes the extension only when that
+    # version went up. Repository secrets: VSCE_PAT, an Azure DevOps token with Marketplace (Manage) for the
+    # Chatixia-AI publisher; OVSX_PAT, an open-vsx.org token. Without them the extension is packaged, not published.
+    needs: [plan, test, release]
+    if: >-
+      !cancelled() && needs.plan.outputs.version != '' && needs.test.result == 'success'
+      && contains(fromJSON('["success", "skipped"]'), needs.release.result)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HAS_VSCE: ${{ secrets.VSCE_PAT != '' }}
+      HAS_OVSX: ${{ secrets.OVSX_PAT != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: v${{ needs.plan.outputs.version }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22  # vsce and ovsx need 22 or later
+          package-manager-cache: false  # nothing to restore, and a release never restores a cache
+      - name: Package
+        working-directory: vscode-extension
+        run: npx --yes @vscode/vsce@4.0.0 package -o "$RUNNER_TEMP/interlatch.vsix"
+      - name: Publish to the Marketplace
+        if: env.HAS_VSCE == 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce@4.0.0 publish --packagePath "$RUNNER_TEMP/interlatch.vsix" --skip-duplicate
+      - name: Publish to Open VSX
+        if: env.HAS_OVSX == 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx --yes ovsx@1.2.0 publish "$RUNNER_TEMP/interlatch.vsix" --skip-duplicate
+      - name: Say what wasn't published
+        if: env.HAS_VSCE != 'true' || env.HAS_OVSX != 'true'
+        run: |
+          [ "$HAS_VSCE" = true ] || echo "::notice::No VSCE_PAT secret: the extension isn't published to the Marketplace"
+          [ "$HAS_OVSX" = true ] || echo "::notice::No OVSX_PAT secret: the extension isn't published to Open VSX"
 
   macos-app:
     needs: [plan, test, release]
