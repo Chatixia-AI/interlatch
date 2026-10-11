@@ -87,6 +87,8 @@ macOS からは別のアプリに見えるため、Chronicle.app はそのまま
 
 ## VS Code 拡張機能
 
-[拡張機能](vscode.md)は今のところ Chronicle の名前のままで、Interlatch でそのまま使えます。することはありません。
+Chronicle 拡張機能は Interlatch でもそのまま使えます。後継は Interlatch 拡張機能で、セクションは **Interlatch: …**、
+設定は `interlatch.*` です。[インストール](vscode.md#インストール)すると、古い拡張機能が残っている間に一度だけ
+そのアンインストールを提案します。Chronicle で変えた `chronicle.*` の設定は、`interlatch.*` を設定するまでそのまま使われます。
 
 うまくいかないときは[トラブルシューティング](troubleshooting.md#chronicle-からの移行)を参照してください。

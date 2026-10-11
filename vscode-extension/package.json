@@ -1,16 +1,16 @@
 {
-  "name": "chronicle-sessions",
-  "displayName": "Chronicle",
-  "description": "The coding-agent sessions behind your files: for the open file, and for every file agents worked on, from your local Chronicle.",
-  "version": "0.2.0",
-  "publisher": "chatixia",
+  "name": "interlatch",
+  "displayName": "Interlatch",
+  "description": "Shared memory for your coding agents, in the Explorer: the agent sessions that read or changed the open file, and every file they worked on, from your local Interlatch.",
+  "version": "0.3.0",
+  "publisher": "Chatixia-AI",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Chatixia-AI/interlatch",
     "directory": "vscode-extension"
   },
-  "homepage": "https://chronicle.chatixia.net/docs/vscode/",
+  "homepage": "https://interlatch.com/docs/vscode/",
   "engines": {
     "vscode": "^1.82.0"
   },
@@ -22,107 +22,110 @@
     "codex",
     "copilot",
     "agents",
-    "history"
+    "history",
+    "memory"
   ],
   "extensionKind": [
     "ui"
   ],
   "main": "./extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "views": {
       "explorer": [
         {
-          "id": "chronicle.fileSessions",
-          "name": "Chronicle: This File",
-          "icon": "media/chronicle.svg"
+          "id": "interlatch.fileSessions",
+          "name": "Interlatch: This File",
+          "icon": "media/interlatch.svg"
         },
         {
-          "id": "chronicle.workspaceFiles",
-          "name": "Chronicle: Files in Workspace",
-          "icon": "media/chronicle.svg"
+          "id": "interlatch.workspaceFiles",
+          "name": "Interlatch: Files in Workspace",
+          "icon": "media/interlatch.svg"
         }
       ]
     },
     "commands": [
       {
-        "command": "chronicle.refresh",
+        "command": "interlatch.refresh",
         "title": "Refresh",
-        "category": "Chronicle",
+        "category": "Interlatch",
         "icon": "$(refresh)"
       },
       {
-        "command": "chronicle.openDashboard",
+        "command": "interlatch.openDashboard",
         "title": "Open Dashboard",
-        "category": "Chronicle",
+        "category": "Interlatch",
         "icon": "$(link-external)"
       },
       {
-        "command": "chronicle.openFile",
+        "command": "interlatch.openFile",
         "title": "Open File",
-        "category": "Chronicle",
+        "category": "Interlatch",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "chronicle.openSession",
-        "title": "Open Session in Chronicle",
-        "category": "Chronicle",
+        "command": "interlatch.openSession",
+        "title": "Open Session in Interlatch",
+        "category": "Interlatch",
         "icon": "$(link-external)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "chronicle.refresh",
-          "when": "view =~ /^chronicle\\./",
+          "command": "interlatch.refresh",
+          "when": "view =~ /^interlatch\\./",
           "group": "navigation"
         },
         {
-          "command": "chronicle.openDashboard",
-          "when": "view == chronicle.fileSessions",
+          "command": "interlatch.openDashboard",
+          "when": "view == interlatch.fileSessions",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "chronicle.openSession",
+          "command": "interlatch.openSession",
           "when": "false"
         },
         {
-          "command": "chronicle.openFile",
+          "command": "interlatch.openFile",
           "when": "false"
         }
       ],
       "view/item/context": [
         {
-          "command": "chronicle.openFile",
-          "when": "view == chronicle.workspaceFiles && viewItem == chronicleFile",
+          "command": "interlatch.openFile",
+          "when": "view == interlatch.workspaceFiles && viewItem == interlatchFile",
           "group": "inline"
         },
         {
-          "command": "chronicle.openSession",
-          "when": "view =~ /^chronicle\\./ && viewItem == chronicleSession",
+          "command": "interlatch.openSession",
+          "when": "view =~ /^interlatch\\./ && viewItem == interlatchSession",
           "group": "inline"
         }
       ]
     },
     "configuration": {
-      "title": "Chronicle",
+      "title": "Interlatch",
       "properties": {
-        "chronicle.url": {
+        "interlatch.url": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Address of the Chronicle dashboard (`chronicle ui`). Empty: `http://127.0.0.1:11524`, else `http://127.0.0.1:8765` (older installs). Set it if you changed `[server] port` in Chronicle's config."
+          "markdownDescription": "Address of the Interlatch dashboard (`interlatch ui`). Empty: the Chronicle extension's `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `http://127.0.0.1:8765` (older installs). Set it if you changed `[server] port` in Interlatch's config."
         },
-        "chronicle.includeReads": {
+        "interlatch.includeReads": {
           "type": "boolean",
           "default": true,
           "description": "Also list sessions that only read the file, not just the ones that changed it."
         },
-        "chronicle.showIgnoredFiles": {
+        "interlatch.showIgnoredFiles": {
           "type": "boolean",
           "default": false,
-          "description": "Also show files git ignores (screenshots, build output, caches) in Chronicle: Files in Workspace."
+          "description": "Also show files git ignores (screenshots, build output, caches) in Interlatch: Files in Workspace."
         }
       }
     }
