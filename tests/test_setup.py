@@ -213,7 +213,7 @@ def test_background_analysis_says_how_long_the_backlog_takes(machine, monkeypatc
 
 
 def test_background_is_not_promised_where_it_cannot_run(machine, monkeypatch, capsys):
-    monkeypatch.setattr("platform.system", lambda: "Windows")
+    monkeypatch.setattr("platform.system", lambda: "FreeBSD")  # no launchd, systemd or Task Scheduler
     _answer(monkeypatch, {"Analyze": "n", "Open": "n"})
     assert main(["install", "--exe", "/opt/bin/chronicle"]) == 0
     out = " ".join(capsys.readouterr().out.split())

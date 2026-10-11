@@ -6,7 +6,6 @@ import json
 import os
 import plistlib
 import re
-import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -17,7 +16,7 @@ from pathlib import Path
 from .config import Config, set_config_value
 from .hooks import internal_env
 from .i18n import tr
-from .install import LEGACY_MCP_NAME, MCP_NAME
+from .install import LEGACY_MCP_NAME, MCP_NAME, exe_argv
 
 MCP_NAMES = (MCP_NAME, LEGACY_MCP_NAME)  # an agent that still has Chronicle's 'chronicle' server runs the same one
 
@@ -196,7 +195,7 @@ def connect_codex(cfg: Config, exe: str) -> list[str]:
     if not binary:
         return actions + [tr("MCP registration skipped: codex CLI not found")]
     if not codex_mcp_registered(home):
-        cmd = [binary, "mcp", "add", MCP_NAME, "--", *shlex.split(exe), "mcp"]
+        cmd = [binary, "mcp", "add", MCP_NAME, "--", *exe_argv(exe), "mcp"]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         actions.append(tr("registered MCP server 'interlatch' in Codex") if proc.returncode == 0
                        else tr("Codex MCP registration failed: {error}", error=(proc.stderr or proc.stdout).strip()[:300]))
@@ -339,8 +338,19 @@ def _write_json(cfg: Config, path: Path, data: dict, label: str) -> None:
 
 
 def _split_exe(exe: str) -> tuple[str, list[str]]:
-    parts = shlex.split(exe)
+    parts = exe_argv(exe)
     return parts[0], [*parts[1:], "mcp"]
+
+
+def app_support_dir() -> Path:
+    """Where this system keeps apps' settings: ~/Library/Application Support, %APPDATA%, or ~/.config."""
+    import sys
+
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support"
+    if sys.platform == "win32":
+        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 
 
 # ------------------------------------------------------------------ GitHub Copilot
@@ -349,7 +359,7 @@ def copilot_home() -> Path:
 
 
 def vscode_user_dirs() -> list[Path]:
-    base = Path("~/Library/Application Support").expanduser()
+    base = app_support_dir()
     return [d for d in (base / "Code" / "User", base / "Code - Insiders" / "User") if d.is_dir()]
 
 
@@ -592,9 +602,9 @@ def disconnect_antigravity(cfg: Config) -> list[str]:
 APPLICATIONS = Path("/Applications")
 
 MCP_CLIENTS = {
-    "claude-desktop": {"label": "Claude Desktop", "vendor": "Anthropic", "app": "Claude.app",
-                       "config": "Library/Application Support/Claude/claude_desktop_config.json", "home": "Library/Application Support/Claude",
-                       "restart": True},
+    # "in_app_support": its paths are in app_support_dir(), not the home folder
+    "claude-desktop": {"label": "Claude Desktop", "vendor": "Anthropic", "app": "Claude.app", "in_app_support": True,
+                       "config": "Claude/claude_desktop_config.json", "home": "Claude", "restart": True},
     "cursor": {"label": "Cursor", "vendor": "Anysphere", "app": "Cursor.app", "config": ".cursor/mcp.json", "home": ".cursor"},
     "windsurf": {"label": "Windsurf", "vendor": "Windsurf", "app": "Windsurf.app",
                  "config": ".codeium/windsurf/mcp_config.json", "home": ".codeium/windsurf"},
@@ -602,13 +612,17 @@ MCP_CLIENTS = {
 }
 
 
+def _client_base(c: dict) -> Path:
+    return app_support_dir() if c.get("in_app_support") else Path.home()
+
+
 def mcp_client_config(name: str) -> Path:
-    return Path.home() / MCP_CLIENTS[name]["config"]
+    return _client_base(MCP_CLIENTS[name]) / MCP_CLIENTS[name]["config"]
 
 
 def _mcp_client_detected(name: str) -> bool:
     c = MCP_CLIENTS[name]
-    return ((Path.home() / c["home"]).is_dir() or ("app" in c and (APPLICATIONS / c["app"]).exists())
+    return ((_client_base(c) / c["home"]).is_dir() or ("app" in c and (APPLICATIONS / c["app"]).exists())
             or ("binary" in c and bool(shutil.which(c["binary"]))))
 
 
@@ -626,7 +640,7 @@ def mcp_server_entry(exe: str) -> dict:
 def add_mcp_client(cfg: Config, name: str, exe: str) -> list[str]:
     c = MCP_CLIENTS[name]
     if not _mcp_client_detected(name):
-        return [tr("{label} not found on this Mac; nothing changed", label=c["label"])]
+        return [tr("{label} not found on this computer; nothing changed", label=c["label"])]
     action, changed = _mcp_json_write(cfg, mcp_client_config(name), "mcpServers", mcp_server_entry(exe), c["label"])
     return [action + (tr("; restart {label} to load it", label=c["label"]) if c.get("restart") and changed else "")]
 

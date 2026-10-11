@@ -25,7 +25,6 @@ deleted.
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
 import logging
 import os
@@ -38,6 +37,11 @@ import tomllib
 from pathlib import Path
 
 from .config import Config, chronicle_home, default_home, home_override, legacy_home, load_config
+
+try:
+    import fcntl
+except ImportError:  # Windows, where Chronicle never ran: there is no folder of its to move
+    fcntl = None
 from .install import LEGACY_BUNDLE_ID, LEGACY_MCP_NAME, MCP_NAME
 
 log = logging.getLogger("interlatch.migrate")
@@ -90,6 +94,9 @@ def migrate_if_due(*, quiet: bool = True) -> list[str]:
 def _lock(wait: float = LOCK_WAIT_S):
     """One process migrates at a time. The lock is on the folder both homes are in (the user's home folder): a file
     inside the one being moved would move away from under the next process, and nothing is left behind."""
+    if fcntl is None:
+        yield True
+        return
     fd = os.open(str(legacy_home().parent), os.O_RDONLY)
     try:
         deadline = time.monotonic() + wait

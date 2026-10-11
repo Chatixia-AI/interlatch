@@ -612,6 +612,14 @@ def reveal(conn, artifact_id: int, how: str, local_machine: str | None = None) -
         cmd = ["open", "-R", a["path"]] if how == "reveal" else ["open", a["path"]]
     elif sys.platform.startswith("linux"):
         cmd = ["xdg-open", os.path.dirname(a["path"]) if how == "reveal" else a["path"]]
+    elif sys.platform == "win32":
+        from .windows import open_path
+
+        try:
+            open_path(a["path"], reveal=how == "reveal")
+        except OSError as exc:
+            return tr("could not open it: {error}", error=exc)
+        return None
     else:
         return tr("opening files is not supported on this system")
     try:

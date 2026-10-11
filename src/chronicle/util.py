@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import gzip
 import hashlib
 import json
@@ -14,6 +13,12 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
+
+try:
+    import fcntl
+except ImportError:  # Windows: msvcrt locks a byte range instead
+    fcntl = None
+    import msvcrt
 
 log = logging.getLogger("interlatch")
 
@@ -168,25 +173,16 @@ def file_lock(path: Path, *, blocking: bool = True, timeout: float | None = None
     acquired = False
     try:
         if not blocking:
-            try:
-                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-            except BlockingIOError:
-                acquired = False
-        elif timeout is None:
+            acquired = _try_lock(fh)
+        elif timeout is None and fcntl:
             fcntl.flock(fh, fcntl.LOCK_EX)
             acquired = True
         else:
-            deadline = time.monotonic() + timeout
-            while True:
-                try:
-                    fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    acquired = True
+            deadline = None if timeout is None else time.monotonic() + timeout
+            while not (acquired := _try_lock(fh)):
+                if deadline is not None and time.monotonic() >= deadline:
                     break
-                except BlockingIOError:
-                    if time.monotonic() >= deadline:
-                        break
-                    time.sleep(0.25)
+                time.sleep(0.25)
         if acquired:
             fh.seek(0)
             fh.truncate()
@@ -196,8 +192,37 @@ def file_lock(path: Path, *, blocking: bool = True, timeout: float | None = None
     finally:
         if acquired:
             with contextlib.suppress(OSError):
-                fcntl.flock(fh, fcntl.LOCK_UN)
+                _unlock(fh)
         fh.close()
+
+
+# Windows locks a range of bytes, and a locked range may lie past the end of the file: this one is far from the pid
+# that file_lock writes at the start, so writing it never meets the lock
+_WIN_LOCK_AT = 1 << 30
+
+
+def _try_lock(fh) -> bool:
+    """Take the lock on `fh` without waiting; False when another process holds it."""
+    if fcntl:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return True
+    os.lseek(fh.fileno(), _WIN_LOCK_AT, os.SEEK_SET)
+    try:
+        msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        return False
+    return True
+
+
+def _unlock(fh) -> None:
+    if fcntl:
+        fcntl.flock(fh, fcntl.LOCK_UN)
+    else:
+        os.lseek(fh.fileno(), _WIN_LOCK_AT, os.SEEK_SET)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def setup_logging(logs_dir: Path, *, verbose: bool = False, console: bool = False) -> None:

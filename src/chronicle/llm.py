@@ -493,6 +493,13 @@ class BobRunner(Runner):
 def _kill_group(proc: subprocess.Popen) -> None:
     import signal
 
+    if os.name == "nt":  # no process groups: taskkill ends the tree (an npm install's claude.cmd runs node under cmd)
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        return
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(proc.pid, sig)

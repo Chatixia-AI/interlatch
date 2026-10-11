@@ -1,5 +1,5 @@
 """Install/uninstall Interlatch into Claude Code (hooks, MCP server) and the background agents: launchd on macOS,
-systemd user units on Linux (for a hub that runs on a Linux box)."""
+systemd user units on Linux (for a hub that runs on a Linux box), Task Scheduler on Windows (windows.py)."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ LEGACY_MCP_NAME = "chronicle"
 APP_BUNDLE_ID = "com.interlatch.app"
 LEGACY_BUNDLE_ID = "io.github.kayeungadrian-tam.chronicle"
 APP_EXECUTABLES = ("Interlatch", "Chronicle")  # Contents/MacOS/<name> in Interlatch.app, and in Chronicle.app
+WINDOWS_TASKS = {LAUNCHD_LABEL: "Sync", UI_LABEL: "Dashboard"}  # in Task Scheduler's \\Interlatch\\ folder
 
 
 def shim_path() -> Path:
@@ -75,7 +76,7 @@ def executable() -> str:
     the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle."""
     if getattr(sys, "frozen", False):  # inside Interlatch.app
         return str(write_shim(sys.executable))
-    found = [str(Path(f).absolute()) for f in map(shutil.which, COMMANDS) if f]
+    found = [str(Path(f).absolute() if not on_windows() else Path(f).resolve()) for f in map(shutil.which, COMMANDS) if f]
     outside = [f for f in found if not f.startswith(os.path.join(sys.prefix, ""))]
     if outside or found:
         return (outside or found)[0]
@@ -85,7 +86,20 @@ def executable() -> str:
     return f"{shlex.quote(sys.executable)} -m chronicle"
 
 
+def exe_argv(exe: str) -> list[str]:
+    """`exe` (executable(), or install's --exe) as argv: a program's path, which may have spaces in it, or a command
+    line (python -m chronicle). On Windows a backslash is a path's, not an escape."""
+    if Path(exe).is_file():
+        return [exe]
+    return shlex.split(exe.replace("\\", "/") if on_windows() else exe)
+
+
 def _exe_cmd(exe: str, *args: str) -> str:
+    """The command line Claude Code runs (a hook, the status line)."""
+    if on_windows():
+        from .windows import shell_command
+
+        return shell_command([*exe_argv(exe), *args])
     base = exe if " -m " in exe else shlex.quote(exe)
     return " ".join([base, *args])
 
@@ -269,9 +283,13 @@ def uses_systemd() -> bool:
     return platform.system() == "Linux" and shutil.which("systemctl") is not None
 
 
+def on_windows() -> bool:
+    return platform.system() == "Windows"
+
+
 def background_supported() -> bool:
     """Whether `interlatch install` can keep the sync and dashboard running from login here."""
-    return platform.system() == "Darwin" or uses_systemd()
+    return platform.system() == "Darwin" or uses_systemd() or on_windows()
 
 
 def systemd_dir() -> Path:
@@ -287,7 +305,7 @@ def _sd_quote(arg: str) -> str:
 
 def systemd_units(cfg: Config, exe: str, *, interval: int = 900) -> dict[str, str]:
     """The unit files for the background sync (a timer) and the always-on dashboard."""
-    cmd = shlex.split(exe)
+    cmd = exe_argv(exe)
     env = "\n".join(f"Environment={_sd_quote(f'{k}={v}')}" for k, v in _agent_env(cfg).items())
     run = lambda *args: " ".join(_sd_quote(a) for a in [*cmd, *args])  # noqa: E731
     return {
@@ -337,6 +355,31 @@ def _systemd_status(label: str) -> dict:
         if key == "ExecMainStatus" and info["installed"]:
             info["last_exit"] = value
     return info
+
+
+# ------------------------------------------------------------------ Task Scheduler (Windows)
+def _task_python(exe: str) -> Path:
+    """The python that a task runs `-m chronicle` with: the one in `exe` when that is `python -m chronicle`, else this
+    process's (the uv tool's environment, which `interlatch install` runs in)."""
+    argv = exe_argv(exe)
+    return Path(argv[0]) if argv[1:3] == ["-m", "chronicle"] else Path(sys.executable)
+
+
+def _windows_install(cfg: Config, exe: str, label: str, args: list[str], *, every_minutes: int, keep_alive: bool,
+                     description: str, dry_run: bool) -> str | None:
+    """Register the task for `label` that runs `interlatch <args>` without a window; an error message, or None."""
+    from . import windows
+
+    python = _task_python(exe)
+    pythonw = next((p for p in (python.with_name("pythonw.exe"), python) if p.is_file()), python)
+    claude = cfg.claude_bin()
+    log = cfg.logs_dir / ("ui" if label == UI_LABEL else "sync")
+    arguments = windows.runner_arguments(args, log=log, home=cfg.home, path_dirs=[str(Path(claude).parent)] if claude else [])
+    if dry_run:
+        return None
+    xml = windows.task_xml(description=description, command=str(pythonw), arguments=arguments,
+                           every_minutes=every_minutes, keep_alive=keep_alive)
+    return windows.install_task(WINDOWS_TASKS[label], xml)
 
 
 # ------------------------------------------------------------------ launchd
@@ -421,9 +464,16 @@ def install_ui_agent(cfg: Config, exe: str, *, dry_run: bool = False, retire: bo
         if err:
             return [f"dashboard agent failed: {err}"]
         return [f"dashboard always available at {url}"] + (retire_legacy_agent(UI_LABEL) if retire else [])
+    if on_windows():
+        task = f"Task Scheduler task \\Interlatch\\{WINDOWS_TASKS[UI_LABEL]}"
+        err = _windows_install(cfg, exe, UI_LABEL, ["ui"], every_minutes=5, keep_alive=True, dry_run=dry_run,
+                               description=f"Interlatch dashboard at {url}")
+        if dry_run:
+            return [f"{task} serving {url}"]
+        return [f"dashboard agent failed: {err}"] if err else [f"dashboard always available at {url} ({task})"]
     if platform.system() != "Darwin":
         return ["dashboard agent skipped (no launchd or systemd); run `interlatch ui` yourself"]
-    program = shlex.split(exe) + ["ui"]
+    program = exe_argv(exe) + ["ui"]
     if dry_run:
         return [f"dashboard agent {plist_path(UI_LABEL)} serving {url}"]
     err = _bootstrap(UI_LABEL, {
@@ -454,9 +504,18 @@ def install_launchd(cfg: Config, exe: str, *, interval: int = 900, dry_run: bool
             return [f"systemd timer failed: {err}"]
         return ([f"systemd timer interlatch-sync.timer runs `interlatch sync --work` every {interval // 60} min"]
                 + (retire_legacy_agent(LAUNCHD_LABEL) if retire else []))
+    if on_windows():
+        task = f"Task Scheduler task \\Interlatch\\{WINDOWS_TASKS[LAUNCHD_LABEL]}"
+        err = _windows_install(cfg, exe, LAUNCHD_LABEL, ["sync", "--work", "--quiet"], every_minutes=max(1, interval // 60),
+                               keep_alive=False, dry_run=dry_run,
+                               description="Interlatch: archive, ingest and analyze coding-agent sessions")
+        if dry_run:
+            return [f"{task} running `interlatch sync --work --quiet` every {max(1, interval // 60)} min"]
+        return ([f"Task Scheduler failed: {err}"] if err
+                else [f"{task} runs `interlatch sync --work` every {max(1, interval // 60)} min"])
     if platform.system() != "Darwin":
         return ["background sync skipped (no launchd or systemd); schedule `interlatch sync --work` with cron instead"]
-    program = shlex.split(exe) + ["sync", "--work", "--quiet"]
+    program = exe_argv(exe) + ["sync", "--work", "--quiet"]
     plist = {
         "Label": LAUNCHD_LABEL,
         "ProgramArguments": program,
@@ -492,6 +551,11 @@ def uninstall_launchd(labels=(LAUNCHD_LABEL, UI_LABEL)) -> list[str]:
         if out:
             _systemctl("daemon-reload")
         return out
+    if on_windows():
+        from .windows import delete_task
+
+        return [f"removed Task Scheduler task \\Interlatch\\{WINDOWS_TASKS[label]}" for label in labels
+                if label in WINDOWS_TASKS and delete_task(WINDOWS_TASKS[label])]
     if platform.system() != "Darwin":
         return out
     for label in [x for wanted in labels for x in (wanted, LEGACY_LABELS.get(wanted)) if x]:
@@ -514,6 +578,10 @@ def launchd_status(label: str = LAUNCHD_LABEL) -> dict:
     """The agent's state; until `interlatch migrate` replaces it, that of the agent Chronicle installed for the job."""
     if uses_systemd() and label in SYSTEMD_UNITS:
         return _systemd_status(label)
+    if on_windows() and label in WINDOWS_TASKS:
+        from .windows import task_status
+
+        return task_status(WINDOWS_TASKS[label])
     if platform.system() != "Darwin":
         return {"installed": False}
     label = active_label(label)
@@ -533,7 +601,12 @@ def background_status() -> dict:
     return launchd_status(LAUNCHD_LABEL)
 
 
-def agent_path(label: str) -> Path:
+def agent_path(label: str) -> Path | str:
+    """Where the agent for `label` is defined: its unit or plist file, or on Windows its task's name."""
+    if on_windows():
+        from .windows import task_name
+
+        return task_name(WINDOWS_TASKS[label])
     return systemd_dir() / SYSTEMD_UNITS[label][0] if uses_systemd() else plist_path(label)
 
 
@@ -561,7 +634,7 @@ def install_mcp(cfg: Config, exe: str, *, dry_run: bool = False) -> list[str]:
     claude = cfg.claude_bin()
     if not claude:
         return [tr("MCP registration skipped: claude CLI not found")]
-    args = shlex.split(exe) + ["mcp"]
+    args = exe_argv(exe) + ["mcp"]
     cmd = [claude, "mcp", "add", "--scope", "user", "--transport", "stdio", MCP_NAME, "--", *args]
     if dry_run:
         return ["would run: " + " ".join(shlex.quote(c) for c in cmd)]

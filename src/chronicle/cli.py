@@ -776,7 +776,8 @@ def cmd_install(args) -> int:
             actions += install_launchd(cfg, exe, interval=args.interval * 60, dry_run=True)
         if background_on and not args.no_ui:
             actions += install_ui_agent(cfg, exe, dry_run=True)
-        actions += [f"would remove background agent {agent_path(label)}" for label in turned_off if agent_path(label).exists()]
+        actions += [f"would remove background agent {agent_path(label)}" for label in turned_off
+                    if launchd_status(label).get("installed")]
         if notify is not None:
             actions.append(f"would turn release notifications {'on' if notify else 'off'}")
         if menu_bar is not None:
@@ -1028,7 +1029,7 @@ def cmd_config(args) -> int:
     if args.action == "path":
         print(cfg.config_path)
     elif args.action == "edit":
-        editor = os.environ.get("EDITOR", "open" if sys.platform == "darwin" else "vi")
+        editor = os.environ.get("EDITOR", {"darwin": "open", "win32": "notepad"}.get(sys.platform, "vi"))
         subprocess.call([*editor.split(), str(cfg.config_path)])
     else:
         print(cfg.config_path.read_text())
@@ -2953,7 +2954,24 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _rerun_in_utf8_mode(argv: list[str]) -> int:
+    """Windows: Claude Code and the other agents write UTF-8, while Python there reads and writes text in the ANSI code
+    page (cp1252, cp932) unless in UTF-8 mode, which is set as Python starts. So this command runs again in it, as do
+    the Pythons it starts (PYTHONUTF8). Windows has no exec: this process waits, its stdin and stdout passed on."""
+    import os
+    import subprocess
+
+    proc = subprocess.Popen([sys.executable, "-X", "utf8", "-m", "chronicle", *argv], env={**os.environ, "PYTHONUTF8": "1"})
+    while True:
+        try:
+            return proc.wait()
+        except KeyboardInterrupt:  # Ctrl+C reaches both: the command decides how it ends
+            continue
+
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None and sys.platform == "win32" and not sys.flags.utf8_mode:
+        return _rerun_in_utf8_mode(sys.argv[1:])
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["hook"] and len(argv) >= 2:  # fast path: no argparse/rich import cost
         from .hooks import hook_main

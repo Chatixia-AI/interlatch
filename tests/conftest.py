@@ -242,14 +242,20 @@ def no_real_home(tmp_path_factory, monkeypatch):
         if name.startswith(("INTERLATCH_", "CHRONICLE_")) and name != "CHRONICLE_TEST_PG":
             monkeypatch.delenv(name)
     monkeypatch.delenv("XPC_SERVICE_NAME", raising=False)  # which launchd agent this process is: none
-    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("user-home")))
+    home = str(tmp_path_factory.mktemp("user-home"))
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)  # Windows' home folder (Path.home())
+    monkeypatch.setenv("APPDATA", str(Path(home) / "AppData" / "Roaming"))
+
+
+AGENT_MANAGERS = ("launchctl", "systemctl", "schtasks")
 
 
 @pytest.fixture(autouse=True)
 def no_real_background_agents(tmp_path_factory, monkeypatch):
-    """No test reaches this computer's own launchd or systemd agents: `chronicle install --no-ui` in a test once
-    booted out the developer's real dashboard. Agent files go to a scratch folder, and launchctl and systemctl are
-    never run (a test that wants to see those calls patches subprocess.run itself, over this)."""
+    """No test reaches this computer's own launchd, systemd or Task Scheduler agents: `chronicle install --no-ui` in a
+    test once booted out the developer's real dashboard. Agent files go to a scratch folder, and launchctl, systemctl
+    and schtasks are never run (a test that wants to see those calls patches subprocess.run itself, over this)."""
     import subprocess
 
     from chronicle import install
@@ -260,8 +266,8 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
     real_run = subprocess.run
 
     def run(cmd, *args, **kwargs):
-        if isinstance(cmd, (list, tuple)) and cmd and Path(str(cmd[0])).name in ("launchctl", "systemctl"):
-            print_ = "print" in cmd or "is-active" in cmd  # asking about an agent: there is none
+        if isinstance(cmd, (list, tuple)) and cmd and Path(str(cmd[0])).name in AGENT_MANAGERS:
+            print_ = "print" in cmd or "is-active" in cmd or "/Query" in cmd  # asking about an agent: there is none
             return subprocess.CompletedProcess(cmd, 113 if print_ else 0, "" if kwargs.get("text") else b"",
                                                "" if kwargs.get("text") else b"")
         return real_run(cmd, *args, **kwargs)
@@ -271,8 +277,8 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
 
     class Popen(real_popen):  # update.restart() asks launchd to restart the dashboard with a detached launchctl
         def __init__(self, cmd, *args, **kwargs):
-            if isinstance(cmd, (list, tuple)) and cmd and Path(str(cmd[0])).name in ("launchctl", "systemctl"):
-                cmd = ["true"]
+            if isinstance(cmd, (list, tuple)) and cmd and Path(str(cmd[0])).name in AGENT_MANAGERS:
+                cmd = [sys.executable, "-c", ""]
             super().__init__(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", Popen)

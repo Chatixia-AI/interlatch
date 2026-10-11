@@ -2264,13 +2264,14 @@ def make_handler(app: App, port: int):
             return people.has_people(app.conn)
 
         def _local(self) -> str | None:
-            """"mac" or "linux" when the request comes from this computer itself and Interlatch can open files here;
-            None otherwise. Gates "Open on this Mac"."""
+            """"mac", "linux" or "windows" when the request comes from this computer itself and Interlatch can open
+            files here; None otherwise. Gates "Open on this Mac"."""
             import sys
 
             if not self._from_here():
                 return None
-            return "mac" if sys.platform == "darwin" else "linux" if sys.platform.startswith("linux") else None
+            return ("mac" if sys.platform == "darwin" else "linux" if sys.platform.startswith("linux")
+                    else "windows" if sys.platform == "win32" else None)
 
         # ---- who is viewing (people.py): set per request in _get/_post, None meaning an admin
         def _client(self) -> str:
@@ -2977,8 +2978,12 @@ def _already_running(cfg: Config, port: int, open_browser: bool) -> None:
     print(f"Interlatch {running} is already running at {url}" + (" (the background agent from `interlatch install`)." if agent else "."),
           file=sys.stderr)
     if running != __version__ or agent:
-        restart = (f"launchctl kickstart -k gui/{os.getuid()}/{active_label(UI_LABEL)}" if agent
-                   else "stop that one (Ctrl+C where it runs)")
+        if agent and sys.platform == "win32":
+            restart = r"schtasks /End /TN \Interlatch\Dashboard, then schtasks /Run /TN \Interlatch\Dashboard"
+        elif agent:
+            restart = f"launchctl kickstart -k gui/{os.getuid()}/{active_label(UI_LABEL)}"
+        else:
+            restart = "stop that one (Ctrl+C where it runs)"
         print(f"If it still runs older code (after an update), restart it to load this install ({__version__}): {restart}",
               file=sys.stderr)
     print("Or run a second dashboard with --port <n>.", file=sys.stderr)

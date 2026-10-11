@@ -1,8 +1,8 @@
 name: CI
 
-# Every pull request and every push to main: the test suite, the Postgres tests against a real database, known
-# vulnerabilities in the locked dependencies, the pre-commit hooks (.pre-commit-config.yaml), and the hub's Docker image
-# (docker/) built from this checkout.
+# Every pull request and every push to main: the test suite, the install on Windows, the Postgres tests against a real
+# database, known vulnerabilities in the locked dependencies, the pre-commit hooks (.pre-commit-config.yaml), and the
+# hub's Docker image (docker/) built from this checkout.
 # `test` is a required check on main.
 
 on:
@@ -27,6 +27,29 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       - run: uv run --locked pytest -q
+
+  windows:
+    # Windows: its own tests (the rest of the suite assumes macOS or Linux), then the install on a real Windows
+    # (tests/windows_smoke.py): the hooks through Git Bash and PowerShell, the Task Scheduler tasks and the dashboard
+    # they start, a reinstall while it all runs, and uninstall
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+      - run: uv run --locked pytest -q tests/test_windows.py
+      - name: Install the wheel as a uv tool, as a user would
+        run: |
+          uv build --wheel -o "$RUNNER_TEMP/dist"
+          uv tool install "$(ls "$RUNNER_TEMP"/dist/*.whl)"
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Set up, record, run in the background, update, uninstall
+        # outside the project: `uv run` would put the project's own interlatch.exe first on PATH
+        run: uv run --no-project python tests/windows_smoke.py "$(ls "$RUNNER_TEMP"/dist/*.whl)"
 
   postgres:
     # The team store and the mirror against a real Postgres: their tests skip without one (INTERLATCH_TEST_PG; set

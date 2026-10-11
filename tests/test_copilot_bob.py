@@ -164,7 +164,7 @@ def test_mcp_clients_get_the_server_and_keep_their_settings(env, monkeypatch):
     cfg = env["cfg"]
     status = {c["name"]: c for c in mcp_clients_status()}
     assert not status["cursor"]["detected"] and not status["cursor"]["registered"]
-    assert connect(cfg, "cursor", "/opt/bin/chronicle") == ["Cursor not found on this Mac; nothing changed"]
+    assert connect(cfg, "cursor", "/opt/bin/chronicle") == ["Cursor not found on this computer; nothing changed"]
     assert not (home / ".cursor").exists()
 
     (home / ".cursor").mkdir(parents=True)

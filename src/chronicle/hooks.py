@@ -32,6 +32,8 @@ def self_command() -> list[str]:
 
 def spawn_detached(args: list[str], log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    # Windows: a console of its own without a window (what it starts shares it), outside Claude Code's process group
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
     with open(log_path, "a") as log:
         subprocess.Popen(
             args,
@@ -41,6 +43,7 @@ def spawn_detached(args: list[str], log_path: Path) -> None:
             start_new_session=True,
             close_fds=True,
             env={k: v for k, v in os.environ.items() if k not in INTERNAL_ENVS},
+            creationflags=flags,
         )
 
 
