@@ -43,14 +43,14 @@ interlatch mirror             # 書き込み先、テーブルごとの行数、
 ### このコンピューターの Docker で Postgres を動かす
 
 ```bash
-docker run -d --name chronicle-pg --restart unless-stopped \
-  -e POSTGRES_USER=chronicle -e POSTGRES_DB=chronicle -e POSTGRES_PASSWORD=<パスワード> \
-  -p 127.0.0.1:5432:5432 -v chronicle-pg:/var/lib/postgresql/data postgres:17
+docker run -d --name interlatch-pg --restart unless-stopped \
+  -e POSTGRES_USER=interlatch -e POSTGRES_DB=interlatch -e POSTGRES_PASSWORD=<パスワード> \
+  -p 127.0.0.1:5432:5432 -v interlatch-pg:/var/lib/postgresql/data postgres:17
 ```
 
-設定には、サーバーのアドレス `127.0.0.1`、ポート `5432`、データベースとユーザーに `chronicle`、決めたパスワード、SSL モード
+設定には、サーバーのアドレス `127.0.0.1`、ポート `5432`、データベースとユーザーに `interlatch`、決めたパスワード、SSL モード
 `disable` を使います。Docker の Postgres には TLS 証明書がなく、ポートはこのコンピューターからしか開いていません。データは
-`chronicle-pg` ボリュームにあるので、コンテナーを作り直しても残ります。
+`interlatch-pg` ボリュームにあるので、コンテナーを作り直しても残ります。
 
 ### クラウドのデータベース
 

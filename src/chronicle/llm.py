@@ -24,7 +24,7 @@ from pathlib import Path
 
 from .config import Config
 
-log = logging.getLogger("chronicle.llm")
+log = logging.getLogger("interlatch.llm")
 
 INTERNAL_ENV = "INTERLATCH_INTERNAL"  # hooks.py: the sessions of the agents this runs are not recorded
 

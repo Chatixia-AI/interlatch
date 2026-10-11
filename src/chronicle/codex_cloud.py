@@ -19,7 +19,7 @@ from .hooks import internal_env
 from .parser import FileStat, ParsedSession
 from .util import safe_text
 
-log = logging.getLogger("chronicle.codex_cloud")
+log = logging.getLogger("interlatch.codex_cloud")
 
 CLOUD_PARSER_VERSION = 1
 STATUS_KEY = "codex-cloud:status"  # kv: the last listing's outcome, for the Sources page

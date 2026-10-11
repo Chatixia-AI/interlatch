@@ -35,7 +35,7 @@ from .copilot_parser import (COPILOT_PARSER_VERSION, agent_session_dirs, chat_fi
 from .parser import PARSER_VERSION, ParsedSession, parse_history, parse_session, session_dir_for
 from .util import dumps, file_lock, one_line, parse_ts, safe_text, to_iso, utcnow_iso
 
-log = logging.getLogger("chronicle.ingest")
+log = logging.getLogger("interlatch.ingest")
 
 
 @dataclass

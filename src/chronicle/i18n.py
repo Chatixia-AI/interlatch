@@ -1,4 +1,4 @@
-"""The dashboard's language for the text the server writes: every /api call says which one (X-Chronicle-Lang: en or ja),
+"""The dashboard's language for the text the server writes: every /api call says which one (X-Interlatch-Lang: en or ja),
 so it is chosen per browser, independently of [analysis] language (what Interlatch writes its knowledge in).
 
 tr() and trn() translate while a response is built, never at import time. What is not for the dashboard stays English:
@@ -17,7 +17,7 @@ lang: ContextVar[str] = ContextVar("lang", default="en")  # set per request by t
 
 
 def pick(header: str | None) -> str:
-    """The language an X-Chronicle-Lang header asks for: "ja", or "en" for anything else."""
+    """The language an X-Interlatch-Lang header asks for: "ja", or "en" for anything else."""
     value = (header or "").strip().lower()
     return value if value in LANGS else "en"
 

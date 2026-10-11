@@ -428,7 +428,7 @@ def test_provider_settings_are_refused_from_another_device(env):
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{httpd.server_address[1]}/api/analysis/provider", method="POST",
                                      data=json.dumps({"provider": "openai", "key": "sk-x"}).encode(),
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/json",
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/json",
                                               "X-Forwarded-For": "100.64.0.9"})
         with pytest.raises(urllib.error.HTTPError) as info:
             urllib.request.urlopen(req, timeout=10)

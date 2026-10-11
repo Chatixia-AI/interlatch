@@ -51,7 +51,7 @@ from . import __version__, news
 from .config import Config
 from .util import utcnow_iso
 
-log = logging.getLogger("chronicle.hub")
+log = logging.getLogger("interlatch.hub")
 
 PROTOCOL = 1
 TOKEN_FILE = "hub-token"

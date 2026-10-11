@@ -29,7 +29,7 @@ from .config import Config
 from .pg import PG_KEYS, SETTINGS, SSLMODES, driver_available  # noqa: F401 (this module's names, as before)
 from .util import fingerprint
 
-log = logging.getLogger("chronicle.team_store")
+log = logging.getLogger("interlatch.team_store")
 
 ENV_FILE = "team-store.env"
 MAX_LESSONS = 2000  # sent to one computer per pull

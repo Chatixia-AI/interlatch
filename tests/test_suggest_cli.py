@@ -115,7 +115,7 @@ def _serve(cfg):
 
 
 def _call(base, path, body=None, *, header=True):
-    headers = {"X-Chronicle": "1", "Content-Type": "application/json"} if header else {}
+    headers = {"X-Interlatch": "1", "Content-Type": "application/json"} if header else {}
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(base + path, data=data, method="GET" if body is None else "POST", headers=headers)
     try:

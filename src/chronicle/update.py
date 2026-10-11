@@ -32,7 +32,7 @@ from urllib.request import Request, urlopen
 from . import __version__
 from .i18n import tr
 
-log = logging.getLogger("chronicle.update")
+log = logging.getLogger("interlatch.update")
 
 DIST = "interlatch"
 LEGACY_DIST = "agents-chronicle"  # the package's name before the rename

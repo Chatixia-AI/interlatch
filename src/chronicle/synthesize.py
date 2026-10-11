@@ -14,7 +14,7 @@ from .ladder import STAGE_ORDER_SQL, SUPERSEDE_REASONS, TRUSTED
 from .llm import Runner, make_runner, written_in
 from .util import dumps, local_str, loads, one_line, truncate, utcnow_iso
 
-log = logging.getLogger("chronicle.synthesize")
+log = logging.getLogger("interlatch.synthesize")
 
 GLOBAL = "__global__"
 MAX_ITEMS = 250

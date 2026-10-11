@@ -35,7 +35,7 @@ from . import artifacts
 from .pricing import normalize_model, openai_cost
 from .util import iter_jsonl, one_line, parse_ts, safe_text, truncate
 
-log = logging.getLogger("chronicle.codex")
+log = logging.getLogger("interlatch.codex")
 
 CODEX_PARSER_VERSION = 4  # 4: artifacts (files created, PRs, commits, generated images)
 ROLLOUT_RE = re.compile(r"^rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-([0-9a-f-]{36})\.jsonl(\.gz)?$")

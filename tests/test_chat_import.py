@@ -125,7 +125,7 @@ def test_import_from_dashboard_upload(env):
     body = write_export(env["tmp"] / "export.zip").read_bytes()
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{port}/api/import", data=body, method="POST",
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/octet-stream"})
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/octet-stream"})
         with urllib.request.urlopen(req, timeout=10) as r:
             assert json.loads(r.read())["started"]
         for _ in range(100):

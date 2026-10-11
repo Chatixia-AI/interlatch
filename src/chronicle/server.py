@@ -40,7 +40,7 @@ from .synthesize import GLOBAL
 from .util import PROGRESS_RE, loads, to_iso, utcnow
 from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
 
-log = logging.getLogger("chronicle.server")
+log = logging.getLogger("interlatch.server")
 MAX_SELECTION = 1000  # sessions one "analyze selected" may cover
 # What the dashboard may change for each coding agent: setting -> (config section, key). Effort is shared.
 AGENT_SETTINGS = {
@@ -51,7 +51,8 @@ AGENT_SETTINGS = {
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 WEB_DIR = Path(__file__).parent / "web"
 LOOPBACK = ("127.0.0.1", "localhost", "[::1]")
-SESSION_COOKIE = "chronicle_session"  # a person's dashboard session on a hub (people.py)
+SESSION_COOKIE = "interlatch_session"  # a person's dashboard session on a hub (people.py)
+LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the rename: still honoured until it expires
 TEAM_DAYS = ("7", "30", "90")  # the team Home's periods, first the default
 TEAM_MAX_PROJECTS = 500
 # headers a proxy adds: a request with any of them came through one, so it is not from someone at this computer
@@ -2205,7 +2206,7 @@ def make_handler(app: App, port: int):
     local_hosts = {f"{h}:{port}" for h in LOOPBACK}
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = f"chronicle/{__version__}"
+        server_version = f"interlatch/{__version__}"
         viewer: dict | None = None  # who is viewing (_viewer), None meaning an admin
         limited = False  # the viewer sees only some projects (access.py): set per request in _get
 
@@ -2293,9 +2294,10 @@ def make_handler(app: App, port: int):
             from http.cookies import CookieError, SimpleCookie
 
             try:
-                morsel = SimpleCookie(self.headers.get("Cookie") or "").get(SESSION_COOKIE)
+                jar = SimpleCookie(self.headers.get("Cookie") or "")
             except CookieError:
                 return ""
+            morsel = jar.get(SESSION_COOKIE) or jar.get(LEGACY_SESSION_COOKIE)
             return morsel.value if morsel else ""
 
         def _session_cookie(self, value: str, max_age: int) -> str:
@@ -2358,7 +2360,7 @@ def make_handler(app: App, port: int):
             from . import people
 
             accept = (self.headers.get("Accept-Language") or "").strip().lower()
-            i18n.lang.set("ja" if accept.startswith("ja") else "en")  # a link opened by hand sends no X-Chronicle-Lang
+            i18n.lang.set("ja" if accept.startswith("ja") else "en")  # a link opened by hand sends no X-Interlatch-Lang
             who = self._client()
             wait = app.code_attempts.wait(who)
             try:
@@ -2412,7 +2414,7 @@ def make_handler(app: App, port: int):
             self.send_header("Referrer-Policy", "no-referrer")
             if f["policy"]:
                 self.send_header("Content-Security-Policy", f["policy"])
-            self.send_header("X-Chronicle-Source", f["source"])  # "disk", or "archive": as the agent wrote it, now gone
+            self.send_header("X-Interlatch-Source", f["source"])  # "disk", or "archive": as the agent wrote it, now gone
             self.end_headers()
             self.wfile.write(f["body"])
 
@@ -2539,8 +2541,12 @@ def make_handler(app: App, port: int):
             self.end_headers()
             self.wfile.write(body)
 
+        def _asked_lang(self) -> str | None:
+            """The X-Interlatch-Lang header, or X-Chronicle-Lang from a tab opened before the rename."""
+            return self.headers.get("X-Interlatch-Lang") or self.headers.get("X-Chronicle-Lang")
+
         def do_GET(self):
-            token = i18n.lang.set(i18n.pick(self.headers.get("X-Chronicle-Lang")))  # the dashboard's language, per browser
+            token = i18n.lang.set(i18n.pick(self._asked_lang()))  # the dashboard's language, per browser
             try:
                 app.refresh_config()
                 return self._get()
@@ -2549,7 +2555,7 @@ def make_handler(app: App, port: int):
                 app.release()
 
         def do_POST(self):
-            token = i18n.lang.set(i18n.pick(self.headers.get("X-Chronicle-Lang")))
+            token = i18n.lang.set(i18n.pick(self._asked_lang()))
             try:
                 app.refresh_config()
                 return self._post()
@@ -2749,7 +2755,7 @@ def make_handler(app: App, port: int):
                 return self._json({"error": tr("forbidden")}, 403)
             if urlparse(self.path).path.startswith("/api/hub/"):
                 return self._hub_api(urlparse(self.path).path)
-            if self.headers.get("X-Chronicle") != "1" or not (self._user_ok() or self._people_mode()):
+            if "1" not in (self.headers.get("X-Interlatch"), self.headers.get("X-Chronicle")) or not (self._user_ok() or self._people_mode()):
                 return self._json({"error": tr("forbidden")}, 403)
             if urlparse(self.path).path == "/api/signout":
                 from . import people

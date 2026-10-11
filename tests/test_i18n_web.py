@@ -156,7 +156,7 @@ def _keys() -> tuple[dict[str, int], list[str]]:
 
 def _ja() -> dict[str, str]:
     src = (WEB / "ja.js").read_text()
-    body = src[src.index("window.CHRONICLE_JA = {") + len("window.CHRONICLE_JA = ") : src.rindex("}") + 1]
+    body = src[src.index("window.INTERLATCH_JA = {") + len("window.INTERLATCH_JA = ") : src.rindex("}") + 1]
     body = re.sub(r"^\s*//.*$", "", body, flags=re.M)
     body = re.sub(r",(\s*)\}$", r"\1}", body.rstrip())
     pairs = json.loads(body, object_pairs_hook=lambda kv: kv)
@@ -221,7 +221,7 @@ def test_scripts_parse(name):
 HELPER_CHECK = r"""
 const fs = require("fs"), vm = require("vm");
 const run = (stored, browser) => {
-  const store = stored ? { "chronicle-lang": stored } : {};
+  const store = stored ? { "interlatch-lang": stored } : {};
   const ctx = { window: {}, navigator: { languages: [browser], language: browser }, document: { documentElement: {} },
     localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
     location: { reload() {} } };

@@ -25,7 +25,7 @@ from .config import Config
 from .i18n import lang, tr, trn
 from .util import dumps, loads, one_line, utcnow_iso
 
-log = logging.getLogger("chronicle.suggest")
+log = logging.getLogger("interlatch.suggest")
 
 STATUSES = ("new", "applied", "dismissed", "stale", "done")
 COLUMNS = ("key", "kind", "origin", "cause_id", "knowledge_id", "project_path", "agent", "target_path", "title", "text",

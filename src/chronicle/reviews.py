@@ -12,7 +12,7 @@ from .i18n import tr
 from .llm import Runner, make_runner, written_in
 from .util import dumps, human_cost, human_count, human_duration, loads, one_line, to_iso, utcnow_iso
 
-log = logging.getLogger("chronicle.reviews")
+log = logging.getLogger("interlatch.reviews")
 
 REVIEW_SCHEMA = {
     "type": "object",

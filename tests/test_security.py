@@ -263,7 +263,7 @@ def test_a_hub_without_people_lets_no_other_device_in(dashboard):
 def test_a_file_name_cant_add_response_headers(dashboard, monkeypatch):
     app = dashboard["app"]
     monkeypatch.setattr(app, "artifact_open", lambda i: {
-        "name": 'x.txt\r\nSet-Cookie: chronicle_session=evil\r\n\r\n<script>alert(1)</script>', "ctype": "text/plain",
+        "name": 'x.txt\r\nSet-Cookie: interlatch_session=evil\r\n\r\n<script>alert(1)</script>', "ctype": "text/plain",
         "inline": False, "body": b"hi", "policy": None, "source": "disk"})
     status, headers, body = _raw(dashboard["url"], "/api/artifacts/1/open")
     assert status == 200 and body == b"hi"

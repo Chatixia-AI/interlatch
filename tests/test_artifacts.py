@@ -283,7 +283,7 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
 
     def call(path, *, method="GET", headers=None):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=b'{"how": "reveal"}' if method == "POST" else None,
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/json", **(headers or {})})
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/json", **(headers or {})})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return r.status, dict(r.headers), r.read()
@@ -292,7 +292,7 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
     try:
         status, headers, body = call(f"/api/artifacts/{ids[str(report)]}/open")
         assert status == 200 and body.decode() == html and "allow-scripts" in headers["Content-Security-Policy"]
-        assert headers["X-Chronicle-Source"] == "archive"
+        assert headers["X-Interlatch-Source"] == "archive"
         local = json.loads(call("/api/artifacts")[2])["local"]
         status, _, _ = call(f"/api/artifacts/{ids[str(notes)]}/reveal", method="POST")
         assert (status, len(launched)) == ((200, 1) if local else (403, 0))

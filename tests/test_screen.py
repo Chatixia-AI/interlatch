@@ -147,7 +147,7 @@ def test_dashboard_filters_and_queues(env):
 
     def post(path, body):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode(),
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/json"})
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as r:
             return json.load(r)
 

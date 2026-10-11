@@ -30,7 +30,7 @@ from .llm import LLMError, Runner, UsageLimitError, make_runner, written_in
 from .redact import redact
 from .util import one_line, utcnow_iso
 
-log = logging.getLogger("chronicle.screen")
+log = logging.getLogger("interlatch.screen")
 
 VERDICTS = ("analyze", "maybe", "skip")
 VERDICT_LABEL = {"analyze": "worth analyzing", "maybe": "maybe", "skip": "not worth it"}

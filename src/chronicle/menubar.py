@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 from .config import Config
 from .util import parse_ts, to_iso, utcnow
 
-log = logging.getLogger("chronicle.menubar")
+log = logging.getLogger("interlatch.menubar")
 
 OK, WORKING, ATTENTION, PAUSED = "ok", "working", "attention", "paused"
 RECENT_N = 6
@@ -428,7 +428,7 @@ def _classes() -> dict:
         import objc
         import WebKit  # noqa: F401  (registers the WKScriptMessageHandler protocol)
 
-        class ChronicleStatusTarget(AppKit.NSObject):
+        class InterlatchStatusTarget(AppKit.NSObject):
             def act_(self, sender):
                 self.owner.act(str(sender.representedObject()))
 
@@ -438,13 +438,13 @@ def _classes() -> dict:
             def menuWillOpen_(self, menu):
                 self.owner.will_open()
 
-        class ChroniclePanelBridge(AppKit.NSObject, protocols=[objc.protocolNamed("WKScriptMessageHandler")]):
+        class InterlatchPanelBridge(AppKit.NSObject, protocols=[objc.protocolNamed("WKScriptMessageHandler")]):
             def userContentController_didReceiveScriptMessage_(self, controller, message):
                 body = message.body()
                 if isinstance(body, AppKit.NSDictionary):
                     self.owner.panel_message({str(k): v for k, v in body.items()})
 
-        _CLASSES.update(target=ChronicleStatusTarget, bridge=ChroniclePanelBridge)
+        _CLASSES.update(target=InterlatchStatusTarget, bridge=InterlatchPanelBridge)
     return _CLASSES
 
 
@@ -532,7 +532,7 @@ class StatusMenu:
         if self.base_url:
             self._build_panel()  # loaded and filled in before the first click
         self.will_open()
-        threading.Thread(target=self._poll, name="chronicle-menubar", daemon=True).start()
+        threading.Thread(target=self._poll, name="interlatch-menubar", daemon=True).start()
 
     def _image(self, state: str):
         if state not in self.images:
@@ -639,7 +639,7 @@ class StatusMenu:
         self.bridge = classes["bridge"].alloc().init()
         self.bridge.owner = self
         config = WebKit.WKWebViewConfiguration.alloc().init()
-        config.userContentController().addScriptMessageHandler_name_(self.bridge, "chronicle")
+        config.userContentController().addScriptMessageHandler_name_(self.bridge, "interlatch")
         view = WebKit.WKWebView.alloc().initWithFrame_configuration_(((0, 0), (self.PANEL_WIDTH, 420)), config)
         view.setValue_forKey_(False, "drawsBackground")  # transparent: the popover's glass shows through
         # The page loads nothing but itself: it has no links or forms, session text goes in as text, its CSP allows
@@ -664,7 +664,7 @@ class StatusMenu:
         self.popover.showRelativeToRect_ofView_preferredEdge_(button.bounds(), button, AppKit.NSRectEdgeMinY)
         self.popover.contentViewController().view().window().makeKeyWindow()
         self._push()
-        self._js("window.chronicle && chronicle.opened()")
+        self._js("window.interlatch && interlatch.opened()")
         self.will_open()  # the extras' state for the More menu, and a fresh snapshot
 
     def _close_panel(self) -> None:
@@ -677,7 +677,7 @@ class StatusMenu:
 
     def _push(self) -> None:
         if self.snap is not None:
-            self._js(f"window.chronicle && chronicle.render({json.dumps(self.snap.to_page())})")
+            self._js(f"window.interlatch && interlatch.render({json.dumps(self.snap.to_page())})")
 
     def panel_message(self, msg: dict) -> None:
         """What the panel page sent (web/panel.js): {type: open|sync|update|menu|close|size|ready, …}."""
@@ -751,7 +751,7 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
     SHOWN = True
     app = httpd.app
     AppKit.NSApplication.sharedApplication().setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
-    threading.Thread(target=httpd.serve_forever, name="chronicle-ui", daemon=True).start()
+    threading.Thread(target=httpd.serve_forever, name="interlatch-ui", daemon=True).start()
 
     def quit_() -> None:
         if os.environ.get("XPC_SERVICE_NAME") == UI_LABEL:  # launchd would start a KeepAlive agent right back up

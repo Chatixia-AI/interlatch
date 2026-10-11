@@ -169,7 +169,7 @@ function learningInterests(interests) {
 
 const learningMemory = new Map();
 function learningStore() {
-  const storageKey = `chronicle.learning.v1:${ME?.viewer?.id || "local"}`;
+  const storageKey = `interlatch.learning.v1:${ME?.viewer?.id || "local"}`;
   let data = learningMemory.get(storageKey), available = true;
   if (!data) {
     try { data = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch { available = false; }

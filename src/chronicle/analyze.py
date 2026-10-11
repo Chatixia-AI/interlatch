@@ -18,7 +18,7 @@ from .llm import (BudgetExceededError, LLMError, LLMResult, Runner, SleepInterru
 from .redact import redact
 from .util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
 
-log = logging.getLogger("chronicle.analyze")
+log = logging.getLogger("interlatch.analyze")
 
 PROMPT_VERSION = 3  # 2: fixes, gotchas and decisions carry a case file; 3: lessons carry a principle, checks, topics, a diagram
 

@@ -366,7 +366,7 @@ def _call(url, path, body=None, headers=None):
 
     req = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
                                  method="GET" if body is None else "POST",
-                                 headers={"Content-Type": "application/json", "X-Chronicle": "1", **(headers or {})})
+                                 headers={"Content-Type": "application/json", "X-Interlatch": "1", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.status, json.loads(r.read())

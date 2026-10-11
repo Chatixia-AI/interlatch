@@ -1462,12 +1462,25 @@ table.data a.proj { overflow-wrap: normal; word-break: normal; white-space: nowr
 /* after an update: the dashboard restarts, and the page waits for it under this cover */
 #restart-wait { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--page) 55%, transparent);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: sk-in 0.2s ease-out; }
-#restart-wait .rw-card { display: grid; justify-items: center; gap: 6px; width: min(360px, 100%); padding: 22px 20px; border-radius: 6px; text-align: center;
+#restart-wait .rw-card { position: relative; overflow: hidden; display: grid; justify-items: center; gap: 6px; width: min(360px, 100%); padding: 22px 20px 25px;
+  border-radius: 6px; text-align: center; animation: rw-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
   background: var(--glass-strong); color: var(--ink); font-size: 13px; box-shadow: var(--glass-shadow), 0 12px 40px rgba(0, 0, 0, 0.18), inset 0 0 0 0.5px var(--glass-rim); }
-#restart-wait .rw-card > .icon { width: 22px; height: 22px; color: var(--accent); margin-bottom: 4px; }
+@keyframes rw-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+/* the mark: the arrows turn, easing in and out, inside two rings that swell and fade in turn, until the new process answers */
+#restart-wait .rw-mark { position: relative; display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 6px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#restart-wait .rw-mark i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0;
+  animation: rw-ring 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
+#restart-wait .rw-mark i + i { animation-delay: 1.2s; }
+@keyframes rw-ring { from { transform: scale(0.7); opacity: 0.6; } to { transform: scale(1.75); opacity: 0; } }
+#restart-wait .rw-mark .icon { position: relative; width: 22px; height: 22px; color: var(--accent); animation: spin 1.6s cubic-bezier(0.45, 0.05, 0.35, 1) infinite; }
 #restart-wait .rw-card b { font-size: 15px; }
 #restart-wait .btn { margin-top: 6px; }
-:root[data-motion="off"] #restart-wait { animation: none; }
+/* along the card's foot, the sweep of the page's loading bar */
+#restart-wait .rw-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#restart-wait .rw-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 30%; border-radius: 0 2px 2px 0; background: var(--accent); animation: load-slide 1.3s ease-in-out infinite; }
+:root[data-motion="off"] #restart-wait, :root[data-motion="off"] #restart-wait .rw-card { animation: none; } :root[data-motion="off"] #restart-wait .rw-mark i { display: none; }
+:root[data-motion="off"] #restart-wait .rw-bar i { animation: none; width: 100%; opacity: 0.45; }
 
 /* Sessions list: pick rows, then act on them from a floating bar */
 table.data :is(th, td).pick { width: 1%; padding-right: 0; }

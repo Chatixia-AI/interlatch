@@ -254,7 +254,7 @@ def test_a_limited_computer_hears_of_and_sends_only_its_projects(limited):
     import urllib.request
 
     req = urllib.request.Request(f"{url}/api/hub/sessions?machine={MACHINE}", data=blob, method="POST",
-                                 headers={**auth, "Content-Type": "application/gzip", "X-Chronicle": "1"})
+                                 headers={**auth, "Content-Type": "application/gzip", "X-Interlatch": "1"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         r = json.loads(resp.read())
     assert r["stored"] == 1 and r["refused"] == 1

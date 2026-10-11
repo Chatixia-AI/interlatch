@@ -447,7 +447,7 @@ def test_the_switch_works_only_from_this_computer(mac, monkeypatch):
 
     def post(body, **headers):
         req = urllib.request.Request(f"http://127.0.0.1:{port}/api/menu-bar", data=json.dumps(body).encode(),
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/json", **headers})
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/json", **headers})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return r.status, json.load(r)

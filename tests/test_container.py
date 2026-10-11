@@ -146,7 +146,7 @@ def test_a_request_from_loopback_is_not_an_admin(env, monkeypatch):
     conn.close()
     _app, httpd, url = _serve(cfg)
     try:
-        req = urllib.request.Request(url + "/api/people", headers={"X-Chronicle": "1"})
+        req = urllib.request.Request(url + "/api/people", headers={"X-Interlatch": "1"})
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(req, timeout=10)
         assert exc.value.code == 401

@@ -15,7 +15,7 @@ from .synthesize import GLOBAL, render_kb_markdown
 from .util import human_cost, human_count, human_duration, local_str, loads, one_line
 from .views import KIND_ICON, OUTCOME_ICON, project_labels, session_markdown, session_record
 
-log = logging.getLogger("chronicle.export")
+log = logging.getLogger("interlatch.export")
 
 _BAD = re.compile(r'[\\/:*?"<>|#^\[\]\n\r\t]+')
 

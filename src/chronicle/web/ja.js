@@ -1,6 +1,6 @@
 /* Interlatch dashboard: the Japanese UI strings, keyed by the exact English text (see i18n.js). */
 "use strict";
-window.CHRONICLE_JA = {
+window.INTERLATCH_JA = {
   // Formatting, labels
   "{n}s": "{n} 秒",
   "{d}d {h}h": "{d} 日 {h} 時間",
@@ -1860,7 +1860,7 @@ window.CHRONICLE_JA = {
   "Postgres in Docker on this computer": "このコンピューターの Docker で Postgres を動かす",
   "Schema": "スキーマ",
   "Sessions in projects you excluded never go. One computer per schema: give each computer a schema of its own.": "除外したプロジェクトのセッションは送りません。スキーマは 1 台に 1 つです。コンピューターごとに別のスキーマを指定してください。",
-  "Start one, then fill in server address 127.0.0.1, port 5432, database and user chronicle, the password you chose, and SSL mode disable.": "起動したら、サーバーアドレス 127.0.0.1、ポート 5432、データベースとユーザーに chronicle、決めたパスワード、SSL モード disable を入力します。",
+  "Start one, then fill in server address 127.0.0.1, port 5432, database and user interlatch, the password you chose, and SSL mode disable.": "起動したら、サーバーアドレス 127.0.0.1、ポート 5432、データベースとユーザーに interlatch、決めたパスワード、SSL モード disable を入力します。",
   "What it holds": "入れる内容",
   "Write now": "今すぐ書き込む",
   "Writing the mirror": "ミラーへの書き込み",

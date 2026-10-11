@@ -455,7 +455,7 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
         except tomllib.TOMLDecodeError as exc:  # keep running on a broken edit, loudly
             import logging
 
-            logging.getLogger("chronicle").error("config.toml is invalid (%s); using defaults", exc)
+            logging.getLogger("interlatch").error("config.toml is invalid (%s); using defaults", exc)
     sources = _section(data, "sources")
     export = _section(data, "export")
     server = _section(data, "server")
@@ -527,29 +527,29 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
     if cfg.analysis.language not in LANGUAGES:
         import logging
 
-        logging.getLogger("chronicle").warning("[analysis] language %r is not one of %s; using \"en\"",
+        logging.getLogger("interlatch").warning("[analysis] language %r is not one of %s; using \"en\"",
                                                cfg.analysis.language, ", ".join(LANGUAGES))
         cfg.analysis.language = "en"
     if store not in STORES:
         import logging
 
-        logging.getLogger("chronicle").warning("[hub] store %r is not one of: \"postgres\", or empty; keeping the "
+        logging.getLogger("interlatch").warning("[hub] store %r is not one of: \"postgres\", or empty; keeping the "
                                                "team's record in the hub's SQLite only", store)
     for name, value, allowed in (("to", mirror_to, MIRRORS), ("include", mirror_include, MIRROR_INCLUDES)):
         if value not in allowed:
             import logging
 
-            logging.getLogger("chronicle").warning("[mirror] %s %r is not one of: %s; using %r", name, value,
+            logging.getLogger("interlatch").warning("[mirror] %s %r is not one of: %s; using %r", name, value,
                                                    ", ".join(f'"{x}"' for x in allowed), getattr(cfg, f"mirror_{name}"))
     if cfg.mirror_schema != mirror_schema:
         import logging
 
-        logging.getLogger("chronicle").warning("[mirror] schema %r is not a plain name (letters, digits, _); using "
+        logging.getLogger("interlatch").warning("[mirror] schema %r is not a plain name (letters, digits, _); using "
                                                "\"chronicle\"", mirror_schema)
     if accept not in SHARE_MODES:
         import logging
 
-        logging.getLogger("chronicle").warning("[hub] accept %r is not one of: \"everything\", \"knowledge\"; taking "
+        logging.getLogger("interlatch").warning("[hub] accept %r is not one of: \"everything\", \"knowledge\"; taking "
                                                "knowledge only", accept)
     return cfg
 

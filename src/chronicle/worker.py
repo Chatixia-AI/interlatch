@@ -14,7 +14,7 @@ from .i18n import tr
 from .llm import BudgetExceededError, LLMError, Runner, UsageLimitError, make_runner
 from .util import file_lock, local_str, one_line, to_iso, utcnow
 
-log = logging.getLogger("chronicle.worker")
+log = logging.getLogger("interlatch.worker")
 
 PAUSE_KEY = "analysis_paused_until"
 

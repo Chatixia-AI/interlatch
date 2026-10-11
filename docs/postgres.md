@@ -46,14 +46,14 @@ interlatch mirror             # where it is, how many rows each table holds, and
 ### Postgres in Docker on this computer
 
 ```bash
-docker run -d --name chronicle-pg --restart unless-stopped \
-  -e POSTGRES_USER=chronicle -e POSTGRES_DB=chronicle -e POSTGRES_PASSWORD=<a password> \
-  -p 127.0.0.1:5432:5432 -v chronicle-pg:/var/lib/postgresql/data postgres:17
+docker run -d --name interlatch-pg --restart unless-stopped \
+  -e POSTGRES_USER=interlatch -e POSTGRES_DB=interlatch -e POSTGRES_PASSWORD=<a password> \
+  -p 127.0.0.1:5432:5432 -v interlatch-pg:/var/lib/postgresql/data postgres:17
 ```
 
-Then use server address `127.0.0.1`, port `5432`, database and user `chronicle`, your password, and SSL mode
+Then use server address `127.0.0.1`, port `5432`, database and user `interlatch`, your password, and SSL mode
 `disable`. Docker's Postgres has no TLS certificate, and the port is open to this computer only. The data lives in the
-`chronicle-pg` volume, so it survives the container being recreated.
+`interlatch-pg` volume, so it survives the container being recreated.
 
 ### A database in the cloud
 

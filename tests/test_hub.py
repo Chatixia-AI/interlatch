@@ -539,7 +539,7 @@ def test_tailnet_names_and_logins(synced):
         assert status({**ts, "Tailscale-User-Login": "anyone@else"}) == 200  # anyone on the tailnet
         assert status(ts) == 403  # but with no people, never someone Serve names no login for (Funnel, a tagged device)
         req = urllib.request.Request(base + "/api/sync", data=b"{}", method="POST",
-                                     headers={**ts, "X-Chronicle": "1", "Tailscale-User-Login": "x"})
+                                     headers={**ts, "X-Interlatch": "1", "Tailscale-User-Login": "x"})
         cfg.server_allowed_users = ["me@github"]
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(req, timeout=10)

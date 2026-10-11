@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-log = logging.getLogger("chronicle")
+log = logging.getLogger("interlatch")
 
 PROGRESS_RE = re.compile(r"(\d[\d,]*)\s*(?:of|/)\s*(\d[\d,]*)")  # "12 of 40", "120/2,000": a job's progress
 
@@ -202,8 +202,8 @@ def file_lock(path: Path, *, blocking: bool = True, timeout: float | None = None
 
 def setup_logging(logs_dir: Path, *, verbose: bool = False, console: bool = False) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
-    root = logging.getLogger("chronicle")
-    if getattr(root, "_chronicle_configured", False):
+    root = logging.getLogger("interlatch")
+    if getattr(root, "_interlatch_configured", False):
         return
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
     fh = logging.handlers.RotatingFileHandler(logs_dir / "chronicle.log", maxBytes=5_000_000, backupCount=3)
@@ -214,4 +214,4 @@ def setup_logging(logs_dir: Path, *, verbose: bool = False, console: bool = Fals
         ch.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         ch.setLevel(logging.DEBUG if verbose else logging.WARNING)
         root.addHandler(ch)
-    root._chronicle_configured = True  # type: ignore[attr-defined]
+    root._interlatch_configured = True  # type: ignore[attr-defined]

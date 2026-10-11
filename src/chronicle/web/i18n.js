@@ -3,7 +3,7 @@
 
 // Resolved once: the stored choice (Settings › Appearance, the statusbar button), else the browser's first language.
 // Changing it reloads the page, since many labels are built at load time.
-const LANG_KEY = "chronicle-lang";
+const LANG_KEY = "interlatch-lang";
 function langPref() { // "en" | "ja" | "system"
   try { const v = localStorage.getItem(LANG_KEY); if (v === "en" || v === "ja") return v; } catch (e) { /* storage blocked */ }
   return "system";
@@ -25,7 +25,7 @@ function setLang(lang) { // "en" | "ja" | "system"
 }
 
 // Keys are the exact English strings with {name} placeholders; a missing translation falls back to English.
-const JA = LANG === "ja" ? window.CHRONICLE_JA || {} : null;
+const JA = LANG === "ja" ? window.INTERLATCH_JA || {} : null;
 function fillVars(str, vars) {
   return vars ? str.replace(/\{(\w+)\}/g, (m, k) => (k in vars && vars[k] != null ? String(vars[k]) : m)) : str;
 }

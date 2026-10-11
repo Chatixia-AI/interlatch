@@ -30,7 +30,7 @@ def archive(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def ja():
-    """The dashboard's language for one test, as a request with X-Chronicle-Lang: ja sets it."""
+    """The dashboard's language for one test, as a request with X-Interlatch-Lang: ja sets it."""
     token = i18n.lang.set("ja")
     yield
     i18n.lang.reset(token)
@@ -394,8 +394,8 @@ def _serve(cfg):
 
 
 def _call(base, path, body=None, *, lang=None, write=True):
-    headers = {"Content-Type": "application/json", **({"X-Chronicle": "1"} if write else {}),
-               **({"X-Chronicle-Lang": lang} if lang else {})}
+    headers = {"Content-Type": "application/json", **({"X-Interlatch": "1"} if write else {}),
+               **({"X-Interlatch-Lang": lang} if lang else {})}
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(base + path, data=data, method="GET" if body is None else "POST", headers=headers)
     try:

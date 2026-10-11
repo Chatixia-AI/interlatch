@@ -40,7 +40,7 @@ from pathlib import Path
 from .config import Config, chronicle_home, default_home, home_override, legacy_home, load_config
 from .install import LEGACY_BUNDLE_ID, LEGACY_MCP_NAME, MCP_NAME
 
-log = logging.getLogger("chronicle.migrate")
+log = logging.getLogger("interlatch.migrate")
 
 MARKER = "migration.json"  # in the moved folder: {"from", "moved_at", "done"}; due() until done
 LOCK_WAIT_S = 60

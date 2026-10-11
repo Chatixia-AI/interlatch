@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .config import Config, load_config
 
-log = logging.getLogger("chronicle.desktop")
+log = logging.getLogger("interlatch.desktop")
 
 SYNC_INTERVAL_S = 15 * 60
 FIRST_SYNC_DELAY_S = 20
@@ -127,7 +127,7 @@ class Background:
         self.error: str | None = None
 
     def start(self) -> None:
-        threading.Thread(target=self._loop, name="chronicle-sync", daemon=True).start()
+        threading.Thread(target=self._loop, name="interlatch-sync", daemon=True).start()
 
     def sync_now(self) -> None:
         self.wake.set()
@@ -202,7 +202,7 @@ class DesktopApp:
         httpd = make_server(self.cfg, any_port=True)
         self.server_app = httpd.app
         self.url = f"http://127.0.0.1:{httpd.server_address[1]}/"
-        threading.Thread(target=httpd.serve_forever, name="chronicle-ui", daemon=True).start()
+        threading.Thread(target=httpd.serve_forever, name="interlatch-ui", daemon=True).start()
         log.info("app started (%s), dashboard at %s", sys.executable, self.url)
 
         self._install_app_delegate()

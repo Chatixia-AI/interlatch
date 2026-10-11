@@ -30,7 +30,7 @@ from .parser import ApiCall, ParsedSession
 from .pricing import normalize_model
 from .util import one_line, parse_ts
 
-log = logging.getLogger("chronicle.antigravity")
+log = logging.getLogger("interlatch.antigravity")
 
 ANTIGRAVITY_PARSER_VERSION = 1
 LOGS = Path(".system_generated") / "logs"

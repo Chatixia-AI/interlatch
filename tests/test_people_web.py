@@ -30,7 +30,7 @@ OPENER = urllib.request.build_opener(_NoRedirect)
 def _raw(url, path, body=None, headers=None):
     req = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
                                  method="GET" if body is None else "POST",
-                                 headers={"Content-Type": "application/json", "X-Chronicle": "1", **(headers or {})})
+                                 headers={"Content-Type": "application/json", "X-Interlatch": "1", **(headers or {})})
     try:
         with OPENER.open(req, timeout=10) as r:
             return r.status, r.headers, r.read()
@@ -44,7 +44,7 @@ def _call(url, path, body=None, headers=None):
 
 
 def _as(session, **extra):
-    return {**REMOTE, "Cookie": f"chronicle_session={session}", **extra}
+    return {**REMOTE, "Cookie": f"interlatch_session={session}", **extra}
 
 
 @pytest.fixture()
@@ -106,8 +106,12 @@ def test_who_may_look_and_who_may_change(team):
         assert _call(url, "/api/team-store/save", {"enabled": False}, _as(s[name]))[0] == 403
         assert _call(url, "/api/mirror/save", {"enabled": False}, _as(s[name]))[0] == 403
         assert _call(url, "/api/mirror", headers=_as(s[name]))[0] == 403
-    code, r = _call(url, "/api/suggestions/seen", {}, _as(s["Bob"], **{"X-Chronicle-Lang": "ja"}))
+    code, r = _call(url, "/api/suggestions/seen", {}, _as(s["Bob"], **{"X-Interlatch-Lang": "ja"}))
     assert r["error"] == "これができるのはこのハブの管理者だけです"
+    # a browser signed in before the rename, in a tab opened then: its cookie and language header keep counting
+    before = {**REMOTE, "Cookie": f"chronicle_session={s['Bob']}", "X-Chronicle-Lang": "ja"}
+    assert _call(url, "/api/me", headers=before)[1]["viewer"]["name"] == "Bob"
+    assert _call(url, "/api/suggestions/seen", {}, before)[1]["error"] == "これができるのはこのハブの管理者だけです"
 
     code, dv = _call(url, "/api/devices", headers=_as(s["Ada"]))
     assert code == 200 and dv["can_admin"] and dv["viewer"]["name"] == "Ada" and not dv["here"]
@@ -136,7 +140,7 @@ def test_signing_in_with_a_link(team):
     code = people.invite(conn, team["vic"]["id"])
     status, headers, _ = _raw(url, f"/signin?code={code.lower()}", headers=REMOTE)
     cookie = headers["Set-Cookie"]
-    assert status == 302 and headers["Location"] == "/#/" and "Secure" not in cookie
+    assert status == 302 and headers["Location"] == "/#/" and "Secure" not in cookie and cookie.startswith("interlatch_session=")
     assert all(part in cookie for part in ("HttpOnly", "SameSite=Lax", "Path=/", "Max-Age=2592000"))
     session = cookie.split(";")[0].split("=", 1)[1]
     assert _call(url, "/api/me", headers=_as(session))[1]["viewer"]["name"] == "Vic"
@@ -216,7 +220,7 @@ def test_people_api_and_its_audit(team):
     code, r = _call(url, "/api/people/role", {"id": cy, "role": "readonly"}, ada)
     assert code == 200 and {p["name"]: p["role"] for p in r["people"]}["Cy"] == "readonly"
     code, r = _call(url, "/api/people/role", {"id": team["ada"]["id"], "role": "member"},
-                    {**ada, "X-Chronicle-Lang": "ja"})
+                    {**ada, "X-Interlatch-Lang": "ja"})
     assert code == 400 and r["error"] == "このハブの最後の管理者です。先にほかの人を管理者にしてください"
     assert _call(url, "/api/people/revoke", {"id": cy, "token": "f" * 16}, ada)[0] == 400
     code, r = _call(url, "/api/people/remove", {"id": cy}, ada)

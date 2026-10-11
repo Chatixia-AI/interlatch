@@ -105,12 +105,15 @@ def test_http_api(synced):
         req = urllib.request.Request(base + "/api/sync", data=b"{}", method="POST")
         try:
             urllib.request.urlopen(req, timeout=10)
-            raise AssertionError("POST without X-Chronicle header accepted")
+            raise AssertionError("POST without X-Interlatch header accepted")
         except urllib.error.HTTPError as exc:
             assert exc.code == 403
         kid = synced["conn"].execute("SELECT id FROM knowledge LIMIT 1").fetchone()[0]
         req = urllib.request.Request(base + f"/api/knowledge/{kid}", data=b'{"pinned": true}', method="POST",
-                                     headers={"X-Chronicle": "1", "Content-Type": "application/json"})
+                                     headers={"X-Interlatch": "1", "Content-Type": "application/json"})
+        assert json.loads(urllib.request.urlopen(req, timeout=10).read())["ok"] is True
+        req = urllib.request.Request(base + f"/api/knowledge/{kid}", data=b'{"pinned": true}', method="POST",
+                                     headers={"X-Chronicle": "1", "Content-Type": "application/json"})  # a tab from before the rename
         assert json.loads(urllib.request.urlopen(req, timeout=10).read())["ok"] is True
         touched = json.loads(get("/api/file?path=" + urllib.parse.quote(f"{CWD}/auth.py"))[1])  # the VS Code extension's view
         assert [s["id"] for s in touched["sessions"]] == [SID]

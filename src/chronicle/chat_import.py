@@ -27,7 +27,7 @@ from . import chatgpt_export, claude_export
 from .util import utcnow_iso
 from .views import NOT_ANALYZED_CHAT
 
-log = logging.getLogger("chronicle.chat_import")
+log = logging.getLogger("interlatch.chat_import")
 
 _CONVERSATIONS_RE = re.compile(r"^conversations(?:-\d+)?\.json$")  # large exports may be split
 _LOCAL_HEADER = struct.Struct("<4s5H3I2H")  # signature, version, flags, method, time, date, crc, sizes, name/extra lengths

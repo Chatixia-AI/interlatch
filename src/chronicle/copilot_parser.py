@@ -24,7 +24,7 @@ from .parser import IDLE_GAP_CAP_S, TEXT_LIMITS, ApiCall, Event, FileStat, Parse
 from .pricing import is_openai_model, normalize_model, openai_cost, usage_cost
 from .util import one_line, parse_ts, safe_text, truncate
 
-log = logging.getLogger("chronicle.copilot")
+log = logging.getLogger("interlatch.copilot")
 
 COPILOT_PARSER_VERSION = 2  # 2: artifacts (files created, PRs, commits)
 _TERMINAL_TOOLS = {"run_in_terminal", "bash", "shell", "powershell", "run_command", "execute_command"}

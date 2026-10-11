@@ -22,7 +22,7 @@ from .parser import ApiCall, FileStat, ParsedSession, Subagent
 from .pricing import normalize_model
 from .util import one_line, safe_text
 
-log = logging.getLogger("chronicle.bob")
+log = logging.getLogger("interlatch.bob")
 
 BOB_PARSER_VERSION = 2  # 2: Bob's own toolCalls shape, subagents, per-message spend, relative paths
 _ENV_RE = re.compile(r"<environment_details>.*?</environment_details>", re.S)

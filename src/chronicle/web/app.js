@@ -444,7 +444,7 @@ function markTerms(root, terms) { // wrap every occurrence of the terms under ro
 async function api(path, params) {
   const url = new URL(path, location.origin);
   if (params) for (const [k, v] of Object.entries(params)) if (v != null && v !== "") url.searchParams.set(k, v);
-  const res = await fetch(url, { headers: { "X-Chronicle-Lang": LANG } });
+  const res = await fetch(url, { headers: { "X-Interlatch-Lang": LANG } });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401 && body.signin) { showSignin(); throw handledError(body.error); }
@@ -457,7 +457,7 @@ async function api(path, params) {
 // a viewer whose role doesn't allow the change (said in a toast). Both reject with an error already shown. A hub
 // without people answers another device 403 {nobody: true}: the sign-in screen, saying how to add the first admin.
 async function post(path, body) {
-  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Chronicle": "1", "X-Chronicle-Lang": LANG }, body: JSON.stringify(body || {}) });
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Interlatch": "1", "X-Interlatch-Lang": LANG }, body: JSON.stringify(body || {}) });
   const data = await res.json().catch(() => ({ error: res.statusText }));
   if (res.status === 401 && data.signin) { showSignin(); throw handledError(data.error); }
   if (res.status === 403 && data.nobody) { showSignin(data.error); throw handledError(data.error); }
@@ -950,14 +950,14 @@ async function projectOptions(selected, { groups = false } = {}) { // groups: a 
 let foldedGroups = null;
 function groupFolded(key) {
   if (!foldedGroups) {
-    try { foldedGroups = new Set(JSON.parse(localStorage.getItem("chronicle.groups.folded") || "[]")); } catch { foldedGroups = new Set(); }
+    try { foldedGroups = new Set(JSON.parse(localStorage.getItem("interlatch.groups.folded") || "[]")); } catch { foldedGroups = new Set(); }
   }
   return foldedGroups.has(key);
 }
 function foldGroup(key, folded) {
   groupFolded(key);
   folded ? foldedGroups.add(key) : foldedGroups.delete(key);
-  try { localStorage.setItem("chronicle.groups.folded", JSON.stringify([...foldedGroups])); } catch { /* remembered for this tab only */ }
+  try { localStorage.setItem("interlatch.groups.folded", JSON.stringify([...foldedGroups])); } catch { /* remembered for this tab only */ }
 }
 function under(path, folder) { return path === folder || path.startsWith(folder + "/") || path.startsWith(folder + "\\"); }
 // The folder rule a group is offered from the projects picked for it: the folder they share, one per computer
@@ -1181,7 +1181,7 @@ const viewModes = {};
 function viewMode(page, fallback) {
   if (!(page in viewModes)) {
     let saved = null;
-    try { saved = localStorage.getItem(`chronicle.view.${page}`); } catch { /* storage blocked: use the default */ }
+    try { saved = localStorage.getItem(`interlatch.view.${page}`); } catch { /* storage blocked: use the default */ }
     viewModes[page] = saved === "cards" || saved === "list" ? saved : fallback;
   }
   return viewModes[page];
@@ -1195,7 +1195,7 @@ function viewToggle(page, mode) {
   ], mode, (v) => {
     if (v === mode) return;
     viewModes[page] = v;
-    try { localStorage.setItem(`chronicle.view.${page}`, v); } catch { /* remembered for this tab only */ }
+    try { localStorage.setItem(`interlatch.view.${page}`, v); } catch { /* remembered for this tab only */ }
     render();
   });
   seg.classList.add("view-toggle");
@@ -1957,7 +1957,7 @@ route(/^\/session\/([\w-]+)$/, async (params, id) => {
   const outlineBtn = h("button", { type: "button", class: `chip ol-toggle ${sessionOutline ? "on" : ""}`, "aria-pressed": String(sessionOutline), title: t("Show the prompts and files beside the transcript"),
     onclick: () => {
       sessionOutline = !sessionOutline;
-      try { localStorage.setItem("chronicle.outline", sessionOutline ? "1" : "0"); } catch (e) { /* this tab only */ }
+      try { localStorage.setItem("interlatch.outline", sessionOutline ? "1" : "0"); } catch (e) { /* this tab only */ }
       outlineBtn.classList.toggle("on", sessionOutline); outlineBtn.setAttribute("aria-pressed", String(sessionOutline));
       page.classList.toggle("with-outline", sessionOutline);
     } }, icon("outline"), t("Outline"));
@@ -1983,7 +1983,7 @@ route(/^\/session\/([\w-]+)$/, async (params, id) => {
   trackOutline(promptList);
   return page;
 });
-let sessionOutline = (() => { try { return localStorage.getItem("chronicle.outline") !== "0"; } catch (e) { return true; } })();
+let sessionOutline = (() => { try { return localStorage.getItem("interlatch.outline") !== "0"; } catch (e) { return true; } })();
 function trackOutline(list) { // mark the prompt currently at the top of the transcript
   const scroller = $("#app");
   let raf = 0;
@@ -2219,7 +2219,7 @@ function lessonParts(k, compact, picked, again) {
 // Case files (analyze.case_of): a fix, gotcha or decision opens with the scene and asks before it tells. The answers
 // to pick from are the real one and the leads the session ruled out, never made-up ones. What this browser answered,
 // and whether it asks at all, stay in this browser.
-const CASES_KEY = "chronicle.cases", ASK_KEY = "chronicle.cases.ask", SKIPS_KEY = "chronicle.cases.skips";
+const CASES_KEY = "interlatch.cases", ASK_KEY = "interlatch.cases.ask", SKIPS_KEY = "interlatch.cases.skips";
 const SKIPS_TO_STOP = 5; // someone who keeps skipping stops being asked
 let caseLog = null;
 // a case's one-line texts: inline code only, since some sit inside buttons (no links there)
@@ -4521,7 +4521,7 @@ route(/^\/sources$/, async () => {
     const file = picker.files[0];
     if (!file) return;
     importBtn.disabled = true; importBtn.textContent = t("Uploading {size}B…", { size: fmtCompact(file.size) });
-    const res = await fetch("/api/import", { method: "POST", headers: { "X-Chronicle": "1", "X-Chronicle-Lang": LANG, "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(file.name) }, body: file });
+    const res = await fetch("/api/import", { method: "POST", headers: { "X-Interlatch": "1", "X-Interlatch-Lang": LANG, "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(file.name) }, body: file });
     const r = await res.json().catch(() => ({}));
     importBtn.disabled = false; importBtn.textContent = t("Import export…"); picker.value = "";
     if (!r.started) { toast(r.error || t("An import is already running")); return; }
@@ -4827,7 +4827,7 @@ function updatesCard() {
       run.disabled = true; run.textContent = t("Updating…");
       const r = await post("/api/update");
       if (!r.started) { toast(r.error || t("An update is already running")); run.disabled = false; run.textContent = label; return; }
-      try { sessionStorage.setItem("chronicle-updating", u.current); } catch (e) { /* private mode */ }
+      try { sessionStorage.setItem("interlatch-updating", u.current); } catch (e) { /* private mode */ }
       toast(u.restartable ? t("Updating Interlatch; the dashboard restarts when it is done") : t("Updating Interlatch…"), 6000);
       if (u.restartable) restartAfter.add("update");
       watchJob("update");
@@ -6664,8 +6664,8 @@ function mirrorCard(mi) {
   });
   const what = h("div", { class: "set-row" }, h("div", null, h("b", null, t("What it holds")), holdsNote, everythingWarn), includeSeg);
   const docker = h("details", { class: "mirror-docker" }, h("summary", null, t("Postgres in Docker on this computer")),
-    h("p", { class: "muted" }, t("Start one, then fill in server address 127.0.0.1, port 5432, database and user chronicle, the password you chose, and SSL mode disable.")),
-    h("pre", { class: "mcp-code" }, "docker run -d --name chronicle-pg --restart unless-stopped \\\n  -e POSTGRES_USER=chronicle -e POSTGRES_DB=chronicle -e POSTGRES_PASSWORD=<a password> \\\n  -p 127.0.0.1:5432:5432 -v chronicle-pg:/var/lib/postgresql/data postgres:17"));
+    h("p", { class: "muted" }, t("Start one, then fill in server address 127.0.0.1, port 5432, database and user interlatch, the password you chose, and SSL mode disable.")),
+    h("pre", { class: "mcp-code" }, "docker run -d --name interlatch-pg --restart unless-stopped \\\n  -e POSTGRES_USER=interlatch -e POSTGRES_DB=interlatch -e POSTGRES_PASSWORD=<a password> \\\n  -p 127.0.0.1:5432:5432 -v interlatch-pg:/var/lib/postgresql/data postgres:17"));
   const values = () => ({ ...Object.fromEntries([...form.querySelectorAll("input, select")].map((x) => [x.name, x.value])), include });
   const result = h("div", { class: "ts-result" });
   const say = (text, bad) => result.replaceChildren(h("div", { class: bad ? "warn-line" : "muted" }, text));
@@ -6721,14 +6721,14 @@ route(/^\/appearance$/, async () => {
   const theme = root.dataset.theme || "system";
   const setTheme = (v) => {
     if (v === "system") delete root.dataset.theme; else root.dataset.theme = v;
-    try { v === "system" ? localStorage.removeItem("chronicle-theme") : localStorage.setItem("chronicle-theme", v); } catch (e) { /* private mode */ }
+    try { v === "system" ? localStorage.removeItem("interlatch-theme") : localStorage.setItem("interlatch-theme", v); } catch (e) { /* private mode */ }
     themeChanged();
     render();
   };
   let motion = "system";
-  try { const m = localStorage.getItem("chronicle-motion"); if (m === "on" || m === "off") motion = m; } catch (e) { /* private mode */ }
+  try { const m = localStorage.getItem("interlatch-motion"); if (m === "on" || m === "off") motion = m; } catch (e) { /* private mode */ }
   const setMotion = (v) => {
-    try { v === "system" ? localStorage.removeItem("chronicle-motion") : localStorage.setItem("chronicle-motion", v); } catch (e) { /* private mode */ }
+    try { v === "system" ? localStorage.removeItem("interlatch-motion") : localStorage.setItem("interlatch-motion", v); } catch (e) { /* private mode */ }
     root.dataset.motion = v !== "system" ? v : matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on";
     render();
   };
@@ -7014,7 +7014,7 @@ function toggleSidebar() {
   if (matchMedia("(max-width: 860px)").matches) root.classList.toggle("show-sidebar");
   else {
     const hidden = root.classList.toggle("no-sidebar");
-    try { localStorage.setItem("chronicle-sidebar", hidden ? "0" : "1"); } catch (e) { /* private mode */ }
+    try { localStorage.setItem("interlatch-sidebar", hidden ? "0" : "1"); } catch (e) { /* private mode */ }
   }
   peekSidebar(false);
   sidebarExpanded();
@@ -7035,7 +7035,7 @@ function showSidebar() {
   const root = document.documentElement;
   if (!root.classList.contains("no-sidebar") || matchMedia("(max-width: 860px)").matches) return;
   root.classList.remove("no-sidebar");
-  try { localStorage.setItem("chronicle-sidebar", "1"); } catch (e) { /* private mode */ }
+  try { localStorage.setItem("interlatch-sidebar", "1"); } catch (e) { /* private mode */ }
   clearTimeout(peekTimer);
   clearTimeout(peekHoverTimer);
   root.classList.remove("peek-sidebar"); // not peekSidebar(false): that would draw the old page's lists first
@@ -7360,11 +7360,12 @@ function awaitRestart(job = "update") {
   const note = h("div", { class: "muted" }, job === "update" ? t("The update is installed. This page reloads by itself when the dashboard is back.")
     : t("This page reloads by itself when the dashboard is back."));
   document.body.append(h("div", { id: "restart-wait", role: "alertdialog", "aria-modal": "true", "aria-label": t("Restarting Interlatch") },
-    h("div", { class: "rw-card" }, icon("sync", "spin"), h("b", null, t("Restarting Interlatch…")), note)));
+    h("div", { class: "rw-card" }, h("div", { class: "rw-mark", "aria-hidden": "true" }, h("i"), h("i"), icon("sync", "spin")),
+      h("b", null, t("Restarting Interlatch…")), note, h("div", { class: "rw-bar", "aria-hidden": "true" }, h("i")))));
   const since = Date.now();
   const tick = async () => {
     try {
-      const res = await fetch("/api/jobs", { cache: "no-store", headers: { "X-Chronicle-Lang": LANG } });
+      const res = await fetch("/api/jobs", { cache: "no-store", headers: { "X-Interlatch-Lang": LANG } });
       if (res.ok && !(await res.json()).jobs?.[job]) { location.reload(); return; } // a fresh process: it has no record of the job
     } catch (e) { /* down while it restarts */ }
     if (Date.now() - since > 60000 && !note.dataset.late) {
@@ -7452,17 +7453,17 @@ function showUpdate(u, version) {
   document.documentElement.classList.toggle("has-update", !!u);
   if (u) { upd.replaceChildren(h("span", { class: "dot" }), u.to === "build" ? t("Update available") : t("Update to {version}", { version: u.to })); upd.title = t("Open Status to update Interlatch"); }
   let from = null;
-  try { from = sessionStorage.getItem("chronicle-updating"); } catch (e) { /* private mode */ }
+  try { from = sessionStorage.getItem("interlatch-updating"); } catch (e) { /* private mode */ }
   if (from && !u) { // back after an update ran: say so once
-    try { sessionStorage.removeItem("chronicle-updating"); } catch (e) { /* private mode */ }
+    try { sessionStorage.removeItem("interlatch-updating"); } catch (e) { /* private mode */ }
     toast(version && version !== from ? t("Interlatch updated to {version}", { version }) : t("Interlatch updated"), 6000);
   }
   let seen = null;
-  try { seen = localStorage.getItem("chronicle-update-seen"); } catch (e) { /* private mode */ }
+  try { seen = localStorage.getItem("interlatch-update-seen"); } catch (e) { /* private mode */ }
   const card = $("#update-note");
   if (!u || seen === u.key || from) { card.hidden = true; return; }
   if (!card.hidden && card.dataset.key === u.key) return;
-  const dismiss = () => { try { localStorage.setItem("chronicle-update-seen", u.key); } catch (e) { /* private mode */ } card.hidden = true; };
+  const dismiss = () => { try { localStorage.setItem("interlatch-update-seen", u.key); } catch (e) { /* private mode */ } card.hidden = true; };
   card.dataset.key = u.key;
   card.replaceChildren(
     h("div", { class: "un-icon" }, icon("sync")),
@@ -7511,7 +7512,7 @@ function themeChanged() {
 function flipTheme() {
   const root = document.documentElement;
   root.dataset.theme = isDark() ? "light" : "dark";
-  try { localStorage.setItem("chronicle-theme", root.dataset.theme); } catch (e) { /* private mode */ }
+  try { localStorage.setItem("interlatch-theme", root.dataset.theme); } catch (e) { /* private mode */ }
   themeChanged();
   if (parseHash().path === "/appearance") render();
 }

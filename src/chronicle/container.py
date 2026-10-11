@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 from .config import STORES, Config, load_config, set_config_value
 from .config import env as _env
 
-log = logging.getLogger("chronicle.container")
+log = logging.getLogger("interlatch.container")
 
 DEFAULT_PORT = 11524
 WORK_MINUTES = 15

@@ -36,7 +36,7 @@ from .config import Config
 from .db import connect, kv_get, kv_set
 from .util import file_lock, one_line, utcnow_iso
 
-log = logging.getLogger("chronicle.mirror")
+log = logging.getLogger("interlatch.mirror")
 
 ENV_FILE = "mirror.env"
 INCLUDES = ("knowledge", "everything")

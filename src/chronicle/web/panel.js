@@ -1,11 +1,11 @@
-// The menu-bar panel (menubar.py shows panel.html in a popover). The app sends what to show with chronicle.render();
-// the page sends back what was clicked through window.webkit.messageHandlers.chronicle. Search asks the dashboard's
+// The menu-bar panel (menubar.py shows panel.html in a popover). The app sends what to show with interlatch.render();
+// the page sends back what was clicked through window.webkit.messageHandlers.interlatch. Search asks the dashboard's
 // own /api/search. Text from sessions only ever goes in as text (textContent), never as HTML.
 "use strict";
 
 (() => {
   const post = (msg) => {
-    try { window.webkit.messageHandlers.chronicle.postMessage(msg); } catch (e) { /* opened outside the app */ }
+    try { window.webkit.messageHandlers.interlatch.postMessage(msg); } catch (e) { /* opened outside the app */ }
   };
   const $ = (sel, el = document) => el.querySelector(sel);
 
@@ -189,7 +189,7 @@
   async function search() {
     const mine = ++seq, q = query.trim();
     try {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { headers: { "X-Chronicle-Lang": "en" } });
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { headers: { "X-Interlatch-Lang": "en" } });
       const data = await r.json();
       if (mine === seq) { found = data; drawList(); }
     } catch (e) {
@@ -222,7 +222,7 @@
   new ResizeObserver(() => { if (snap) post({ type: "size", height: Math.ceil($("#panel").getBoundingClientRect().height) }); })
     .observe($("#panel"));
 
-  window.chronicle = {
+  window.interlatch = {
     render(data) {
       const first = !snap;
       snap = data;

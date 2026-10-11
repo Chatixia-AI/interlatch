@@ -11,7 +11,7 @@ import logging
 import os
 from pathlib import Path
 
-log = logging.getLogger("chronicle.pg")
+log = logging.getLogger("interlatch.pg")
 
 PG_KEYS = {"PGHOST": "host", "PGPORT": "port", "PGDATABASE": "dbname", "PGUSER": "user", "PGPASSWORD": "password",
            "PGSSLMODE": "sslmode"}

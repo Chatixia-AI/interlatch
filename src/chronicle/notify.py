@@ -14,7 +14,7 @@ import subprocess
 
 from .config import Config
 
-log = logging.getLogger("chronicle.notify")
+log = logging.getLogger("interlatch.notify")
 
 NOTIFIED_KEY = "update_notified"  # kv: the release the last notification was about
 UPGRADE = {"uv": "uv tool upgrade interlatch", "pipx": "pipx upgrade interlatch",

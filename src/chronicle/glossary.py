@@ -13,7 +13,7 @@ from .llm import Runner, make_runner, written_in
 from .synthesize import GLOBAL, kb_sections
 from .util import dumps, loads, one_line, safe_text, truncate, utcnow_iso
 
-log = logging.getLogger("chronicle.glossary")
+log = logging.getLogger("interlatch.glossary")
 
 CATEGORIES = ["system", "service", "component", "tool", "library", "platform", "concept", "acronym", "file",
               "command", "data", "domain", "organization", "other"]
