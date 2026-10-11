@@ -107,10 +107,14 @@ def show_logs() -> None:
 
 
 def main(wheel: str) -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # the log is UTF-8; a pipe's default here is cp1252
     exe = shutil.which("interlatch")
     if not check(bool(exe), "interlatch is on PATH", os.environ.get("PATH", "")):
         return 1
     print(f"interlatch: {exe}")
+    tools = run(["uv", "tool", "dir", "--bin"]).stdout.strip()
+    if not check(Path(exe).parent.resolve() == Path(tools).resolve(), "it is the uv tool's interlatch", f"{exe} vs {tools}"):
+        return 1
     run([exe, "--version"])
 
     first, _ = transcript("ログインのテストを直して")  # read in the ANSI code page, this would come back garbled
@@ -126,6 +130,7 @@ def main(wheel: str) -> int:
     command = settings["hooks"]["SessionEnd"][0]["hooks"][0]["command"]
     print(f"SessionEnd hook: {command}")
     check("\\" not in command and command.endswith(" hook session-end"), "the hook's command has no backslashes", command)
+    check(Path(command.split()[0]).resolve() == Path(exe).resolve(), "the hook runs the uv tool's interlatch", command)
 
     # the hook as Claude Code runs it: Git Bash, or PowerShell without Git for Windows (a bare `bash` may be WSL's)
     git_bash = Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Git" / "bin" / "bash.exe"

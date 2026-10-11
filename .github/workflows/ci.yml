@@ -48,8 +48,10 @@ jobs:
           uv tool install "$(ls "$RUNNER_TEMP"/dist/*.whl)"
           uv tool dir --bin >> "$GITHUB_PATH"
       - name: Set up, record, run in the background, update, uninstall
-        # outside the project: `uv run` would put the project's own interlatch.exe first on PATH
-        run: uv run --no-project python tests/windows_smoke.py "$(ls "$RUNNER_TEMP"/dist/*.whl)"
+        # without the project's environment, whose own interlatch.exe would come first on PATH
+        run: |
+          rm -rf .venv
+          cd "$RUNNER_TEMP" && uv run --no-project python "$GITHUB_WORKSPACE/tests/windows_smoke.py" "$(ls dist/*.whl)"
 
   postgres:
     # The team store and the mirror against a real Postgres: their tests skip without one (INTERLATCH_TEST_PG; set
