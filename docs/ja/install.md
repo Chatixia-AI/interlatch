@@ -111,6 +111,40 @@ Claude Code と Mac 本体には、次の 4 つを設定します（それぞれ
 `uv tool install --force --python 3.13 'interlatch[app]'`（ほかのエクストラを使っている場合は、それも角かっこ内に並べます）。今後アプリだけを使う場合は、先に `interlatch uninstall` を実行してから
 アプリで Claude Code を接続してください。launchd エージェントとアプリが並行して動くのを避けるためです（害はありませんが無駄です）。
 
+## Windows
+
+Windows 10 と 11 では、Interlatch はコマンドライン版を使います。デスクトップアプリとメニューバーアイコンはありません。PowerShell で：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
+uv tool install --python 3.13 interlatch
+interlatch install
+```
+
+`interlatch install` は Mac と同じことを尋ねます。launchd の代わりに、タスク スケジューラの **Interlatch** フォルダーに、
+あなたのアカウントでサインイン中に動く 2 つのタスクを登録します：
+
+| タスク | 内容 |
+| --- | --- |
+| `\Interlatch\Sync` | `interlatch sync --work` を 15 分ごと、およびサインイン時に実行 |
+| `\Interlatch\Dashboard` | ダッシュボードを <http://127.0.0.1:11524/> で動かし続けます。サインイン時に起動し、止まっても 5 分以内に再起動 |
+
+どちらもウィンドウを開きません。タスクは `pythonw.exe` を起動し、それがウィンドウのないコンソールでコマンドを実行します。
+出力は `%USERPROFILE%\.interlatch\logs` の `sync.out.log` や `ui.err.log` などに残ります。バッテリー駆動中も動きます。
+`interlatch uninstall` はタスクを終了して削除し、ダッシュボードも止めます。
+
+Claude Code に追加するフックは `C:/Users/<you>/.local/bin/interlatch.exe hook session-end` を実行します。Claude Code は
+フックを Git Bash で（Git for Windows がなければ PowerShell で）実行し、スラッシュ区切りのパスはどちらでも同じに読まれます。
+名前に空白を含むフォルダーは短い形式（`C:/Users/ADALOV~1/…`）で書きます。
+
+Interlatch は、Windows の表示言語にかかわらず、コーディングエージェントが書くのと同じ UTF-8 でテキストを読み書きします。
+
+Windows ではまだできないこと：
+
+- **チームのハブへの参加。** ハブの一部はプロジェクトのフォルダーを `/…` 形式のパスとして扱うため、Windows からは未検証です。
+- **VS Code 拡張のファイル履歴。** ファイルを `/…` 形式のパスで探します。
+- 新しいバージョンの**デスクトップ通知**と、メニューバーアイコン。
+
 ## メニューバーアイコン
 
 macOS では、Interlatch のマーク（アプリアイコンの重なったページ）をメニューバーに置けます。デスクトップアプリでは常に表示されます。
@@ -197,6 +231,12 @@ Browser**、**Connect Claude Code…**、**Open at Login**、**Install Command-L
 `interlatch ui`（またはその launchd エージェント）で動くダッシュボードはアップデート後に自動で再起動し、開いているタブも再読み込みされます。
 コマンドラインの `interlatch app` は終了して開き直してください。同期や分析の実行中は、終わるまでボタンは待ちます。
 ターミナルからは同じコマンドを直接実行できます。
+
+Windows では、ボタンか `uv tool upgrade interlatch` でアップデートしてください。どちらもツールのフォルダーを残すので、Interlatch
+の実行中でも動きます。実行中に `uv tool install --force interlatch` は使わないでください。先にフォルダーを削除しようとし、
+Windows は実行中の `python.exe` を削除させないため、インストールが途中まで消えた状態になります。そうなった場合は、タスクを
+終了し（`schtasks /End /TN \Interlatch\Dashboard`、`\Interlatch\Sync` も同様）、Claude Code を閉じてから同じコマンドを
+もう一度実行し、`interlatch install` を実行します。
 
 バージョンを固定せずにインストールしてください。`uv tool install 'interlatch==<version>'` とすると uv がインストールの記録に
 `==<version>` を残し、`uv tool upgrade`（ボタンも同じ）はそれより先に進みません。`uv tool install --force interlatch`

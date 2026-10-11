@@ -2,7 +2,7 @@
 
 [← Interlatch](../README.md) · [Docs index](README.md)
 
-Interlatch runs on macOS and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup uses Claude Code when it is installed and offers Codex when it is not; switch any time in **Status › Analysis** or with `interlatch config set analysis.backend codex`. There are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
+Interlatch runs on macOS and [Windows](#windows) and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup uses Claude Code when it is installed and offers Codex when it is not; switch any time in **Status › Analysis** or with `interlatch config set analysis.backend codex`. There are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
 
 Interlatch was called Chronicle. To update from Chronicle, see [Moving from Chronicle](moving-from-chronicle.md).
 
@@ -115,6 +115,40 @@ To use the desktop app from a command-line install, add the `app` extra and run 
 too). If you switch to the app for good, `interlatch uninstall` first and let the app connect Claude Code, so the
 launchd agents do not run alongside it (harmless, but redundant).
 
+## Windows
+
+On Windows 10 and 11 Interlatch is the command-line install; there is no desktop app or menu-bar icon. In PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
+uv tool install --python 3.13 interlatch
+interlatch install
+```
+
+`interlatch install` asks what it asks on a Mac. In place of launchd it registers two tasks in Task Scheduler, in an
+**Interlatch** folder, for your account while you are signed in:
+
+| Task | What it does |
+| --- | --- |
+| `\Interlatch\Sync` | `interlatch sync --work` every 15 minutes, and when you sign in |
+| `\Interlatch\Dashboard` | Keeps the dashboard at <http://127.0.0.1:11524/>: started when you sign in, and again within 5 minutes if it stops |
+
+Neither opens a window: a task starts `pythonw.exe`, which runs the command in a console without one, and its output
+goes to `sync.out.log`, `ui.err.log` and the like in `%USERPROFILE%\.interlatch\logs`. They run on battery too.
+`interlatch uninstall` ends and removes them, the dashboard with them.
+
+The hooks it adds to Claude Code run `C:/Users/<you>/.local/bin/interlatch.exe hook session-end`. Claude Code runs a
+hook in Git Bash, or in PowerShell without Git for Windows, and forward slashes read the same in both. A folder with
+a space in its name is written in its short form (`C:/Users/ADALOV~1/…`).
+
+Interlatch reads and writes text in UTF-8, as the coding agents write it, whatever language Windows is set to.
+
+Not on Windows yet:
+
+- **Joining a team hub.** Parts of the hub expect project folders as `/…` paths, so it is untested from Windows.
+- **The VS Code extension's file history,** which looks files up by `/…` paths.
+- **Desktop notifications** of a new version, and the menu-bar icon.
+
 ## The menu-bar icon
 
 On macOS, Interlatch's mark (the stack of pages from its app icon) can sit in the menu bar. The desktop app always
@@ -209,6 +243,12 @@ commits and changed files a reinstall would bring in.
 A dashboard run by `interlatch ui` (or its launchd agent) restarts itself afterwards and open tabs reload; an
 `interlatch app` from the command line needs quitting and reopening. The button waits while a sync or analysis runs.
 From a terminal, run the same command yourself.
+
+On Windows, update with the button or `uv tool upgrade interlatch`, which keep the tool's folder and work while
+Interlatch runs. Don't run `uv tool install --force interlatch` while it runs: that deletes the folder first, Windows
+refuses to delete a running `python.exe`, and the install is left half removed. If that happened, end the tasks
+(`schtasks /End /TN \Interlatch\Dashboard`, the same for `\Interlatch\Sync`), close Claude Code, run the same
+command again, then `interlatch install`.
 
 Install without a version pin: `uv tool install 'interlatch==<version>'` keeps `==<version>` in uv's record of the
 install, and `uv tool upgrade` (the button included) then never goes past it. `uv tool install --force
