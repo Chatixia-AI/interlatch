@@ -4,6 +4,7 @@
   "description": "Shared memory for your coding agents, in the Explorer: the agent sessions that read or changed the open file, and every file they worked on, from your local Interlatch.",
   "version": "0.3.0",
   "publisher": "Chatixia-AI",
+  "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
