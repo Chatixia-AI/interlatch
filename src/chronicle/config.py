@@ -390,11 +390,7 @@ class Config:
         found = shutil.which("claude")
         if found:
             return found
-        for candidate in ("~/.local/bin/claude", "~/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"):
-            p = Path(candidate).expanduser()
-            if p.exists():
-                return str(p)
-        return None
+        return _installed_bin("claude", ("~/.local/bin/claude", "~/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"))
 
     def codex_bin(self) -> str | None:
         if self.analysis.codex_bin:
@@ -402,11 +398,7 @@ class Config:
         found = shutil.which("codex")
         if found:
             return found
-        for candidate in ("/opt/homebrew/bin/codex", "/usr/local/bin/codex", "~/.local/bin/codex"):
-            p = Path(candidate).expanduser()
-            if p.exists():
-                return str(p)
-        return None
+        return _installed_bin("codex", ("/opt/homebrew/bin/codex", "/usr/local/bin/codex", "~/.local/bin/codex"))
 
     def bob_bin(self) -> str | None:
         """IBM Bob Shell (npm package bobshell), which installs as `bob`."""
@@ -415,11 +407,7 @@ class Config:
         found = shutil.which("bob")
         if found:
             return found
-        for candidate in ("/opt/homebrew/bin/bob", "/usr/local/bin/bob", "~/.local/bin/bob", "~/.npm-global/bin/bob"):
-            p = Path(candidate).expanduser()
-            if p.exists():
-                return str(p)
-        return None
+        return _installed_bin("bob", ("/opt/homebrew/bin/bob", "/usr/local/bin/bob", "~/.local/bin/bob", "~/.npm-global/bin/bob"))
 
     def is_internal_path(self, path: str | None) -> bool:
         """`path` is in Interlatch's own working folder, where agents run its analyses: not a project of yours. Runs from
@@ -427,8 +415,20 @@ class Config:
         if not path:
             return False
         work = self.home / "workdir"
-        return any(str(path).rstrip("/") == str(w) or str(path).startswith(f"{w}/")
-                   for w in {str(work), os.path.realpath(work), str(legacy_home() / "workdir")})
+        path = os.path.normcase(str(path).rstrip("/\\" if os.name == "nt" else "/"))  # Windows: any case, either slash
+        return any(path == w or path.startswith(w + os.sep)
+                   for w in {os.path.normcase(x) for x in (str(work), os.path.realpath(work), str(legacy_home() / "workdir"))})
+
+
+def _installed_bin(name: str, candidates: tuple[str, ...]) -> str | None:
+    """The first of `candidates` that exists: where installers put `name` when it is not on PATH. On Windows: as
+    name.exe (Claude Code's installer) or name.cmd, also in npm's global folder."""
+    if os.name == "nt":
+        npm = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "npm"
+        paths = [p for c in ("~/.local/bin/" + name, str(npm / name), *candidates) for p in (f"{c}.exe", f"{c}.cmd")]
+    else:
+        paths = list(candidates)
+    return next((str(p) for p in map(lambda c: Path(c).expanduser(), paths) if p.exists()), None)
 
 
 def _section(data: dict, name: str) -> dict:

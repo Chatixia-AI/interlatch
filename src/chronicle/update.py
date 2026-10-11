@@ -58,6 +58,9 @@ def _which(name: str) -> str | None:
     """Like shutil.which, but also looks where installers put tools: launchd's PATH is only /usr/bin:/bin."""
     home = Path.home()
     found = shutil.which(name)
+    if sys.platform == "win32":  # uv and its tools install to ~/.local/bin as name.exe
+        return found or next((str(p) for p in (home / ".local/bin" / f"{name}.exe", home / ".cargo/bin" / f"{name}.exe")
+                              if p.is_file()), None)
     for p in [found, home / ".local/bin" / name, home / ".cargo/bin" / name, f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}"]:
         if p and Path(p).is_file() and os.access(p, os.X_OK):
             return str(p)
@@ -389,11 +392,17 @@ def restart() -> None:
     The macOS login item asks launchd for a new process (`launchctl kickstart -k`): a process that re-executes itself
     in place keeps its pid, and macOS then keeps its menu-bar icon hidden. Anything else replaces this process with a
     fresh copy of itself (the pid stays, so a systemd unit is undisturbed; the listening socket is not inherited).
-    After the move from agents-chronicle this environment is gone: the fresh copy is the `interlatch` command's."""
+    After the move from agents-chronicle this environment is gone: the fresh copy is the `interlatch` command's.
+    On Windows, under the Dashboard task, this process ends with the code that has the task's runner start it again
+    (windows.run_hidden): Windows has no exec, and a copy started from here would outlive the task."""
     from .install import LEGACY_LABELS, UI_LABEL
 
     sys.stdout.flush()
     sys.stderr.flush()
+    if sys.platform == "win32" and os.environ.get("INTERLATCH_WINDOWS_TASK"):
+        from .windows import RESTART_EXIT
+
+        os._exit(RESTART_EXIT)
     label = os.environ.get("XPC_SERVICE_NAME")
     if sys.platform == "darwin" and label in (UI_LABEL, LEGACY_LABELS[UI_LABEL]):
         try:  # its own session, so launchd stopping this agent's processes doesn't stop launchctl too

@@ -305,7 +305,7 @@ JA: dict[str, str] = {
     "{label}: interlatch MCP server already registered": "{label}：MCP サーバー「interlatch」は登録済みです",
     "{label}: removed MCP server 'interlatch' ({path})": "{label}：MCP サーバー「interlatch」を削除しました（{path}）",
     "{label}: registered MCP server 'interlatch' ({path})": "{label}：MCP サーバー「interlatch」を登録しました（{path}）",
-    "{label} not found on this Mac; nothing changed": "この Mac に {label} が見つかりません。何も変更していません",
+    "{label} not found on this computer; nothing changed": "このコンピューターに {label} が見つかりません。何も変更していません",
     "; restart {label} to load it": "。読み込むには {label} を再起動してください",
     "registered MCP server '{name}' (user scope)": "MCP サーバー「{name}」を登録しました（ユーザースコープ）",
     "removed MCP server '{name}'": "MCP サーバー「{name}」を削除しました",

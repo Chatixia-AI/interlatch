@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 
@@ -164,7 +165,7 @@ def test_mcp_clients_get_the_server_and_keep_their_settings(env, monkeypatch):
     cfg = env["cfg"]
     status = {c["name"]: c for c in mcp_clients_status()}
     assert not status["cursor"]["detected"] and not status["cursor"]["registered"]
-    assert connect(cfg, "cursor", "/opt/bin/chronicle") == ["Cursor not found on this Mac; nothing changed"]
+    assert connect(cfg, "cursor", "/opt/bin/chronicle") == ["Cursor not found on this computer; nothing changed"]
     assert not (home / ".cursor").exists()
 
     (home / ".cursor").mkdir(parents=True)
@@ -176,7 +177,10 @@ def test_mcp_clients_get_the_server_and_keep_their_settings(env, monkeypatch):
         connect(cfg, name, "/opt/bin/chronicle")
     entry = {"command": "/opt/bin/chronicle", "args": ["mcp"]}
     assert json.loads((home / ".cursor" / "mcp.json").read_text()) == {"mcpServers": {"interlatch": entry}}
-    desktop = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    desktop = connectors.mcp_client_config("claude-desktop")  # where each system keeps apps' settings
+    mac = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    assert desktop == {"darwin": mac, "win32": home / "AppData" / "Roaming" / "Claude" / desktop.name}.get(
+        sys.platform, home / ".config" / "Claude" / desktop.name)
     assert json.loads(desktop.read_text())["mcpServers"]["interlatch"] == entry
     data = json.loads(gemini.read_text())
     assert data["theme"] == "Dracula" and set(data["mcpServers"]) == {"other", "interlatch"}

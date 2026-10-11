@@ -154,10 +154,11 @@ computer. Pick one in **Status › Analysis** or with `interlatch config set ana
 ([Model providers](docs/analysis.md#model-providers)). Recording and browsing work either way; with none set up,
 sessions are archived and wait in the analysis queue.
 
-**Windows or Linux?** The desktop app is macOS only. On Linux, `interlatch install` runs the sync and the dashboard
+**Windows or Linux?** The desktop app is macOS only. On Windows, `uv tool install interlatch` and `interlatch install`
+work as on a Mac, with Task Scheduler running the sync and the dashboard ([Windows](docs/install.md#windows)); a
+Windows computer can't join a team hub yet. On Linux, `interlatch install` runs the sync and the dashboard
 as systemd user units, so a Linux box can be the [hub](docs/devices.md#a-linux-hub) for your other computers. A
 team's hub also runs [in Docker](docs/docker.md).
-Windows is not supported yet.
 
 **Can I keep a project or a session out?** Add the project to `sources.exclude_projects` in the
 [configuration](docs/configuration.md), or remove a session for good with `interlatch forget <id>`.
