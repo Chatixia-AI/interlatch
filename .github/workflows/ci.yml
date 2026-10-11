@@ -3,7 +3,7 @@ name: CI
 # Every pull request and every push to main: the test suite, the install on Windows, the Postgres tests against a real
 # database, known vulnerabilities in the locked dependencies, the pre-commit hooks (.pre-commit-config.yaml), and the
 # hub's Docker image (docker/) built from this checkout.
-# `test` is a required check on main.
+# `test` and `windows` are required checks on main.
 
 on:
   push:
