@@ -1,11 +1,12 @@
 """The Windows install for real, on CI's Windows runner: run after `uv tool install <wheel>`, with a Python outside the
 project (`uv run` would put the project's own interlatch.exe first on PATH). Standard library only.
 
-    python tests/windows_smoke.py <wheel>
+    python tests/windows_smoke.py
 
 `interlatch install --yes`, then: the session it imported (Japanese text intact), the hook command Claude Code runs,
-through Git Bash and through PowerShell, the two Task Scheduler tasks and the dashboard they start, a reinstall over
-the running install, and `interlatch uninstall` ending it all. Every check runs; it fails at the end if any failed.
+through Git Bash and through PowerShell, the two Task Scheduler tasks and the dashboard they start, the dashboard's
+Update button while an MCP server holds interlatch.exe open, and `interlatch uninstall` ending it all. Every check
+runs; it fails at the end if any failed.
 """
 
 from __future__ import annotations
@@ -24,7 +25,8 @@ from pathlib import Path
 HOME = Path.home()
 CLAUDE = HOME / ".claude"
 DATA = HOME / ".interlatch"
-URL = "http://127.0.0.1:11524/api/jobs"
+BASE = "http://127.0.0.1:11524"
+URL = f"{BASE}/api/jobs"
 CWD = "C:\\work\\demo-app"
 FAILED: list[str] = []
 
@@ -76,22 +78,35 @@ def session(sid: str) -> dict | None:
     return dict(row) if row else None
 
 
-def wait_for(fn, seconds: float):
+def wait_for(fn, seconds: float, every: float = 2):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         found = fn()
         if found:
             return found
-        time.sleep(2)
+        time.sleep(every)
     return fn()
 
 
-def dashboard_up() -> bool:
+def api(path: str, body: dict | None = None) -> dict | None:
+    """The dashboard's JSON, or None while it does not answer. A POST carries the header its page sends."""
+    req = urllib.request.Request(BASE + path, data=None if body is None else json.dumps(body).encode(),
+                                 headers={"X-Chronicle": "1", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(URL, timeout=3) as r:
-            return r.status == 200
-    except OSError:
-        return False
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return json.load(r)
+    except (OSError, ValueError):
+        return None
+
+
+def dashboard_up() -> bool:
+    return api("/api/jobs") is not None
+
+
+def update_job() -> dict | None:
+    """The Update job once it has finished (done or error)."""
+    job = ((api("/api/jobs") or {}).get("jobs") or {}).get("update")
+    return job if job and job.get("state") != "running" else None
 
 
 def hook_payload(sid: str, path: Path) -> str:
@@ -106,7 +121,7 @@ def show_logs() -> None:
             print(f"--- {log}\n{log.read_text(encoding='utf-8', errors='replace')[-3000:]}")
 
 
-def main(wheel: str) -> int:
+def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # the log is UTF-8; a pipe's default here is cp1252
     exe = shutil.which("interlatch")
     if not check(bool(exe), "interlatch is on PATH", os.environ.get("PATH", "")):
@@ -150,16 +165,21 @@ def main(wheel: str) -> int:
     proc = run([exe, "status"])
     check("background sync agent" in proc.stdout, "interlatch status reports the background agents")
 
-    # an update while Claude Code holds the MCP server open (interlatch.exe mcp) and the dashboard runs
+    # the dashboard's Update button (uv tool upgrade --reinstall, for an install from a file) while Claude Code holds
+    # the MCP server open (interlatch.exe mcp); then the dashboard restarts through its task's runner
     mcp = subprocess.Popen([exe, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(3)
-        proc = run(["uv", "tool", "install", "--force", wheel])
-        check(proc.returncode == 0, "a reinstall while interlatch.exe and the dashboard run")
+        started = api("/api/update", {})
+        check(bool(started and started.get("started")), "the dashboard's Update starts", str(started))
+        job = wait_for(update_job, 600, every=0.25)
+        check(bool(job and job["state"] == "done"), "the update ran while interlatch.exe and the dashboard run", str(job))
+        check(wait_for(lambda: not dashboard_up(), 30, every=0.25), "the dashboard restarts after it (went away)")
+        check(wait_for(dashboard_up, 90), "... and came back")
     finally:
         mcp.stdin.close()
         mcp.wait(timeout=30)
-    check(dashboard_up(), "the dashboard still answers after the reinstall")
+    check(run([exe, "--version"]).returncode == 0, "interlatch still runs after the update")
 
     proc = run([exe, "uninstall"])
     check(proc.returncode == 0, "interlatch uninstall")
@@ -178,4 +198,4 @@ def main(wheel: str) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1]))
+    raise SystemExit(main())

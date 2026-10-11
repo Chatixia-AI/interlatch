@@ -43,15 +43,21 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       - run: uv run --locked pytest -q tests/test_windows.py
       - name: Install the wheel as a uv tool, as a user would
+        # where uv's installer and uv tool put things on a user's PC, which the Task Scheduler tasks find too
+        # (setup-uv points uv's tool folders at temporary ones through variables that tasks don't see)
         run: |
+          unset UV_TOOL_DIR UV_TOOL_BIN_DIR
+          mkdir -p ~/.local/bin
+          cp "$(dirname "$(command -v uv)")/uv.exe" ~/.local/bin/uv.exe
           uv build --wheel -o "$RUNNER_TEMP/dist"
-          uv tool install "$(ls "$RUNNER_TEMP"/dist/*.whl)"
-          uv tool dir --bin >> "$GITHUB_PATH"
+          ~/.local/bin/uv tool install "$(ls "$RUNNER_TEMP"/dist/*.whl)"
+          cygpath -w ~/.local/bin >> "$GITHUB_PATH"
       - name: Set up, record, run in the background, update, uninstall
         # without the project's environment, whose own interlatch.exe would come first on PATH
         run: |
+          unset UV_TOOL_DIR UV_TOOL_BIN_DIR
           rm -rf .venv
-          cd "$RUNNER_TEMP" && uv run --no-project python "$GITHUB_WORKSPACE/tests/windows_smoke.py" "$(ls dist/*.whl)"
+          cd "$RUNNER_TEMP" && ~/.local/bin/uv run --no-project python "$GITHUB_WORKSPACE/tests/windows_smoke.py"
 
   postgres:
     # The team store and the mirror against a real Postgres: their tests skip without one (INTERLATCH_TEST_PG; set

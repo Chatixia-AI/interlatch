@@ -246,6 +246,7 @@ def no_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("HOME", home)
     monkeypatch.setenv("USERPROFILE", home)  # Windows' home folder (Path.home())
     monkeypatch.setenv("APPDATA", str(Path(home) / "AppData" / "Roaming"))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)  # Linux apps' settings: under HOME, as above
 
 
 AGENT_MANAGERS = ("launchctl", "systemctl", "schtasks")
