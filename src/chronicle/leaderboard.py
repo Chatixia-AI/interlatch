@@ -6,7 +6,8 @@ active time, the sessions started and the tokens used in the last 7, 30 and 90 d
 Google first name until they change it) and their Google picture. No email, project, prompt or title. Leaving deletes
 the row.
 
-Where it lives: Firestore in the `interlatch` Firebase project (leaderboard/ holds its rules and the sign-in page),
+Where it lives: Firestore in the `interlatch` Firebase project (leaderboard/ holds its rules; the sign-in page ships
+with the website, Chatixia-AI/chronicle-site, which owns the project's Hosting site),
 spoken to over REST so no SDK is needed here. Signing in: the dashboard opens SIGNIN_PAGE on Firebase Hosting with
 its own loopback address and a one-time state; that page signs in with Google through Firebase and comes back to
 the dashboard with the Firebase refresh token in the URL fragment, which the dashboard keeps only when the state is
@@ -40,7 +41,7 @@ PROJECT = "interlatch"
 # The project's web config (its Firebase web key among it), as Firebase Hosting serves it: read once per process,
 # so the key lives with the project rather than in this code (api_key())
 CONFIG_URL = "https://interlatch.firebaseapp.com/__/firebase/init.json"
-SIGNIN_PAGE = "https://interlatch.firebaseapp.com/signin.html"  # leaderboard/public/signin.html
+SIGNIN_PAGE = "https://interlatch.firebaseapp.com/signin.html"  # Chatixia-AI/chronicle-site: public/signin.html
 PROVIDERS = ("google.com", "github.com")  # what the rules take; the page offers Google
 PHOTO_RE = re.compile(r"^https://(lh3\.googleusercontent\.com|avatars\.githubusercontent\.com)/\S{1,450}$")
 NAME_MAX = 32
