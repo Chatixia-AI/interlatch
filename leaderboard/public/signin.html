@@ -109,11 +109,17 @@
     try { localStorage.setItem("theme", document.documentElement.dataset.theme); } catch { /* no storage */ }
   });
 
-  const ret = q.get("return") || "", state = q.get("state") || "";
   const errorEl = document.getElementById("error"), button = document.getElementById("google");
   const showError = (msg) => { errorEl.textContent = msg; errorEl.hidden = false; };
-  // only Interlatch on this same computer may receive the session
-  if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d{2,5}\/$/.test(ret) || !/^[A-Za-z0-9_-]{20,100}$/.test(state)) {
+  // Only Interlatch on this same computer may receive the session. The way back is rebuilt from fixed parts (a host
+  // from LOOPBACK, a port as a number), never the address as given; the state is only letters, digits, - and _.
+  const LOOPBACK = new Map([["127.0.0.1", "127.0.0.1"], ["localhost", "localhost"], ["[::1]", "[::1]"]]);
+  const asked = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):(\d{2,5})\/$/.exec(q.get("return") || "");
+  const port = asked ? Number(asked[2]) : 0;
+  const ret = asked && LOOPBACK.has(asked[1]) && port >= 1 && port <= 65535 ? `http://${LOOPBACK.get(asked[1])}:${port}/` : null;
+  const stateAsked = q.get("state") || "";
+  const state = /^[A-Za-z0-9_-]{20,100}$/.test(stateAsked) ? stateAsked.replace(/[^A-Za-z0-9_-]/g, "") : null;
+  if (!ret || !state) {
     showError(t("Open this page from Interlatch: Leaderboard › Sign in with Google."));
   } else {
     // the project's web config, as Firebase Hosting serves it beside this page
