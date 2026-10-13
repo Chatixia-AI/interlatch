@@ -11,7 +11,7 @@ claude.ai・ChatGPT のチャットを自分のマシンの中で記録し、そ
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11 以上">
   <img src="https://img.shields.io/badge/macOS-app%20%2B%20CLI-lightgrey?logo=apple" alt="macOS アプリと CLI">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT ライセンス"></a>
-  <a href="https://github.com/Chatixia-AI/interlatch/pkgs/container/interlatch-hub"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fipitio%2Fbackage%2Fraw%2Findex%2FChatixia-AI%2Fagents-chronicle%2Finterlatch-hub.json&query=%24.downloads&logo=docker&label=hub%20image%20pulls" alt="ハブの Docker イメージの pull 数"></a>
+  <a href="https://github.com/Chatixia-AI/interlatch/pkgs/container/interlatch-hub"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fipitio%2Fbackage%2Fraw%2Findex%2FChatixia-AI%2Finterlatch%2Finterlatch-hub.json&query=%24.downloads&logo=docker&label=hub%20image%20pulls" alt="ハブの Docker イメージの pull 数"></a>
 </p>
 <p align="center">
   <a href="https://github.com/Chatixia-AI/interlatch/actions/workflows/ci.yml"><img src="https://github.com/Chatixia-AI/interlatch/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>

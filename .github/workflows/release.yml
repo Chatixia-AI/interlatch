@@ -3,18 +3,17 @@ name: Release
 # Releasing is one button: Actions → Release → Run workflow on main, and pick patch, minor or major. The version
 # lives in the git tags (hatch-vcs), so nothing is committed first. The run works out the next version from the
 # latest vX.Y.Z tag, runs the tests, creates the tag and the GitHub release (its notes are the changelog.d/ files
-# added since the previous tag), publishes interlatch to PyPI (trusted publishing, no token) and then agents-chronicle
-# at the same version (its name before the rename, which installs interlatch: packaging/agents-chronicle-farewell),
-# publishes the hub's image ghcr.io/chatixia-ai/interlatch-hub (docker/, built from that PyPI release; also as
-# chronicle-hub, its name before the rename), attaches Interlatch-X.Y.Z-arm64.dmg, publishes the VS Code
-# extension when its own version went up (the vscode job says what it needs), and opens a pull request that moves
-# those files' lines into CHANGELOG.md under "## X.Y.Z (date)". The next release doesn't wait for that pull request: a
-# file merged after the tag is simply new since it.
+# added since the previous tag), publishes interlatch to PyPI (trusted publishing, no token), publishes the hub's
+# image ghcr.io/chatixia-ai/interlatch-hub (docker/, built from that PyPI release; also as chronicle-hub, its name
+# before the rename), attaches Interlatch-X.Y.Z-arm64.dmg, publishes the VS Code extension when its own version went
+# up (the vscode job says what it needs), and opens a pull request that moves those files' lines into CHANGELOG.md
+# under "## X.Y.Z (date)". The next release doesn't wait for that pull request: a file merged after the tag is
+# simply new since it.
 # "dry run" (the default) runs the tests and keeps the DMG as a workflow artifact, publishing nothing.
 # Publishing a release tagged vX.Y.Z on GitHub by hand runs the same tests, PyPI and DMG jobs.
 #
-# PyPI takes each package only from the trusted publisher it lists for it: this repository, release.yml and the
-# environment pypi, for interlatch and for agents-chronicle alike.
+# PyPI takes interlatch only from the trusted publisher it lists for it: this repository, release.yml and the
+# environment pypi. (agents-chronicle, the name before the rename, is no longer on PyPI.)
 #
 # The DMG is signed and notarized when these repository secrets exist, otherwise it is ad-hoc signed:
 #   MACOS_CERT_P12            base64 of the "Developer ID Application" certificate + key (.p12)
@@ -89,8 +88,6 @@ jobs:
         with:
           enable-cache: false  # a release never restores a cache another run could have written
       - run: uv run --locked pytest -q
-      - name: agents-chronicle builds (the farewell job publishes it)
-        run: uv build --wheel packaging/agents-chronicle-farewell -o "$RUNNER_TEMP/farewell"
 
   release:
     needs: [plan, test]
@@ -142,61 +139,6 @@ jobs:
             echo "::error::The build is not version $VERSION"
             exit 1
           fi
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
-
-  farewell:
-    # agents-chronicle, Interlatch's name before the rename, at the same version: it installs interlatch, so a copy
-    # installed under that name keeps updating, and one from before the rename (which asks PyPI about agents-chronicle)
-    # sees the release. Published after interlatch, so it never names a version PyPI doesn't have. It carries the same
-    # chronicle/ files as interlatch, which pip needs (packaging/agents-chronicle-farewell/pyproject.toml): a wheel only.
-    needs: [plan, pypi]
-    if: ${{ !cancelled() && needs.pypi.result == 'success' }}
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      contents: read   # checkout
-      id-token: write  # OIDC for PyPI trusted publishing
-    env:
-      VERSION: ${{ needs.plan.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: v${{ needs.plan.outputs.version }}
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
-        with:
-          enable-cache: false  # a release never restores a cache another run could have written
-      - name: Wait until PyPI serves interlatch
-        run: |
-          for _ in $(seq 1 30); do
-            if python3 -m pip download --quiet --no-deps --no-cache-dir --dest "$RUNNER_TEMP/probe" \
-                "interlatch==$VERSION"; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::PyPI does not serve interlatch $VERSION after 5 minutes"
-          exit 1
-      - name: Build agents-chronicle at the release's version, pinned to the same interlatch
-        run: |
-          sed -i "s/0\.0\.0/$VERSION/g" packaging/agents-chronicle-farewell/pyproject.toml
-          uv build --wheel packaging/agents-chronicle-farewell -o dist
-          ls dist
-          if [ ! -f "dist/agents_chronicle-$VERSION-py3-none-any.whl" ]; then
-            echo "::error::The build is not version $VERSION"
-            exit 1
-          fi
-      - name: Check it carries the chronicle/ files of the interlatch on PyPI
-        run: |
-          python3 - "$RUNNER_TEMP/probe/interlatch-$VERSION-py3-none-any.whl" "dist/agents_chronicle-$VERSION-py3-none-any.whl" <<'EOF'
-          import sys, zipfile
-          def files(wheel):  # chronicle/ path -> hash, from the wheel's RECORD
-              z = zipfile.ZipFile(wheel)
-              record = next(n for n in z.namelist() if n.endswith(".dist-info/RECORD"))
-              return {r.split(",")[0]: r.split(",")[1] for r in z.read(record).decode().splitlines() if r.startswith("chronicle/")}
-          if not files(sys.argv[1]) or files(sys.argv[1]) != files(sys.argv[2]):
-              sys.exit("::error::agents-chronicle's chronicle/ files differ from interlatch's")
-          EOF
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
 
   image:

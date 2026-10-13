@@ -17,9 +17,9 @@ uv tool uninstall agents-chronicle
 uv tool install --python 3.13 'interlatch[app]'   # デスクトップアプリが不要なら interlatch だけ
 ```
 
-pipx では `pipx uninstall agents-chronicle` のあとに `pipx install interlatch` です。切り替えるまでは
-`uv tool upgrade agents-chronicle` もそのまま使えます。最後の `agents-chronicle` のリリースが Interlatch をインストールし、
-両方のコマンドを残します。チェックアウトや git の URL からのインストールは、ボタンでは切り替わりません。
+pipx では `pipx uninstall agents-chronicle` のあとに `pipx install interlatch` です。`agents-chronicle` は
+PyPI からなくなったので、`uv tool upgrade agents-chronicle` では何も更新されず、名前が変わる前のバージョンには
+新しいリリースが通知されません。上のコマンドで切り替えてください。チェックアウトや git の URL からのインストールは、ボタンでは切り替わりません。
 アンインストールしてから、同じ方法で `interlatch` をインストールしてください。
 
 **デスクトップアプリの場合：** [最新リリース](https://github.com/Chatixia-AI/interlatch/releases/latest)から

@@ -84,9 +84,8 @@ confirm the icon is in the menu bar of every display:
 ### One-time setup before the first release
 
 1. On PyPI, add a *pending publisher* (Account → Publishing): project `interlatch`, owner
-   `Chatixia-AI`, repository `interlatch`, workflow `release.yml`, environment `pypi`; the project
-   `agents-chronicle` (the old name, which each release also publishes) needs the same publisher. PyPI matches the
-   repository by its name, so after renaming the repository, update both publishers there.
+   `Chatixia-AI`, repository `interlatch`, workflow `release.yml`, environment `pypi`. PyPI matches the
+   repository by its name, so after renaming the repository, update the publisher there.
 2. In the GitHub repository, create an environment named `pypi` (Settings → Environments).
 3. To ship a signed, notarized DMG (Apple Developer Program membership): export the *Developer ID Application*
    certificate with its key as a `.p12`, and add the secrets `MACOS_CERT_P12` (base64 of the file),

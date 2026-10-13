@@ -17,10 +17,10 @@ uv tool uninstall agents-chronicle
 uv tool install --python 3.13 'interlatch[app]'   # or plain interlatch, without the desktop app
 ```
 
-With pipx it is `pipx uninstall agents-chronicle`, then `pipx install interlatch`. Until you switch,
-`uv tool upgrade agents-chronicle` keeps working: the last `agents-chronicle` release installs Interlatch and keeps
-both commands. An install from a checkout or a git URL is not switched by the button: uninstall it and install
-`interlatch` the same way.
+With pipx it is `pipx uninstall agents-chronicle`, then `pipx install interlatch`. `agents-chronicle` is no longer
+on PyPI, so `uv tool upgrade agents-chronicle` gets nothing new, and a version from before the rename doesn't hear of
+new releases: switch with the commands above. An install from a checkout or a git URL is not switched by the button:
+uninstall it and install `interlatch` the same way.
 
 **The desktop app:** download `Interlatch-<version>-arm64.dmg` from the
 [latest release](https://github.com/Chatixia-AI/interlatch/releases/latest), drag **Interlatch** into

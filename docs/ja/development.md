@@ -84,9 +84,8 @@ GitHub で `v<version>` タグのリリースを手動で公開する方法も�
 ### 最初のリリースの前に一度だけ必要な設定
 
 1. PyPI で *pending publisher* を追加します（Account → Publishing）：プロジェクト `interlatch`、オーナー
-   `Chatixia-AI`、リポジトリ `interlatch`、ワークフロー `release.yml`、環境 `pypi`。プロジェクト `agents-chronicle`
-   （以前の名前で、リリースのたびにこちらも公開します）にも同じパブリッシャーが必要です。PyPI はリポジトリを名前で
-   照合するので、リポジトリの名前を変えたら、PyPI 側で両方のパブリッシャーを更新してください。
+   `Chatixia-AI`、リポジトリ `interlatch`、ワークフロー `release.yml`、環境 `pypi`。PyPI はリポジトリを名前で
+   照合するので、リポジトリの名前を変えたら、PyPI 側でパブリッシャーを更新してください。
 2. GitHub リポジトリで `pypi` という名前の環境を作成します（Settings → Environments）。
 3. 署名・公証済みの DMG を配布するには（Apple Developer Program への加入が必要）：*Developer ID Application*
    証明書を鍵ごと `.p12` として書き出し、シークレット `MACOS_CERT_P12`（ファイルの base64）、
