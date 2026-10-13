@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Interlatch Leaderboard</title>
+<!--
+  The leaderboard's sign-in (src/chronicle/leaderboard.py). Interlatch opens this page with ?return=<its own dashboard on
+  this computer>&state=<a one-time value>. After Google sign-in, the page goes back to that dashboard with the Firebase
+  refresh token in the URL fragment (never sent to a server), and the dashboard keeps it only if the state matches the
+  one it made. Nothing is stored here: the session lives in memory, and only a loopback address is accepted as return.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --page: #eef3f9; --surface: #ffffff; --ink: #071629; --ink-2: #283f5c; --muted: #455f7e; --border: #b9cbe0;
+    --cta: #ffb45e; --cta-hover: #ffc67f; --cta-ink: #081a31; --critical: #b42f2f; --grid: rgba(29, 92, 150, 0.09);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #071a33; --surface: #0e2c51; --ink: #eef5ff; --ink-2: #c5d8ef; --muted: #9bb8da; --border: #2b5285;
+      --critical: #ff8f8f; --grid: rgba(140, 207, 255, 0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #071a33; --surface: #0e2c51; --ink: #eef5ff; --ink-2: #c5d8ef; --muted: #9bb8da; --border: #2b5285;
+    --critical: #ff8f8f; --grid: rgba(140, 207, 255, 0.07);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--page); color: var(--ink);
+    font: 15px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; max-width: 720px; margin: 0 auto; }
+  header b { font-size: 16px; }
+  .theme { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px;
+    padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  main { max-width: 420px; margin: 8vh auto 0; padding: 0 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  p { margin: 0 0 14px; color: var(--ink-2); }
+  .small { font-size: 13px; color: var(--muted); }
+  button.go { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 11px 14px;
+    border: 1px solid var(--cta); background: var(--cta); color: var(--cta-ink); border-radius: 6px; font: inherit;
+    font-weight: 600; cursor: pointer; margin: 8px 0 14px; }
+  button.go:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
+  button.go:disabled { opacity: 0.6; cursor: default; }
+  button.go svg { width: 18px; height: 18px; flex: none; }
+  .error { color: var(--critical); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <b>Interlatch</b>
+  <button class="theme" type="button" id="theme" aria-label="Switch between light and dark">◐</button>
+</header>
+<main>
+  <div class="card">
+    <h1 id="title">Join the leaderboard</h1>
+    <p id="lead">Sign in with Google to put your hours, sessions and tokens on the board.</p>
+    <button class="go" type="button" id="google" hidden>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      <span id="google-label">Sign in with Google</span>
+    </button>
+    <p class="error" id="error" role="alert" hidden></p>
+    <p class="small" id="note">Interlatch sends only totals and the name you show: no projects, prompts or titles. Leave from the dashboard whenever you like and your row is deleted.</p>
+  </div>
+</main>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+  import { initializeAuth, inMemoryPersistence, browserPopupRedirectResolver, signInWithPopup, GoogleAuthProvider }
+    from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+
+  const JA = {
+    "Join the leaderboard": "リーダーボードに参加",
+    "Sign in with Google to put your hours, sessions and tokens on the board.": "Google でサインインすると、あなたの時間、セッション、トークンがボードに載ります。",
+    "Sign in with Google": "Google でサインイン",
+    "Interlatch sends only totals and the name you show: no projects, prompts or titles. Leave from the dashboard whenever you like and your row is deleted.":
+      "Interlatch が送るのは合計と表示名だけで、プロジェクト、プロンプト、タイトルは送りません。ダッシュボードからいつでも抜けられ、抜けると行は削除されます。",
+    "Open this page from Interlatch: Leaderboard › Sign in with Google.": "Interlatch の「リーダーボード › Google でサインイン」からこのページを開いてください。",
+    "Signing in…": "サインインしています…",
+    "Back to Interlatch…": "Interlatch に戻ります…",
+    "Sign-in didn't finish: {error}": "サインインが完了しませんでした：{error}",
+    "Switch between light and dark": "ライトとダークを切り替え",
+  };
+  const q = new URLSearchParams(location.search);
+  const ja = q.get("lang") === "ja";
+  const t = (s, vars = {}) => (ja ? JA[s] || s : s).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+  if (ja) document.documentElement.lang = "ja";
+  for (const id of ["title", "lead", "google-label", "note"]) {
+    const el = document.getElementById(id);
+    el.textContent = t(el.textContent);
+  }
+
+  // light / dark: the system's until chosen here
+  const themeBtn = document.getElementById("theme");
+  themeBtn.setAttribute("aria-label", t("Switch between light and dark"));
+  try { const saved = localStorage.getItem("theme"); if (saved) document.documentElement.dataset.theme = saved; } catch { /* no storage */ }
+  themeBtn.addEventListener("click", () => {
+    const dark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", document.documentElement.dataset.theme); } catch { /* no storage */ }
+  });
+
+  const ret = q.get("return") || "", state = q.get("state") || "";
+  const errorEl = document.getElementById("error"), button = document.getElementById("google");
+  const showError = (msg) => { errorEl.textContent = msg; errorEl.hidden = false; };
+  // only Interlatch on this same computer may receive the session
+  if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d{2,5}\/$/.test(ret) || !/^[A-Za-z0-9_-]{20,100}$/.test(state)) {
+    showError(t("Open this page from Interlatch: Leaderboard › Sign in with Google."));
+  } else {
+    // the project's web config, as Firebase Hosting serves it beside this page
+    let auth = null;
+    try {
+      const app = initializeApp(await (await fetch("/__/firebase/init.json")).json());
+      auth = initializeAuth(app, { persistence: inMemoryPersistence, popupRedirectResolver: browserPopupRedirectResolver });
+      button.hidden = false;
+    } catch (e) {
+      showError(t("Sign-in didn't finish: {error}", { error: e.message }));
+    }
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      errorEl.hidden = true;
+      document.getElementById("google-label").textContent = t("Signing in…");
+      try {
+        const { user } = await signInWithPopup(auth, new GoogleAuthProvider());
+        document.getElementById("google-label").textContent = t("Back to Interlatch…");
+        location.replace(`${ret}#/leaderboard?lb_state=${encodeURIComponent(state)}&lb_token=${encodeURIComponent(user.refreshToken)}`);
+      } catch (e) {
+        button.disabled = false;
+        document.getElementById("google-label").textContent = t("Sign in with Google");
+        showError(t("Sign-in didn't finish: {error}", { error: e.code || e.message }));
+      }
+    });
+  }
+</script>
+</body>
+</html>

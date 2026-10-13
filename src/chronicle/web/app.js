@@ -165,6 +165,8 @@ ICONS.person = ICONS.preference;
 ICONS.team = ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", ["circle", { cx: 9, cy: 7, r: 4 }], "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"];
 ICONS.other = ICONS.dot;
 ICONS.shield = ["M12 3 3 6v6c0 5 9 9 9 9s9-4 9-9V6z", "m8 12 3 3 5-6"];
+ICONS.leaderboard = ["M6 9H4.5a2.5 2.5 0 0 1 0-5H6", "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", "M4 22h16", "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22",
+  "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", "M18 2H6v7a6 6 0 0 0 12 0V2Z"]; // a trophy
 function icon(name, cls = "") {
   return s("svg", { class: `icon ${cls}`, viewBox: "0 0 24 24", "aria-hidden": "true" },
     (ICONS[name] || ICONS.dot).map((p) => (typeof p === "string" ? s("path", { d: p }) : s(p[0], p[1]))));
@@ -886,6 +888,7 @@ function navKey(path) {
   if (path.startsWith("/suggestions")) return "suggestions";
   if (path.startsWith("/friction")) return "friction";
   if (path.startsWith("/artifacts")) return "artifacts";
+  if (path === "/leaderboard") return "leaderboard";
   if (path.startsWith("/team")) return { "/team/projects": "teamprojects", "/team/computers": "teamcomputers", "/team/store": "teamstore", "/team/settings": "teamsettings" }[path] || "team";
   if (path === "/activity") return "activity";
   if (path === "/overview") return "teamhome";
@@ -6748,6 +6751,146 @@ route(/^\/appearance$/, async () => {
 });
 
 // =====================================================================================
+// Leaderboard: people who signed in with Google compare their hours, sessions and tokens (leaderboard.py)
+// =====================================================================================
+const LB_METRICS = [["hours", t("Hours"), "clock"], ["sessions", t("Sessions"), "sessions"], ["tokens", t("Tokens"), "tokens"]];
+const LB_DAYS = [["7", t("7 days")], ["30", t("30 days")], ["90", t("90 days")]];
+let lbPoll = null; // while a sign-in runs in another tab, this page looks again now and then
+function lbHref(by, days) {
+  const qs = new URLSearchParams(Object.entries({ by: by === "hours" ? "" : by, days: days === "30" ? "" : days }).filter(([, v]) => v)).toString();
+  return `#/leaderboard${qs ? "?" + qs : ""}`;
+}
+function lbValue(by, v) { return by === "hours" ? fmtHours((v || 0) * 3600) : by === "tokens" ? fmtCompact(v || 0) : fmtNum(v || 0); }
+function lbAvatar(uid, name, photo) { // the initial shows until the picture (fetched through this computer) arrives
+  const box = h("span", { class: "lb-avatar", "aria-hidden": "true" }, h("span", null, (name || "?").slice(0, 1).toUpperCase()));
+  if (uid && photo) {
+    const img = h("img", { alt: "", loading: "lazy", src: `/api/leaderboard/avatar/${encodeURIComponent(uid)}` });
+    img.addEventListener("error", () => img.remove());
+    box.append(img);
+  }
+  return box;
+}
+async function lbPost(path, body) {
+  try {
+    const r = await post(path, body);
+    if (r.error) { toast(r.error, 6000); return null; }
+    return r;
+  } catch (e) { if (!e.handled) toast(e.message, 6000); return null; }
+}
+async function lbSignin() { // Google's sign-in runs on the hosted page, in the browser; it comes back to this dashboard
+  const r = await lbPost("/api/leaderboard/signin");
+  if (!r || !safeUrl(r.url)) return;
+  const a = h("a", { href: r.url, target: "_blank", rel: "noopener" });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  render();
+}
+function lbRenameForm(me, line) { // the name line becomes a field, in place (no prompt(): the Mac app has none)
+  const input = h("input", { type: "text", value: me.name || "", maxlength: 32, "aria-label": t("The name to show on the board"), class: "lb-name-input" });
+  const save = async () => {
+    const name = input.value.trim();
+    if (!name || name === me.name) return render();
+    if (await lbPost("/api/leaderboard/name", { name })) { toast(t("Sent")); render(); }
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") render(); });
+  line.replaceWith(h("div", { class: "lb-rename-form" }, input,
+    h("button", { class: "btn small primary", type: "button", onclick: save }, t("Save")),
+    h("button", { class: "btn small", type: "button", onclick: () => render() }, t("Cancel"))));
+  input.focus();
+  input.select();
+}
+function lbMeLine(me) {
+  const line = h("div", { class: "lb-me" }, lbAvatar(me.uid, me.name, me.photo),
+    h("div", null, h("b", null, me.name), h("div", { class: "muted" }, me.last_sent ? t("Sent {ago}", { ago: ago(me.last_sent) }) : t("Nothing sent yet"))),
+    h("button", { class: "btn small lb-rename", type: "button", onclick: () => lbRenameForm(me, line) }, t("Rename")));
+  return line;
+}
+function lbYouCard(lb) {
+  const me = lb.me;
+  const period = LB_DAYS.find(([v]) => v === String(lb.days))[1];
+  const mine = h("div", { class: "lb-mine" }, LB_METRICS.map(([k, label]) => fact(label, lbValue(k, lb.mine[k]))));
+  const head = cardHead(t("You"), { iconName: "person", hint: t("This computer, last {period}", { period }) });
+  if (!me.joined) {
+    return h("section", { class: "card lb-you" }, head, mine,
+      h("p", null, t("Sign in with Google to put these on the board. Only the totals go, with your first name and picture: no email, project, prompt or title. Leave whenever you like and your row is deleted.")),
+      h("div", { class: "lb-actions" }, h("button", { class: "btn primary", type: "button", onclick: lbSignin }, t("Sign in with Google")),
+        lb.signing_in ? h("button", { class: "btn", type: "button", onclick: async () => { if (await lbPost("/api/leaderboard/cancel")) render(); } }, t("Cancel")) : null),
+      lb.signing_in ? h("div", { class: "muted lb-wait" }, t("Finish signing in on the page that opened. This page carries on by itself once you have.")) : null);
+  }
+  const problem = me.paused ? t("Another computer reports for this account now. Sign in again here to report from this one.") : me.error;
+  return h("section", { class: "card lb-you" }, head,
+    lbMeLine(me),
+    mine,
+    problem ? h("p", { class: "warn-line" }, problem) : null,
+    h("div", { class: "lb-actions" },
+      me.paused ? h("button", { class: "btn primary", type: "button", onclick: lbSignin }, t("Sign in again"))
+        : h("button", { class: "btn", type: "button", onclick: async () => { if (await lbPost("/api/leaderboard/send")) { toast(t("Sent")); render(); } } }, t("Send now")),
+      h("button", { class: "btn", type: "button", onclick: async () => {
+        if (!confirm(t("Leave the leaderboard? Your row is deleted, and nothing more is sent."))) return;
+        if (await lbPost("/api/leaderboard/leave")) { toast(t("You left the leaderboard.")); render(); }
+      } }, t("Leave"))),
+    h("p", { class: "muted lb-note" }, t("Each sync sends your totals again, every 15 minutes at most.")));
+}
+function lbBoard(lb) {
+  const by = lb.by, label = LB_METRICS.find(([v]) => v === by)[1];
+  if (lb.error) return h("section", { class: "card empty" }, t("Could not reach the leaderboard: {error}", { error: lb.error }));
+  if (!lb.rows.length) {
+    return h("section", { class: "card" }, emptyArt("flag", h("b", null, t("No one on this board yet")),
+      h("div", { class: "muted" }, t("Sign in to be the first."))));
+  }
+  const top = Math.max(...lb.rows.map((r) => r[by] || 0), 1);
+  // all three numbers on every row; the ranked one stands out and drives the bar. A column's head ranks by it.
+  const nums = (r) => LB_METRICS.map(([k]) => h("span", { class: `lb-num${k === by ? " on" : ""}` }, lbValue(k, r[k])));
+  const head = h("li", { class: "lb-row lb-head", "aria-hidden": "true" }, h("span"), h("span"), h("span"),
+    LB_METRICS.map(([k, l]) => h("a", { class: `lb-num${k === by ? " on" : ""}`, href: lbHref(k, String(lb.days)) }, l)));
+  const row = (r) => h("li", { class: `lb-row${r.me ? " me" : ""}${r.rank <= 3 ? ` podium p${r.rank}` : ""}`,
+    title: LB_METRICS.map(([k, l]) => `${l}: ${lbValue(k, r[k])}`).join(" · ") },
+    h("span", { class: "lb-rank" }, String(r.rank)),
+    lbAvatar(r.uid, r.name, r.photo),
+    h("div", { class: "lb-who" },
+      h("div", { class: "lb-name" }, h("span", null, r.name), r.me ? h("span", { class: "lb-you-tag" }, t("you")) : null),
+      h("div", { class: "lb-bar", "aria-hidden": "true" }, h("i", { style: { width: `${Math.max(2, ((r[by] || 0) / top) * 100)}%` } }))),
+    nums(r));
+  const meShown = lb.rows.some((r) => r.me);
+  return h("section", { class: "card" },
+    cardHead(t("Ranked by {metric}", { metric: label.toLowerCase() }), { iconName: "leaderboard", hint: tn(lb.rows.length, "{n} person", "{n} people", { n: fmtNum(lb.rows.length) }) }),
+    h("ol", { class: "lb-list" }, head, lb.rows.map(row)),
+    lb.me.joined && !meShown && !lb.me.paused ? h("p", { class: "muted" }, lb.me.last_sent ? t("You're not in the top {n} on this board.", { n: lb.rows.length }) : t("Your row appears after the first send.")) : null);
+}
+route(/^\/leaderboard$/, async (params) => {
+  clearTimeout(lbPoll);
+  if (params.lb_token || params.lb_state) { // back from the sign-in page: the session leaves the address bar first
+    const { lb_token: token, lb_state: state } = params;
+    history.replaceState(null, "", "#/leaderboard");
+    lastHash = location.hash;
+    const r = await lbPost("/api/leaderboard/finish", { state, token });
+    if (r) toast(t("Signed in as {name}. Your totals are on the board.", { name: r.name }), 6000);
+    params = {};
+  }
+  const by = LB_METRICS.some(([v]) => v === params.by) ? params.by : "hours";
+  const days = LB_DAYS.some(([v]) => v === params.days) ? params.days : "30";
+  const lb = await api("/api/leaderboard", { by, days });
+  if (lb.signing_in && !lb.me.joined) {
+    const seq = renderSeq;
+    lbPoll = setTimeout(() => { if (seq === renderSeq && parseHash().path === "/leaderboard") render(); }, 3000);
+  }
+  return h("div", { class: "narrow-page wide" },
+    h("div", { class: "page-head" }, titled("flag", h("h1", null, t("Leaderboard")),
+      h("div", { class: "sub" }, t("Who spends the most time with their coding agents. Sign in with Google to compete."))),
+      h("div", { class: "lb-controls" },
+        segControl(LB_METRICS.map(([v, l]) => [v, l]), by, (v) => go(lbHref(v, days))),
+        segControl(LB_DAYS, days, (v) => go(lbHref(by, v))))),
+    h("div", { class: "grid lb-grid" }, lbBoard(lb), lbYouCard(lb)),
+    h("p", { class: "muted lb-note" }, t("Each person's Interlatch reports their own totals: hours of active agent time, sessions started and tokens used by that computer's coding agents. Nobody checks them: it's for fun.")));
+});
+function leaderboardSidebar(box) {
+  box.replaceChildren(h("div", { class: "sb-head" }, h("h2", null, t("Leaderboard"))),
+    h("div", { class: "sb-scroll" }, h("div", { class: "sb-group" }, t("Ranked by")),
+      LB_METRICS.map(([v, label, ic]) => sbRow(label, lbHref(v, "30"), ic, null, ["/leaderboard", "by", v === "hours" ? "" : v]))));
+}
+
+// =====================================================================================
 // Shell: rail, section sidebar, toolbar, status bar, command palette
 // =====================================================================================
 const SECTIONS = [
@@ -6760,11 +6903,12 @@ const SECTIONS = [
   { key: "artifacts", label: t("Artifacts"), href: "#/artifacts" },
   { key: "projects", label: t("Projects"), href: "#/projects" },
   { key: "suggestions", label: t("Suggestions"), href: "#/suggestions" },
+  { key: "leaderboard", label: t("Leaderboard"), href: "#/leaderboard", here: true }, // signing in keeps a credential: this computer only
   { key: "team", label: t("Team"), href: "#/team" }, // a hub's admins
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", leaderboard: "leaderboard", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
 const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), appearance: t("Appearance") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
@@ -6805,7 +6949,7 @@ function renderRail() {
   const link = (sx) => h("a", { href: sx.href, "data-section": sx.key, "aria-label": sx.label,
     onclick: (e) => railClick(e, sx) }, icon(sx.icon || sx.key));
   const settings = SECTIONS.find((x) => x.key === "settings");
-  const shown = SECTIONS.filter((x) => (!x.team || ME?.hub?.team) && !(dedicated() && DEDICATED_HIDDEN.has(x.key)));
+  const shown = SECTIONS.filter((x) => (!x.team || ME?.hub?.team) && (!x.here || ME?.viewer?.here !== false) && !(dedicated() && DEDICATED_HIDDEN.has(x.key)));
   if (limited()) { // no transcripts to search, no settings of this hub to see
     rail.replaceChildren(...shown.filter((x) => LIMITED_SECTIONS.has(x.key)).map(link));
     return;
@@ -6998,6 +7142,7 @@ async function buildSidebar(section) {
     else if (section === "projects") await projectsSidebar(box);
     else if (section === "artifacts") await artifactsSidebar(box);
     else if (section === "suggestions") await suggestionsSidebar(box);
+    else if (section === "leaderboard") leaderboardSidebar(box);
     else if (section === "team") teamSidebar(box);
     else settingsSidebar(box);
   } catch (e) {
@@ -7225,7 +7370,7 @@ const LIMITED_SECTIONS = new Set(["home", "teamhome", "sessions", "knowledge", "
 // Team overview is its home, and what only a person's own computer needs (Sync, artifacts, suggestions, sources, MCP,
 // devices) is left out.
 function dedicated() { return !!ME?.hub?.dedicated && !!ME?.hub?.team; }
-const DEDICATED_HIDDEN = new Set(["home", "artifacts", "suggestions"]);
+const DEDICATED_HIDDEN = new Set(["home", "artifacts", "suggestions", "leaderboard"]);
 const DEDICATED_HIDDEN_HREFS = new Set(["#/", "#/artifacts", "#/suggestions", "#/friction", "#/sources", "#/mcp", "#/devices"]);
 function teamProjectsLabel() { return dedicated() ? t("Projects") : t("Shared projects"); }
 async function loadMe() {

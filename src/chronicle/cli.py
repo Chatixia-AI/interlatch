@@ -104,6 +104,11 @@ def cmd_sync(args) -> int:
         work = run_worker(cfg, progress=None if args.quiet else (lambda m: print(f"  {m}")))
         if not args.quiet:
             print(f"work: {work.summary()}")
+    from .leaderboard import send_safely
+
+    conn = _conn(cfg)
+    send_safely(cfg, conn)  # once signed in to the leaderboard (`interlatch leaderboard join`)
+    conn.close()
     return 0
 
 
@@ -2509,6 +2514,55 @@ def _hub_folders(cfg, console, args) -> int:
     return code
 
 
+def cmd_leaderboard(args) -> int:
+    """`interlatch leaderboard`: the usage leaderboard: where you stand, or join, send now, or leave."""
+    from . import leaderboard as lb
+
+    cfg = _cfg()
+    console = _console()
+    try:
+        if args.action == "join":  # signing in is a browser's job: Google's page, then back to the dashboard
+            import webbrowser
+
+            url = f"http://127.0.0.1:{cfg.server_port}/#/leaderboard"
+            console.print(f"Sign in with Google from the dashboard's Leaderboard page: {url}", highlight=False)
+            if not _wait_for_port(cfg.server_port, 1.0):
+                console.print("[yellow]The dashboard isn't running[/]: start it with `interlatch ui`.", highlight=False)
+                return 1
+            webbrowser.open(url)
+            return 0
+        if args.action == "send":
+            conn = _conn(cfg)
+            st = lb.send(cfg, conn, force=True)
+            conn.close()
+            if st is None:
+                console.print("Not on the leaderboard: `interlatch leaderboard join`.", highlight=False)
+                return 1
+        elif args.action == "leave":
+            lb.leave(cfg)
+            console.print("Left the leaderboard: your row is deleted, and nothing more is sent.", highlight=False)
+            return 0
+    except lb.LeaderboardError as exc:
+        console.print(f"[red]{exc}[/]", highlight=False)
+        return 1
+    st = lb.status(cfg)
+    if not st["joined"]:
+        console.print("Not on the leaderboard. `interlatch leaderboard join` opens the dashboard's Leaderboard page, "
+                      "where you sign in with Google.", highlight=False)
+        return 0
+    console.print(f"On the leaderboard as [bold]{st['name']}[/] · last sent {st['last_sent'] or 'not yet'}", highlight=False)
+    for problem in (st.get("paused"), st.get("error")):
+        if problem:
+            console.print(f"  [yellow]{problem}[/]", highlight=False)
+    conn = _conn(cfg)
+    mine = lb.totals(conn, cfg)
+    conn.close()
+    for days in lb.WINDOWS:
+        console.print(f"  {days:>2} days: {mine[f'h{days}']:,.1f} h · {mine[f's{days}']:,} sessions · "
+                      f"{mine[f't{days}']:,} tokens", highlight=False)
+    return 0
+
+
 def cmd_mirror(args) -> int:
     """`interlatch mirror`: the copy of this archive in Postgres ([mirror] to = "postgres"): what it holds, or write it now."""
     from . import mirror
@@ -2881,6 +2935,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("mcp", help="run the MCP server (stdio); registered by `install` and `connect`")
     s.add_argument("--print-config", action="store_true", help="print a JSON entry to add Interlatch to any MCP client by hand")
     s.set_defaults(fn=cmd_mcp)
+
+    s = sub.add_parser("leaderboard", help="the usage leaderboard: sign in with Google and compare hours, sessions and tokens")
+    s.add_argument("action", nargs="?", choices=["status", "join", "send", "leave"], default="status")
+    s.set_defaults(fn=cmd_leaderboard)
 
     s = sub.add_parser("mirror", help="a copy of this archive in a Postgres database you choose: what it holds, or write it now")
     s.add_argument("action", nargs="?", choices=["status", "sync"], default="status")

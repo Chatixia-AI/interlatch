@@ -174,6 +174,7 @@ class App:
         self.cfg = cfg
         self.local = threading.local()
         self.jobs = Jobs()
+        self._lb_signin: dict | None = None  # a leaderboard sign-in waiting to come back from the hosted page
         self._cfg_sig = self._config_sig()
         self._update_check = threading.Lock()  # one daily update check at a time
         from .hub import IngestTrigger
@@ -500,6 +501,71 @@ class App:
             x["project"] = (labels.get(x["project_path"]) or project_name_for(x["project_path"])) if x["project_path"] else None
         return {"now": now, "seen": news.seen_at(c, viewer), "unseen": news.unseen(c, viewer, scope=scope, admin=admin),
                 "items": items}
+
+    # ---- the usage leaderboard (leaderboard.py): this computer's person against everyone who signed in
+    def leaderboard(self, q: dict) -> dict:
+        from . import leaderboard as lb
+
+        by = q.get("by") if q.get("by") in lb.METRICS else "hours"
+        days = int(q["days"]) if q.get("days") in {str(d) for d in lb.WINDOWS} else 30
+        me = lb.status(self.cfg)
+        mine = lb.totals(self.conn, self.cfg)
+        out = {"by": by, "days": days, "me": me, "rows": [], "error": None, "signing_in": self._lb_pending() is not None,
+               "mine": {"hours": mine[f"h{days}"], "sessions": mine[f"s{days}"], "tokens": mine[f"t{days}"]}}
+        try:
+            rows = sorted(lb.board(by, days), key=lambda r: r[by], reverse=True)
+        except lb.LeaderboardError as e:
+            out["error"] = str(e)
+            return out
+        out["rows"] = [{"rank": i + 1, **r, "me": bool(me.get("joined") and r["uid"] == me.get("uid"))}
+                       for i, r in enumerate(rows)]
+        return out
+
+    def _lb_pending(self) -> dict | None:
+        """The sign-in this dashboard started and waits to hear back from, while it may still come."""
+        s = self._lb_signin
+        return s if s and s["expires"] > time.time() else None
+
+    def action_leaderboard_signin(self, return_to: str, lang: str) -> dict:
+        """Start a sign-in: the hosted page's address, carrying this dashboard's address and a one-time state."""
+        from . import leaderboard as lb
+
+        state = lb.new_state()
+        self._lb_signin = {"state": state, "expires": time.time() + lb.SIGNIN_TTL}
+        return {"url": lb.signin_url(return_to, state, "ja" if lang == "ja" else "en")}
+
+    def action_leaderboard_finish(self, body: dict) -> dict:
+        """The sign-in page came back: keep its session if it carries the state this dashboard made, then send."""
+        from . import leaderboard as lb
+
+        pending = self._lb_pending()
+        if not lb.same_state(pending and pending["state"], body.get("state")):
+            raise lb.LeaderboardError("this sign-in wasn't started here, or took too long: start again")
+        self._lb_signin = None  # one use
+        lb.sign_in(self.cfg, body.get("token"))
+        lb.send(self.cfg, self.conn, force=True)
+        return lb.status(self.cfg)
+
+    def action_leaderboard_cancel(self) -> None:
+        self._lb_signin = None
+
+    def action_leaderboard_send(self) -> dict:
+        from . import leaderboard as lb
+
+        lb.send(self.cfg, self.conn, force=True)
+        return lb.status(self.cfg)
+
+    def action_leaderboard_name(self, body: dict) -> dict:
+        from . import leaderboard as lb
+
+        lb.rename(self.cfg, self.conn, body.get("name"))
+        return lb.status(self.cfg)
+
+    def action_leaderboard_leave(self) -> dict:
+        from . import leaderboard as lb
+
+        lb.leave(self.cfg)
+        return lb.status(self.cfg)
 
     def _k(self, k: dict) -> dict:
         k["tags"] = loads(k.pop("tags_json", None), []) or []
@@ -2008,6 +2074,13 @@ class App:
                 conn.close()
             progress("processing…")
             work = run_worker(self.cfg, progress=progress)
+            conn = connect(self.cfg.db_path)
+            try:
+                from .leaderboard import send_safely
+
+                send_safely(self.cfg, conn)  # once signed in to the leaderboard
+            finally:
+                conn.close()
             return f"{report.summary()} | {work.summary()}"
 
         return self.jobs.start("sync", job)
@@ -2595,6 +2668,17 @@ def make_handler(app: App, port: int):
                     return self._json(app.people_info())
                 if p == "/api/overview":
                     return self._json(app.overview(q, limited=self.limited))
+                if p == "/api/leaderboard" or p.startswith("/api/leaderboard/"):  # a person's own computer only
+                    if not self._from_here():
+                        return self._json({"error": tr("the leaderboard is on the dashboard of your own computer")}, 403)
+                    if p == "/api/leaderboard":
+                        return self._json(app.leaderboard(q))
+                    m = re.fullmatch(r"/api/leaderboard/avatar/([\w-]+)", p)
+                    if m:
+                        from .leaderboard import avatar
+
+                        got = avatar(m.group(1), app.cfg)
+                        return self._image(*got) if got else self._json({"error": "no avatar"}, 404)
                 if p == "/api/team/who":
                     return self._json(app.who_options())
                 if p == "/api/team":
@@ -2792,6 +2876,26 @@ def make_handler(app: App, port: int):
             try:
                 if p == "/api/sync":
                     return self._json({"started": app.action_sync()})
+                m = re.fullmatch(r"/api/leaderboard/(signin|finish|cancel|send|name|leave)", p)
+                if m:  # signing in keeps a credential on this computer: only from here
+                    from .leaderboard import LeaderboardError
+
+                    if not self._from_here():
+                        return self._json({"error": tr("the leaderboard is on the dashboard of your own computer")}, 403)
+                    body = body if isinstance(body, dict) else {}
+                    try:
+                        if m.group(1) == "signin":  # the hosted page comes back to this dashboard, as it was opened
+                            return self._json(app.action_leaderboard_signin(f"http://{self._host()}/", i18n.lang.get()))
+                        if m.group(1) == "finish":
+                            return self._json(app.action_leaderboard_finish(body))
+                        if m.group(1) == "cancel":
+                            app.action_leaderboard_cancel()
+                            return self._json({"ok": True})
+                        if m.group(1) == "name":
+                            return self._json(app.action_leaderboard_name(body))
+                        return self._json(app.action_leaderboard_send() if m.group(1) == "send" else app.action_leaderboard_leave())
+                    except LeaderboardError as e:
+                        return self._json({"error": str(e)}, 502)
                 m = re.fullmatch(r"/api/artifacts/(\d+)/reveal", p)
                 if m:  # open the file in its own app, or show it in Finder: only from this computer
                     if not self._local():
