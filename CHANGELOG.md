@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.23.0 (2026-10-13)
+
+- **Leaderboard:** sign in with Google and compare your hours of agent time, sessions and tokens over 7, 30 or 90
+  days with everyone else who joined, under **Leaderboard** in the dashboard (`interlatch leaderboard` shows where
+  you stand). Only the totals from this computer's coding-agent sessions are sent, with your first name (rename it
+  any time) and your Google picture. No email, projects, prompts or titles. **Leave** deletes your row.
+
 ## 0.22.0 (2026-10-10)
 
 - **Your Chronicle setup moves over by itself:** the first time the dashboard or the background sync starts,
