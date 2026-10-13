@@ -1,0 +1,120 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// The Interlatch usage leaderboard (src/chronicle/leaderboard.py writes it, the dashboard's Leaderboard page reads it).
+//
+// Collection: players
+// Document ID: the player's Firebase Auth uid (signed in with Google; GitHub allowed for later)
+// Fields (all required, no others):
+//   - provider: string ('google.com' | 'github.com') - how they signed in; must be the token's sign-in provider
+//   - pid: string (1-128, [A-Za-z0-9_-]) - their id at that provider; must be the one in the token
+//   - name: string (1-64 characters) - the name they show on the board (their choice; not their email)
+//   - photo: string ('' or an https URL on Google's or GitHub's avatar host, <= 500) - their picture
+//   - machine: string (8-64, [A-Za-z0-9-]) - the computer that reports for this player (one at a time)
+//   - h7, h30, h90: number (>= 0, bounded, h7 <= h30 <= h90) - hours of active agent time in the last 7/30/90 days
+//   - s7, s30, s90: int (>= 0, bounded, s7 <= s30 <= s90) - sessions started in those days
+//   - t7, t30, t90: int (>= 0, bounded, t7 <= t30 <= t90) - tokens (input, output, cache read and write)
+//   - at: timestamp - server time of the upload; must be request.time
+//
+// No email or other private data: the documents are public. Totals are self-reported: the rules bound them, not prove
+// them.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function signInProvider() {
+      return request.auth.token.firebase.sign_in_provider;
+    }
+
+    // Signed in with a provider the board takes, which names the person in the token
+    function isPlayerAccount() {
+      return isAuthenticated()
+        && signInProvider() in ['google.com', 'github.com']
+        && signInProvider() in request.auth.token.firebase.identities;
+    }
+
+    function providerId() {
+      return string(request.auth.token.firebase.identities[signInProvider()][0]);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function inRange(v, max) {
+      return v is number && v >= 0 && v <= max;
+    }
+
+    function isCount(v, max) {
+      return v is int && v >= 0 && v <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidPlayer(data) {
+      let fields = ['provider', 'pid', 'name', 'photo', 'machine', 'h7', 'h30', 'h90', 's7', 's30', 's90',
+                    't7', 't30', 't90', 'at'];
+      return hasOnlyAllowedFields(fields) && hasRequiredFields(fields)
+        && data.provider == signInProvider()
+        && data.pid is string && data.pid.matches('^[A-Za-z0-9_-]{1,128}$') && data.pid == providerId()
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 64
+        && data.photo is string && data.photo.size() <= 500
+        && (data.photo == ''
+            || data.photo.matches('^https://(lh3[.]googleusercontent[.]com|avatars[.]githubusercontent[.]com)/[^\\s]+$'))
+        && data.machine is string && data.machine.matches('^[A-Za-z0-9-]{8,64}$')
+        // hours: parallel sessions add up, so a day may hold more than 24
+        && inRange(data.h7, 7 * 24 * 50) && inRange(data.h30, 30 * 24 * 50) && inRange(data.h90, 90 * 24 * 50)
+        && data.h7 <= data.h30 && data.h30 <= data.h90
+        && isCount(data.s7, 7 * 5000) && isCount(data.s30, 30 * 5000) && isCount(data.s90, 90 * 5000)
+        && data.s7 <= data.s30 && data.s30 <= data.s90
+        && isCount(data.t7, 7 * 20000000000) && isCount(data.t30, 30 * 20000000000)
+        && isCount(data.t90, 90 * 20000000000)
+        && data.t7 <= data.t30 && data.t30 <= data.t90
+        && data.at == request.time;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /players/{userId} {
+      // The board is public on purpose (anyone running Interlatch may open it); queries are capped at 100 rows.
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
+
+      allow create: if isOwner(userId) && isPlayerAccount() && isValidPlayer(request.resource.data);
+      // provider and pid never change: the uid stays tied to the account it was made with
+      allow update: if isOwner(userId) && isPlayerAccount() && isValidPlayer(request.resource.data)
+        && request.resource.data.provider == resource.data.provider && request.resource.data.pid == resource.data.pid;
+      // leaving the board
+      allow delete: if isOwner(userId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

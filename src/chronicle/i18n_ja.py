@@ -345,6 +345,7 @@ JA: dict[str, str] = {
         "`interlatch hub invite <名前> --email <メール> --role admin` を実行し、表示される招待リンクを開いてください",
     "you're not on this hub; ask an admin to add you": "あなたはこのハブに登録されていません。管理者に追加を頼んでください",
     "only an admin of this hub can do this": "これができるのはこのハブの管理者だけです",
+    "the leaderboard is on the dashboard of your own computer": "リーダーボードは自分のコンピューターのダッシュボードで開けます",
     "this computer is not a hub": "このコンピューターはハブではありません",
     "Could not sign in": "サインインできませんでした",
     "Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "

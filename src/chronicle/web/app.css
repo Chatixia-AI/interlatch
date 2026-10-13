@@ -2361,3 +2361,56 @@ td.pg-cell { width: 1%; text-align: right; }
 .mirror-docker summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
 .mirror-docker p { margin: 8px 0 6px; }
 .mirror-warn { margin-top: 8px; font-size: 12.5px; line-height: 1.45; }
+
+/* Leaderboard: the board beside the You card; ranks 1 to 3 in gold, silver and bronze */
+.lb-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.lb-grid { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+@media (max-width: 860px) { .lb-grid { grid-template-columns: minmax(0, 1fr); } .lb-you { order: -1; } }
+.lb-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.lb-row { display: grid; grid-template-columns: 30px 32px minmax(0, 1fr) repeat(3, 72px); align-items: center; gap: 10px; padding: 9px 6px;
+  border-top: 1px solid var(--grid); border-radius: 4px; }
+.lb-row:first-child { border-top: 0; }
+.lb-row.me { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
+.lb-rank { font: 600 13px var(--mono); color: var(--muted); text-align: center; }
+.lb-row.podium .lb-rank { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #241500; }
+.lb-row.p1 .lb-rank { background: #f5c242; }
+.lb-row.p2 .lb-rank { background: #c9d3de; }
+.lb-row.p3 .lb-rank { background: #e0a370; }
+.lb-avatar { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+  background: var(--surface-3); color: var(--ink-2); font-weight: 600; flex: none; }
+.lb-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lb-who { min-width: 0; }
+.lb-name { display: flex; align-items: center; gap: 6px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-name > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.lb-name a { color: var(--ink); text-decoration: none; }
+.lb-name a:hover { text-decoration: underline; }
+.lb-you-tag { font: 500 10.5px var(--mono); padding: 1px 6px; border-radius: 9px; background: var(--accent); color: var(--surface); }
+.lb-bar { height: 5px; margin-top: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.lb-bar i { display: block; height: 100%; border-radius: 3px; background: var(--chart); }
+.lb-row.me .lb-bar i { background: var(--chart-strong); }
+.lb-mine { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 12px; }
+.lb-me { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.lb-me b { font-size: 15px; }
+.lb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.lb-wait { margin-top: 10px; font-size: 12.5px; }
+.lb-note { font-size: 12.5px; margin-top: 12px; }
+.lb-me > div { flex: 1; min-width: 0; }
+.lb-rename { flex: none; }
+.lb-rename-form { display: flex; gap: 6px; align-items: center; margin: 4px 0 12px; }
+.lb-rename-form input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 5px;
+  background: var(--surface); color: var(--ink); font: inherit; }
+/* the three numbers of a row: the one ranked by in bold, the others quieter */
+.lb-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); font-size: 13.5px; }
+.lb-num.on { color: var(--ink); font-weight: 600; font-size: 15px; }
+.lb-head { padding-top: 0; padding-bottom: 4px; }
+.lb-head .lb-num { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; text-decoration: none; }
+.lb-head .lb-num:hover { color: var(--ink); text-decoration: underline; }
+.lb-head .lb-num.on { color: var(--ink); font-weight: 600; }
+.lb-head + .lb-row { border-top: 1px solid var(--grid); }
+@media (max-width: 560px) {
+  .lb-row { grid-template-columns: 24px 28px minmax(0, 1fr) repeat(3, 50px); gap: 6px; }
+  .lb-num { font-size: 12px; }
+  .lb-num.on { font-size: 13px; }
+  .lb-you-tag { display: none; } /* the row's highlight says it */
+  .lb-head .lb-num { font-size: 9.5px; text-transform: none; letter-spacing: 0; }
+}
