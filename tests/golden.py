@@ -1,7 +1,7 @@
 """Golden files for the safety-net tests (tests/goldens/): compare a value with the JSON written for it.
 
 Run with UPDATE_GOLDENS=1 to rewrite the files from what the code produces now, then review the diff:
-    UPDATE_GOLDENS=1 uv run --locked pytest -q tests/test_cli_pins.py tests/test_parser_goldens.py tests/test_layout_goldens.py
+    UPDATE_GOLDENS=1 uv run --locked pytest -q tests/test_cli_pins.py tests/test_parser_goldens.py tests/test_map_goldens.py
 
 Files are written with sorted keys and "\\n" line endings, and read back with any line endings (a Windows checkout),
 so they compare the same on every OS.
