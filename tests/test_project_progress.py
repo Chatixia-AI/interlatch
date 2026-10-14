@@ -1,12 +1,15 @@
-"""Where a project stands, on its page (progress.py): the last sessions as each one left things, the work week by week
-with each pull request counted once, and the folder's git state, read only for someone at this computer."""
+"""Where a project stands, on its page (progress.py): the last sessions as each one left things and the decisions they
+left to a person, the work week by week with each pull request counted once, and the folder's git state and roadmap
+file, read only for someone at this computer."""
 
 import json
 import os
 import subprocess
+import time
 
 import pytest
 
+from interlatch.core.util import parse_ts
 from interlatch.interfaces.web import api
 from interlatch.interfaces.web.app import App
 from interlatch.projects import progress
@@ -100,6 +103,103 @@ def test_repo_state_reads_the_branch_what_isnt_committed_the_last_commit_and_oth
     inner.mkdir()
     assert os.path.samefile(progress.repo_state(str(inner))["root"], repo)  # a project in a folder of the repository
 
+
+def test_repo_state_dates_what_waits_uncommitted_and_the_commits_on_no_remote(repo, tmp_path):
+    three_days_ago = time.time() - 3 * 86400
+    os.utime(repo / "app.py", (three_days_ago, three_days_ago))  # the change not committed
+    (repo / "with space.py").write_text("x\n")
+    _git(repo, "add", "with space.py")  # a staged new file, named as git would quote it
+    state = progress.repo_state(str(repo))
+    assert state["changed"] == 2 and state["untracked"] == 1  # notes.md is only counted, never dated
+    assert abs(parse_ts(state["changed_since"]).timestamp() - three_days_ago) < 2
+    assert state["unpushed"] == 1 and state["unpushed_since"]  # "Search by number" is on no remote branch
+    alone = tmp_path / "no-remote"
+    alone.mkdir()
+    _git(alone, "init", "-q", "-b", "main")
+    (alone / "a.txt").write_text("a\n")
+    _git(alone, "add", "a.txt")
+    _git(alone, "commit", "-q", "-m", "Only here")
+    assert progress.repo_state(str(alone))["unpushed"] == 0  # without remotes, nothing is waiting to be pushed
+
+
+def test_asks_are_the_decisions_and_questions_the_last_analyzed_sessions_left_open():
+    def s(sid, status, *threads):
+        return {"id": sid, "started_at": f"2026-10-1{sid[-1]}T12:00:00Z", "analysis_status": status, "open_threads": list(threads)}
+
+    rows = [s("s4", "done", "A restart of app-coc-quote is pending the developer's decision",
+              "Commit the changes; nothing is committed or deployed.", "Decide whether to commit docs/manual",
+              "Merge PRs #154 and #155", "本番に移行するかどうか未定"),
+            s("s3", "pending", "Should we ship?"),  # not analyzed: what it left open isn't known yet
+            s("s2", "done", "Decide whether to commit docs/manual", "Is the export needed?", "Re-shoot the screenshots"),
+            s("s1", "done", "Confirm the deploy date with the customer"),
+            s("s0", "done", "Approve the pull request")]  # a fourth analyzed session: too far back
+    assert [(a["session_id"], a["text"][:16]) for a in progress.asks(rows)] == [
+        ("s4", "A restart of app"), ("s4", "Decide whether t"), ("s4", "Merge PRs #154 a"), ("s4", "本番に移行するかどうか未定"),
+        ("s2", "Is the export ne"), ("s1", "Confirm the depl")]
+
+
+ROADMAP = """# Roadmap
+
+What is coming, roughly in order.
+
+## Now
+
+### Answers that say what they don't know
+
+- **Trust that expires.** An established item no session confirmed for 90 days shows as seen once.
+  - an indented detail is not an item
+- [Empty search results](docs/search.md) that say what was searched and what wasn't, so a miss is not mistaken
+
+### Fixes
+
+- __Desktop app__ without the command-line install
+
+## Next
+
+- [ ] Named upgrade steps
+- [x] Something finished
+
+```markdown
+- **Not an item:** inside a code block
+```
+
+## Suggesting something
+
+Open an issue.
+"""
+
+
+def test_a_roadmap_file_is_read_by_its_sections_and_items(tmp_path):
+    project = tmp_path / "proj"
+    (project / "docs").mkdir(parents=True)
+    (project / "docs" / "todo.md").write_text("- [ ] Ship it\n- [x] Plan it\n")
+    got = progress.roadmap(str(project))
+    assert got["file"] == "docs/todo.md" and got["updated"]
+    assert got["sections"] == [{"title": "", "items": ["Ship it"], "total": 1, "open": 1, "done": 1}]
+    (project / "RoadMap.md").write_text(ROADMAP)  # any case, and a roadmap before a to-do list
+    got = progress.roadmap(str(project))
+    assert got["file"] == "RoadMap.md" and os.path.samefile(got["path"], project / "RoadMap.md")
+    assert got["sections"] == [
+        {"title": "Now", "items": ["Trust that expires", "Empty search results that say what was searched and what "
+                                   "wasn't, so a miss is not mistaken", "Desktop app"], "total": 3, "open": 0, "done": 0},
+        {"title": "Next", "items": ["Named upgrade steps"], "total": 1, "open": 1, "done": 1}]
+    inner = project / "src"
+    inner.mkdir()
+    assert progress.roadmap(str(inner)) is None  # the folder alone has none
+    assert progress.roadmap(str(inner), root=str(project))["file"] == "RoadMap.md"  # its repository's root has one
+    assert progress.roadmap(str(tmp_path / "gone")) is None and progress.roadmap("claude.ai") is None
+
+
+def test_the_page_lists_asks_always_and_reads_a_roadmap_only_on_this_computer(project, repo):
+    conn = project["conn"]
+    (repo / "ROADMAP.md").write_text(ROADMAP)
+    _session(conn, "s-repo", "2026-10-14T12:00:00Z", path=str(repo), title="Here", analysis_status="done",
+             open_threads_json=json.dumps(["Decide whether to ship the beta"]))
+    conn.commit()
+    ctx = App(project["cfg"]).context()
+    away = api.projects.project(ctx, str(repo))
+    assert away["roadmap"] is None and [a["text"] for a in away["asks"]] == ["Decide whether to ship the beta"]
+    assert api.projects.project(ctx, str(repo), here=True)["roadmap"]["sections"][0]["title"] == "Now"
 
 def test_repo_state_is_none_for_a_folder_that_isnt_a_repository_or_isnt_here(tmp_path):
     assert progress.repo_state(str(tmp_path)) is None
