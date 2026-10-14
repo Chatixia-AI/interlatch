@@ -6,7 +6,8 @@ import pytest
 from interlatch import hub, people
 from interlatch.cli import main
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
+from interlatch.core.machine import local_machine
 
 from conftest import CWD, SID
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke
@@ -59,7 +60,7 @@ def _yuma(conn, spoke):
     """Yuma, given every project, and the spoke as her computer, sending with her token from now on (the hub's
     shared token no longer acts as a computer that joined as a person)."""
     p = people.add(conn, "Yuma", "yuma@example.com", "member", projects=None)
-    _, token = people.join_computer(conn, people.invite(conn, p["id"]), hub.local_machine(spoke)["id"], "Yuma's Mac",
+    _, token = people.join_computer(conn, people.invite(conn, p["id"]), local_machine(spoke)["id"], "Yuma's Mac",
                                     hub.machine_key(spoke))  # it pushed before: the hub has its key
     hub.write_token(spoke, token)
     return p
@@ -107,7 +108,7 @@ def test_purge_a_computers_project_and_never_the_hubs_own(teamenv, capsys):  # n
     spoke, conn, cfg = teamenv["spoke"], teamenv["conn"], teamenv["cfg"]
     _analyzed_on_spoke(spoke, title="Private work", at="2026-10-02T00:00:00Z", lessons=[])
     assert hub.push(spoke).sent == 1
-    name = hub.local_machine(spoke)["name"]
+    name = local_machine(spoke)["name"]
     assert main(["hub", "purge", name, "--project", SPOKE_CWD, "--yes"]) == 0
     assert "Removed 1 session" in capsys.readouterr().out
     assert main(["hub", "purge", name, "--project", SPOKE_CWD, "--yes"]) == 1  # it was its only session there

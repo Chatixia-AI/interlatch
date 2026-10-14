@@ -7,7 +7,7 @@ from interlatch.bob_parser import load_tasks, parse_bob_task
 from interlatch.core.config import load_config
 from interlatch.copilot_parser import (load_chat, load_usage, parse_copilot_agent, parse_vscode_chat, uri_path,
                                       workspace_folder)
-from interlatch.db import connect as db_connect
+from interlatch.storage.sqlite import connect as db_connect
 from interlatch.ingest import sync
 
 from copilot_fixture import (AGENT_ID, BOB_EMPTY, BOB_SUB, BOB_TASK, BOB_TOOLS, CHAT_ID, EMPTY_CHAT, FOLDER,

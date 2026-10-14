@@ -17,7 +17,7 @@ import re
 import sqlite3
 from datetime import timedelta
 
-from .db import kv_get, kv_set
+from .storage.kv import kv_get, kv_set
 from .core.util import to_iso, utcnow
 
 FOLD_MINUTES = 30

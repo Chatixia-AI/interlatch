@@ -3,7 +3,7 @@ import json
 import pytest
 
 from interlatch.analyze import analyze_session, normalize_analysis
-from interlatch.db import kv_get
+from interlatch.storage.kv import kv_get
 from interlatch.digest import build_digest
 from interlatch.llm import UsageLimitError, parse_json_object
 from interlatch.core.redact import redact

@@ -133,7 +133,7 @@ def first_admin(cfg: Config, conn, env: Mapping[str, str]) -> list[str]:
 def _work(home, minutes: float, stop: threading.Event) -> None:
     """What the launchd agent or systemd timer runs elsewhere: read what computers sent, then analyze, synthesize and
     export. On a hub that takes knowledge only, with no model set up, this is mostly the Markdown export."""
-    from .db import connect
+    from .storage.sqlite import connect
     from .ingest import sync
     from .worker import run_worker
 
@@ -154,7 +154,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
 
 def main(env: Mapping[str, str] | None = None) -> int:
     from . import hub
-    from .db import connect
+    from .storage.sqlite import connect
     from .server import serve
     from .core.util import setup_logging
 

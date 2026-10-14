@@ -10,6 +10,7 @@ from interlatch import hub, people
 from interlatch.cli import main
 from interlatch.core.config import load_config, set_config_value, toml_table
 from interlatch.server import App
+from interlatch.core.machine import local_machine
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _serve
@@ -39,7 +40,7 @@ def _shared_at(conn):
 def test_leaving_keeps_what_was_shared_and_stops_the_rest(teamenv):  # noqa: F811
     fake, conn = teamenv["fake"], teamenv["conn"]
     spoke = _in_project(teamenv)
-    me = hub.local_machine(spoke)["id"]
+    me = local_machine(spoke)["id"]
 
     spoke = hub.leave_project(spoke, CWD)
     assert spoke.hub_left == [CWD] and spoke.hub_folders == {SPOKE_CWD: CWD}  # the folder stays: so do its sessions
@@ -131,7 +132,7 @@ def _withdraw(url, token, machine, folder=SPOKE_CWD):
 def test_a_computer_takes_back_only_its_own(teamenv):  # noqa: F811
     conn, url = teamenv["conn"], teamenv["url"]
     spoke = _in_project(teamenv)
-    me = hub.local_machine(spoke)["id"]
+    me = local_machine(spoke)["id"]
     other = "aaaaaaaa-0000-4000-8000-000000000001"
     p = people.add(conn, "Yuma", "yuma@example.com", "member", projects=None)
     for machine, token in ((me, "mine"), (other, "theirs")):
@@ -180,7 +181,7 @@ def test_the_dashboard_lists_leaves_and_rejoins_from_this_computer_only(teamenv,
         dv = _call(url, "/api/devices")[1]
         [row] = dv["projects"]
         assert (row["path"], row["left"], [f["folder"] for f in row["folders"]]) == (CWD, False, [SPOKE_CWD])
-        assert row["folders"][0]["sessions"] == 1 and dv["hub_name"] == hub.local_machine(teamenv["cfg"])["name"]  # no [hub] name
+        assert row["folders"][0]["sessions"] == 1 and dv["hub_name"] == local_machine(teamenv["cfg"])["name"]  # no [hub] name
         assert dv["last_push"]["sent"] == 1 and dv["last_push"]["kind"] == "knowledge"
 
         for path, body in (("/api/devices/projects/leave", {"project": CWD}), ("/api/devices/projects/remove", {"folder": SPOKE_CWD}),

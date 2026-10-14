@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.ingest import decode_project_dir, parse_frontmatter, sync
 
 from conftest import CWD, PROJECT_DIR, SID

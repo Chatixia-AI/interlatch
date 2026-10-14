@@ -31,12 +31,13 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import pg
-from .core.config import Config
-from .db import connect, kv_get, kv_set
-from .core.util import file_lock, one_line, utcnow_iso
+from . import postgres as pg
+from ..core.config import Config
+from .sqlite import connect
+from .kv import kv_get, kv_set
+from ..core.util import file_lock, one_line, utcnow_iso
 
-log = logging.getLogger("interlatch.mirror")
+log = logging.getLogger("interlatch.storage.mirror")
 
 ENV_FILE = "mirror.env"
 INCLUDES = ("knowledge", "everything")
@@ -145,7 +146,7 @@ def _value(value, typ: str, redact: bool):
         value = value.decode("utf-8", "replace")
     if isinstance(value, str):
         if redact:
-            from .core.redact import redact as scrub
+            from ..core.redact import redact as scrub
 
             value = scrub(value)
         value = _clean(value)
@@ -312,8 +313,8 @@ def sync(cfg: Config, *, full: bool = False, progress=None) -> Result:
 
 
 def _sync(cfg: Config, progress, full: bool = False) -> Result:
-    from . import __version__
-    from .hub import local_machine
+    from .. import __version__
+    from ..core.machine import local_machine
 
     params = connection_params(cfg)
     schema, include = cfg.mirror_schema, cfg.mirror_include

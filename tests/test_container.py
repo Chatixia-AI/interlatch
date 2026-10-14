@@ -9,7 +9,7 @@ import pytest
 
 from interlatch import container, hub, people, update
 from interlatch.core.config import load_config, set_config_value
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 
 from test_hub import _serve
 

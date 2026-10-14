@@ -3,7 +3,7 @@
 from dataclasses import replace
 from datetime import timedelta
 
-from interlatch.db import kv_set
+from interlatch.storage.kv import kv_set
 from interlatch.core.util import to_iso, utcnow
 from interlatch.worker import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
 
@@ -107,7 +107,7 @@ def test_analyze_the_queue_now(synced):
     """Analyze now runs the ready sessions through a usage-limit pause, and a run that gets through lifts the pause."""
     import time
 
-    from interlatch.db import kv_get
+    from interlatch.storage.kv import kv_get
     from interlatch.server import App
 
     conn, cfg = synced["conn"], synced["cfg"]

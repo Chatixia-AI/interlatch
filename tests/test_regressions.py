@@ -4,7 +4,8 @@ import json
 import sqlite3
 
 from interlatch.analyze import analyze_session, store_analysis
-from interlatch.db import connect, kv_set
+from interlatch.storage.sqlite import connect
+from interlatch.storage.kv import kv_set
 from interlatch.ingest import sync
 from interlatch.reviews import review_ready, week_bounds
 from interlatch.synthesize import GLOBAL, synthesize_project

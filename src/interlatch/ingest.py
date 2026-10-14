@@ -23,7 +23,7 @@ from pathlib import Path
 
 from . import artifacts, news
 from .core.config import Config
-from .db import kv_get, kv_set
+from .storage.kv import kv_get, kv_set
 from .ladder import MEMORY_STAGE_REASON
 from .codex_parser import (CODEX_PARSER_VERSION, load_imports, load_titles, parent_thread_id, parse_codex_session,
                            read_meta, rollout_files, rollout_id)
@@ -66,7 +66,8 @@ class SyncReport:
 
 # ------------------------------------------------------------------ paths
 def archive_key(claude_dir: Path) -> str:
-    from .hub import MACHINE_RE, ROOT_RE
+    from .hub import ROOT_RE
+    from .core.machine import MACHINE_RE
 
     if claude_dir.parent.parent.name == "machines" and MACHINE_RE.match(claude_dir.parent.name) and ROOT_RE.match(claude_dir.name):
         return f"machines/{claude_dir.parent.name}/{claude_dir.name}"  # received from another computer (hub.py)
@@ -219,7 +220,7 @@ def paths_signature(paths, version: int) -> str:
 
 # ------------------------------------------------------------------ store
 def local_machine_id(cfg: Config) -> str:
-    from .hub import local_machine
+    from .core.machine import local_machine
 
     return local_machine(cfg)["id"]
 

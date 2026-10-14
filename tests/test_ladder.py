@@ -6,7 +6,8 @@ import pytest
 
 from interlatch import ladder
 from interlatch.analyze import analyze_session
-from interlatch.db import connect, init_schema
+from interlatch.storage.sqlite import connect
+from interlatch.storage.migrations import init_schema
 from interlatch.reviews import generate_review
 from interlatch.search import search_knowledge
 from interlatch.synthesize import normalize_kb, render_kb_markdown, synthesize_project

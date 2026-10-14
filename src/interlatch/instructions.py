@@ -389,7 +389,7 @@ def repo_visibility(project_path: str | None, conn: sqlite3.Connection | None = 
         return _VISIBILITY[project_path]
     key = f"repo_visibility:{project_path}"
     if conn is not None:
-        from .db import kv_get
+        from .storage.kv import kv_get
 
         cached = loads(kv_get(conn, key), None)
         at = parse_ts((cached or {}).get("at"))
@@ -399,7 +399,7 @@ def repo_visibility(project_path: str | None, conn: sqlite3.Connection | None = 
     value = _visibility_now(Path(project_path))
     _VISIBILITY[project_path] = value
     if conn is not None and value != "unknown":
-        from .db import kv_set
+        from .storage.kv import kv_set
 
         try:
             kv_set(conn, key, dumps({"v": value, "at": utcnow().isoformat()}))

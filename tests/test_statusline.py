@@ -111,7 +111,7 @@ def test_sync_imports_records_and_the_dashboard_shows_them(synced):
 
 
 def test_expired_windows_are_not_reported(synced):
-    from interlatch.db import kv_set
+    from interlatch.storage.kv import kv_set
 
     conn = synced["conn"]
     kv_set(conn, "plan_usage_latest", json.dumps({"as_of": "2026-01-01T00:00:00Z", "limits": {

@@ -3,7 +3,7 @@
 import pytest
 
 from interlatch import people
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 
 MACHINE = "11111111-2222-4333-8444-555555555555"
 KEY = "k" * 43  # the key Bob's laptop keeps in its machine-key file

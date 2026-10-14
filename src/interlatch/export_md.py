@@ -9,7 +9,7 @@ import sqlite3
 from pathlib import Path
 
 from .core.config import Config
-from .db import kv_get, kv_set
+from .storage.kv import kv_get, kv_set
 from .core.redact import redact
 from .synthesize import GLOBAL, render_kb_markdown
 from .core.util import human_cost, human_count, human_duration, local_str, loads, one_line

@@ -12,7 +12,7 @@ from .core.config import Config
 from .core.agents import AGENTS, short_name, speaker
 from .artifacts import KINDS as ARTIFACT_KINDS
 from .artifacts import STATUS as ARTIFACT_STATUS
-from .db import connect
+from .storage.sqlite import connect
 from .hub import team_from
 from .ladder import stage_label
 from .core.redact import redact

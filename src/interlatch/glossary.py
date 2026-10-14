@@ -156,7 +156,7 @@ def build_glossaries(cfg: Config, paths: list[str], *, concurrency: int = 3, pro
     """Build several glossaries: Claude calls run in parallel, database writes stay serialized (one connection)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from .db import connect
+    from .storage.sqlite import connect
 
     conn = connect(cfg.db_path)
     runner = make_runner(cfg)
@@ -371,7 +371,7 @@ def _fingerprint(rows) -> str:
 
 def themes_due(conn: sqlite3.Connection, *, force: bool = False, min_terms: int = THEME_MIN_TERMS) -> list[str]:
     """Categories big enough for themes whose term set changed since they were last grouped."""
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     due = []
     for (cat,) in conn.execute("SELECT category FROM glossary WHERE category IS NOT NULL GROUP BY category "
@@ -394,7 +394,7 @@ def _generate_themes(cfg: Config, category: str, rows, runner: Runner):
 
 def _store_themes(conn: sqlite3.Connection, category: str, rows, res, other: tuple[str, str] = OTHER_THEME["en"]) -> int:
     """Validate Claude's grouping (unknown ids dropped, every term placed once, leftovers in `other`) and store it."""
-    from .db import kv_set
+    from .storage.kv import kv_set
 
     valid = {r["id"] for r in rows}
     placed: dict[int, str] = {}
@@ -440,7 +440,7 @@ def build_themes(cfg: Config, categories: list[str] | None = None, *, force: boo
     """Group big glossary categories into themes, one Claude call per category (only those that changed)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from .db import connect
+    from .storage.sqlite import connect
 
     conn = connect(cfg.db_path)
     runner = make_runner(cfg)

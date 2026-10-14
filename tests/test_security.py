@@ -15,7 +15,8 @@ import urllib.request
 import pytest
 
 from interlatch import hub, people
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
+from interlatch.core.machine import local_machine
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
 from test_people_web import REMOTE, TAILNET, _call, _raw
@@ -63,7 +64,7 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     for spoke in (a, b):
         spoke.hub_share, spoke.hub_all_folders = "knowledge", True
-    a_id, b_id = hub.local_machine(a)["id"], hub.local_machine(b)["id"]
+    a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
     _analyzed_on_spoke(a, title="A's work", at="2026-09-20T12:00:00Z", lessons=[("a-fact", "project", "fact")])
     assert hub.push(a).sent == 1
     _analyzed_on_spoke(b, title="B's version", at="2026-09-21T12:00:00Z", lessons=[("b-fact", "project", "fact")])
@@ -87,7 +88,7 @@ def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spoke
     from interlatch.ingest import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
-    a_id = hub.local_machine(a)["id"]
+    a_id = local_machine(a)["id"]
     hub.push(a)
     sync(cfg, conn)
     before = [tuple(r) for r in conn.execute("SELECT seq, text FROM events WHERE session_id = ? ORDER BY seq", (SPOKE_SID,))]
@@ -96,7 +97,7 @@ def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spoke
         fh.write(json.dumps({"type": "user", "sessionId": SPOKE_SID, "cwd": SPOKE_CWD, "timestamp": "2026-09-20T11:00:00.000Z",
                              "message": {"role": "user", "content": "replaced by B"}}) + "\n")
     hub.push(b)
-    b_id = hub.local_machine(b)["id"]
+    b_id = local_machine(b)["id"]
     received = cfg.machines_dir / b_id / "claude" / "projects" / SPOKE_CWD.replace("/", "-") / f"{SPOKE_SID}.jsonl"
     assert received.exists()
     report = sync(cfg, conn, only=received)  # B's file alone: a full sync would put A's back right after
@@ -128,7 +129,7 @@ def test_a_computers_history_cant_replace_anothers_stub(synced):
 def test_a_gzip_bomb_is_refused(two_spokes, monkeypatch):
     monkeypatch.setattr(hub, "MAX_SESSIONS_JSON", 64 << 10)
     monkeypatch.setattr(hub, "MAX_ANALYSES_JSON", 64 << 10)
-    machine = f"machine={hub.local_machine(two_spokes['a'])['id']}"
+    machine = f"machine={local_machine(two_spokes['a'])['id']}"
     bomb = gzip.compress(b'{"sessions": [], "pad": "' + b"0" * (1 << 20) + b'"}')
     assert len(bomb) < 4096
     for path in ("/api/hub/sessions", "/api/hub/analyses"):
@@ -146,7 +147,7 @@ def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
     from interlatch.ingest import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
-    a_id, b_id = hub.local_machine(a)["id"], hub.local_machine(b)["id"]
+    a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
     hub.push(a)  # A's transcript: the hub ingests it as A's, analysis pending
     sync(cfg, conn)
     row = conn.execute("SELECT machine_id, analysis_status, title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
@@ -181,11 +182,11 @@ def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsy
     from interlatch.cli import main
 
     cfg, conn, url, a, b = (two_spokes[k] for k in ("cfg", "conn", "url", "a", "b"))
-    a_id, b_id = hub.local_machine(a)["id"], hub.local_machine(b)["id"]
+    a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
     hub.push(a)  # A joined with the shared token and sends: the hub records its key with its hello
     assert conn.execute("SELECT key_hash FROM machines WHERE id = ?", (a_id,)).fetchone()[0]
     key_file = a.home / "machine-key"
-    assert stat.S_IMODE(key_file.stat().st_mode) == 0o600 and "key" not in hub.local_machine(a)
+    assert stat.S_IMODE(key_file.stat().st_mode) == 0o600 and "key" not in local_machine(a)
 
     mallory = people.add(conn, "Mallory", "mallory@example.com", "member", projects=None)
     code = people.invite(conn, mallory["id"])
@@ -229,7 +230,7 @@ def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsy
 # ------------------------------------------------------------------ the shared token can't act as a person's computer
 def test_the_shared_token_cant_act_as_a_persons_computer(two_spokes):
     cfg, conn, a = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"]
-    a_id = hub.local_machine(a)["id"]
+    a_id = local_machine(a)["id"]
     shared = f"Bearer {two_spokes['token']}"
     assert hub.authorize(cfg, conn, shared, a_id) == (True, None)  # nobody has joined as a person: any computer
     ada = people.add(conn, "Ada", "ada@example.com", "admin")

@@ -20,7 +20,7 @@ import pytest
 from interlatch import install, migrate
 from interlatch.cli import main
 from interlatch.core.config import interlatch_home, default_home, env, legacy_home
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 
 EXE = "/opt/bin/interlatch"
 

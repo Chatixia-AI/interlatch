@@ -12,10 +12,12 @@ import uuid
 
 import pytest
 
-from interlatch import hub, team_store
+from interlatch import hub
+from interlatch.storage import team as team_store
 from interlatch.core.config import load_config, set_config_value
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.core.util import fingerprint
+from interlatch.core.machine import local_machine
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
 
@@ -155,7 +157,7 @@ def test_teammates_lessons_come_back_read_only(teamenv):
     assert fake.sessions[SPOKE_SID]["project"] == SPOKE_CWD and fake.sessions[SPOKE_SID]["language"] == "en"
     assert sorted(x["title"] for x in fake.lessons.values()) == ["Teammate lesson", "lesson p-gotcha"]
     merged = next(lid for lid, x in fake.lessons.items() if x["title"] == "lesson p-gotcha")
-    assert {s[2] for s in fake.sources if s[0] == merged} == {TEAMMATE, hub.local_machine(spoke)["id"]}
+    assert {s[2] for s in fake.sources if s[0] == merged} == {TEAMMATE, local_machine(spoke)["id"]}
     assert conn.execute("SELECT source FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == "remote"
 
     # here: the teammate's lesson, filed where this computer's own session in that project is; not the merged one,
@@ -243,7 +245,7 @@ def test_lessons_endpoint_needs_the_token_and_a_store(teamenv):
     import urllib.error
     import urllib.request
 
-    body = json.dumps({"machine": hub.local_machine(teamenv["spoke"])["id"]}).encode()
+    body = json.dumps({"machine": local_machine(teamenv["spoke"])["id"]}).encode()
     req = urllib.request.Request(f"{teamenv['url']}/api/hub/lessons", data=body, method="POST",
                                  headers={"Authorization": "Bearer wrong", "Content-Type": "application/json"})
     with pytest.raises(urllib.error.HTTPError) as err:
@@ -251,7 +253,7 @@ def test_lessons_endpoint_needs_the_token_and_a_store(teamenv):
     assert err.value.code == 401
     cfg = load_config(teamenv["cfg"].home)
     cfg.hub_store = ""
-    assert hub.team_lessons(cfg, {"machine": hub.local_machine(teamenv["spoke"])["id"]}) == {"team": False}
+    assert hub.team_lessons(cfg, {"machine": local_machine(teamenv["spoke"])["id"]}) == {"team": False}
 
 
 def test_team_lessons_find_their_folder_here(env):

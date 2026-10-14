@@ -5,7 +5,8 @@ import json
 import sqlite3
 
 from interlatch.analyze import PROMPT_VERSION, case_of, normalize_analysis, normalize_knowledge, store_analysis
-from interlatch.db import SCHEMA_VERSION, connect
+from interlatch.storage.sqlite import connect
+from interlatch.storage.schema import SCHEMA_VERSION
 
 from conftest import SECRET, SID
 

@@ -120,7 +120,7 @@ def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
 
 def test_japanese_screening_prompt_and_rule_reasons(env):
     from interlatch.chat_import import import_export
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
     from interlatch.screen import screen_chats
     from test_screen import write_export
 

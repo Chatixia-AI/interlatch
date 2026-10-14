@@ -6,7 +6,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.ingest import sync
 from interlatch.parser import PARSER_VERSION, parse_session
 

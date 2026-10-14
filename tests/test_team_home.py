@@ -4,9 +4,10 @@ limited to projects gets their projects only."""
 
 from datetime import timedelta
 
-from interlatch import hub, people
+from interlatch import people
 from interlatch.core.config import load_config, set_config_value
 from interlatch.core.util import to_iso, utcnow
+from interlatch.core.machine import local_machine
 
 from test_hub_projects import OTHER, PROJECTS, limited  # noqa: F401  (the fixture)
 from test_people_web import MACHINE, _as, _call
@@ -46,7 +47,7 @@ def _team(env):
 def test_me_names_the_hub(limited):  # noqa: F811
     url, cfg = limited["url"], limited["cfg"]
     _, me = _call(url, "/api/me")
-    assert me["hub"] == {"name": hub.local_machine(cfg)["name"], "team": True, "address": None, "knowledge_only": False,
+    assert me["hub"] == {"name": local_machine(cfg)["name"], "team": True, "address": None, "knowledge_only": False,
                          "dedicated": False}
     set_config_value(cfg, "hub", "name", '"Resona team"')
     limited["app"].cfg = load_config(cfg.home)
@@ -136,7 +137,7 @@ def test_a_member_with_every_project_sees_the_team_but_not_its_admin(limited):  
 
 def test_narrowing_sessions_and_lessons_to_a_person(limited):  # noqa: F811
     _team(limited)
-    url, here = limited["url"], hub.local_machine(limited["cfg"])
+    url, here = limited["url"], local_machine(limited["cfg"])
     bob = f"p:{limited['bob']['id']}"
     _, opts = _call(url, "/api/team/who")
     by = {x["key"]: x for x in opts["items"]}

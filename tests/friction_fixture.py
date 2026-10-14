@@ -94,7 +94,7 @@ class Archive:
 def make_archive(tmp_path, monkeypatch):
     """A fresh database plus a sandboxed HOME (instruction files and ~/.claude.json live there); yields once."""
     from interlatch.core.config import load_config
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
 
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
