@@ -74,11 +74,6 @@ def load_chat(path: Path) -> dict | None:
     return state if isinstance(state, dict) else None
 
 
-def chat_has_requests(path: Path) -> bool:
-    state = load_chat(path)
-    return bool(state and state.get("requests"))
-
-
 def _md(part) -> str:
     v = part.get("value") if isinstance(part, dict) else None
     if isinstance(v, dict):

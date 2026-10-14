@@ -1259,7 +1259,3 @@ def system(data: dict, key: str) -> dict | None:
     labels = {x["id"]: x["label"] for x in data["systems"]}
     return {**s, "links": [{**ln, "other": labels.get(ln["to"] if ln["from"] == s["id"] else ln["from"]),
                             "direction": "out" if ln["from"] == s["id"] else "in"} for ln in links]}
-
-
-def system_for_project(data: dict, project_path: str) -> str | None:
-    return next((s["id"] for s in data["systems"] if project_path in s["project_paths"]), None)
