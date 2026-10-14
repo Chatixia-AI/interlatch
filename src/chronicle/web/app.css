@@ -831,7 +831,7 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .src-list-head h2 { margin: 0; }
 .src-list-head .muted { font-size: 12.5px; margin-top: 3px; }
 .src-row + .src-row { border-top: 1px solid var(--grid); }
-.src-row > summary, .src-line { display: grid; grid-template-columns: 14px 10px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 11px 18px; }
+.src-row > summary, .src-line { display: grid; grid-template-columns: 14px 18px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 11px 18px; }
 .src-row > summary { cursor: pointer; list-style: none; }
 .src-row > summary::-webkit-details-marker { display: none; }
 .src-row > summary:hover { background: var(--hover); }
@@ -842,7 +842,13 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .src-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--muted)); }
 .agent-cell { display: inline-flex; align-items: center; gap: 7px; }
 .agent-cell .src-dot { width: 8px; height: 8px; flex: none; }
-.agent-sub { padding-left: 15px; }
+.agent-sub { padding-left: 22px; }
+/* the agents' own marks (web/agent-*.svg); one-colour marks are masks painted in the text colour */
+.agent-icon { display: block; width: 18px; height: 18px; flex: none; justify-self: center; }
+.agent-cell .agent-icon { width: 15px; height: 15px; }
+.agent-icon.mono { background: currentColor; mask: var(--mark) center / contain no-repeat; }
+.agent-icon.a-copilot { --mark: url(agent-copilot.svg); }
+.agent-icon.a-chatgpt { --mark: url(agent-chatgpt.svg); }
 table.data.sessions :is(th, td) { padding-left: 8px; padding-right: 8px; } /* eleven columns: fit a 1440 px window */
 .src-dot.a-claude { --c: var(--series-4); }
 .src-dot.a-codex, .src-dot.a-codex-cloud { --c: var(--series-3); }
@@ -1546,6 +1552,20 @@ details.menu .menu-list button:hover:not(:disabled) { background: var(--hover); 
 details.menu .menu-list button:disabled { opacity: 0.45; cursor: not-allowed; }
 details.menu .menu-list b { font-weight: 600; font-size: 13px; }
 details.menu .menu-list span { color: var(--muted); font-size: 12px; }
+/* the agent filter (agentPicker): looks like the selects beside it, lists each agent with its mark */
+details.agent-pick > summary.ap-summary { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 5px;
+  padding: 6px 8px 6px 10px; gap: 8px; cursor: pointer; }
+details.agent-pick > summary.ap-summary:focus-visible { outline: 2px solid var(--accent-wash-2); border-color: var(--accent); }
+details.agent-pick > summary .icon { color: var(--muted); }
+.ap-face { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.ap-face .agent-icon { width: 16px; height: 16px; }
+details.agent-pick .menu-list { left: 0; right: auto; width: max-content; min-width: 100%; }
+details.agent-pick .menu-list button { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; }
+details.agent-pick .menu-list button:focus-visible { outline: none; background: var(--hover); }
+details.agent-pick .menu-list button span { color: inherit; font-size: 13.5px; white-space: nowrap; }
+details.agent-pick .menu-list .agent-icon { width: 16px; height: 16px; }
+details.agent-pick .ap-check { width: 14px; height: 14px; flex: none; visibility: hidden; }
+details.agent-pick [aria-checked="true"] .ap-check { visibility: visible; }
 
 /* MCP page: setup snippets and the tool list */
 .mcp-card { margin-bottom: 18px; }

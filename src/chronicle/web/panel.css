@@ -137,6 +137,11 @@ kbd { font: 500 10.5px/1 var(--mono); color: var(--muted); border: 1px solid var
 .agent.a-copilot { --c: var(--series-7); }
 .agent.a-bob { --c: var(--series-1); }
 .agent.a-antigravity { --c: var(--series-8); }
+.agent.mark { background: var(--card-hi); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(3, 14, 30, 0.12); color: var(--ink); }
+.agent .glyph { display: block; width: 16px; height: 16px; }
+.agent .glyph.mono { background: currentColor; mask: var(--mark) center / contain no-repeat; }
+.agent .glyph.a-copilot { --mark: url(agent-copilot.svg); }
+.agent .glyph.a-chatgpt { --mark: url(agent-chatgpt.svg); }
 .row-main { display: flex; flex-direction: column; min-width: 0; }
 .row-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 1px; font-size: 11.5px;
