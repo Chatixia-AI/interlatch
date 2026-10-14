@@ -12,7 +12,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 from interlatch.storage.sqlite import connect
-from interlatch.install import hooks_installed, install_hooks, uninstall_hooks
+from interlatch.runtime.install import hooks_installed, install_hooks, uninstall_hooks
 
 from conftest import CWD, SECRET, SID
 
@@ -236,7 +236,7 @@ def test_hooks_are_inert_for_internal_runs(env):
 
 def test_session_start_context(synced):
     from interlatch.analysis.session import analyze_session
-    from interlatch.hooks import build_session_context
+    from interlatch.runtime.hooks import build_session_context
     from interlatch.knowledge.synthesize import synthesize_project
 
     analyze_session(synced["conn"], synced["cfg"], SID)
@@ -389,7 +389,7 @@ def test_mcp_page_info(env):
     """Settings › MCP: the command that starts the server, its tools, and config to paste for each kind of client."""
     import tomllib
 
-    from interlatch.mcp_server import TOOLS
+    from interlatch.interfaces.mcp import TOOLS
     from interlatch.server import App
 
     info = App(env["cfg"]).mcp_info()

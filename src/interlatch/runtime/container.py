@@ -19,8 +19,8 @@ import threading
 from collections.abc import Mapping
 from urllib.parse import urlparse
 
-from .core.config import STORES, Config, load_config, set_config_value
-from .core.config import env as _env
+from ..core.config import STORES, Config, load_config, set_config_value
+from ..core.config import env as _env
 
 log = logging.getLogger("interlatch.container")
 
@@ -60,7 +60,7 @@ def hub_url(env: Mapping[str, str]) -> tuple[str, str]:
 def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
     """Write the INTERLATCH_* variables into config.toml and make this computer a hub. Returns the reloaded config,
     and whether this was the hub's first start."""
-    from .sharing.identity import new_token, read_token
+    from ..sharing.identity import new_token, read_token
 
     url, host = hub_url(env)
     port = (var(env, "PORT") or str(DEFAULT_PORT)).strip()
@@ -103,8 +103,8 @@ def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
 def first_admin(cfg: Config, conn, env: Mapping[str, str]) -> list[str]:
     """Add INTERLATCH_ADMIN_EMAIL as the hub's first admin when it has no people yet. Returns what to print: their
     invite, which is shown only now."""
-    from .sharing import people
-    from .sharing.protocol import invite_command, invite_link
+    from ..sharing import people
+    from ..sharing.protocol import invite_command, invite_link
 
     if people.has_people(conn):
         return []
@@ -134,10 +134,10 @@ def first_admin(cfg: Config, conn, env: Mapping[str, str]) -> list[str]:
 def _work(home, minutes: float, stop: threading.Event) -> None:
     """What the launchd agent or systemd timer runs elsewhere: read what computers sent, then analyze, synthesize and
     export. On a hub that takes knowledge only, with no model set up, this is mostly the Markdown export."""
-    from .storage.sqlite import connect
-    from .ingestion.service import sync
-    from .application.workflows import run_worker
-    from .interfaces.exports.vault import export_markdown
+    from ..storage.sqlite import connect
+    from ..ingestion.service import sync
+    from ..application.workflows import run_worker
+    from ..interfaces.exports.vault import export_markdown
 
     while not stop.wait(minutes * 60):
         try:
@@ -155,10 +155,10 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
 
 
 def main(env: Mapping[str, str] | None = None) -> int:
-    from .ingestion.persistence import register_local
-    from .storage.sqlite import connect
-    from .server import serve
-    from .core.util import setup_logging
+    from ..ingestion.persistence import register_local
+    from ..storage.sqlite import connect
+    from ..server import serve
+    from ..core.util import setup_logging
 
     env = os.environ if env is None else env
     cfg = load_config()

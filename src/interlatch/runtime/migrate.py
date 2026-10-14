@@ -36,14 +36,14 @@ import time
 import tomllib
 from pathlib import Path
 
-from .core.config import Config, interlatch_home, default_home, home_override, legacy_home, load_config
+from ..core.config import Config, interlatch_home, default_home, home_override, legacy_home, load_config
 
 try:
     import fcntl
 except ImportError:  # Windows, where Chronicle never ran: there is no folder of its to move
     fcntl = None
 from .install import LEGACY_BUNDLE_ID, LEGACY_MCP_NAME, MCP_NAME
-from .core.paths import abs_path_sql
+from ..core.paths import abs_path_sql
 
 log = logging.getLogger("interlatch.migrate")
 
@@ -381,7 +381,8 @@ def _permissions(cfg: Config, exe: str, dry_run: bool) -> list[str]:
 def _codex_mcp(cfg: Config, exe: str, dry_run: bool) -> list[str]:
     """Codex keeps its MCP servers as [mcp_servers.<name>] tables in config.toml: rename ours (and its sub-tables),
     keeping its settings and the file's layout, and point its command at this install when it is written on one line."""
-    from .connectors import _split_exe, _tilde, codex_home
+    from .connectors import _split_exe, _tilde
+    from ..sources.discovery import codex_home
 
     command, args = _split_exe(exe)
     lines = []
@@ -445,14 +446,15 @@ def _write_text(cfg: Config, path: Path, text: str, label: str) -> None:
 
 def json_mcp_configs(cfg: Config) -> list[tuple[Path, str, str]]:
     """(file, key of its server map, label) for every JSON MCP config connectors.py writes ours into."""
+    from ..sources import discovery
     from . import connectors as c
 
-    found = [(u / "mcp.json", "servers", "VS Code") for u in c.vscode_user_dirs()]
-    for d in dict.fromkeys([*cfg.copilot_dirs, c.copilot_home()]):
+    found = [(u / "mcp.json", "servers", "VS Code") for u in discovery.vscode_user_dirs()]
+    for d in dict.fromkeys([*cfg.copilot_dirs, discovery.copilot_home()]):
         found += [(d / "mcp-config.json", "mcpServers", "Copilot CLI"), (d / "mcp.json", "servers", "VS Code")]
-    for home in dict.fromkeys([*cfg.bob_dirs, c.bob_home()]):
+    for home in dict.fromkeys([*cfg.bob_dirs, discovery.bob_home()]):
         found += [(f, "mcpServers", "IBM Bob") for f in c.bob_mcp_files(home)]
-    for home in dict.fromkeys([*cfg.antigravity_dirs, c.antigravity_home()]):
+    for home in dict.fromkeys([*cfg.antigravity_dirs, discovery.antigravity_home()]):
         found.append((c.antigravity_mcp_config(home), "mcpServers", "Antigravity"))
     found += [(c.mcp_client_config(name), "mcpServers", client["label"]) for name, client in c.MCP_CLIENTS.items()]
     seen, out = set(), []
@@ -493,7 +495,7 @@ def _json_mcp(cfg: Config, exe: str, dry_run: bool) -> list[str]:
 # ---------------------------------------------------------------- CLAUDE.md / AGENTS.md
 def managed_instruction_files(cfg: Config) -> list[Path]:
     """The user-level CLAUDE.md and AGENTS.md, and every file a suggestion was written to or proposed for."""
-    from .knowledge.instructions import claude_home, codex_home
+    from ..knowledge.instructions import claude_home, codex_home
 
     paths = [claude_home(cfg) / "CLAUDE.md", codex_home(cfg) / "AGENTS.md"]
     if cfg.db_path.exists():
@@ -509,7 +511,7 @@ def managed_instruction_files(cfg: Config) -> list[Path]:
 
 
 def _instruction_markers(cfg: Config, exe: str, dry_run: bool) -> list[str]:
-    from .knowledge.instructions import LEGACY_BEGIN, MalformedBlock, relabel, write_atomic
+    from ..knowledge.instructions import LEGACY_BEGIN, MalformedBlock, relabel, write_atomic
 
     lines = []
     for path in managed_instruction_files(cfg):

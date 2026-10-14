@@ -181,7 +181,7 @@ def test_background_run_refreshes_and_notifies(archive, monkeypatch):
         a.cause(f"s{i}", "zsh-nomatch", ago(1))
     conn.commit()
     posted = []
-    monkeypatch.setattr("interlatch.notify.post", lambda title, message: posted.append((title, message)) or True)
+    monkeypatch.setattr("interlatch.runtime.notify.post", lambda title, message: posted.append((title, message)) or True)
 
     report = run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=None)
     assert report.suggestions == 2 and "2 new suggestions" in report.summary()

@@ -29,8 +29,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
-from . import __version__
-from .core.i18n import tr
+from .. import __version__
+from ..core.i18n import tr
 
 log = logging.getLogger("interlatch.update")
 
@@ -77,7 +77,7 @@ def install_method() -> dict:
 
 
 def _install_method() -> dict:
-    from .core.config import env
+    from ..core.config import env
 
     if getattr(sys, "frozen", False):
         return {"kind": "app", "label": "Interlatch.app", "command": None}
@@ -95,7 +95,7 @@ def _install_method() -> dict:
         method = {"kind": "uv", "label": f"uv tool from {source}" if source else "uv tool from PyPI", "source": source,
                   "local": bool(req.get("directory") or req.get("path")), "extras": extras,
                   # installed files carry the install time (the receipt is not rewritten by an upgrade)
-                  "installed_at": (Path(__file__).parent / "__init__.py").stat().st_mtime}
+                  "installed_at": (Path(__file__).parents[1] / "__init__.py").stat().st_mtime}  # interlatch/__init__.py
         if req.get("name") == LEGACY_DIST and not source:
             return {**method, "label": f"uv tool {LEGACY_DIST} from PyPI", "move": True,
                     **_steps(move_steps("uv", uv, extras) if uv else None)}
@@ -294,7 +294,7 @@ def compares_online() -> bool:
 
 def recall(conn) -> None:
     """Load the last PyPI check from the database, when it is newer than the one in memory."""
-    from .storage.kv import kv_get
+    from ..storage.kv import kv_get
 
     try:
         saved = json.loads(kv_get(conn, REMOTE_KEY) or "null")
@@ -306,7 +306,7 @@ def recall(conn) -> None:
 
 
 def remember(conn) -> None:
-    from .storage.kv import kv_set
+    from ..storage.kv import kv_set
 
     kv_set(conn, REMOTE_KEY, json.dumps(_remote))
     conn.commit()
@@ -400,7 +400,7 @@ def restart() -> None:
     sys.stdout.flush()
     sys.stderr.flush()
     if sys.platform == "win32" and os.environ.get("INTERLATCH_WINDOWS_TASK"):
-        from .windows import RESTART_EXIT
+        from .platforms.windows import RESTART_EXIT
 
         os._exit(RESTART_EXIT)
     label = os.environ.get("XPC_SERVICE_NAME")

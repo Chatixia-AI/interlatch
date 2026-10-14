@@ -203,7 +203,7 @@ def write_atomic(path: Path, text: str, *, cfg: Config | None = None, mkdir: boo
     A symlinked file (dotfiles) is written where it points, so the link stays a link. With mkdir=False a missing
     directory is an error rather than created (a project that was moved or deleted is never re-created).
     """
-    from ..install import _backup
+    from ..runtime.install import _backup
 
     if cfg is None:
         from ..core.config import load_config

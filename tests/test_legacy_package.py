@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 import interlatch
-from interlatch import install, windows
+from interlatch.runtime import install
+from interlatch.runtime.platforms import windows
 
 LEGACY = Path(__file__).resolve().parent.parent / "src" / "chronicle"
 

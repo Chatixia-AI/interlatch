@@ -249,7 +249,7 @@ def test_after_sync_respects_settings(archive, monkeypatch):
     a, conn, cfg = archive["a"], archive["conn"], archive["cfg"]
     _spread(a, "zsh-nomatch")
     posted = []
-    monkeypatch.setattr("interlatch.notify.post", lambda title, msg: posted.append((title, msg)) or True)
+    monkeypatch.setattr("interlatch.runtime.notify.post", lambda title, msg: posted.append((title, msg)) or True)
     cfg.suggestions_enabled = False
     assert suggest.after_sync(conn, cfg) is None and suggest.counts(conn)["new"] == 0
     cfg.suggestions_enabled, cfg.suggestions_notify = True, True

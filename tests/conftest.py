@@ -259,7 +259,7 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
     and schtasks are never run (a test that wants to see those calls patches subprocess.run itself, over this)."""
     import subprocess
 
-    from interlatch import install
+    from interlatch.runtime import install
 
     agents = tmp_path_factory.mktemp("agents")
     monkeypatch.setattr(install, "plist_path", lambda label=install.LAUNCHD_LABEL: agents / f"{label}.plist")
@@ -313,7 +313,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / "no-copilot"))
     monkeypatch.setenv("BOB_HOME", str(tmp_path / "no-bob"))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(tmp_path / "no-antigravity"))
-    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [])
+    monkeypatch.setattr("interlatch.sources.discovery.vscode_user_dirs", lambda: [])
     from interlatch.core.config import load_config
 
     cfg = load_config(home)

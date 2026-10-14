@@ -18,7 +18,7 @@ import types
 import webbrowser
 from pathlib import Path
 
-from .core.config import Config, load_config
+from ...core.config import Config, load_config
 
 log = logging.getLogger("interlatch.desktop")
 
@@ -140,11 +140,11 @@ class Background:
             self.wake.wait(SYNC_INTERVAL_S)
 
     def run_once(self) -> None:
-        from .storage.sqlite import connect
-        from .ingestion.service import sync
-        from .notify import release_check_safely
-        from .application.workflows import run_worker
-        from .interfaces.exports.vault import export_markdown
+        from ...storage.sqlite import connect
+        from ...ingestion.service import sync
+        from ..notify import release_check_safely
+        from ...application.workflows import run_worker
+        from ...interfaces.exports.vault import export_markdown
 
         self.running = True
         self.on_change()
@@ -153,7 +153,7 @@ class Background:
             cfg.ensure_dirs()
             release_check_safely(cfg)
             if cfg.sends_files:  # this Mac sends its sessions to a hub, which records and analyzes them
-                from .sharing.push import push
+                from ...sharing.push import push
 
                 log.info("app push: %s", push(cfg).summary())
                 self.error = None
@@ -194,8 +194,8 @@ class DesktopApp:
             name_process("Interlatch")  # before pywebview creates the NSApplication
         import webview
 
-        from .install import write_shim
-        from .server import make_server
+        from ..install import write_shim
+        from ...server import make_server
 
         adopt_login_path()
         if self.frozen:
@@ -345,7 +345,7 @@ class DesktopApp:
         """From source the Dock would show Python's icon; Interlatch.app has its own .icns."""
         import AppKit
 
-        from .server import WEB_DIR
+        from ...server import WEB_DIR
 
         image = AppKit.NSImage.alloc().initWithContentsOfFile_(str(WEB_DIR / "icon.png"))
         if image is not None:
@@ -377,7 +377,7 @@ class DesktopApp:
         import AppKit
         from PyObjCTools import AppHelper
 
-        from .install import hooks_installed
+        from ..install import hooks_installed
         from .menubar import Extra, StatusMenu, snapshot
 
         self.menu = StatusMenu(
@@ -417,9 +417,9 @@ class DesktopApp:
     # ------------------------------------------------------------------ setup
     def onboard(self) -> None:
         """First launch: offer to connect Claude Code (hooks + MCP). Asked once; the menu keeps the option."""
-        from .storage.sqlite import connect
-        from .storage.kv import kv_get, kv_set
-        from .install import hooks_installed
+        from ...storage.sqlite import connect
+        from ...storage.kv import kv_get, kv_set
+        from ..install import hooks_installed
 
         if self.frozen and in_temporary_location():
             self.alert("Move Interlatch to Applications",
@@ -439,8 +439,8 @@ class DesktopApp:
         self.connect_claude(first_run=True)
 
     def connect_claude(self, first_run: bool = False) -> None:
-        from .connectors import connect
-        from .install import executable
+        from ..connectors import connect
+        from ..install import executable
 
         if not self.cfg.claude_bin():
             self.alert("Claude Code not found",
@@ -455,7 +455,7 @@ class DesktopApp:
                  "• register the interlatch MCP server, so Claude can search your past sessions"]
         if self.frozen:
             steps.append("• open Interlatch at login, so sessions are analyzed in the background")
-        from .analysis.runners.factory import make_runner
+        from ...analysis.runners.factory import make_runner
 
         runner = make_runner(self.cfg)
         how = (f"Analysis runs on this Mac with {runner.label}." if runner.local()
@@ -503,7 +503,7 @@ class DesktopApp:
 
     # ------------------------------------------------------------------ command-line tool
     def install_cli(self) -> None:
-        from .install import shim_path, write_shim
+        from ..install import shim_path, write_shim
 
         shim = write_shim(sys.executable)
         link = Path(CLI_LINK).expanduser()
@@ -531,8 +531,8 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         print("The desktop app needs the `app` extra: uv tool install 'interlatch[app]'", file=sys.stderr)
         return 1
-    from .migrate import migrate_if_due
-    from .core.util import file_lock, setup_logging
+    from ..migrate import migrate_if_due
+    from ...core.util import file_lock, setup_logging
 
     migrate_if_due()  # Chronicle's folder becomes Interlatch's
     cfg = load_config()

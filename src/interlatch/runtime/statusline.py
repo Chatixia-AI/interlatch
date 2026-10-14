@@ -35,7 +35,7 @@ COMMAND_MARKER = " statusline"
 
 
 def state_dir() -> Path:
-    from .core.config import interlatch_home
+    from ..core.config import interlatch_home
 
     return interlatch_home() / "statusline"
 
@@ -159,7 +159,7 @@ def ingest(conn, now: float | None = None) -> int:
     """Copy each session's latest record into sessions.statusline_json; keep the newest plan limits in kv.
 
     A record whose session is not in the database yet stays for the next sync. Records idle for KEEP_DAYS go."""
-    from .storage.kv import kv_get, kv_set
+    from ..storage.kv import kv_get, kv_set
 
     folder = samples_dir()
     if not folder.is_dir():
@@ -190,7 +190,7 @@ def ingest(conn, now: float | None = None) -> int:
 
 def plan_usage(conn) -> dict | None:
     """The newest plan limits seen, with windows whose reset has already passed dropped (they no longer apply)."""
-    from .storage.kv import kv_get
+    from ..storage.kv import kv_get
 
     latest = _read_json_text(kv_get(conn, "plan_usage_latest"))
     if not latest:

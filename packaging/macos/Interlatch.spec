@@ -12,7 +12,7 @@ ROOT = Path(SPECPATH).parents[1]
 HERE = Path(SPECPATH)
 # the installed package's version (from the git tag); the bundle takes its release numbers only (0.7.1.dev3+g… -> 0.7.1)
 VERSION = re.match(r"\d+(?:\.\d+)*", version("interlatch")).group(0)
-BUNDLE_ID = "com.interlatch.app"  # keep in sync with interlatch.install.APP_BUNDLE_ID
+BUNDLE_ID = "com.interlatch.app"  # keep in sync with interlatch.runtime.install.APP_BUNDLE_ID
 IDENTITY = os.environ.get("INTERLATCH_CODESIGN_IDENTITY") or None
 
 a = Analysis(
@@ -31,7 +31,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Interlatch",  # Contents/MacOS/Interlatch, which interlatch.install's shim runs
+    name="Interlatch",  # Contents/MacOS/Interlatch, which interlatch.runtime.install's shim runs
     console=False,
     argv_emulation=False,
     target_arch=os.environ.get("INTERLATCH_TARGET_ARCH") or None,

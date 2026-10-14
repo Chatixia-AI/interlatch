@@ -728,7 +728,7 @@ class App:
         row = self.conn.execute("SELECT * FROM sessions WHERE id = ?", (real,)).fetchone()
         why = waiting_reason(self.conn, self.cfg, row) if row else None
         s["waiting"] = {"code": why[0], "text": why[1]} if why else None
-        from .statusline import session_usage
+        from .runtime.statusline import session_usage
 
         s["usage"] = session_usage(row["statusline_json"]) if row else None  # None: not recorded, never zero
         s["api_calls"] = [dict(r) for r in self.conn.execute(
@@ -1191,15 +1191,15 @@ class App:
         return self.jobs.start(f"glossary:{path or 'all'}", job)
 
     def connectors(self) -> list[dict]:
-        from .connectors import all_status
+        from .runtime.connectors import all_status
 
         return all_status(self.cfg, self.conn)
 
     def mcp_info(self) -> dict:
         """What the MCP page shows: the command that starts the server, its tools, and config to paste."""
-        from .connectors import mcp_server_entry
-        from .install import MCP_NAME, executable
-        from .mcp_server import INSTRUCTIONS, TOOLS
+        from .runtime.connectors import mcp_server_entry
+        from .runtime.install import MCP_NAME, executable
+        from .interfaces.mcp import INSTRUCTIONS, TOOLS
 
         entry = mcp_server_entry(executable())
         cmd, args = entry["command"], entry["args"]
@@ -1220,14 +1220,14 @@ class App:
         }
 
     def mcp_clients(self) -> list[dict]:
-        from .connectors import mcp_clients_status
+        from .runtime.connectors import mcp_clients_status
 
         return mcp_clients_status()
 
     def action_connector(self, name: str, action: str) -> dict:
         from .core.config import load_config
-        from .connectors import MCP_CLIENTS, connect, disconnect
-        from .install import executable
+        from .runtime.connectors import MCP_CLIENTS, connect, disconnect
+        from .runtime.install import executable
 
         if name in MCP_CLIENTS:  # only another tool's MCP config changes: no config reload, nothing to sync
             return {"actions": connect(self.cfg, name, executable()) if action == "connect" else disconnect(self.cfg, name),
@@ -1314,7 +1314,7 @@ class App:
         return self.jobs.start(f"review:{week or 'last'}", job)
 
     def status_small(self, limited: bool = False) -> dict:
-        from .update import available, recall
+        from .runtime.update import available, recall
         from .analysis.queue import PAUSE_KEY, count_pending
 
         if limited:  # the hub's own queue, jobs and updates are not theirs to see
@@ -1871,7 +1871,7 @@ class App:
         return self.jobs.start("push", lambda progress: push(self.cfg, progress=progress).summary())
 
     def update_info(self, remote: bool) -> dict:
-        from .update import check, recall, remember
+        from .runtime.update import check, recall, remember
 
         recall(self.conn)
         info = check(remote, detail=True)
@@ -1881,7 +1881,7 @@ class App:
 
     def _maybe_check_daily(self) -> None:
         """With [updates] check_daily on, ask PyPI once a day, in the background, while a dashboard polls."""
-        from .update import check_due, fetch_latest, remember
+        from .runtime.update import check_due, fetch_latest, remember
 
         if not self.cfg.update_check_daily or not check_due() or not self._update_check.acquire(blocking=False):
             return
@@ -2057,7 +2057,7 @@ class App:
 
     def action_menu_bar(self, on: bool) -> dict:
         """Status › Recording's switch: the macOS menu-bar icon on or off, adding the `app` extra when it is missing."""
-        from . import menubar
+        from .runtime.platforms import menubar
         from .core.config import load_config
 
         info = menubar.setting_info(self.cfg)
@@ -2079,7 +2079,7 @@ class App:
         return {"started": self.jobs.start("menu-bar", job), "restarts": restarts}
 
     def action_update(self) -> dict:
-        from .update import run_update
+        from .runtime.update import run_update
 
         busy = [k for k, j in self.jobs.snapshot().items() if j["state"] == "running" and k != "update"]
         if busy:  # updating restarts the dashboard, which would cut the running job off
@@ -2087,8 +2087,8 @@ class App:
         return {"started": self.jobs.start("update", run_update)}
 
     def status(self) -> dict:
-        from .install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
-        from .statusline import plan_usage
+        from .runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
+        from .runtime.statusline import plan_usage
 
         c = self.conn
         st = self.status_small()
@@ -2100,7 +2100,7 @@ class App:
         st["ui_agent"] = launchd_status(UI_LABEL)
         st["mcp"] = mcp_registered()
         st["statusline"] = {"installed": statusline_installed(self.cfg), "plan": plan_usage(c)}
-        from .menubar import setting_info
+        from .runtime.platforms.menubar import setting_info
 
         st["menu_bar"] = setting_info(self.cfg)
         st["db_size"] = self.cfg.db_path.stat().st_size if self.cfg.db_path.exists() else 0
@@ -3145,7 +3145,7 @@ def _already_running(cfg: Config, port: int, open_browser: bool) -> None:
     import sys
     from urllib.request import urlopen
 
-    from .install import UI_LABEL, active_label, launchd_status
+    from .runtime.install import UI_LABEL, active_label, launchd_status
 
     url = f"http://127.0.0.1:{port}/"
     try:
@@ -3179,10 +3179,10 @@ def serve(cfg: Config, host: str | None = None, port: int | None = None, open_br
     """`banner`: the line printed once the dashboard listens, instead of its 127.0.0.1 address (container.py prints
     the hub's own: an editor connected to the server forwards any 127.0.0.1 address it sees in a terminal).
     `menu_bar`: the macOS menu-bar item too; None shows it when this is the login item (menubar.wants_menu_bar)."""
-    from . import update
+    from .runtime import update
 
     if sys.platform == "win32" and os.environ.get("INTERLATCH_WINDOWS_TASK"):
-        from .windows import QUIT_TEXT, logon_id, quit_stands
+        from .runtime.platforms.windows import QUIT_TEXT, logon_id, quit_stands
 
         if quit_stands(cfg.home, logon_id()):  # quit from its notification-area icon: not back before the next sign-in
             print(f"Quit from the notification-area icon. {QUIT_TEXT}", flush=True)
@@ -3198,7 +3198,7 @@ def serve(cfg: Config, host: str | None = None, port: int | None = None, open_br
     print(banner or f"Interlatch dashboard: {url}  (Ctrl+C to stop)", flush=True)
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
-    from .menubar import run_with_server, wants_menu_bar
+    from .runtime.platforms.menubar import run_with_server, wants_menu_bar
 
     if (wants_menu_bar(cfg) if menu_bar is None else menu_bar) and run_with_server(cfg, httpd, url):
         return

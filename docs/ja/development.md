@@ -122,7 +122,7 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `core/`：設定、セッションの記録、パス、翻訳、エージェント名、料金、伏せ字処理、このコンピューターの識別子、
   セッションが作ったものの見分け方
 - `storage/`：SQLite のアーカイブ（スキーマ、マイグレーション、接続）と、任意の Postgres ストア
-- `sources/`：エージェントごとの読み取り（`claude/`、`codex/`、`copilot.py`、`bob.py`、`antigravity.py`）と、
+- `sources/`：各エージェントがファイルを置く場所（`discovery.py`）、エージェントごとの読み取り（`claude/`、`codex/`、`copilot.py`、`bob.py`、`antigravity.py`）と、
   チャットのエクスポートごとの読み取り（`claude/export.py`、`chatgpt.py`）
 - `artifacts/`：セッションが作ったもの、その今の状態、開くこと
 - `ingestion/`：すべてのソースの同期（`service.py`）。生ファイルのアーカイブ、解析したセッションの保存、チャットの
@@ -136,9 +136,12 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `sharing/`：ハブと参加するコンピューター。プロトコル、トークン、クライアントと送受信、ハブの受け取り側、ハブの
   プロジェクト、人と見えるもの、チームページのニュース、リーダーボード
 - `application/`：ワーカーの 1 回の実行で起きること（`workflows.py`）、機能をまたぐセッションの記録と検索
-- `interfaces/exports/`：Markdown の保管庫、セッションのエクスポート、Excalidraw の図
-- `connectors.py`（ソース）、`server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`hooks.py` / `install.py`、
-  `desktop.py`（macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします
+- `interfaces/`：MCP サーバー（`mcp.py`）と、Interlatch が書き出すファイル（`exports/`：Markdown の保管庫、
+  セッションのエクスポート、Excalidraw の図）
+- `runtime/`：このコンピューター上の Interlatch。インストール（フック、MCP サーバー、バックグラウンドジョブ）、
+  エージェントの接続（`connectors.py`）、ステータスライン、Chronicle からの移行、更新、通知、コンテナーのハブ。
+  `runtime/platforms/`：Windows（タスク スケジューラ、通知領域）、macOS アプリとメニューバーのアイコン
+- `server.py` ＋ `web/`（ダッシュボード）、`cli.py`。`packaging/macos/` がアプリをビルドします
 
 ダッシュボードのページは Content-Security-Policy（`server.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは

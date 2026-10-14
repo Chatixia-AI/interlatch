@@ -404,7 +404,7 @@ def after_sync(conn: sqlite3.Connection, cfg: Config) -> dict[str, int] | None:
         log.exception("suggestions refresh failed")
         return None
     if cfg.suggestions_notify and report["new"] > 0:
-        from ..notify import post
+        from ..runtime.notify import post
 
         post("Interlatch", f"{report['new']} new suggestion{'s' if report['new'] != 1 else ''}. "
                           "Open the dashboard > Suggestions")

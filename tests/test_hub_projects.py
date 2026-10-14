@@ -343,7 +343,7 @@ def test_a_limited_connection_hides_columns_and_tables(synced):
 
 def test_notes_inside_a_project_set_up_here(synced):
     """A session started in a folder inside a project set up on this hub gets that project's notes."""
-    from interlatch.hooks import build_session_context
+    from interlatch.runtime.hooks import build_session_context
 
     cfg, conn = synced["cfg"], synced["conn"]
     _project_setup(conn, cfg)

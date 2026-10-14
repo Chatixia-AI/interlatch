@@ -49,7 +49,7 @@ def _since(value: str | None) -> str | None:
 
 # ---------------------------------------------------------------------------- commands
 def cmd_hook(args) -> int:
-    from .hooks import hook_main
+    from .runtime.hooks import hook_main
 
     return hook_main(args.event)
 
@@ -82,8 +82,8 @@ def cmd_ingest_session(args) -> int:
 
 def cmd_sync(args) -> int:
     from .ingestion.service import sync
-    from .migrate import migrate_if_due
-    from .notify import release_check_safely
+    from .runtime.migrate import migrate_if_due
+    from .runtime.notify import release_check_safely
     from .core.util import setup_logging
 
     migrate_if_due(quiet=args.quiet)  # the background sync: Chronicle's folder becomes Interlatch's
@@ -404,8 +404,8 @@ def cmd_stats(args) -> int:
 
 def cmd_status(args) -> int:
     from .storage.kv import kv_get
-    from .install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
-    from .statusline import WINDOW_LABEL, plan_usage
+    from .runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
+    from .runtime.statusline import WINDOW_LABEL, plan_usage
     from .analysis.runners.factory import make_runner
     from .core.util import human_cost, local_str
     from .analysis.queue import PAUSE_KEY, QUEUE_REASON_LABEL, count_pending
@@ -471,8 +471,8 @@ def _ask(question: str, default: bool) -> bool:
 
 def _setup_choices(cfg, conn, console, *, ask) -> tuple[list[str], list[str]]:
     """Show the agents found on this machine; return (sources to connect, MCP-only clients to register)."""
-    from .connectors import all_status, mcp_clients_status
-    from .install import hooks_installed
+    from .runtime.connectors import all_status, mcp_clients_status
+    from .runtime.install import hooks_installed
 
     statuses = all_status(cfg, conn)
     sources = [s for s in statuses if s["name"] != "codex-cloud"]
@@ -700,7 +700,7 @@ def _notify_choice(cfg, conn, args, *, ask, background_sync: bool) -> bool | Non
     """Turn release notifications on or off (True/False), or leave the setting alone (None). Asked once, and only
     where they can work: an install that updates from PyPI, with the background sync running to check."""
     from .storage.kv import kv_get
-    from .update import compares_online
+    from .runtime.update import compares_online
 
     if args.notify_updates is not None:
         return args.notify_updates
@@ -728,16 +728,16 @@ def _menu_bar_choice(cfg, conn, args, *, ask, login_dashboard: bool) -> bool | N
 
 
 def cmd_install(args) -> int:
-    from .connectors import connect, disconnect
+    from .runtime.connectors import connect, disconnect
     from .storage.kv import kv_get, kv_set
     from .ingestion.service import sync
-    from .install import (LAUNCHD_LABEL, UI_LABEL, agent_path, background_supported, executable, install_hooks,
-                          install_launchd, install_mcp, install_statusline, install_ui_agent, launchd_status,
-                          statusline_installed, uninstall_launchd)
+    from .runtime.install import (LAUNCHD_LABEL, UI_LABEL, agent_path, background_supported, executable, install_hooks,
+                                  install_launchd, install_mcp, install_statusline, install_ui_agent, launchd_status,
+                                  statusline_installed, uninstall_launchd)
     from .core.util import utcnow_iso
 
     if not args.dry_run:
-        from .migrate import migrate_if_due
+        from .runtime.migrate import migrate_if_due
 
         migrate_if_due(quiet=False)
     cfg = _cfg()
@@ -923,8 +923,8 @@ def _set_config_value(cfg, section: str, key: str, value: str) -> None:
 def cmd_uninstall(args) -> int:
     import shutil
 
-    from .connectors import mcp_clients_status, remove_mcp_client
-    from .install import uninstall_hooks, uninstall_launchd, uninstall_mcp, uninstall_statusline
+    from .runtime.connectors import mcp_clients_status, remove_mcp_client
+    from .runtime.install import uninstall_hooks, uninstall_launchd, uninstall_mcp, uninstall_statusline
 
     cfg = _cfg()
     actions = uninstall_hooks(cfg) + uninstall_statusline(cfg) + uninstall_launchd() + uninstall_mcp(cfg)
@@ -942,7 +942,7 @@ def cmd_uninstall(args) -> int:
 
 
 def cmd_serve(args) -> int:
-    from .migrate import migrate_if_due
+    from .runtime.migrate import migrate_if_due
     from .server import serve
     from .core.util import setup_logging
 
@@ -954,14 +954,14 @@ def cmd_serve(args) -> int:
 
 
 def cmd_app(args) -> int:
-    from .desktop import main
+    from .runtime.platforms.desktop import main
 
     return main()
 
 
 def cmd_migrate(args) -> int:
     """`interlatch migrate`: Chronicle's folder and settings become Interlatch's (migrate.py)."""
-    from .migrate import migrate
+    from .runtime.migrate import migrate
 
     lines = migrate(dry_run=args.dry_run)
     for line in lines:
@@ -1018,14 +1018,14 @@ def cmd_mcp(args) -> int:
     if args.print_config:
         import json
 
-        from .connectors import mcp_server_entry
-        from .install import executable
+        from .runtime.connectors import mcp_server_entry
+        from .runtime.install import executable
 
-        from .install import MCP_NAME
+        from .runtime.install import MCP_NAME
 
         print(json.dumps({"mcpServers": {MCP_NAME: mcp_server_entry(executable())}}, indent=2))
         return 0
-    from .mcp_server import serve
+    from .interfaces.mcp import serve
 
     return serve(_cfg())
 
@@ -1527,7 +1527,7 @@ def cmd_friction(args) -> int:
 
 
 def cmd_sources(args) -> int:
-    from .connectors import all_status, mcp_clients_status
+    from .runtime.connectors import all_status, mcp_clients_status
     from .core.util import local_str
 
     cfg = _cfg()
@@ -1641,8 +1641,8 @@ def _screen_list(conn, args) -> int:
 
 
 def cmd_connect(args) -> int:
-    from .connectors import MCP_CLIENTS, connect, disconnect
-    from .install import executable
+    from .runtime.connectors import MCP_CLIENTS, connect, disconnect
+    from .runtime.install import executable
 
     cfg = _cfg()
     if args.disconnect:
@@ -1689,7 +1689,7 @@ def _push(cfg, *, quiet: bool = False) -> int:
 
 
 def cmd_container(args) -> int:
-    from .container import main
+    from .runtime.container import main
 
     return main()
 
@@ -1725,7 +1725,7 @@ def cmd_hub(args) -> int:
     from .sharing.pull import last_team
     from .sharing.push import last_push
     from .core.machine import local_machine
-    from .install import background_status, hooks_installed
+    from .runtime.install import background_status, hooks_installed
 
     cfg = _cfg()
     console = _console()
@@ -2639,7 +2639,7 @@ def cmd_mirror(args) -> int:
 def cmd_tailnet(args) -> int:
     import platform
 
-    from . import tailnet
+    from .runtime import tailnet
 
     cfg = _cfg()
     console = _console()
@@ -2703,7 +2703,7 @@ def cmd_tailnet(args) -> int:
 def cmd_context(args) -> int:
     import os
 
-    from .hooks import build_session_context
+    from .runtime.hooks import build_session_context
 
     cfg = _cfg()
     print(build_session_context(cfg, args.cwd or os.getcwd()) or "(no knowledge recorded for this directory yet)")
@@ -3065,11 +3065,11 @@ def main(argv: list[str] | None = None) -> int:
         return _rerun_in_utf8_mode(sys.argv[1:])
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["hook"] and len(argv) >= 2:  # fast path: no argparse/rich import cost
-        from .hooks import hook_main
+        from .runtime.hooks import hook_main
 
         return hook_main(argv[1])
     if argv[:1] == ["statusline"]:  # Claude Code runs this after every turn: same fast path
-        from .statusline import main as statusline_main
+        from .runtime.statusline import main as statusline_main
 
         return statusline_main()
     parser = build_parser()

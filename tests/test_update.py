@@ -9,7 +9,8 @@ import time
 
 import pytest
 
-from interlatch import __version__, update
+from interlatch import __version__
+from interlatch.runtime import update
 
 
 @pytest.fixture

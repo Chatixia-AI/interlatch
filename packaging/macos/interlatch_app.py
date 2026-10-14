@@ -13,7 +13,7 @@ def run() -> int:
         from interlatch.cli import main
 
         return main(args)
-    from interlatch.desktop import main
+    from interlatch.runtime.platforms.desktop import main
 
     return main()
 

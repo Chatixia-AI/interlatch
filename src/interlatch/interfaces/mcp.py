@@ -7,21 +7,21 @@ import os
 import sys
 from datetime import timedelta
 
-from . import __version__
-from .core.config import Config
-from .core.agents import AGENTS, short_name, speaker
-from .core.artifact_records import KINDS as ARTIFACT_KINDS
-from .artifacts.queries import STATUS as ARTIFACT_STATUS
-from .storage.sqlite import connect
-from .sharing.pull import team_from
-from .knowledge.ladder import stage_label
-from .core.redact import redact
-from .application.search import search_knowledge, search_sessions
-from .knowledge.synthesize import GLOBAL, kb_for_path
-from .core.util import human_duration, local_str, one_line, to_iso, truncate, utcnow
-from .application.records import resolve_session_id, session_record
-from .interfaces.exports.markdown import case_lines, session_markdown
-from .projects.labels import project_labels
+from .. import __version__
+from ..core.config import Config
+from ..core.agents import AGENTS, short_name, speaker
+from ..core.artifact_records import KINDS as ARTIFACT_KINDS
+from ..artifacts.queries import STATUS as ARTIFACT_STATUS
+from ..storage.sqlite import connect
+from ..sharing.pull import team_from
+from ..knowledge.ladder import stage_label
+from ..core.redact import redact
+from ..application.search import search_knowledge, search_sessions
+from ..knowledge.synthesize import GLOBAL, kb_for_path
+from ..core.util import human_duration, local_str, one_line, to_iso, truncate, utcnow
+from ..application.records import resolve_session_id, session_record
+from .exports.markdown import case_lines, session_markdown
+from ..projects.labels import project_labels
 
 SUPPORTED_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
 
@@ -253,7 +253,7 @@ class Tools:
             row = self.conn.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
             kb = dict(row) if row else None
         else:
-            from .hooks import _project_here
+            from ..runtime.hooks import _project_here
 
             kb = kb_for_path(self.conn, self.cwd)
             path = kb["project_path"] if kb else _project_here(self.conn, self.cwd)
@@ -268,7 +268,7 @@ class Tools:
         return "\n".join(lines)
 
     def glossary(self, term: str | None = None, project: str | None = None) -> str:
-        from .knowledge.glossary import glossary_entries, lookup
+        from ..knowledge.glossary import glossary_entries, lookup
 
         if term:
             e = lookup(self.conn, term)
@@ -293,8 +293,8 @@ class Tools:
         return "\n".join(f"- **{e['term']}** ({e['category']}): {one_line(e['definition'] or '', 200)}" for e in entries[:120])
 
     def find_artifacts(self, query: str | None = None, kind: str | None = None, project: str | None = None, limit: int = 20) -> str:
-        from .artifacts.queries import query as find
-        from .core.machine import local_machine_id
+        from ..artifacts.queries import query as find
+        from ..core.machine import local_machine_id
 
         path = self._resolve_project(project) if project else None
         items, _ = find(self.conn, kind=kind or None, project=path, q=(query or "").strip() or None,

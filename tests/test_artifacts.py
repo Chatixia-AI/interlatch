@@ -161,7 +161,7 @@ def test_stored_with_the_session(synced):
     rows = [dict(r) for r in conn.execute("SELECT * FROM artifacts WHERE session_id = ?", (SID,))]
     pr = next(r for r in rows if r["kind"] == "pr")  # the transcript's pr-link record
     assert pr["url"] == "https://github.com/x/y/pull/7" and pr["title"] == "x/y#7"
-    from interlatch.mcp_server import TOOLS, Tools
+    from interlatch.interfaces.mcp import TOOLS, Tools
     from interlatch.server import App
 
     assert any(t["name"] == "find_artifacts" and t["annotations"]["readOnlyHint"] for t in TOOLS)

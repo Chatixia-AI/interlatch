@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import install, windows
+from interlatch.runtime import install
+from interlatch.runtime.platforms import windows
 from interlatch.core.config import load_config
 from interlatch.core.util import file_lock
 
@@ -285,7 +286,7 @@ def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeyp
 
     for name in ("COPILOT_HOME", "BOB_HOME", "ANTIGRAVITY_HOME"):
         monkeypatch.setenv(name, str(tmp_path / "none"))
-    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [])
+    monkeypatch.setattr("interlatch.sources.discovery.vscode_user_dirs", lambda: [])
     sid = "33333333-2222-3333-4444-555555555555"
     claude = tmp_path / "claude"
     proj = claude / "projects" / "C--work-app"
@@ -337,7 +338,9 @@ def test_copilot_s_file_uris_give_windows_paths():
 def test_the_tray_icon_is_interlatch_s_own(tmp_path):
     import struct
 
-    png = (Path(windows.__file__).parent / "web" / "favicon.png").read_bytes()
+    import interlatch
+
+    png = (Path(interlatch.__file__).parent / "web" / "favicon.png").read_bytes()
     ico = windows.ico_from_pngs([png])
     assert struct.unpack("<HHH", ico[:6]) == (0, 1, 1)
     w, h, _, _, planes, bits, size, offset = struct.unpack("<BBBBHHII", ico[6:22])
@@ -362,7 +365,8 @@ def test_quit_from_the_icon_lasts_until_the_next_sign_in(tmp_path, monkeypatch):
 
 
 def test_the_dashboard_task_does_not_start_again_after_quit(tmp_path, monkeypatch):
-    from interlatch import server, update
+    from interlatch import server
+    from interlatch.runtime import update
 
     cfg = load_config(tmp_path / "home")
     monkeypatch.setattr(update, "RESTARTABLE", update.RESTARTABLE)  # serve() sets it
@@ -384,7 +388,7 @@ def test_installing_the_dashboard_task_undoes_a_quit(cfg, schtasks):
 
 
 def test_windows_menubar_setting_and_wants(cfg, monkeypatch):
-    from interlatch import menubar
+    from interlatch.runtime.platforms import menubar
 
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setattr(windows, "task_status", lambda name: {"installed": True, "loaded": True})
@@ -438,7 +442,7 @@ def test_open_and_reveal_use_windows_own_programs(monkeypatch):
 
 @on_windows
 def test_the_notification_script_parses_in_windows_powershell(tmp_path):
-    from interlatch import notify
+    from interlatch.runtime import notify
 
     script = tmp_path / "toast.ps1"
     script.write_text(notify.WINDOWS_SCRIPT, encoding="utf-8-sig")

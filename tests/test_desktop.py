@@ -24,7 +24,7 @@ def frozen(env, monkeypatch):
 
 
 def test_frozen_executable_is_a_shim_that_runs_the_app(env, frozen):
-    from interlatch.install import executable, shim_path
+    from interlatch.runtime.install import executable, shim_path
 
     exe = executable()
     assert exe == str(shim_path()) == str(env["home"] / "bin" / "interlatch")
@@ -33,7 +33,7 @@ def test_frozen_executable_is_a_shim_that_runs_the_app(env, frozen):
 
 
 def test_shim_is_rewritten_only_when_the_app_moves(env, frozen, monkeypatch):
-    from interlatch.install import write_shim
+    from interlatch.runtime.install import write_shim
 
     shim = write_shim(str(frozen))
     mtime = shim.stat().st_mtime_ns
@@ -44,7 +44,7 @@ def test_shim_is_rewritten_only_when_the_app_moves(env, frozen, monkeypatch):
 
 
 def test_frozen_hooks_point_at_the_shim(env, frozen):
-    from interlatch.install import executable, install_hooks, settings_path
+    from interlatch.runtime.install import executable, install_hooks, settings_path
 
     install_hooks(env["cfg"], executable(), inject=False)
     settings = json.loads(settings_path(env["cfg"]).read_text())
@@ -84,7 +84,7 @@ def test_make_server_falls_back_to_a_free_port(env):
 
 
 def test_in_temporary_location():
-    from interlatch.desktop import in_temporary_location
+    from interlatch.runtime.platforms.desktop import in_temporary_location
 
     assert in_temporary_location("/Volumes/Chronicle/Chronicle.app/Contents/MacOS/Chronicle")
     assert in_temporary_location("/private/var/folders/x/AppTranslocation/ABC/d/Chronicle.app/Contents/MacOS/Chronicle")
@@ -100,14 +100,14 @@ def test_version_comes_from_the_package_metadata():
 
 
 def test_app_window_loads_the_transparent_page():
-    from interlatch.desktop import app_url
+    from interlatch.runtime.platforms.desktop import app_url
 
     assert app_url("http://127.0.0.1:8765/", False) == "http://127.0.0.1:8765/?app=mac"
     assert app_url("http://127.0.0.1:8765/", True) == "http://127.0.0.1:8765/?app=mac&reduce=1"
 
 
 def test_bridge_exposes_only_window_actions_and_no_way_back_to_the_app():
-    from interlatch.desktop import make_bridge
+    from interlatch.runtime.platforms.desktop import make_bridge
 
     calls = []
 

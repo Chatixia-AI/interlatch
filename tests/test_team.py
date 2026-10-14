@@ -144,8 +144,8 @@ def _team_rows(spoke):
 
 
 def test_teammates_lessons_come_back_read_only(teamenv):
-    from interlatch.hooks import build_session_context
-    from interlatch.mcp_server import Tools
+    from interlatch.runtime.hooks import build_session_context
+    from interlatch.interfaces.mcp import Tools
 
     fake, spoke, conn = teamenv["fake"], teamenv["spoke"], teamenv["conn"]
     assert spoke.shares_knowledge

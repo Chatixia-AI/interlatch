@@ -228,7 +228,7 @@ def sync(cfg: Config, conn: sqlite3.Connection, *, only: Path | None = None, end
                 conn.rollback()
                 log.exception("re-reading archived chat exports failed")
                 report.errors.append(f"chat exports: {exc}")
-            from ..statusline import ingest as ingest_statusline
+            from ..runtime.statusline import ingest as ingest_statusline
 
             conn.execute("SAVEPOINT statusline")  # a bad record must not undo the sessions synced above
             try:
