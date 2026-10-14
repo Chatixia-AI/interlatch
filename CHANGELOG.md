@@ -3,6 +3,22 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.23.4 (2026-10-14)
+
+- **What goes wrong:** the projects and agents a cause hit equally often are listed by name, in the same order every
+  time, instead of in a different order after each restart of the dashboard.
+- **Codex Cloud:** listing Codex Cloud tasks no longer leaves an `error.log` from the Codex CLI in the folder Interlatch
+  was started from (a sync run in a project left one there).
+- **A project's page tells you where you left off:** it opens on the last session's goal and what it left open, the
+  sessions before it, the project folder's git state (branch, uncommitted changes, last commit, other worktrees) and
+  the work week by week with the pull requests and commits it made. The knowledge base, lessons, sessions, artifacts
+  and usage numbers move into tabs. On a hub with people it shows whose each session is
+  ([A project's page](docs/dashboard.md#a-projects-page)).
+- **What needs you, and where the project is going:** a project's page now starts with **Needs you**: changes not
+  committed and commits on no remote, each with how long it has waited, and the decisions and open questions the last
+  sessions left to you (amber after two days). Beside it, the project's own `ROADMAP.md`, `BACKLOG.md` or `TODO.md`
+  by section, or else a backlog of its to-do items and open threads ([A project's page](docs/dashboard.md#a-projects-page)).
+
 ## 0.23.3 (2026-10-14)
 
 - **`python -m interlatch`:** Interlatch's Python package is now `interlatch` too, so it runs as `python -m interlatch`.
