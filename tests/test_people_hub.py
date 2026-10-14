@@ -147,7 +147,7 @@ def _out(capsys) -> str:
 
 
 def test_join_with_an_invite_then_sign_in(hubcfg, monkeypatch, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     cfg, conn = hubcfg["cfg"], hubcfg["conn"]
     bob = people.add(conn, "Bob", "bob@example.com", "member")
@@ -183,7 +183,7 @@ def test_join_with_an_invite_then_sign_in(hubcfg, monkeypatch, capsys):
 
 
 def test_join_with_a_token_still_works(env, monkeypatch, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     home = _spoke_home(env["tmp"])
     monkeypatch.setenv("INTERLATCH_HOME", str(home))
@@ -207,11 +207,11 @@ def test_redeem_at_a_hub_without_invites(env, monkeypatch):
 
 
 def test_people_from_the_command_line(hubcfg, monkeypatch, capsys):
-    import interlatch.cli as cli
+    from interlatch.cli import main
+    from interlatch.interfaces.cli.commands import sharing
 
     conn, home = hubcfg["conn"], hubcfg["home"]
-    monkeypatch.setattr(cli, "_wait_for_port", lambda *a, **kw: True)
-    main = cli.main
+    monkeypatch.setattr(sharing, "wait_for_port", lambda *a, **kw: True)
     assert main(["hub", "people"]) == 0
     assert "No people on this hub yet" in _out(capsys)
 
@@ -266,7 +266,7 @@ def test_people_from_the_command_line(hubcfg, monkeypatch, capsys):
 
 
 def test_people_commands_belong_to_the_hub(env, monkeypatch, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
     from interlatch.core.config import set_config_value
 
     set_config_value(env["cfg"], "hub", "url", '"https://hub.example"')

@@ -378,7 +378,7 @@ def test_worker_says_what_is_missing(synced):
 
 
 def test_cli_config(env, capsys, monkeypatch):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     assert main(["config", "set", "analysis.backend", "ollama"]) == 0
     assert main(["config", "set", "providers.ollama.model", "qwen3:30b"]) == 0

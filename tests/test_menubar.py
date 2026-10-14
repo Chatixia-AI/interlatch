@@ -277,7 +277,7 @@ def setup(env, monkeypatch):
 def _install(monkeypatch, answers, *extra):
     import sys
 
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     asked = []
 
@@ -321,7 +321,7 @@ def test_install_flag_sets_it_without_asking(setup, monkeypatch):
 
 
 def test_install_does_not_ask_without_the_login_dashboard_a_terminal_or_a_mac(setup, monkeypatch):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
     from interlatch.core.config import load_config
 
     assert _install(monkeypatch, {"Open": "n"}, "--no-ui") == []

@@ -9,7 +9,7 @@ from interlatch.sharing.identity import machine_key, read_token, write_token
 from interlatch.sharing.protocol import HubError
 from interlatch.sharing.push import _shared_records, push
 from interlatch.sharing.receiver import purge
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.core.machine import local_machine

@@ -11,7 +11,7 @@ import pytest
 from friction_fixture import ago, make_archive
 
 from interlatch.knowledge import suggest
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.knowledge.instructions import BEGIN
 
 

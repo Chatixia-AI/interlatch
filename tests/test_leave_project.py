@@ -14,7 +14,7 @@ from interlatch.sharing.projects import left_of
 from interlatch.sharing.protocol import FolderError, HubUnreachable
 from interlatch.sharing.push import push
 from interlatch.sharing.receiver import team_lessons
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config, set_config_value, toml_table
 from interlatch.server import App
 from interlatch.core.machine import local_machine

@@ -227,7 +227,7 @@ def test_added_folders_and_what_wins(hubenv):
 def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     """`chronicle hub add-folder` on the spoke: its sessions there move to the hub's project, knowledge and all, and
     `remove-folder` moves them back."""
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
     from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
@@ -286,7 +286,7 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
 
 
 def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
     from interlatch.core.config import set_config_value
 
     cfg = load_config(env["home"])
@@ -574,7 +574,7 @@ elif args[:2] == ["serve", "status"]:
 
 
 def test_tailnet_on_and_hub_enable(env, monkeypatch, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     bin_dir = env["tmp"] / "tsbin"
     bin_dir.mkdir()

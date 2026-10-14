@@ -144,7 +144,7 @@ def test_chronicles_own_bob_tasks_are_not_imported(env, tmp_path):
 
 
 def test_cli_set_key_bob(env):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     assert main(["config", "set-key", "bob", "k-1"]) == 0
     assert key_source(load_config(env["cfg"].home), "bob") == ("k-1", "stored")

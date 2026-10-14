@@ -141,7 +141,10 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `runtime/`：このコンピューター上の Interlatch。インストール（フック、MCP サーバー、バックグラウンドジョブ）、
   エージェントの接続（`connectors.py`）、ステータスライン、Chronicle からの移行、更新、通知、コンテナーのハブ。
   `runtime/platforms/`：Windows（タスク スケジューラ、通知領域）、macOS アプリとメニューバーのアイコン
-- `server.py` ＋ `web/`（ダッシュボード）、`cli.py`。`packaging/macos/` がアプリをビルドします
+- `interfaces/cli/`：コマンドライン。`parser.py` がコマンドをまとめ、`commands/` の各モジュールがコマンドの
+  グループ（記録、アーカイブ、ナレッジ、セットアップ、共有、運用）を持ち、各コマンドのオプションはその処理の隣に
+  あります。最上位の `cli.py` は `interlatch` コマンドが実行する入り口です
+- `server.py` ＋ `web/`（ダッシュボード）。`packaging/macos/` がアプリをビルドします
 
 ダッシュボードのページは Content-Security-Policy（`server.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは

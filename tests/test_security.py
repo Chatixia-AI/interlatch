@@ -185,7 +185,7 @@ def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
 
 # ------------------------------------------------------------------ an invite can't claim a computer the hub knows (#92)
 def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     cfg, conn, url, a, b = (two_spokes[k] for k in ("cfg", "conn", "url", "a", "b"))
     a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]

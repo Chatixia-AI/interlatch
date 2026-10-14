@@ -15,7 +15,7 @@ from interlatch.sharing.projects import add_project, hub_projects, remove_projec
 from interlatch.sharing.protocol import HubError, PROTOCOL
 from interlatch.sharing.push import _shared_records
 from interlatch.sharing.receiver import IngestTrigger
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.core.machine import local_machine

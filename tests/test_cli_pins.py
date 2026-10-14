@@ -1,8 +1,8 @@
 """Safety net: every CLI command, alias, option, default and handler, snapshotted to tests/goldens/cli.json.
 
-Moving or splitting cli.py must leave this snapshot unchanged: a dropped flag, a changed default, a renamed dest or a
-command routed to another function fails here. For a deliberate change, rerun with UPDATE_GOLDENS=1 and review the
-diff of tests/goldens/cli.json.
+Moving or splitting the command line (interfaces/cli/) must leave this snapshot unchanged: a dropped flag, a changed
+default, a renamed dest or a command routed to another function fails here. For a deliberate change, rerun with
+UPDATE_GOLDENS=1 and review the diff of tests/goldens/cli.json.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from interlatch.cli import build_parser
+from interlatch.interfaces.cli.parser import build_parser
 
 from golden import assert_golden
 

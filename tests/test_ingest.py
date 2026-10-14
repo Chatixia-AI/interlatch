@@ -154,7 +154,7 @@ def test_excluded_projects_are_not_archived(env):
 
 
 def test_cli_search_prints_snippet_labels_as_styling(synced, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     assert main(["search", "logout", "--sessions-only"]) == 0
     out = capsys.readouterr().out

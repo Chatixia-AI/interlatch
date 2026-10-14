@@ -151,7 +151,7 @@ def test_worker_end_to_end_with_codex(codex_env):
 
 
 def test_config_set_backend(env, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     assert main(["config", "set", "analysis.backend", "codex"]) == 0
     assert load_config(env["cfg"].home).analysis.backend == "codex"
@@ -165,7 +165,7 @@ def test_config_set_backend(env, capsys):
 def test_setup_offers_codex_when_claude_is_missing(env, monkeypatch):
     from rich.console import Console
 
-    from interlatch.cli import _choose_analyzer
+    from interlatch.interfaces.cli.commands.setup import _choose_analyzer
 
     cfg = env["cfg"]
     monkeypatch.setattr(type(cfg), "claude_bin", lambda self: None)
