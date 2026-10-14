@@ -593,7 +593,7 @@ class _CodexThread:
                 self._fail(owner)
             elif not cell:
                 artifact_records.from_tool(self.ps, owner.name, owner.input, text, ts=ts, agent_id=self.agent_id,
-                                    tool_use_id=owner.tool_use_id, command=owner.command)
+                                           tool_use_id=owner.tool_use_id, command=owner.command)
         self._event(ts, "user", "tool_result", text, limit_key="tool_error" if is_error else "tool_result",
                     tool_name=call.name if call else None, tool_use_id=call_id, is_error=is_error)
 

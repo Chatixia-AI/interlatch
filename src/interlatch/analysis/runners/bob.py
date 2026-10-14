@@ -77,7 +77,7 @@ class BobRunner(Runner):
             env = {**internal_env(), "BOB_API_KEY": key}
             t0 = time.monotonic()
             stdout, stderr, returncode = run_sleep_aware(cmd, prompt, cwd=ws, env=env,
-                                                          timeout=timeout or a.timeout_seconds, name=self.cli)
+                                                         timeout=timeout or a.timeout_seconds, name=self.cli)
             elapsed = int((time.monotonic() - t0) * 1000)
         finally:
             shutil.rmtree(ws, ignore_errors=True)

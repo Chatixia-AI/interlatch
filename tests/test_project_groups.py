@@ -6,6 +6,7 @@ import pytest
 from interlatch.sharing import access
 from interlatch.projects import groups
 from interlatch.interfaces.web.app import App
+from interlatch.interfaces.web import api
 
 AKTIO = "/Users/me/Work/AI-BPO/Aktio"
 VM = "aktio-vm:/root/Aktio"
@@ -75,19 +76,19 @@ def test_names_and_folder_rules_are_checked(projects, name, folders):
 
 def test_projects_page_filter_and_breadcrumb(projects):
     app = App(projects["cfg"])
-    r, code = app.action_project_groups("save", {"name": "Aktio", "folders": [AKTIO, VM]})
+    r, code = api.projects.action_project_groups(app.context(), "save", {"name": "Aktio", "folders": [AKTIO, VM]})
     gid = r["id"]
-    assert code == 200 and app.project_groups()["groups"] == [{"id": gid, "name": "Aktio", "folders": [AKTIO, VM], "hub_project": None}]
-    rows = {p["project_path"]: p for p in app.projects()}
+    assert code == 200 and api.projects.project_groups(app.context())["groups"] == [{"id": gid, "name": "Aktio", "folders": [AKTIO, VM], "hub_project": None}]
+    rows = {p["project_path"]: p for p in api.projects.projects(app.context())}
     assert (rows[AKTIO]["group"], rows[AKTIO]["group_by"]) == (gid, "folder") and rows["claude.ai"]["group"] is None
-    assert app.action_project_groups("move", {"paths": ["claude.ai"], "group": gid}) == ({"ok": True}, 200)
-    assert {s["id"] for s in app.sessions({"group": str(gid)})["items"]} == {"g-0", "g-1", "g-2", "g-3", "g-6"}
-    assert app.sessions({"group": "999"})["total"] == 0
-    assert app.project(AKTIO)["group"] == {"id": gid, "name": "Aktio", "by": "folder"}
-    assert app.action_project_groups("save", {"name": "aktio"})[1] == 400  # the name is taken
-    assert app.action_project_groups("move", {"paths": []})[1] == 400
-    assert app.action_project_groups("delete", {"id": gid}) == ({"ok": True}, 200)
-    assert app.project_groups()["groups"] == [] and app.project(AKTIO)["group"] is None
+    assert api.projects.action_project_groups(app.context(), "move", {"paths": ["claude.ai"], "group": gid}) == ({"ok": True}, 200)
+    assert {s["id"] for s in api.sessions.sessions(app.context(), {"group": str(gid)})["items"]} == {"g-0", "g-1", "g-2", "g-3", "g-6"}
+    assert api.sessions.sessions(app.context(), {"group": "999"})["total"] == 0
+    assert api.projects.project(app.context(), AKTIO)["group"] == {"id": gid, "name": "Aktio", "by": "folder"}
+    assert api.projects.action_project_groups(app.context(), "save", {"name": "aktio"})[1] == 400  # the name is taken
+    assert api.projects.action_project_groups(app.context(), "move", {"paths": []})[1] == 400
+    assert api.projects.action_project_groups(app.context(), "delete", {"id": gid}) == ({"ok": True}, 200)
+    assert api.projects.project_groups(app.context())["groups"] == [] and api.projects.project(app.context(), AKTIO)["group"] is None
 
 
 def test_a_person_limited_to_projects_sees_no_groups(projects):

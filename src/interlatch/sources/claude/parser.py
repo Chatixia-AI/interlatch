@@ -375,10 +375,10 @@ class _Thread:
             if not is_error:
                 if name in WRITE_TOOLS and call.file_path:
                     artifact_records.file_written(ps, call.file_path, content=(call.input or {}).get("content"),
-                                           created=not (isinstance(tur, dict) and tur.get("type") == "update"),
-                                           ts=ts, agent_id=self.agent_id, tool_use_id=tid)
+                                                  created=not (isinstance(tur, dict) and tur.get("type") == "update"),
+                                                  ts=ts, agent_id=self.agent_id, tool_use_id=tid)
                 artifact_records.from_tool(ps, name, call.input, text, ts=ts, agent_id=self.agent_id, tool_use_id=tid,
-                                    command=call.command, tur=tur)
+                                           command=call.command, tur=tur)
             if name in AGENT_TOOLS and isinstance(tur, dict) and tur.get("agentId"):
                 sub = ps.subagents.setdefault(tur["agentId"], Subagent(tur["agentId"]))
                 sub.tool_use_id = sub.tool_use_id or tid

@@ -8,6 +8,7 @@ from interlatch.sharing.projects import FOLDERS_FILE, add_project, hub_project_o
 from interlatch.interfaces.web.app import App
 
 from conftest import CWD
+from interlatch.interfaces.web import api
 
 RESONA = "/Users/me/Work/AI-BPO/Resona"
 REPO = f"{RESONA}/quote-agent"  # a repository inside an added folder: its remote decides
@@ -41,10 +42,10 @@ def test_a_project_page_and_card_say_which_hub_project(synced):
     cfg = _spoke(synced["cfg"])
     cfg = replace(cfg, hub_folders={CWD: "/data/projects/AI-BPO-Resona"})
     app = App(cfg)
-    row = next(p for p in app.projects() if p["project_path"] == CWD)
+    row = next(p for p in api.projects.projects(app.context()) if p["project_path"] == CWD)
     assert row["hub"] == {"path": "/data/projects/AI-BPO-Resona", "name": "AI-BPO-Resona"}
-    assert app.project(CWD)["hub"] == row["hub"]
-    assert all(p["hub"] is None for p in App(synced["cfg"]).projects())  # not sending to a hub: none
+    assert api.projects.project(app.context(), CWD)["hub"] == row["hub"]
+    assert all(p["hub"] is None for p in api.projects.projects(App(synced["cfg"]).context()))  # not sending to a hub: none
 
 
 def test_a_project_set_up_on_the_hub_is_listed_before_anything_is_filed(synced):
@@ -53,14 +54,14 @@ def test_a_project_set_up_on_the_hub_is_listed_before_anything_is_filed(synced):
     empty.mkdir()
     path = add_project(cfg, conn, str(empty))["path"]
     app = App(cfg)
-    rows = {p["project_path"]: p for p in app.projects()}
+    rows = {p["project_path"]: p for p in api.projects.projects(app.context())}
     assert rows[path] | {"weekly": None} == {
         "project_path": path, "project_name": "new-client", "label": "new-client", "sessions": 0, "prompts": 0,
         "active_s": 0, "cost": 0, "tokens": 0, "first": None, "last": None, "analyzed": 0, "knowledge": 0,
         "kb_updated": None, "exists": True, "weekly": None, "outcomes": {}, "agents": {}, "shared": True, "hub": None,
         "group": None, "group_by": None}
     assert list(rows)[-1] == path  # after every project with sessions
-    assert path not in {p["project_path"] for p in app.projects(scope=[CWD])}  # not someone limited to another one
-    assert path in {p["project_path"] for p in app.projects(scope=[path])}
+    assert path not in {p["project_path"] for p in api.projects.projects(app.context(), scope=[CWD])}  # not someone limited to another one
+    assert path in {p["project_path"] for p in api.projects.projects(app.context(), scope=[path])}
     add_project(cfg, conn, CWD)
-    assert [p["sessions"] > 0 for p in app.projects() if p["project_path"] == CWD] == [True]  # once, with its sessions
+    assert [p["sessions"] > 0 for p in api.projects.projects(app.context()) if p["project_path"] == CWD] == [True]  # once, with its sessions

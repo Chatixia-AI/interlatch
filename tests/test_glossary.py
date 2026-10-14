@@ -9,6 +9,7 @@ from interlatch.knowledge.glossary import build_glossary, glossary_entries, look
 from interlatch.knowledge.synthesize import GLOBAL
 
 from conftest import CWD, SID
+from interlatch.interfaces.web import api
 
 
 def _build(synced):
@@ -129,12 +130,12 @@ def test_dashboard_themes_job_groups_due_categories(synced):
         conn.execute("INSERT INTO glossary(term, norm, category, definition) VALUES (?, ?, 'tool', 'a tool')", (name, name))
     conn.commit()
     app = App(cfg)
-    assert app.map()["themes_due"] == ["tool"]
-    assert app.action_themes(force=False) is True
+    assert api.knowledge.map(app.context())["themes_due"] == ["tool"]
+    assert api.knowledge.action_themes(app.context(), force=False) is True
     for _ in range(100):
         job = app.jobs.snapshot()["themes"]
         if job["state"] != "running":
             break
         time.sleep(0.1)
     assert job["state"] == "done" and job["result"] == "themes for 1/1 categories"
-    assert app.map()["themes_due"] == [] and "tool" in app.map()["themes"]
+    assert api.knowledge.map(app.context())["themes_due"] == [] and "tool" in api.knowledge.map(app.context())["themes"]

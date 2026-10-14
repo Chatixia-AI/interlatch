@@ -14,6 +14,7 @@ from interlatch.analysis.runners.claude import ClaudeRunner
 from interlatch.application.workflows import run_worker
 
 from conftest import CWD, SID
+from interlatch.interfaces.web import api
 
 # Answers like `codex exec --json`: the fake claude produces the reply text for the same system prompt
 # (read from model_instructions_file), wrapped in Codex's JSONL events.
@@ -181,9 +182,9 @@ def test_dashboard_switches_the_backend(env, monkeypatch):
 
     monkeypatch.setattr(type(env["cfg"]), "codex_bin", lambda self: "/opt/bin/codex")
     app = App(env["cfg"])
-    status = app.status()
+    status = api.status.status(app.context())
     assert status["analysis"]["backend"] == "claude" and status["analysis"]["auto"] is True
     assert [c["name"] for c in status["analysis"]["choices"]][:2] == ["claude", "codex"]
-    assert app.action_backend("codex")["backend"] == "codex"
-    assert load_config(env["cfg"].home).analysis.backend == "codex" and app.status_small()["analysis"]["label"] == "Codex"
-    assert "error" in app.action_backend("gemini")
+    assert api.settings.action_backend(app.context(), "codex")["backend"] == "codex"
+    assert load_config(env["cfg"].home).analysis.backend == "codex" and api.status.status_small(app.context())["analysis"]["label"] == "Codex"
+    assert "error" in api.settings.action_backend(app.context(), "gemini")

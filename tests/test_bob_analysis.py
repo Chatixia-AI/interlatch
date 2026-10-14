@@ -17,6 +17,7 @@ from interlatch.analysis.runners.settings import key_source, set_key
 from interlatch.application.workflows import run_worker
 
 from conftest import CWD, SID
+from interlatch.interfaces.web import api
 
 FAKE_BOB = r'''#!{python}
 import json, os, subprocess, sys
@@ -156,22 +157,22 @@ def test_dashboard_sets_agent_models(env):
     from interlatch.interfaces.web.app import App
 
     app = App(env["cfg"])
-    choices = {c["name"]: c for c in app.analysis_backends()["choices"]}
+    choices = {c["name"]: c for c in api.settings.analysis_backends(app.context())["choices"]}
     assert list(choices)[:3] == ["claude", "codex", "bob"]
     assert choices["claude"]["settings"] == {"model": "sonnet", "synthesis_model": "sonnet", "screen_model": "haiku",
                                             "effort": "medium"}
-    out = app.action_agent({"agent": "claude", "settings": {"model": "claude-opus-5-5", "synthesis_model": "opus",
+    out = api.settings.action_agent(app.context(), {"agent": "claude", "settings": {"model": "claude-opus-5-5", "synthesis_model": "opus",
                                                             "screen_model": "haiku", "effort": "high"}})
     assert "error" not in out
     cfg = load_config(env["cfg"].home)
     assert (cfg.analysis.model, cfg.synthesis.model, cfg.analysis.effort) == ("claude-opus-5-5", "opus", "high")
     assert make_runner(cfg).model_label() == "claude-opus-5-5"
-    bad = app.action_agent({"agent": "claude", "settings": {"model": "", "effort": "turbo", "claude_bin": "/tmp/x"}})
+    bad = api.settings.action_agent(app.context(), {"agent": "claude", "settings": {"model": "", "effort": "turbo", "claude_bin": "/tmp/x"}})
     assert bad["error"] == "not saved: model, effort, claude_bin"
     assert load_config(env["cfg"].home).analysis.model == "claude-opus-5-5"
-    assert "error" not in app.action_agent({"agent": "codex", "settings": {"model": "gpt-5.5", "effort": "max"}})
+    assert "error" not in api.settings.action_agent(app.context(), {"agent": "codex", "settings": {"model": "gpt-5.5", "effort": "max"}})
     assert load_config(env["cfg"].home).analysis.codex_model == "gpt-5.5"
-    assert "error" not in app.action_agent({"agent": "codex", "settings": {"model": ""}})  # Codex's own default
+    assert "error" not in api.settings.action_agent(app.context(), {"agent": "codex", "settings": {"model": ""}})  # Codex's own default
     assert load_config(env["cfg"].home).analysis.codex_model == ""
-    assert "error" in app.action_agent({"agent": "bob", "settings": {"model": "x"}})  # Bob picks its own model
-    assert "error" in app.action_agent({"agent": "claude", "settings": {"model": "sonnet\nbackend = 'x'"}})
+    assert "error" in api.settings.action_agent(app.context(), {"agent": "bob", "settings": {"model": "x"}})  # Bob picks its own model
+    assert "error" in api.settings.action_agent(app.context(), {"agent": "claude", "settings": {"model": "sonnet\nbackend = 'x'"}})

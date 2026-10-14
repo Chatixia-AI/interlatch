@@ -15,6 +15,7 @@ from interlatch.storage.sqlite import connect
 from interlatch.runtime.install import hooks_installed, install_hooks, uninstall_hooks
 
 from conftest import CWD, SECRET, SID
+from interlatch.interfaces.web import api
 
 
 def _run_mcp(env, messages):
@@ -137,12 +138,12 @@ def test_file_sessions_matches_relative_paths(synced):
                      [("codex-1", "auth.py", 2, 0), ("other-1", "auth.py", 0, 1)])  # Codex: relative to its folder
     conn.commit()
     app = App(synced["cfg"])
-    found = app.file_sessions(f"{CWD}/./auth.py")
+    found = api.projects.file_sessions(app.context(), f"{CWD}/./auth.py")
     assert found["path"] == f"{CWD}/auth.py" and found["total"] == 2
     assert [s["id"] for s in found["sessions"]] == ["codex-1", SID]  # newest first; /elsewhere's auth.py is another file
     assert found["sessions"][0]["file"] == {"reads": 2, "changes": 0, "added": 0, "removed": 0}
-    assert app.file_sessions("auth.py") == {"path": "", "total": 0, "sessions": []}  # only absolute paths
-    assert app.file_sessions(f"{CWD}/nothing.py")["sessions"] == []
+    assert api.projects.file_sessions(app.context(), "auth.py") == {"path": "", "total": 0, "sessions": []}  # only absolute paths
+    assert api.projects.file_sessions(app.context(), f"{CWD}/nothing.py")["sessions"] == []
 
 
 def test_folder_files_lists_touched_files(synced, tmp_path):
@@ -164,15 +165,15 @@ def test_folder_files_lists_touched_files(synced, tmp_path):
     ])
     conn.commit()
     app = App(synced["cfg"])
-    listed = app.folder_files(str(proj))
+    listed = api.projects.folder_files(app.context(), str(proj))
     assert [(f["rel"], f["sessions"], f["changed"]) for f in listed["files"]] == [("src/app.py", 2, 1), ("gone.png", 1, 0)]
     assert listed["files"][0]["last"] == "2026-09-05T09:00:00Z"
     assert listed["files"][0]["session_ids"] == ["c-old", "x-new"] and listed["files"][0]["changed_ids"] == ["c-old"]
-    assert [f["rel"] for f in app.folder_files(str(proj), existing=True)["files"]] == ["src/app.py"]
-    assert [f["rel"] for f in app.folder_files(str(proj / "src"))["files"]] == ["app.py"]
-    assert [f["rel"] for f in app.folder_files(CWD)["files"]] == ["auth.py"]
-    assert app.folder_files("/")["files"] == [] and app.folder_files("proj")["files"] == []
-    assert app.folder_files(str(proj), ignored=False)["total"] == 2  # not a git repository: nothing to leave out
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), str(proj), existing=True)["files"]] == ["src/app.py"]
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), str(proj / "src"))["files"]] == ["app.py"]
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), CWD)["files"]] == ["auth.py"]
+    assert api.projects.folder_files(app.context(), "/")["files"] == [] and api.projects.folder_files(app.context(), "proj")["files"] == []
+    assert api.projects.folder_files(app.context(), str(proj), ignored=False)["total"] == 2  # not a git repository: nothing to leave out
 
     # in a git repository, ignored=False leaves out what .gitignore covers
     (proj / "debug.log").write_text("x")
@@ -180,8 +181,8 @@ def test_folder_files_lists_touched_files(synced, tmp_path):
     subprocess.run(["git", "init", "-q", str(proj)], check=True)
     conn.execute("INSERT INTO session_files(session_id, path, reads, edits) VALUES ('c-old', ?, 0, 1)", (f"{proj}/debug.log",))
     conn.commit()
-    assert [f["rel"] for f in app.folder_files(str(proj), existing=True)["files"]] == ["src/app.py", "debug.log"]
-    assert [f["rel"] for f in app.folder_files(str(proj), existing=True, ignored=False)["files"]] == ["src/app.py"]
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), str(proj), existing=True)["files"]] == ["src/app.py", "debug.log"]
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), str(proj), existing=True, ignored=False)["files"]] == ["src/app.py"]
 
 
 def test_install_hooks_preserves_existing_settings(env, tmp_path):
@@ -270,10 +271,10 @@ def test_analyze_selected_sessions(synced):
     conn.execute("INSERT INTO sessions(id, source, project_path, analysis_status) VALUES ('hist-1', 'history', '/p', 'skipped')")
     conn.commit()
     app = App(synced["cfg"])
-    matching = app.sessions({"status": "skipped", "ids_only": "1"})
+    matching = api.sessions.sessions(app.context(), {"status": "skipped", "ids_only": "1"})
     assert matching["total"] == 3 and "hist-1" in matching["ids"] and len(matching["ids"]) == 3
 
-    r = app.action_analyze_many([SID[:8], "hist-1", "no-such-session"])
+    r = api.status.action_analyze_many(app.context(), [SID[:8], "hist-1", "no-such-session"])
     assert r["started"] and r["count"] == 1 and r["dropped"] == 2
     for _ in range(200):
         if app.jobs.snapshot()["analyze:selection"]["state"] != "running":
@@ -285,7 +286,7 @@ def test_analyze_selected_sessions(synced):
     assert status[SID] == "done" and status["hist-1"] == "skipped"
     assert all(v == "skipped" for k, v in status.items() if k != SID)  # the ones not picked stay as they were
 
-    assert not app.action_analyze_many(["hist-1"])["started"]
+    assert not api.status.action_analyze_many(app.context(), ["hist-1"])["started"]
 
 
 def test_job_progress_counts():
@@ -325,29 +326,29 @@ def test_export_sessions(synced):
     app = App(synced["cfg"])
     other = conn.execute("SELECT id FROM sessions WHERE id != ?", (SID,)).fetchone()[0]
 
-    name, ctype, body = app.export(SID[:8], "md")
+    name, ctype, body = api.sessions.export(app.context(), SID[:8], "md")
     text = body.decode()
     assert name.endswith(f"{SID[:8]}.md") and ctype.startswith("text/markdown")
     assert text.startswith("---\nsession_id: " + SID) and "## Conversation" in text and "### You" in text
     assert SECRET not in text
 
-    data = json.loads(app.export(SID, "json")[2])
+    data = json.loads(api.sessions.export(app.context(), SID, "json")[2])
     assert data["session"]["id"] == SID and data["events"] and SECRET not in json.dumps(data)
 
-    name, ctype, body = app.export(f"{SID},{other}", "md")
+    name, ctype, body = api.sessions.export(app.context(), f"{SID},{other}", "md")
     z = zipfile.ZipFile(io.BytesIO(body))
     assert name.endswith(".zip") and ctype == "application/zip"
     assert sum(n.endswith(".md") for n in z.namelist()) == 3  # two sessions and the index
     assert SID[:8] in z.read(next(n for n in z.namelist() if n.endswith("index.md"))).decode()
 
-    raw_name, _, raw = app.export(SID, "raw")  # the archived transcript, decompressed
+    raw_name, _, raw = api.sessions.export(app.context(), SID, "raw")  # the archived transcript, decompressed
     assert raw_name.endswith(".jsonl") and raw.startswith(b"{")
-    check = app.export_check(f"{SID},{other}", "raw")
+    check = api.sessions.export_check(app.context(), f"{SID},{other}", "raw")
     assert check["count"] == 2
     history = conn.execute("SELECT id FROM sessions WHERE source = 'history'").fetchone()
     if history:
         try:
-            app.export_check(history[0], "raw")
+            api.sessions.export_check(app.context(), history[0], "raw")
             raise AssertionError("a history-only session has no original transcript")
         except ExportError:
             pass
@@ -391,9 +392,8 @@ def test_mcp_page_info(env):
     import tomllib
 
     from interlatch.interfaces.mcp import TOOLS
-    from interlatch.interfaces.web.app import App
 
-    info = App(env["cfg"]).mcp_info()
+    info = api.sources.mcp_info()
     assert info["args"][-1] == "mcp" and info["command"]
     assert [t["name"] for t in info["tools"]] == [t["name"] for t in TOOLS]
     search = next(t for t in info["tools"] if t["name"] == "search_sessions")

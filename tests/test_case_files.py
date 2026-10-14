@@ -9,6 +9,7 @@ from interlatch.storage.sqlite import connect
 from interlatch.storage.schema import SCHEMA_VERSION
 
 from conftest import SECRET, SID
+from interlatch.interfaces.web import api
 
 CASE = {"kind": "gotcha", "title": "Web files are read once at startup", "body": "Restart the server.",
         "scene": "Edited app.css and reloaded; nothing changed.", "question": "Why didn't the edit show up?",
@@ -79,14 +80,14 @@ def test_dashboard_and_mcp_show_the_case(synced):
         CASE, {"kind": "fix", "title": "No case yet", "body": "b"}]}), "m", 2)
     conn.commit()
     app = App(cfg)
-    data = app.knowledge({})
+    data = api.knowledge.knowledge(app.context(), {})
     by_title = {k["title"]: k for k in data["items"]}
     assert by_title[CASE["title"]]["case"]["question"] == CASE["question"] and "case_json" not in by_title[CASE["title"]]
     assert by_title["No case yet"]["case"] is None
     assert data["cases"] == 1
-    assert [k["title"] for k in app.knowledge({"cases": "1"})["items"]] == [CASE["title"]]
-    assert app.knowledge_hub()["knowledge"]["cases"] == 1
-    session = app.session(SID)
+    assert [k["title"] for k in api.knowledge.knowledge(app.context(), {"cases": "1"})["items"]] == [CASE["title"]]
+    assert api.knowledge.knowledge_hub(app.context())["knowledge"]["cases"] == 1
+    session = api.sessions.session(app.context(), SID)
     assert next(k for k in session["knowledge"] if k["title"] == CASE["title"])["case"]["scene"] == CASE["scene"]
 
     out = Tools(cfg).search_knowledge("startup")

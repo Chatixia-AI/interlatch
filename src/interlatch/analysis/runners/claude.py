@@ -51,7 +51,7 @@ class ClaudeRunner(Runner):
         workdir.mkdir(parents=True, exist_ok=True)
         t0 = time.monotonic()
         stdout, stderr, returncode = run_sleep_aware(cmd, prompt, cwd=workdir, env=env,
-                                                      timeout=timeout or a.timeout_seconds, name=self.cli)
+                                                     timeout=timeout or a.timeout_seconds, name=self.cli)
         elapsed = int((time.monotonic() - t0) * 1000)
         proc = subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
         out = (proc.stdout or "").strip()

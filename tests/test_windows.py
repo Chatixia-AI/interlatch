@@ -15,6 +15,7 @@ from interlatch.runtime import install
 from interlatch.runtime.platforms import windows
 from interlatch.core.config import load_config
 from interlatch.core.util import file_lock
+from interlatch.interfaces.web import api
 
 on_windows = pytest.mark.skipif(sys.platform != "win32", reason="needs Windows")
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
@@ -310,19 +311,19 @@ def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeyp
 
     app = App(cfg)
     for asked in ("C:\\work\\app\\main.py", "c:\\work\\app\\main.py", "C:/work/app/main.py", "/c:/work/app/main.py"):
-        found = app.file_sessions(asked)
+        found = api.projects.file_sessions(app.context(), asked)
         assert found["path"] == "C:/work/app/main.py" and [s["id"] for s in found["sessions"]] == ["codex-w", sid], asked
     assert next(s for s in found["sessions"] if s["id"] == sid)["file"]["changes"] == 1
-    assert [s["id"] for s in app.file_sessions("c:\\work\\app\\src\\util.py")["sessions"]] == ["codex-w", sid]
-    assert app.file_sessions("D:\\work\\app\\main.py")["sessions"] == []
+    assert [s["id"] for s in api.projects.file_sessions(app.context(), "c:\\work\\app\\src\\util.py")["sessions"]] == ["codex-w", sid]
+    assert api.projects.file_sessions(app.context(), "D:\\work\\app\\main.py")["sessions"] == []
     for root in ("C:\\work\\app", "c:\\work\\app\\", "C:/work/app"):
-        listed = app.folder_files(root)
+        listed = api.projects.folder_files(app.context(), root)
         assert listed["root"] == "C:/work/app"
         assert sorted((f["rel"], f["sessions"]) for f in listed["files"]) == [("main.py", 2), ("src/util.py", 2)], root
         assert all(f["path"] == "C:/work/app/" + f["rel"] for f in listed["files"])
-    assert [f["rel"] for f in app.folder_files("C:\\work\\app\\src")["files"]] == ["util.py"]
-    assert app.folder_files("C:\\")["files"] == [] and app.folder_files("c:")["files"] == []
-    assert app.folder_files("C:\\work\\ap")["files"] == []  # a folder that only shares the prefix
+    assert [f["rel"] for f in api.projects.folder_files(app.context(), "C:\\work\\app\\src")["files"]] == ["util.py"]
+    assert api.projects.folder_files(app.context(), "C:\\")["files"] == [] and api.projects.folder_files(app.context(), "c:")["files"] == []
+    assert api.projects.folder_files(app.context(), "C:\\work\\ap")["files"] == []  # a folder that only shares the prefix
 
 
 def test_copilot_s_file_uris_give_windows_paths():

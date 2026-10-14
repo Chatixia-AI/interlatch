@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from interlatch.interfaces.web.app import App
 from interlatch.core.util import to_iso, utcnow
+from interlatch.interfaces.web import api
 
 CHAT = "c1a7c1a7-0000-4000-8000-000000000001"
 OLD = "c0de0000-0000-4000-8000-000000000002"
@@ -20,7 +21,7 @@ def _session(conn, sid, agent, *, days_ago, project=PROJECT, **cols):
 
 
 def _rows(synced, **q):
-    return {r["agent"]: r for r in App(synced["cfg"]).overview(q)["agents"]}
+    return {r["agent"]: r for r in api.status.overview(App(synced["cfg"]).context(), q)["agents"]}
 
 
 def test_every_agent_with_its_totals_and_what_it_records(synced):

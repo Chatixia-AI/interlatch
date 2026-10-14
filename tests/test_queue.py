@@ -8,6 +8,7 @@ from interlatch.core.util import to_iso, utcnow
 from interlatch.analysis.queue import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
 
 from conftest import CWD, SID
+from interlatch.interfaces.web import api
 
 
 def _add(conn, sid, **kw):
@@ -82,7 +83,7 @@ def test_session_api_carries_the_reason(synced):
     conn.execute("UPDATE sessions SET analysis_status = 'pending', n_prompts = 0 WHERE id = ?", (SID,))
     conn.commit()
     app = App(cfg)
-    s = app.session(SID)
+    s = api.sessions.session(app.context(), SID)
     assert s["waiting"]["code"] == "too_short" and "fewer than" in s["waiting"]["text"]
 
 
@@ -115,10 +116,10 @@ def test_analyze_the_queue_now(synced):
     kv_set(conn, PAUSE_KEY, to_iso(utcnow() + timedelta(hours=1)))
     conn.commit()
     app = App(cfg)
-    assert app.action_analyze_queue("everything") == {"started": False, "error": "unknown queue"}
-    assert not app.action_analyze_queue("active")["started"]  # nothing is still going
+    assert api.status.action_analyze_queue(app.context(), "everything") == {"started": False, "error": "unknown queue"}
+    assert not api.status.action_analyze_queue(app.context(), "active")["started"]  # nothing is still going
 
-    r = app.action_analyze_queue("ready")
+    r = api.status.action_analyze_queue(app.context(), "ready")
     assert r["started"] and r["count"] == len(pending_sessions(conn, cfg, 1000)) >= 1
     for _ in range(200):
         if app.jobs.snapshot()["analyze:queue"]["state"] != "running":
@@ -127,4 +128,4 @@ def test_analyze_the_queue_now(synced):
     assert app.jobs.snapshot()["analyze:queue"]["state"] == "done", app.jobs.snapshot()["analyze:queue"]
     assert conn.execute("SELECT analysis_status FROM sessions WHERE id = ?", (SID,)).fetchone()[0] == "done"
     assert not kv_get(conn, PAUSE_KEY)
-    assert not app.action_analyze_queue("ready")["started"]  # nothing left
+    assert not api.status.action_analyze_queue(app.context(), "ready")["started"]  # nothing left

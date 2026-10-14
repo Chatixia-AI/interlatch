@@ -366,7 +366,7 @@ def _sync_copilot(cfg: Config, conn, archiver: Archiver, root: Path, report: Syn
                 report.errors.append(f"parse {sdir}: {exc}")
                 continue
             store_source_session(conn, cfg, ps, report, root=root, transcript=sdir / "events.jsonl",
-                         archive=dst / "session-state" / sdir.name / "events.jsonl.gz", sig=sig, agent="copilot")
+                                 archive=dst / "session-state" / sdir.name / "events.jsonl.gz", sig=sig, agent="copilot")
     files = chat_files(root) if (root / "workspaceStorage").is_dir() or (root / "globalStorage").is_dir() else []
     dst = cfg.archive_dir / "copilot" / re.sub(r"[^\w.-]+", "_", root.parent.name or "vscode")
     for f in files:
@@ -482,4 +482,4 @@ def _sync_codex_cloud(cfg: Config, conn, report: SyncReport, skip: set[str], *, 
         ps = parse_cloud_task(task, diff, _cloud_project(conn, task.get("environment_label")))
         # no prompts, so analysis skips it ("too few prompts")
         store_source_session(conn, cfg, ps, report, root=dst, transcript=archive, archive=archive, sig=sig, agent="codex",
-                     source="codex-cloud")
+                             source="codex-cloud")
