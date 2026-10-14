@@ -207,3 +207,42 @@ def test_every_wasteful_cause_has_a_concrete_fix_and_noise_has_none():
         for fix in c["fixes"]:
             assert fix["kind"] in ("instruction", "config", "environment")
             assert fix["scope"] in ("user", "project") and fix["agents"] and fix["title"] and fix["text"]
+
+
+def _tied_summary_script(names: list[str]) -> str:
+    return (
+        "import json; from datetime import datetime, timezone; from interlatch.knowledge import friction\n"
+        f"names = {names!r}\n"
+        "sessions = {f's{i}': {'project_path': f'/w/{n}', 'project_name': n, 'agent': 'claude'} for i, n in enumerate(names)}\n"
+        "hits = [{'session_id': sid, 'ts': '2026-10-01T00:00:00.000Z', 'kind': 'error', 'text': 'x', 'repeat': False}"
+        " for sid in sessions]\n"
+        "entry = {'id': 't', 'name': 't', 'category': 'tool-misuse', 'noise': False, 'fixes': []}\n"
+        "print(json.dumps(friction._summarize(entry, hits, sessions, datetime.now(timezone.utc))['projects']))\n"
+    )
+
+
+def test_projects_and_agents_hit_as_often_are_listed_by_name():
+    """Most sessions first; a tie goes by name, not by the order the sessions were counted in."""
+    from datetime import datetime, timezone
+
+    rows = [("zeta", "codex"), ("zeta", "claude"), ("beta", "copilot"), ("Alpha", "bob"), ("gamma", "claude")]
+    sessions = {f"s{i}": {"project_path": f"/w/{n}", "project_name": n, "agent": a} for i, (n, a) in enumerate(rows)}
+    hits = [{"session_id": sid, "ts": ago(1), "kind": "error", "text": "x", "repeat": False} for sid in sessions]
+    entry = {"id": "t", "name": "t", "category": "tool-misuse", "noise": False, "fixes": []}
+    c = friction._summarize(entry, hits, sessions, datetime.now(timezone.utc))
+    assert c["projects"] == ["zeta", "Alpha", "beta", "gamma"]
+    assert [p["sessions"] for p in c["project_paths"]] == [2, 1, 1, 1]
+    assert c["agents"] == ["claude", "bob", "codex", "copilot"]
+
+
+def test_the_order_is_the_same_in_every_process():
+    """Session ids are counted from a set, whose order follows each process's string hashing (PYTHONHASHSEED)."""
+    import os
+    import subprocess
+    import sys
+
+    script = _tied_summary_script([f"project-{c}" for c in "hgfedcba"])
+    seen = {subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True,
+                           env={**os.environ, "PYTHONHASHSEED": seed}).stdout for seed in ("1", "2", "3", "4")}
+    assert seen == {'["project-a", "project-b", "project-c", "project-d", "project-e", "project-f", "project-g", '
+                    '"project-h"]\n'}
