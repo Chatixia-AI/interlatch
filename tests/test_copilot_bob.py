@@ -3,10 +3,10 @@ import sys
 
 import pytest
 
-from interlatch.bob_parser import load_tasks, parse_bob_task
+from interlatch.sources.bob import load_tasks, parse_bob_task
 from interlatch.core.config import load_config
-from interlatch.copilot_parser import (load_chat, load_usage, parse_copilot_agent, parse_vscode_chat, uri_path,
-                                      workspace_folder)
+from interlatch.sources.copilot import load_chat, load_usage, parse_copilot_agent, parse_vscode_chat, workspace_folder
+from interlatch.sources.builder import uri_path
 from interlatch.storage.sqlite import connect as db_connect
 from interlatch.ingest import sync
 

@@ -10,8 +10,8 @@ from datetime import timedelta
 from . import __version__
 from .core.config import Config
 from .core.agents import AGENTS, short_name, speaker
-from .artifacts import KINDS as ARTIFACT_KINDS
-from .artifacts import STATUS as ARTIFACT_STATUS
+from .core.artifact_records import KINDS as ARTIFACT_KINDS
+from .artifacts.queries import STATUS as ARTIFACT_STATUS
 from .storage.sqlite import connect
 from .hub import team_from
 from .ladder import stage_label
@@ -291,7 +291,7 @@ class Tools:
         return "\n".join(f"- **{e['term']}** ({e['category']}): {one_line(e['definition'] or '', 200)}" for e in entries[:120])
 
     def find_artifacts(self, query: str | None = None, kind: str | None = None, project: str | None = None, limit: int = 20) -> str:
-        from .artifacts import query as find
+        from .artifacts.queries import query as find
         from .ingest import local_machine_id
 
         path = self._resolve_project(project) if project else None

@@ -15,10 +15,12 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from . import artifacts
-from .core.pricing import normalize_model, usage_cost
-from .core.util import iter_jsonl, one_line, parse_ts, safe_text, to_iso, truncate
-from .core.sessions import ApiCall, Event, FileStat, IDLE_GAP_CAP_S, ParsedSession, Subagent, TEXT_LIMITS, ToolCall
+from ...core import artifact_records
+from ...core.pricing import normalize_model, usage_cost
+from ...core.util import iter_jsonl, one_line, parse_ts, safe_text, to_iso, truncate
+from ...core.sessions import ApiCall, Event, FileStat, IDLE_GAP_CAP_S, ParsedSession, Subagent, TEXT_LIMITS, ToolCall
+from ..prompts import TAG_RE, clean_prompt, parse_command
+from .files import session_dir_for, subagent_files
 
 PARSER_VERSION = 3  # 3: artifacts (files, pages, PRs, commits a session made); 2: replays and API retries count once
 
@@ -26,12 +28,6 @@ READ_TOOLS = {"Read", "NotebookRead"}
 EDIT_TOOLS = {"Edit", "MultiEdit", "NotebookEdit"}
 WRITE_TOOLS = {"Write"}
 AGENT_TOOLS = {"Agent", "Task"}
-
-_WRAPPER_TAGS = ("ide_opened_file", "ide_selection", "ide_diagnostics", "system-reminder")
-_WRAPPER_RE = re.compile(r"<(%s)\b[^>]*>.*?</\1>" % "|".join(_WRAPPER_TAGS), re.S)
-_CMD_NAME_RE = re.compile(r"<command-name>(.*?)</command-name>", re.S)
-_CMD_ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.S)
-_TAG_RE = re.compile(r"</?[a-z][\w-]*>")
 
 
 # ------------------------------------------------------------------ helpers
@@ -62,11 +58,6 @@ def _result_text(content) -> tuple[str, int]:
     return "\n".join(parts), images
 
 
-def clean_prompt(text: str) -> str:
-    text = _WRAPPER_RE.sub("", text)
-    return text.strip()
-
-
 def classify_user_text(entry: dict, text: str) -> str:
     origin = (entry.get("origin") or {}).get("kind")
     t = text.lstrip()
@@ -87,12 +78,6 @@ def classify_user_text(entry: dict, text: str) -> str:
     if entry.get("isMeta") or t.startswith("Caveat:"):
         return "meta"
     return "prompt"
-
-
-def parse_command(text: str) -> tuple[str, str]:
-    name = (_CMD_NAME_RE.search(text) or [None, ""])[1].strip()
-    args = (_CMD_ARGS_RE.search(text) or [None, ""])[1].strip()
-    return name, args
 
 
 def _rel(path, root: str | None) -> str | None:
@@ -242,7 +227,7 @@ class _Thread:
             if self.ps.parse_errors <= 3:
                 import logging
 
-                logging.getLogger("interlatch.parser").warning("skipped a malformed line in %s: %r", self.ps.id, exc)
+                logging.getLogger("interlatch.sources.claude.parser").warning("skipped a malformed line in %s: %r", self.ps.id, exc)
 
     def _feed(self, d: dict) -> None:
         t = d.get("type")
@@ -324,7 +309,7 @@ class _Thread:
                 ps.n_interrupts += 1
             self._event(ts, "user", "interrupt", text.strip())
         elif kind == "bash_input":
-            self._event(ts, "user", "bash_input", _TAG_RE.sub("", text).strip())
+            self._event(ts, "user", "bash_input", TAG_RE.sub("", text).strip())
         elif kind == "meta":
             skill = re.match(r"Base directory for this skill: (\S+)", text.strip())
             if skill:
@@ -333,7 +318,7 @@ class _Thread:
             else:
                 self._event(ts, "user", "meta", text)
         elif kind == "command_output":
-            self._event(ts, "user", "command_output", _TAG_RE.sub("", text).strip())
+            self._event(ts, "user", "command_output", TAG_RE.sub("", text).strip())
         else:
             self._event(ts, "user", kind, text)
 
@@ -389,10 +374,10 @@ class _Thread:
                     fs.lines_removed += r
             if not is_error:
                 if name in WRITE_TOOLS and call.file_path:
-                    artifacts.file_written(ps, call.file_path, content=(call.input or {}).get("content"),
+                    artifact_records.file_written(ps, call.file_path, content=(call.input or {}).get("content"),
                                            created=not (isinstance(tur, dict) and tur.get("type") == "update"),
                                            ts=ts, agent_id=self.agent_id, tool_use_id=tid)
-                artifacts.from_tool(ps, name, call.input, text, ts=ts, agent_id=self.agent_id, tool_use_id=tid,
+                artifact_records.from_tool(ps, name, call.input, text, ts=ts, agent_id=self.agent_id, tool_use_id=tid,
                                     command=call.command, tur=tur)
             if name in AGENT_TOOLS and isinstance(tur, dict) and tur.get("agentId"):
                 sub = ps.subagents.setdefault(tur["agentId"], Subagent(tur["agentId"]))
@@ -576,26 +561,10 @@ class _Thread:
 
 
 # ------------------------------------------------------------------ entry points
-def session_dir_for(main_path: Path) -> Path:
-    name = main_path.name
-    for suffix in (".jsonl.gz", ".jsonl"):
-        if name.endswith(suffix):
-            return main_path.with_name(name[: -len(suffix)])
-    return main_path.with_suffix("")
 
 
 def _session_id_from(main_path: Path) -> str:
     return session_dir_for(main_path).name
-
-
-def subagent_files(session_dir: Path) -> list[Path]:
-    if not session_dir.is_dir():
-        return []
-    sub = session_dir / "subagents"
-    if not sub.is_dir():
-        return []
-    found = [p for p in sub.rglob("agent-*.jsonl*") if p.name.endswith((".jsonl", ".jsonl.gz"))]
-    return sorted(found)
 
 
 def _load_meta(agent_file: Path) -> dict:

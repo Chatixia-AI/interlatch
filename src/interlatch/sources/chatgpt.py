@@ -9,9 +9,9 @@ other than "all") is a tool call whose output follows as a tool message.
 
 from __future__ import annotations
 
-from .copilot_parser import _Builder, finish_session
-from .core.sessions import ParsedSession
-from .core.util import parse_ts, safe_text, to_iso
+from .builder import SessionBuilder, finish_session
+from ..core.sessions import ParsedSession
+from ..core.util import parse_ts, safe_text, to_iso
 
 CHATGPT_PARSER_VERSION = 1
 AGENT = "chatgpt"
@@ -82,7 +82,7 @@ def parse_conversation(conv: dict, projects: dict | None = None) -> ParsedSessio
     ps.project_path = "chatgpt.com"
     ps.entrypoint = "chatgpt"
     ps.custom_title = safe_text(conv.get("title") or "") or None
-    b = _Builder(ps)
+    b = SessionBuilder(ps)
     b.stamps += [t for t in (_iso(conv.get("create_time")), _iso(conv.get("update_time"))) if t]
     calls: list[tuple] = []  # tool calls waiting for their output: (id, recipient, ts, args)
     for m in msgs:

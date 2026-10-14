@@ -309,7 +309,7 @@ class _Exclusions:
     def excluded(self, root: Root, rel: str, path: Path) -> bool:
         if not self.cfg.exclude_projects:
             return False
-        from .codex_parser import read_meta
+        from .sources.codex.parser import read_meta
         from .ingest import decode_project_dir, peek_cwd
 
         parts = rel.split("/")

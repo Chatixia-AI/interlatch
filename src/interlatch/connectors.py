@@ -139,7 +139,7 @@ def _codex_notify(home: Path) -> list | None:
 
 
 def codex_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .codex_parser import load_imports, rollout_files
+    from .sources.codex.parser import load_imports, rollout_files
 
     binary = cfg.codex_bin()
     home = cfg.codex_dirs[0] if cfg.codex_dirs else codex_home()
@@ -220,7 +220,7 @@ def disconnect_codex(cfg: Config) -> list[str]:
 
 # ------------------------------------------------------------------ Codex Cloud
 def codex_cloud_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .codex_cloud import load_status
+    from .sources.codex.cloud import load_status
 
     binary = cfg.codex_bin()
     connected = cfg.codex_cloud
@@ -369,7 +369,7 @@ def _copilot_extension_version() -> str | None:
 
 
 def copilot_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .copilot_parser import agent_session_dirs, chat_files
+    from .sources.copilot import agent_session_dirs, chat_files
 
     home = next((d for d in cfg.copilot_dirs if (d / "session-state").is_dir()), copilot_home())
     users = [d for d in cfg.copilot_dirs if (d / "workspaceStorage").is_dir()] or vscode_user_dirs()
@@ -460,7 +460,7 @@ def _bob_mcp_registered(home: Path) -> bool:
 
 
 def bob_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .bob_parser import bob_db, load_tasks, task_folder
+    from .sources.bob import bob_db, load_tasks, task_folder
 
     home = cfg.bob_dirs[0] if cfg.bob_dirs else bob_home()
     tasks = [t for t in load_tasks(home) if not cfg.is_internal_path(task_folder(t))]  # not Interlatch's own analyses
@@ -541,7 +541,7 @@ def _app_version(app: Path) -> str | None:
 
 
 def antigravity_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .antigravity_parser import conversation_dirs, stored_conversations
+    from .sources.antigravity import conversation_dirs, stored_conversations
 
     home = cfg.antigravity_dirs[0] if cfg.antigravity_dirs else antigravity_home()
     readable = {d.name for d in conversation_dirs(home)}

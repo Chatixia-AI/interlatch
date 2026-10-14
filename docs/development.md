@@ -117,12 +117,19 @@ Excalidraw VS Code extension (`pomdtr.excalidraw-editor`) or on excalidraw.com; 
 ## Code layout
 
 The code is the `interlatch` package in `src/interlatch/` (`src/chronicle/` only forwards `python -m chronicle`,
-which installs from before the rename still run): `parser.py` (Claude transcript format), `codex_parser.py` (Codex rollouts), `copilot_parser.py` (Copilot agent
-sessions + VS Code chat logs), `bob_parser.py` (Bob tasks), `antigravity_parser.py` (Antigravity step logs), `core/` (configuration, session records, translations, agent names, pricing, redaction), `connectors.py` (Sources),
-`ingest.py` (archive + store), `digest.py` / `analyze.py` /
-`llm.py` (analysis), `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and
-Mermaid export), `artifacts.py` (what sessions made, and where each stands), `glossary.py`, `reviews.py`, `worker.py` (queue), `server.py` + `web/`
-(dashboard), `mcp_server.py`, `export_md.py`, `hooks.py` / `install.py`, `desktop.py` (macOS app), `cli.py`; `packaging/macos/` builds the app.
+which installs from before the rename still run):
+
+- `core/`: configuration, session records, translations, agent names, pricing, redaction, this computer's identity,
+  and what counts as an artifact a session made
+- `storage/`: the SQLite archive (schema, migrations, connections) and the optional Postgres stores
+- `sources/`: a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`) and per chat export
+  (`claude/export.py`, `chatgpt.py`)
+- `artifacts/`: what sessions made, where each stands, and opening it
+- `connectors.py` (Sources), `ingest.py` (archive + store), `digest.py` / `analyze.py` / `llm.py` (analysis),
+  `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and Mermaid export),
+  `glossary.py`, `reviews.py`, `worker.py` (queue)
+- `server.py` + `web/` (dashboard), `mcp_server.py`, `export_md.py`, `hooks.py` / `install.py`, `desktop.py` (macOS
+  app), `cli.py`; `packaging/macos/` builds the app
 
 The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `server.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an
