@@ -255,7 +255,8 @@ def test_signing_in_from_the_dashboard_needs_the_state_it_made(hubweb, net):  # 
     q = {k: v[0] for k, v in parse_qs(page.query).items()}
     assert q["return"] == url + "/" and q["lang"] == "en" and len(q["state"]) >= 20  # back to this very dashboard
     assert _http(url, "/api/leaderboard")[1]["signing_in"] is True
-    status, r = _http(url, "/api/leaderboard/finish", {"state": q["state"][:-1] + "A", "token": "R0-from-the-hosted-page"})
+    forged = q["state"][:-1] + ("B" if q["state"].endswith("A") else "A")  # never the state itself
+    status, r = _http(url, "/api/leaderboard/finish", {"state": forged, "token": "R0-from-the-hosted-page"})
     assert status == 502 and lb.read_state(cfg) is None  # someone else's sign-in can't be slipped in
     status, r = _http(url, "/api/leaderboard/signin", {})
     state = parse_qs(urlparse(r["url"]).query)["state"][0]
