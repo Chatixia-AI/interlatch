@@ -4,7 +4,7 @@ each of its projects is in (hub.hub_project_of); on the hub, the projects set up
 import json
 from dataclasses import replace
 
-from interlatch import hub
+from interlatch.sharing.projects import FOLDERS_FILE, add_project, hub_project_of
 from interlatch.server import App
 
 from conftest import CWD
@@ -15,7 +15,7 @@ REPO = f"{RESONA}/quote-agent"  # a repository inside an added folder: its remot
 
 def _spoke(cfg, **kw):
     """`cfg` sending to a hub, with what the hub made of its folders at the last push."""
-    (cfg.home / hub.FOLDERS_FILE).write_text(json.dumps({
+    (cfg.home / FOLDERS_FILE).write_text(json.dumps({
         "at": "2026-10-07T00:00:00Z", "hub": "Team hub",
         "projects": [{"path": "/data/projects/AI-BPO-Resona", "name": "AI-BPO-Resona"},
                      {"path": "/data/projects/Cosmo-Quote-Agent", "name": "Cosmo Quote Agent"}],
@@ -25,10 +25,10 @@ def _spoke(cfg, **kw):
 
 def test_the_hub_project_each_project_here_is_in(env):
     cfg = env["cfg"]
-    assert hub.hub_project_of(cfg, [f"{RESONA}/excel"]) == {}  # not sending to a hub
+    assert hub_project_of(cfg, [f"{RESONA}/excel"]) == {}  # not sending to a hub
     spoke = _spoke(cfg, hub_left=["/data/projects/Gone"], exclude_projects=[f"{RESONA}/secret*"])
     spoke = replace(spoke, hub_folders={**spoke.hub_folders, "/Users/me/old": "/data/projects/Gone"})
-    got = hub.hub_project_of(spoke, [f"{RESONA}/excel", RESONA, f"{REPO}/web", f"{RESONA}/secret-client",
+    got = hub_project_of(spoke, [f"{RESONA}/excel", RESONA, f"{REPO}/web", f"{RESONA}/secret-client",
                                      "/Users/me/old/x", "/Users/me/elsewhere", "claude.ai", None])
     assert got == {
         f"{RESONA}/excel": {"path": "/data/projects/AI-BPO-Resona", "name": "AI-BPO-Resona"},  # the added folder
@@ -51,7 +51,7 @@ def test_a_project_set_up_on_the_hub_is_listed_before_anything_is_filed(synced):
     cfg, conn = synced["cfg"], synced["conn"]
     empty = synced["tmp"] / "new-client"
     empty.mkdir()
-    path = hub.add_project(cfg, conn, str(empty))["path"]
+    path = add_project(cfg, conn, str(empty))["path"]
     app = App(cfg)
     rows = {p["project_path"]: p for p in app.projects()}
     assert rows[path] | {"weekly": None} == {
@@ -62,5 +62,5 @@ def test_a_project_set_up_on_the_hub_is_listed_before_anything_is_filed(synced):
     assert list(rows)[-1] == path  # after every project with sessions
     assert path not in {p["project_path"] for p in app.projects(scope=[CWD])}  # not someone limited to another one
     assert path in {p["project_path"] for p in app.projects(scope=[path])}
-    hub.add_project(cfg, conn, CWD)
+    add_project(cfg, conn, CWD)
     assert [p["sessions"] > 0 for p in app.projects() if p["project_path"] == CWD] == [True]  # once, with its sessions

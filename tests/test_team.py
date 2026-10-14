@@ -12,7 +12,11 @@ import uuid
 
 import pytest
 
-from interlatch import hub
+from interlatch.sharing.identity import new_token
+from interlatch.sharing.protocol import HubError
+from interlatch.sharing.pull import apply_team_lessons, last_team, team_from
+from interlatch.sharing.push import push
+from interlatch.sharing.receiver import IngestTrigger, team_lessons
 from interlatch.storage import team as team_store
 from interlatch.core.config import load_config, set_config_value
 from interlatch.storage.sqlite import connect
@@ -117,12 +121,12 @@ def _teammate_session(sid, lessons, *, project=SPOKE_CWD, remote=None):
 @pytest.fixture()
 def teamenv(synced, monkeypatch):
     """The `synced` computer as a hub with a team store, and a spoke that shares knowledge with it."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
     fake = FakeStore()
     monkeypatch.setattr(team_store, "get", lambda cfg: fake if cfg.hub_store == "postgres" and not cfg.is_spoke else None)
     cfg = synced["cfg"]
     set_config_value(cfg, "hub", "store", '"postgres"')  # the dashboard reads its config again on every request
-    token = hub.new_token(cfg)
+    token = new_token(cfg)
     app, httpd, url = _serve(load_config(cfg.home))
     spoke, _, _ = _make_spoke(synced["tmp"], url, token, extra='share = "knowledge"\nall_folders = true\n')
     fake.computer_seen(TEAMMATE, "Teammate PC", "Linux", "0.7.0")
@@ -149,7 +153,7 @@ def test_teammates_lessons_come_back_read_only(teamenv):
                                                                ("gotcha", "lesson p-gotcha")])])
     _analyzed_on_spoke(spoke, title="Mine", at="2026-10-02T00:00:00Z", lessons=[("p-gotcha", "project", "gotcha"),
                                                                                 ("p-pref", "project", "preference")])
-    report = hub.push(spoke)
+    report = push(spoke)
     assert not report.errors and report.sent == 1 and report.team == 1
     assert "1 team lesson here" in report.summary()
 
@@ -165,7 +169,7 @@ def test_teammates_lessons_come_back_read_only(teamenv):
     [row] = _team_rows(spoke)
     assert (row["title"], row["project_path"], row["session_id"], row["scope"]) == ("Teammate lesson", SPOKE_CWD, None, "project")
     assert row["fingerprint"].startswith("team:") and json.loads(row["confirmed_json"]) == ["mate-1"]
-    assert hub.team_from(row) == ["Teammate PC"] and row["stage"] == "provisional"
+    assert team_from(row) == ["Teammate PC"] and row["stage"] == "provisional"
 
     notes = build_session_context(spoke, SPOKE_CWD)
     assert "From teammates' sessions in this project" in notes and "Teammate lesson (from Teammate PC)" in notes
@@ -189,12 +193,12 @@ def test_teammates_lessons_come_back_read_only(teamenv):
     assert next(k for k in page["knowledge"] if k["source"] == "team")["team_from"] == ["Teammate PC"]
 
     # the same answer again: nothing changes here
-    assert hub.push(spoke).team == 1 and _team_rows(spoke)[0]["id"] == row["id"]
+    assert push(spoke).team == 1 and _team_rows(spoke)[0]["id"] == row["id"]
     connl = connect(spoke.db_path)
     connl.execute("DELETE FROM knowledge WHERE source = 'team'")  # lost here (a restored backup): fetched again
     connl.commit()
     connl.close()
-    assert hub.push(spoke).team == 1 and [r["title"] for r in _team_rows(spoke)] == ["Teammate lesson"]
+    assert push(spoke).team == 1 and [r["title"] for r in _team_rows(spoke)] == ["Teammate lesson"]
     row = _team_rows(spoke)[0]
 
     # a second teammate session confirms it: it climbs, keeps its id, and a dismissal here is kept
@@ -203,26 +207,26 @@ def test_teammates_lessons_come_back_read_only(teamenv):
     connl.commit()
     connl.close()
     fake.put_sessions(TEAMMATE, [_teammate_session("mate-2", [("gotcha", "Teammate lesson")])])
-    hub.push(spoke)
+    push(spoke)
     [again] = _team_rows(spoke)
     assert again["id"] == row["id"] and again["stage"] == "established" and again["status"] == "dismissed"
     assert sorted(json.loads(again["confirmed_json"])) == ["mate-1", "mate-2"]
 
     # the teammate's sessions no longer state it: it is removed here too
     fake.put_sessions(TEAMMATE, [_teammate_session("mate-1", []), _teammate_session("mate-2", [])])
-    assert hub.push(spoke).team == 0 and _team_rows(spoke) == []
-    assert hub.last_team(spoke)["lessons"] == 0
+    assert push(spoke).team == 0 and _team_rows(spoke) == []
+    assert last_team(spoke)["lessons"] == 0
 
 
 def test_store_failure_keeps_nothing_and_is_resent(teamenv):
     fake, spoke, conn = teamenv["fake"], teamenv["spoke"], teamenv["conn"]
     _analyzed_on_spoke(spoke, title="Mine", at="2026-10-02T00:00:00Z", lessons=[("p1", "project", "fact")])
     fake.fail = True
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.sent == 0 and report.errors and "the database is down" in report.errors[0]
     assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 0
     fake.fail = False
-    assert hub.push(spoke).sent == 1  # the store is the record: what it lacks goes again
+    assert push(spoke).sent == 1  # the store is the record: what it lacks goes again
     assert SPOKE_SID in fake.sessions
 
 
@@ -234,10 +238,10 @@ def test_a_broken_store_only_stops_computers_that_share_knowledge(teamenv, monke
     monkeypatch.setattr(team_store, "get", broken)
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Mine", at="2026-10-02T00:00:00Z", lessons=[("p1", "project", "fact")])
-    with pytest.raises(hub.HubError, match="no team database configured"):
-        hub.push(spoke)
+    with pytest.raises(HubError, match="no team database configured"):
+        push(spoke)
     spoke.hub_share = "everything"  # one that sends its transcripts never waits on the team store
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.kind == "files" and report.sent and not report.errors and report.team is None
 
 
@@ -253,7 +257,7 @@ def test_lessons_endpoint_needs_the_token_and_a_store(teamenv):
     assert err.value.code == 401
     cfg = load_config(teamenv["cfg"].home)
     cfg.hub_store = ""
-    assert hub.team_lessons(cfg, {"machine": local_machine(teamenv["spoke"])["id"]}) == {"team": False}
+    assert team_lessons(cfg, {"machine": local_machine(teamenv["spoke"])["id"]}) == {"team": False}
 
 
 def test_team_lessons_find_their_folder_here(env):
@@ -275,7 +279,7 @@ def test_team_lessons_find_their_folder_here(env):
                         {**lesson, "id": 2, "place": "/hub/notes", "project": "/hub/notes", "title": "By folder"},
                         {**lesson, "id": 3, "place": other, "project": "/hub/elsewhere", "title": "No folder here"},
                         {"id": "bad", "place": app, "kind": "fact", "title": "ignored"}]}
-    assert hub.apply_team_lessons(cfg, data, repos) == 2
+    assert apply_team_lessons(cfg, data, repos) == 2
     got = {r["title"]: (r["project_path"], r["project_name"]) for r in _team_rows(cfg)}
     assert got == {"By remote": ("/code/app-copy", "app"), "By folder": ("/work/notes", "notes")}
 

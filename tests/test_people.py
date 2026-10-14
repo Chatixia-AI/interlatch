@@ -2,7 +2,7 @@
 
 import pytest
 
-from interlatch import people
+from interlatch.sharing import people
 from interlatch.storage.sqlite import connect
 
 MACHINE = "11111111-2222-4333-8444-555555555555"

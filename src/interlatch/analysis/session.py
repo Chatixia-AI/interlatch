@@ -8,7 +8,7 @@ import sqlite3
 from datetime import timedelta
 
 from ..knowledge import ladder
-from .. import news
+from ..sharing import news
 from ..knowledge.cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from ..core.config import Config
 from .digest import build_digest

@@ -3,7 +3,7 @@ and what the Projects page and a limited person see."""
 
 import pytest
 
-from interlatch import access
+from interlatch.sharing import access
 from interlatch.projects import groups
 from interlatch.server import App
 

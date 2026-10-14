@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from interlatch import leaderboard as lb
+from interlatch.sharing import leaderboard as lb
 from interlatch.storage.sqlite import connect
 from interlatch.core.util import to_iso, utcnow
 from interlatch.core.machine import local_machine

@@ -60,7 +60,7 @@ def hub_url(env: Mapping[str, str]) -> tuple[str, str]:
 def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
     """Write the INTERLATCH_* variables into config.toml and make this computer a hub. Returns the reloaded config,
     and whether this was the hub's first start."""
-    from . import hub
+    from .sharing.identity import new_token, read_token
 
     url, host = hub_url(env)
     port = (var(env, "PORT") or str(DEFAULT_PORT)).strip()
@@ -72,7 +72,7 @@ def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
     if cfg.is_spoke:
         raise SetupError(f"this Interlatch sends to the hub at {cfg.hub_url}; a container is a hub itself")
 
-    first = not hub.read_token(cfg)
+    first = not read_token(cfg)
     _set(cfg, "server", "host", (var(env, "HOST") or "0.0.0.0").strip())
     _set(cfg, "server", "port", int(port))
     # nothing reaches a container's dashboard from "this computer": every request came through a proxy or the network,
@@ -96,14 +96,15 @@ def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
     cfg = load_config(cfg.home)
     cfg.ensure_dirs()
     if first:
-        hub.new_token(cfg)
+        new_token(cfg)
     return cfg, first
 
 
 def first_admin(cfg: Config, conn, env: Mapping[str, str]) -> list[str]:
     """Add INTERLATCH_ADMIN_EMAIL as the hub's first admin when it has no people yet. Returns what to print: their
     invite, which is shown only now."""
-    from . import hub, people
+    from .sharing import people
+    from .sharing.protocol import invite_command, invite_link
 
     if people.has_people(conn):
         return []
@@ -123,8 +124,8 @@ def first_admin(cfg: Config, conn, env: Mapping[str, str]) -> list[str]:
         f"Added {person['name']} ({person['email']}) as this hub's admin. The invite works once, for "
         f"{people.INVITE_DAYS} days:",
         "",
-        f"  In a browser, to open the hub's dashboard:  {hub.invite_link(address, code)}",
-        f"  Or on their computer, to join it:           {hub.invite_command(address, code)}",
+        f"  In a browser, to open the hub's dashboard:  {invite_link(address, code)}",
+        f"  Or on their computer, to join it:           {invite_command(address, code)}",
         "",
         f"It is not shown again. A new one: docker compose exec hub interlatch hub invite {person['email']}",
     ]
@@ -154,7 +155,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
 
 
 def main(env: Mapping[str, str] | None = None) -> int:
-    from . import hub
+    from .ingestion.persistence import register_local
     from .storage.sqlite import connect
     from .server import serve
     from .core.util import setup_logging
@@ -166,7 +167,7 @@ def main(env: Mapping[str, str] | None = None) -> int:
         cfg, first = configure(cfg, env)
         conn = connect(cfg.db_path)
         try:
-            hub.register_local(conn, cfg)
+            register_local(conn, cfg)
             conn.commit()
             lines = first_admin(cfg, conn, env)
         finally:

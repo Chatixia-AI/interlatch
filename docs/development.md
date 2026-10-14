@@ -132,7 +132,10 @@ which installs from before the rename still run):
   provider's API
 - `knowledge/`: per-project knowledge bases (`synthesize.py`), the maturity ladder, glossaries, case files, learning
   topics, friction, suggestions, instruction files, the weekly review
-- `projects/`: folders that belong together, project names, the systems map
+- `projects/`: folders that belong together, project names, which project another computer's folder belongs to
+  (`routing.py`), the systems map
+- `sharing/`: a hub and the computers that join it: the protocol, tokens, the client and what it pushes and pulls,
+  the hub's receiver, projects on the hub, people and what each may see, the Team page's news, the leaderboard
 - `application/`: what a worker run does from start to finish (`workflows.py`), session records and search, which
   span the features
 - `interfaces/exports/`: the Markdown vault, session exports, Excalidraw diagrams

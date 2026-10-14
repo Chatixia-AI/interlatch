@@ -44,7 +44,7 @@ def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
 
 def limit(conn: sqlite3.Connection, projects: list[str]) -> None:
     """Shadow the tables on this connection with views of `projects` only (see the module docstring)."""
-    from .hub import ANALYSIS_COLS, SHARED_COLS
+    from .protocol import ANALYSIS_COLS, SHARED_COLS
 
     lit = ", ".join(_quote(p) for p in projects) or "NULL"  # views can't take parameters: quoted literals
     visible = set(_ALWAYS) | set(SHARED_COLS) | (set(ANALYSIS_COLS) - {"analysis_json"})

@@ -17,6 +17,7 @@ from ..core.util import utcnow_iso
 from ..sources.claude.parser import PARSER_VERSION
 from ..storage.kv import kv_get, kv_set
 from .report import SyncReport
+from ..core.config import Config
 
 log = logging.getLogger("interlatch.ingest")
 
@@ -146,3 +147,30 @@ def snapshot_sqlite(conn, src: Path, dst: Path) -> bool:
     kv_set(conn, key, sig)
     conn.commit()
     return True
+
+
+def machine_roots(cfg: Config) -> list[tuple[str, str, Path]]:
+    """(machine id, kind, folder) of every agent folder received from other computers."""
+    out = []
+    if not cfg.machines_dir.is_dir():
+        return out
+    for mdir in sorted(cfg.machines_dir.iterdir()):
+        if not mdir.is_dir() or not MACHINE_RE.match(mdir.name):
+            continue
+        for root in sorted(mdir.iterdir()):
+            m = ROOT_RE.match(root.name)
+            if root.is_dir() and m:
+                out.append((mdir.name, m.group(1), root))
+    return out
+
+
+def machine_of(cfg: Config, path: Path | str | None) -> str | None:
+    """The id of the computer a received folder belongs to, or None for this computer's own folders."""
+    if not path:
+        return None
+    try:
+        rel = Path(path).resolve().relative_to(cfg.machines_dir.resolve())
+    except (ValueError, OSError):
+        return None
+    first = rel.parts[0] if rel.parts else ""
+    return first if MACHINE_RE.match(first) else None

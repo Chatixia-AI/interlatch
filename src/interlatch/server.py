@@ -29,7 +29,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, news
+from . import __version__
+from .sharing import news
 from .core import i18n
 from .core.config import LANGUAGES, Config, env
 from .storage.sqlite import connect
@@ -188,10 +189,10 @@ class App:
         self._lb_signin: dict | None = None  # a leaderboard sign-in waiting to come back from the hosted page
         self._cfg_sig = self._config_sig()
         self._update_check = threading.Lock()  # one daily update check at a time
-        from .hub import IngestTrigger
+        from .sharing.receiver import IngestTrigger
 
         self.ingest = IngestTrigger(cfg)  # a hub ingests what other computers send, right after they send it
-        from .people import CodeAttempts
+        from .sharing.people import CodeAttempts
 
         self.code_attempts = CodeAttempts()  # wrong invite and sign-in codes per address
 
@@ -378,9 +379,9 @@ class App:
         """This computer as a hub: the name its dashboard shows, whether it has people (then Home is the team's), its
         address, whether it takes knowledge only, and whether it is a dedicated hub (`[hub] dedicated`: a server for
         the team, whose dashboard leaves out a person's own computer). None on a computer that isn't a hub."""
-        from .hub import read_token
+        from .sharing.identity import read_token
         from .core.machine import local_machine
-        from .people import has_people
+        from .sharing.people import has_people
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return None
@@ -390,7 +391,7 @@ class App:
 
     def _here(self) -> dict:
         """This computer, recorded in the machines table, which whose-session joins go through."""
-        from .hub import register_local
+        from .ingestion.persistence import register_local
         from .core.machine import local_machine
 
         here = local_machine(self.cfg)
@@ -402,7 +403,7 @@ class App:
     def _whos(self) -> dict | None:
         """{computer id: (who, key)} for labelling rows on a hub with people, None elsewhere; the hub's own sessions,
         whose machine_id may be empty, under None."""
-        from .people import has_people
+        from .sharing.people import has_people
 
         if not has_people(self.conn):
             return None
@@ -433,7 +434,7 @@ class App:
     def who_options(self) -> dict:
         """Who the Sessions and Knowledge pages can be narrowed to on a hub with people: each person and each computer
         no one joined, with the sessions this viewer can see (through the request's connection)."""
-        from .people import has_people
+        from .sharing.people import has_people
 
         if not has_people(self.conn):
             return {"items": []}
@@ -449,8 +450,10 @@ class App:
         (access.py), and `scope` keeps the set-up projects to theirs as well. Who: the person whose computer ran the
         session, else that computer's name. People, computers and open invites: admins only. News: what other
         computers sent lately, and what `viewer` saw of it (news.py)."""
-        from . import people
-        from .hub import SHARED_AGENTS, declared_projects, machines
+        from .sharing import people
+        from .sharing.projects import machines
+        from .sharing.protocol import SHARED_AGENTS
+        from .projects.routing import declared_projects
         from .core.paths import project_name_for
 
         c = self.conn
@@ -538,7 +541,7 @@ class App:
 
     # ---- the usage leaderboard (leaderboard.py): this computer's person against everyone who signed in
     def leaderboard(self, q: dict) -> dict:
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         by = q.get("by") if q.get("by") in lb.METRICS else "hours"
         days = int(q["days"]) if q.get("days") in {str(d) for d in lb.WINDOWS} else 30
@@ -562,7 +565,7 @@ class App:
 
     def action_leaderboard_signin(self, return_to: str, lang: str) -> dict:
         """Start a sign-in: the hosted page's address, carrying this dashboard's address and a one-time state."""
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         state = lb.new_state()
         self._lb_signin = {"state": state, "expires": time.time() + lb.SIGNIN_TTL}
@@ -570,7 +573,7 @@ class App:
 
     def action_leaderboard_finish(self, body: dict) -> dict:
         """The sign-in page came back: keep its session if it carries the state this dashboard made, then send."""
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         pending = self._lb_pending()
         if not lb.same_state(pending and pending["state"], body.get("state")):
@@ -584,19 +587,19 @@ class App:
         self._lb_signin = None
 
     def action_leaderboard_send(self) -> dict:
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         lb.send(self.cfg, self.conn, force=True)
         return lb.status(self.cfg)
 
     def action_leaderboard_name(self, body: dict) -> dict:
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         lb.rename(self.cfg, self.conn, body.get("name"))
         return lb.status(self.cfg)
 
     def action_leaderboard_leave(self) -> dict:
-        from . import leaderboard as lb
+        from .sharing import leaderboard as lb
 
         lb.leave(self.cfg)
         return lb.status(self.cfg)
@@ -616,7 +619,7 @@ class App:
         if k.get("stage_reason"):
             k["stage_reason"] = reason_text(k["stage_reason"])
         if k.get("source") == "team":  # a teammate's lesson: the computers whose sessions stated it
-            from .hub import team_from
+            from .sharing.pull import team_from
 
             k["team_from"] = team_from(k)
         return k
@@ -704,7 +707,7 @@ class App:
 
     def session_summary(self, sid: str) -> dict | None:
         """A session as someone limited to projects sees it (access.py): its summary and project lessons."""
-        from .access import session_page
+        from .sharing.access import session_page
 
         real = self.conn.execute("SELECT id FROM sessions WHERE id = ?", (sid,)).fetchone()
         if not real:
@@ -785,7 +788,8 @@ class App:
         """Every project with sessions here, most recent first; on a hub, then the ones set up there that have none yet
         (only those in `scope`, for a person limited to some projects)."""
         from .projects.groups import assign
-        from .hub import declared_projects, hub_project_of
+        from .sharing.projects import hub_project_of
+        from .projects.routing import declared_projects
         from .core.paths import project_name_for
 
         labels = project_labels(self.conn)
@@ -854,7 +858,7 @@ class App:
         return backend in BACKENDS and backend not in AGENTS and not make_runner(self.cfg).local()
 
     def _hub_choices(self) -> dict:
-        from .hub import last_folders
+        from .sharing.projects import last_folders
 
         seen = last_folders(self.cfg) or {}
         return {"name": seen.get("hub"), "url": self.cfg.hub_url or None, "share": self.cfg.hub_share,
@@ -923,10 +927,10 @@ class App:
         from .knowledge.glossary import glossary_entries
         kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
         labels = project_labels(c)
-        from .hub import declared_projects
+        from .projects.routing import declared_projects
 
         from .projects.groups import group_of
-        from .hub import hub_project_of
+        from .sharing.projects import hub_project_of
 
         return {
             "project_path": path,
@@ -1338,10 +1342,12 @@ class App:
 
     def devices(self) -> dict:
         """This computer's role, the computers a hub hears from, and how the dashboard is reachable."""
-        from .hub import last_folders, last_push, machines, read_token
+        from .sharing.push import last_push
+        from .sharing.projects import last_folders, machines
+        from .sharing.identity import read_token
         from .core.machine import local_machine
 
-        from .hub import last_team
+        from .sharing.pull import last_team
 
         role = "spoke" if self.cfg.is_spoke else "hub" if read_token(self.cfg) else "single"
         recorded = (last_folders(self.cfg) or {}) if role == "spoke" else {}
@@ -1397,7 +1403,8 @@ class App:
     # ---- Devices › Projects on the hub (a computer that sends to one): join, leave and rejoin, take a folder back
     def hub_project_choices(self) -> dict:
         """For Join a project: the hub's projects (asked now) and this computer's folders that have sessions."""
-        from .hub import SHARED_AGENTS, HubError, handshake
+        from .sharing.client import handshake
+        from .sharing.protocol import SHARED_AGENTS, HubError
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1417,7 +1424,8 @@ class App:
     def action_hub_project(self, verb: str, body: dict) -> tuple[dict, int]:
         """add: file a folder here under one of the hub's projects (joining it); remove: take a wrongly added folder
         back, and what it shared; leave and rejoin: stop or start sharing to a project, keeping what it has."""
-        from . import hub
+        from .sharing.client import add_folder, handshake, leave_project, rejoin_project, remove_folder
+        from .sharing.protocol import FolderError, HubError
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}, 400
@@ -1428,24 +1436,24 @@ class App:
                 if not (folder.startswith("~") or is_abs_path(folder)):
                     return {"error": tr("Give the folder's full path, such as /Users/you/code/app.")}, 400
                 folder = normalize_project_path(str(Path(folder).expanduser().resolve()))
-                hello = hub.handshake(self.cfg)
+                hello = handshake(self.cfg)
                 project = next((p for p in hello.get("projects") or [] if isinstance(p, dict)
                                 and p.get("path") == body.get("project")), None)
                 if not project:
                     return {"error": tr("The hub has no such project, or you don't see it.")}, 400
-                self.cfg, remote = hub.add_folder(self.cfg, folder, project, hello)
+                self.cfg, remote = add_folder(self.cfg, folder, project, hello)
                 out.update(folder=folder, name=project.get("name") or Path(project["path"]).name, remote=remote)
             elif verb == "remove":
-                self.cfg, out["taken"] = hub.remove_folder(self.cfg, str(body.get("folder") or ""))
+                self.cfg, out["taken"] = remove_folder(self.cfg, str(body.get("folder") or ""))
             else:
                 path = str(body.get("project") or "")
                 if not is_abs_path(path) or len(path) > 1024:
                     return {"error": tr("Which project?")}, 400
                 path = normalize_project_path(path)
-                self.cfg = hub.leave_project(self.cfg, path) if verb == "leave" else hub.rejoin_project(self.cfg, path)
-        except hub.FolderError as exc:
+                self.cfg = leave_project(self.cfg, path) if verb == "leave" else rejoin_project(self.cfg, path)
+        except FolderError as exc:
             return {"error": exc.shown()}, 400
-        except hub.HubError as exc:
+        except HubError as exc:
             return {"error": tr("Can't reach the hub: {error}", error=str(exc))}, 502
         self._cfg_sig = self._config_sig()
         out["pushing"] = self.action_push()  # the hub hears of it now, and the lessons that come back change with it
@@ -1453,7 +1461,7 @@ class App:
 
     def action_leave_hub(self) -> dict:
         """Settings › Devices › Leave the hub (`interlatch hub leave`)."""
-        from .hub import leave_hub
+        from .sharing.client import leave_hub
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1466,7 +1474,7 @@ class App:
     def hub_settings(self) -> dict:
         """This hub's name and address, what it takes, and which of them a container's variables set (each start
         writes them again, so the dashboard can't change them)."""
-        from .hub import read_token
+        from .sharing.identity import read_token
         from .core.machine import local_machine
 
         if self.cfg.is_spoke or not read_token(self.cfg):
@@ -1481,9 +1489,9 @@ class App:
     def action_hub_settings(self, body: dict, by: dict | None) -> tuple[dict, int]:
         """Rename this hub, or change the address computers and browsers reach it at (invites and sign-in links
         use it). A new address's host name is added to [server] allowed_hosts, as `interlatch hub enable --url` does."""
-        from . import people
+        from .sharing import people
         from .core.config import load_config, set_config_value
-        from .hub import read_token
+        from .sharing.identity import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}, 400
@@ -1689,9 +1697,9 @@ class App:
 
     # ---- Devices › People (people.py): who may send to this hub and open its dashboard; admins only
     def people_info(self) -> dict:
-        from . import people
+        from .sharing import people
 
-        from .hub import hub_projects
+        from .sharing.projects import hub_projects
 
         return {"people": people.listing(self.conn), "shared_token": self.cfg.hub_shared_token,
                 "address": self.cfg.hub_address or None, "audit": people.audit_log(self.conn, 50),
@@ -1699,8 +1707,8 @@ class App:
 
     def _invite(self, person: dict, by: dict | None, address: str) -> dict:
         """A new invite for `person`, with the command and the link to pass on. The code is shown this once."""
-        from . import people
-        from .hub import invite_command, invite_link
+        from .sharing import people
+        from .sharing.protocol import invite_command, invite_link
 
         code = people.invite(self.conn, person["id"], by=by)
         expires = self.conn.execute("SELECT expires_at FROM people_codes WHERE person_id = ? AND kind = 'invite' "
@@ -1714,8 +1722,8 @@ class App:
 
     def _projects_body(self, body: dict) -> list[str] | None:
         """`projects` from the dashboard: "all" for every project, else a list of this hub's project paths."""
-        from . import people
-        from .hub import hub_projects
+        from .sharing import people
+        from .sharing.projects import hub_projects
 
         raw = body.get("projects")
         if raw == "all":
@@ -1731,7 +1739,7 @@ class App:
     def action_people(self, verb: str, body: dict, by: dict | None, address: str) -> tuple[dict, int]:
         """add, invite, role, access, remove, revoke or shared-token, done by `by` (None: at the hub itself) for the
         audit."""
-        from . import people
+        from .sharing import people
         from .core.config import load_config, set_config_value
 
         try:
@@ -1776,7 +1784,9 @@ class App:
     def shared_projects(self) -> dict:
         """Settings › Devices › Shared projects: the projects set up on this hub (hub.add_project), and the ones that
         could be (this hub's projects that aren't, busiest first)."""
-        from .hub import declared_projects, hub_projects, read_token, shared_projects, under
+        from .sharing.projects import hub_projects, shared_projects
+        from .sharing.identity import read_token
+        from .projects.routing import declared_projects, under
 
         shared = shared_projects(self.conn)
         set_up = declared_projects(self.conn)
@@ -1790,8 +1800,9 @@ class App:
         it), or stop: hub.add_project / remove_project, recorded in the people audit log. At the hub computer itself
         (`here`), any folder of it. Elsewhere, only on a dedicated hub and only for an admin (`by`; the handler checks):
         a new project by its name, never a folder (hub.named_project_folder), or removing one that is set up."""
-        from . import people
-        from .hub import PROJECT_NAME_RULE, HubError, add_project, named_project_folder, remove_project
+        from .sharing import people
+        from .sharing.projects import add_project, named_project_folder, remove_project
+        from .sharing.protocol import PROJECT_NAME_RULE, HubError
 
         try:
             if verb == "add" and (not here or (self.cfg.hub_dedicated and "name" in body)):
@@ -1838,9 +1849,9 @@ class App:
     def action_accept(self, accept: str, by: dict | None) -> tuple[dict, int]:
         """[hub] accept on the hub: transcripts too, or knowledge only from every computer. `by` (None: at the hub
         itself) goes in the audit."""
-        from . import people
+        from .sharing import people
         from .core.config import SHARE_MODES, load_config, set_config_value
-        from .hub import read_token
+        from .sharing.identity import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}, 400
@@ -1855,7 +1866,7 @@ class App:
 
     def action_push(self) -> bool:
         """Send to the hub now; a computer that shares knowledge also gets its teammates' lessons back."""
-        from .hub import push
+        from .sharing.push import push
 
         return self.jobs.start("push", lambda progress: push(self.cfg, progress=progress).summary())
 
@@ -2109,7 +2120,7 @@ class App:
         from .interfaces.exports.vault import export_markdown
 
         if self.cfg.sends_files:
-            from .hub import push
+            from .sharing.push import push
 
             return self.jobs.start("sync", lambda progress: push(self.cfg, progress=progress).summary())
 
@@ -2125,7 +2136,7 @@ class App:
             work = run_worker(self.cfg, export=export_markdown, progress=progress)
             conn = connect(self.cfg.db_path)
             try:
-                from .leaderboard import send_safely
+                from .sharing.leaderboard import send_safely
 
                 send_safely(self.cfg, conn)  # once signed in to the leaderboard
             finally:
@@ -2389,7 +2400,7 @@ def make_handler(app: App, port: int):
             return not proxied and self.client_address[0] in ("127.0.0.1", "::1") and self._host() in local_hosts
 
         def _people_mode(self) -> bool:
-            from . import people
+            from .sharing import people
 
             return people.has_people(app.conn)
 
@@ -2443,7 +2454,7 @@ def make_handler(app: App, port: int):
             A hub without people has no sign-in, so anything else is refused: a request from another device
             (server.host 0.0.0.0), through a reverse proxy, or through Tailscale Funnel would be an admin of
             everything."""
-            from . import people
+            from .sharing import people
 
             if self._from_here():
                 return None, None
@@ -2471,7 +2482,7 @@ def make_handler(app: App, port: int):
             return self._from_here() or (self.viewer is not None and self.viewer["role"] == "admin")
 
         def _me(self) -> dict:
-            from . import people
+            from .sharing import people
 
             return {"viewer": {**people.public(self.viewer), "here": self._from_here()},
                     "people_mode": people.has_people(app.conn), "can_admin": self._can_admin(), "hub": app.hub_info()}
@@ -2488,7 +2499,7 @@ def make_handler(app: App, port: int):
             wait their turn (people.CodeAttempts)."""
             import html
 
-            from . import people
+            from .sharing import people
 
             accept = (self.headers.get("Accept-Language") or "").strip().lower()
             i18n.lang.set("ja" if accept.startswith("ja") else "en")  # a link opened by hand sends no X-Interlatch-Lang
@@ -2552,7 +2563,11 @@ def make_handler(app: App, port: int):
         def _hub_api(self, p: str):
             """Another computer sending its sessions (hub.py). Authenticated by the hub's shared token or a person's
             computer token (hub.authorize), not a browser header; joining with an invite needs neither."""
-            from . import hub
+            from .sharing.identity import authorize
+            from .sharing.protocol import HubError, UnknownInvite
+            from .sharing.receiver import (_drain, check_machine, hello, join_with_code, receive_analyses, receive_file,
+                                           receive_sessions, signin_code_for, team_lessons, transcripts_refused,
+                                           withdraw)
 
             q = {k: v[-1] for k, v in parse_qs(urlparse(self.path).query).items()}
             length = int(self.headers.get("Content-Length") or 0)
@@ -2566,51 +2581,51 @@ def make_handler(app: App, port: int):
                         return self._json({"error": "bad json"}, 400)
                     if wait := app.code_attempts.wait(who):  # after a few unknown codes from here: not looked at
                         return self._json({"error": tr(TOO_MANY_CODES, seconds=wait)}, 429, headers={"Retry-After": str(wait)})
-                    return self._json(hub.join_with_code(app.cfg, app.conn, body))
-                except hub.UnknownInvite as exc:
+                    return self._json(join_with_code(app.cfg, app.conn, body))
+                except UnknownInvite as exc:
                     app.code_attempts.wrong(who)
                     return self._json({"error": str(exc)}, 400)
-                except (hub.HubError, ValueError) as exc:
+                except (HubError, ValueError) as exc:
                     return self._json({"error": str(exc)}, 400)
             auth = self.headers.get("Authorization")
-            ok, person = hub.authorize(app.cfg, app.conn, auth, q.get("machine"))  # before reading what was sent
+            ok, person = authorize(app.cfg, app.conn, auth, q.get("machine"))  # before reading what was sent
             if not ok:
                 return self._json({"error": "unauthorized"}, 401)
             if person and person["role"] == "readonly" and p in HUB_PUSH:
                 return self._json({"error": "read-only people can't send to the hub"}, 403)
-            if p in ("/api/hub/file", "/api/hub/analyses") and (refused := hub.transcripts_refused(app.cfg, person)):
-                hub._drain(self.rfile, length)  # transcripts this hub doesn't take: never kept
+            if p in ("/api/hub/file", "/api/hub/analyses") and (refused := transcripts_refused(app.cfg, person)):
+                _drain(self.rfile, length)  # transcripts this hub doesn't take: never kept
                 return self._json({"error": str(refused)}, 403)
             try:
                 if p == "/api/hub/file":
-                    return self._json(hub.receive_file(app.cfg, app.conn, q, self.rfile, length))
+                    return self._json(receive_file(app.cfg, app.conn, q, self.rfile, length))
                 if p == "/api/hub/analyses":
-                    return self._json(hub.receive_analyses(app.cfg, app.conn, q, self.rfile, length))
+                    return self._json(receive_analyses(app.cfg, app.conn, q, self.rfile, length))
                 if p == "/api/hub/sessions":
-                    return self._json(hub.receive_sessions(app.cfg, app.conn, q, self.rfile, length, person))
+                    return self._json(receive_sessions(app.cfg, app.conn, q, self.rfile, length, person))
                 body = json.loads(self.rfile.read(length) or b"{}") if length else {}
                 if not isinstance(body, dict):
                     return self._json({"error": "bad json"}, 400)
                 if body.get("machine"):  # a person's token works only from the computer it was issued to, and the
                     # shared token not as a computer that joined as a person: the body names the computer acting
-                    ok, person = hub.authorize(app.cfg, app.conn, auth, str(body["machine"]))
+                    ok, person = authorize(app.cfg, app.conn, auth, str(body["machine"]))
                     if not ok:
                         return self._json({"error": "unauthorized"}, 401)
                 if p == "/api/hub/signin":
-                    return self._json(hub.signin_code_for(app.cfg, app.conn, person))
+                    return self._json(signin_code_for(app.cfg, app.conn, person))
                 if p == "/api/hub/hello":
-                    return self._json(hub.hello(app.cfg, app.conn, body, person))
+                    return self._json(hello(app.cfg, app.conn, body, person))
                 if p == "/api/hub/lessons":
-                    return self._json(hub.team_lessons(app.cfg, body, person, app.conn))
+                    return self._json(team_lessons(app.cfg, body, person, app.conn))
                 if p == "/api/hub/withdraw":  # the computer named in the body, which a person's token is bound to
                     if not body.get("machine"):
                         return self._json({"error": "bad machine id"}, 400)
-                    return self._json(hub.withdraw(app.cfg, app.conn, body, person))
+                    return self._json(withdraw(app.cfg, app.conn, body, person))
                 if p == "/api/hub/done":
-                    hub.check_machine(app.cfg, str(body.get("machine") or ""))
+                    check_machine(app.cfg, str(body.get("machine") or ""))
                     app.ingest.request()
                     return self._json({"ok": True})
-            except (hub.HubError, ValueError) as exc:
+            except (HubError, ValueError) as exc:
                 return self._json({"error": str(exc)}, 400)
             return self._json({"error": "not found"}, 404)
 
@@ -2709,7 +2724,7 @@ def make_handler(app: App, port: int):
                     self.viewer, refused = self._viewer()
                     if refused:
                         return self._json(*refused)
-                    from . import access, people
+                    from .sharing import access, people
 
                     scope = people.projects_of(self.viewer)
                     if scope is not None:  # someone limited to projects: a few pages, of their projects only
@@ -2732,7 +2747,7 @@ def make_handler(app: App, port: int):
                         return self._json(app.leaderboard(q))
                     m = re.fullmatch(r"/api/leaderboard/avatar/([\w-]+)", p)
                     if m:
-                        from .leaderboard import avatar
+                        from .sharing.leaderboard import avatar
 
                         got = avatar(m.group(1), app.cfg)
                         return self._image(*got) if got else self._json({"error": "no avatar"}, 404)
@@ -2907,7 +2922,7 @@ def make_handler(app: App, port: int):
             if "1" not in (self.headers.get("X-Interlatch"), self.headers.get("X-Chronicle")) or not (self._user_ok() or self._people_mode()):
                 return self._json({"error": tr("forbidden")}, 403)
             if urlparse(self.path).path == "/api/signout":
-                from . import people
+                from .sharing import people
 
                 if self._session():
                     people.sign_out(app.conn, self._session())
@@ -2942,7 +2957,7 @@ def make_handler(app: App, port: int):
                     return self._json({"started": app.action_sync()})
                 m = re.fullmatch(r"/api/leaderboard/(signin|finish|cancel|send|name|leave)", p)
                 if m:  # signing in keeps a credential on this computer: only from here
-                    from .leaderboard import LeaderboardError
+                    from .sharing.leaderboard import LeaderboardError
 
                     if not self._from_here():
                         return self._json({"error": tr("the leaderboard is on the dashboard of your own computer")}, 403)
@@ -2984,7 +2999,8 @@ def make_handler(app: App, port: int):
                     if not self._from_here():  # what leaves this computer, or its own sign-in: only from here
                         return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
                     if p == "/api/devices/hub-signin":
-                        from .hub import HubError, dashboard_signin
+                        from .sharing.client import dashboard_signin
+                        from .sharing.protocol import HubError
 
                         try:
                             return self._json({"url": dashboard_signin(app.cfg, page=body.get("next"))})

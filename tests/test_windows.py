@@ -210,7 +210,7 @@ def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
 
 
 def test_under_compares_windows_paths_by_one_spelling_and_never_across_kinds():
-    from interlatch.hub import under
+    from interlatch.projects.routing import under
 
     assert under("C:\\Users\\ada\\project\\sub\\file.py", "C:/Users/ada/project")
     assert under("c:/users/ada/Project", "C:\\")  # the drive letter's case doesn't matter
@@ -229,8 +229,9 @@ def test_under_compares_windows_paths_by_one_spelling_and_never_across_kinds():
 
 
 def test_windows_hub_and_people_path_normalization():
-    from interlatch.hub import clean_folders, clean_left
-    from interlatch.people import PeopleError, clean_projects
+    from interlatch.sharing.protocol import clean_left
+    from interlatch.projects.routing import clean_folders
+    from interlatch.sharing.people import PeopleError, clean_projects
 
     folders = clean_folders({"C:\\Users\\ada\\app": "c:\\hub\\projects\\app\\", "/posix/path/": "/hub/posix/",
                              "1:\\x": "C:/y", "/a\\b": "/hub/ab"})
@@ -244,7 +245,7 @@ def test_windows_hub_and_people_path_normalization():
 
 def test_the_hub_files_a_windows_computer_s_folder_under_one_spelling(tmp_path):
     from interlatch.storage.sqlite import connect
-    from interlatch.hub import ProjectResolver
+    from interlatch.projects.routing import ProjectResolver
 
     cfg = load_config(tmp_path / "home")
     conn = connect(cfg.db_path)

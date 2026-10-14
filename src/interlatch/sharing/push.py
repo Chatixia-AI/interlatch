@@ -1,0 +1,320 @@
+"""Sending the hub what this computer shares: raw session files (only the ones it lacks), or sessions' details
+and lessons, plus the analyses this computer already did when it first joins."""
+
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+import os
+import tempfile
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ..core.config import Config
+from ..core.machine import local_machine
+from ..core.paths import normalize_project_path
+from ..core.util import utcnow_iso
+from ..projects import routing  # git_info through routing: one patch there reaches every caller
+from .client import PUSH_WAIT_S, HubClient, _Exclusions, hello_info, root_files, sharing, spoke_roots
+from .identity import read_token
+from .projects import GroupRoutes, _record_folders, destination, group_routes
+from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_COLS, HubError, HubUnreachable,
+                       _check_protocol)
+from .pull import pull_team_lessons
+
+
+@dataclass
+class PushReport:
+    sent: int = 0
+    bytes: int = 0
+    unchanged: int = 0
+    skipped: int = 0
+    analyses: int = 0
+    errors: list[str] = field(default_factory=list)
+    hub: str = ""
+    seconds: float = 0.0
+    kind: str = "files"  # or "knowledge": sessions this computer analyzed itself
+    team: int | None = None  # teammates' lessons held here after the pull (a hub with a team store sends them)
+
+    def summary(self) -> str:
+        what = "session" if self.kind == "knowledge" else "file"
+        verb = "shared" if self.kind == "knowledge" else "sent"
+        parts = [f"{self.sent} {what}{'s' * (self.sent != 1)} {verb} ({self.bytes / 1e6:.1f} MB)", f"{self.unchanged} unchanged"]
+        if self.skipped:  # sharing knowledge: sessions outside the hub's projects, or in excluded ones, stay here
+            parts.append(f"{self.skipped} kept here" if self.kind == "knowledge" else f"{self.skipped} excluded")
+        if self.analyses:
+            parts.append(f"{self.analyses} earlier analyses handed over")
+        if self.team is not None:
+            parts.append(f"{self.team} team lesson{'s' * (self.team != 1)} here")
+        if self.errors:
+            parts.append(f"{len(self.errors)} errors")
+        return f"to {self.hub}: " + ", ".join(parts) + f" in {self.seconds:.1f}s"
+
+
+def _gzip_to_temp(path: Path) -> tuple[tempfile.SpooledTemporaryFile, int, str]:
+    """(gzip of the file in a spooled temp file, raw size, raw sha256). Reads the file once, as it is now."""
+    out = tempfile.SpooledTemporaryFile(max_size=16 << 20)
+    h, size = hashlib.sha256(), 0
+    with open(path, "rb") as fin, gzip.GzipFile(fileobj=out, mode="wb", compresslevel=6, mtime=0) as gz:
+        while chunk := fin.read(1 << 20):
+            h.update(chunk)
+            size += len(chunk)
+            gz.write(chunk)
+    return out, size, h.hexdigest()
+
+
+def _same(inv: list | None, size: int, mtime: float) -> bool:
+    return bool(inv) and inv[0] == size and abs(float(inv[1]) - mtime) < 1.0
+
+
+def push(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
+    """Send the hub every session file it lacks (or has an older copy of); with [hub] share = "knowledge", what
+    this computer learned instead (push_knowledge). By the config as it is now (sharing)."""
+    with sharing(cfg, PUSH_WAIT_S) as cfg:
+        if cfg.shares_knowledge:
+            return _push_knowledge(cfg, progress=progress, client=client)
+        return _push_files(cfg, progress=progress, client=client)
+
+
+def push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
+    """[hub] share = "knowledge": send the hub each analyzed session's details, analysis and project lessons that it
+    lacks or has an older analysis of. Transcripts never leave this computer."""
+    with sharing(cfg, PUSH_WAIT_S) as cfg:
+        if not cfg.shares_knowledge:  # changed since the caller read it
+            raise HubError("this computer no longer shares knowledge only with the hub")
+        return _push_knowledge(cfg, progress=progress, client=client)
+
+
+def _push_files(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
+    token = read_token(cfg)
+    if not cfg.hub_url or not token:
+        raise HubError("this computer has not joined a hub (`interlatch hub join`)")
+    t0 = time.monotonic()
+    report = PushReport(hub=cfg.hub_url)
+    roots = spoke_roots(cfg)
+    client = client or HubClient(cfg.hub_url, token)
+    me = local_machine(cfg)
+    try:
+        routes = group_routes(cfg)
+        info = hello_info(cfg, roots, routes)
+        hello = client.request("POST", "/api/hub/hello", body=info)
+        _check_protocol(hello)
+        routes.remember(cfg)
+        _record_folders(cfg, hello, info["repos"])
+        inventory = hello.get("inventory") or {}
+        if hello.get("wants_analyses"):
+            blob, n = export_analyses(cfg)
+            client.request("POST", "/api/hub/analyses", params={"machine": me["id"]}, body=blob,
+                           headers={"Content-Type": "application/gzip"})
+            report.analyses = n
+        exclusions = _Exclusions(cfg)
+        todo = []
+        for root in roots:
+            have = inventory.get(root.name) or {}
+            for rel, path in root_files(root):
+                try:
+                    st = path.stat()
+                except OSError:
+                    continue
+                if _same(have.get(rel), st.st_size, st.st_mtime):
+                    report.unchanged += 1
+                elif exclusions.excluded(root, rel, path):
+                    report.skipped += 1
+                else:
+                    todo.append((root, rel, path, st))
+        for i, (root, rel, path, st) in enumerate(todo, 1):
+            if progress:
+                progress(f"sending {i} of {len(todo)}: {rel}")
+            try:
+                body, size, sha = _gzip_to_temp(path)
+            except OSError as exc:
+                report.errors.append(f"{path}: {exc}")
+                continue
+            try:
+                body.seek(0, os.SEEK_END)
+                length = body.tell()
+                client.request("POST", "/api/hub/file", body=body, length=length, headers={"Content-Type": "application/gzip"},
+                               params={"machine": me["id"], "root": root.name, "path": rel, "size": size,
+                                       "mtime": repr(st.st_mtime), "sha256": sha})
+                report.sent += 1
+                report.bytes += size
+            except HubUnreachable:
+                raise
+            except HubError as exc:
+                report.errors.append(f"{rel}: {exc}")
+            finally:
+                body.close()
+        if report.sent or report.analyses:
+            client.request("POST", "/api/hub/done", body={"machine": me["id"]})
+    finally:
+        client.close()
+    report.seconds = time.monotonic() - t0
+    _record_push(cfg, report)
+    return report
+
+
+def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, remotes: dict | None = None,
+                    projects_only: bool = False, conn=None, where: str = "", params: tuple = (),
+                    routes: GroupRoutes | None = None) -> tuple[list[dict], int, int]:
+    """(records the hub lacks or has an older analysis of, unchanged, excluded) for push_knowledge.
+
+    `scope`: the hub projects this computer's person is limited to (hello says so); then only sessions the hub files
+    under them are sent: in a folder added to one of them, or in a repository whose remote the hub files there.
+    `projects_only` ([hub] all_folders = false): the same for any of the hub's projects, so a folder nobody added and
+    a repository the hub doesn't know stay here.
+    Sessions the hub files under a project this computer left ([hub] left) always stay here.
+    `routes`: the groups shared on the hub (GroupRoutes): a project in one goes to its hub project, whatever
+    `projects_only` says; one in a shared group's folder but not in that group, or that left it, stays here.
+    `conn`/`where`: the hub's own sessions in projects set up there (share_own)."""
+    from ..storage.sqlite import connect
+
+    out: list[dict] = []
+    unchanged = excluded = 0
+    own = conn is None
+    if own and not cfg.db_path.exists():
+        return out, 0, 0
+    conn = conn or connect(cfg.db_path, readonly=True)
+    found: dict[str, str | None] = {}
+    left = set(cfg.hub_left)
+    routes = routes if routes is not None else GroupRoutes()
+    try:
+        cols = ", ".join(("id", "project_path", "machine_path") + SHARED_COLS + ANALYSIS_COLS)  # never a prompt-made title
+        marks = ", ".join("?" for _ in SHARED_AGENTS)
+        rows = conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done' "
+                            f"AND source NOT IN ('history', 'remote') AND agent IN ({marks}){where}",
+                            (*SHARED_AGENTS, *params)).fetchall()
+        for r in rows:
+            rec = dict(r)
+            ran = rec.pop("machine_path") or rec["project_path"]  # where it ran: a set-up project may hold it
+            if cfg.is_excluded(rec["project_path"]):
+                excluded += 1
+                continue
+            limited = scope is not None or projects_only
+            routed = bool(routes) and routes.decide(rec["project_path"], cfg.hub_folders) is not None
+            if not limited and not left and not routed and have.get(rec["id"]) == rec["analyzed_at"]:
+                unchanged += 1  # asked git nothing: it runs once per folder, only for what goes
+                continue
+            if ran and ran not in found:
+                info = routing.git_info(ran)
+                found[ran] = info[1] if info else None
+            rec["remote"] = found.get(ran) if ran else None
+            # a repository whose remote the hub files somewhere goes there, as destination() says; else a shared group
+            via = None if not routed or (rec["remote"] and (remotes or {}).get(rec["remote"])) \
+                else routes.decide(rec["project_path"], cfg.hub_folders)
+            if via is not None:
+                goes, ok = via
+                goes = normalize_project_path(goes)  # [hub] left and a person's projects are spelled so
+                if not ok or goes in left or (scope is not None and goes not in scope):
+                    excluded += 1  # kept out of the group, out of it now, left, or a project this person doesn't share
+                    continue
+            elif limited or left:
+                goes = normalize_project_path(destination(cfg, rec["project_path"], rec["remote"], remotes or {}))
+                if goes in left or (limited and (goes is None or (scope is not None and goes not in scope))):
+                    excluded += 1  # not one of the hub's projects, one this person doesn't share, or one it left
+                    continue
+            if have.get(rec["id"]) == rec["analyzed_at"]:
+                unchanged += 1
+                continue
+            rec["language"] = cfg.analysis.language  # what its summary and lessons are written in
+            # lessons about the project only: ones about the person (global, preferences) stay on this computer
+            rec["knowledge"] = [dict(k) for k in conn.execute(
+                f"SELECT {', '.join(KNOWLEDGE_COLS)} FROM knowledge WHERE session_id = ? AND source = 'analysis' "
+                "AND scope = 'project' AND kind != 'preference' AND status != 'dismissed'", (rec["id"],)).fetchall()]
+            out.append(rec)
+    finally:
+        if own:
+            conn.close()
+    return out, unchanged, excluded
+
+
+def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
+    token = read_token(cfg)
+    if not cfg.hub_url or not token:
+        raise HubError("this computer has not joined a hub (`interlatch hub join`)")
+    t0 = time.monotonic()
+    report = PushReport(hub=cfg.hub_url, kind="knowledge")
+    client = client or HubClient(cfg.hub_url, token)
+    me = local_machine(cfg)
+    try:
+        routes = group_routes(cfg)
+        info = hello_info(cfg, spoke_roots(cfg), routes)
+        hello = client.request("POST", "/api/hub/hello", body=info)
+        _check_protocol(hello)
+        routes.remember(cfg)
+        _record_folders(cfg, hello, info["repos"])
+        have = hello.get("knowledge")
+        if not isinstance(have, dict):
+            raise HubError(f"the hub runs version {hello.get('version')}, which can't take knowledge only; update it")
+        scope = hello.get("scope") if isinstance(hello.get("scope"), list) else None  # the hub limits this person
+        records, report.unchanged, report.skipped = _shared_records(cfg, have, scope=scope,
+                                                                    remotes=hello.get("remotes") or {},
+                                                                    projects_only=not cfg.hub_all_folders, routes=routes)
+        for i in range(0, len(records), SHARE_BATCH):
+            batch = records[i:i + SHARE_BATCH]
+            if progress:
+                progress(f"sharing {i + len(batch)} of {len(records)} sessions")
+            body = gzip.compress(json.dumps({"version": 1, "sessions": batch}).encode(), mtime=0)
+            try:
+                client.request("POST", "/api/hub/sessions", params={"machine": me["id"]}, body=body,
+                               headers={"Content-Type": "application/gzip"})
+            except HubUnreachable:
+                raise
+            except HubError as exc:
+                report.errors.append(str(exc))
+                continue
+            report.sent += len(batch)
+            report.bytes += len(body)
+        if report.sent:
+            client.request("POST", "/api/hub/done", body={"machine": me["id"]})
+        if hello.get("team"):  # the hub keeps a team store: bring back what teammates learned in these projects
+            try:
+                report.team = pull_team_lessons(cfg, client, info["repos"])
+            except HubUnreachable:
+                raise
+            except HubError as exc:
+                report.errors.append(f"team lessons: {exc}")
+    finally:
+        client.close()
+    report.seconds = time.monotonic() - t0
+    _record_push(cfg, report)
+    return report
+
+
+def _record_push(cfg: Config, report: PushReport) -> None:
+    """The spoke's own note of its last push, for `interlatch hub status` and its dashboard."""
+    try:
+        (cfg.home / "last-push.json").write_text(json.dumps({
+            "at": utcnow_iso(), "summary": report.summary(), "errors": report.errors[:5], "kind": report.kind,
+            "sent": report.sent, "unchanged": report.unchanged, "kept": report.skipped, "team": report.team}))
+    except OSError:
+        pass
+
+
+def last_push(cfg: Config) -> dict | None:
+    try:
+        return json.loads((cfg.home / "last-push.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def export_analyses(cfg: Config) -> tuple[bytes, int]:
+    """gzip JSON of this computer's finished analyses and the knowledge they produced (not memory notes)."""
+    from ..storage.sqlite import connect
+
+    sessions: list[dict] = []
+    if cfg.db_path.exists():
+        conn = connect(cfg.db_path, readonly=True)
+        try:
+            cols = ", ".join(("id",) + ANALYSIS_COLS)
+            for r in conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done'").fetchall():
+                rec = dict(r)
+                rec["knowledge"] = [dict(k) for k in conn.execute(
+                    f"SELECT {', '.join(KNOWLEDGE_COLS)} FROM knowledge WHERE session_id = ? AND source = 'analysis'",
+                    (rec["id"],)).fetchall()]
+                sessions.append(rec)
+        finally:
+            conn.close()
+    blob = gzip.compress(json.dumps({"version": 1, "sessions": sessions}).encode(), mtime=0)
+    return blob, len(sessions)

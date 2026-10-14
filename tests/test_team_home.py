@@ -4,7 +4,7 @@ limited to projects gets their projects only."""
 
 from datetime import timedelta
 
-from interlatch import people
+from interlatch.sharing import people
 from interlatch.core.config import load_config, set_config_value
 from interlatch.core.util import to_iso, utcnow
 from interlatch.core.machine import local_machine

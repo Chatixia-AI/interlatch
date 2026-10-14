@@ -8,7 +8,9 @@ import urllib.request
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.sharing import people
+from interlatch.sharing.protocol import HubError, PROTOCOL
+from interlatch.sharing.push import push
 from interlatch.core.config import load_config, set_config_value
 
 from test_hub import hubenv  # noqa: F401  (fixture)
@@ -20,7 +22,7 @@ def _knowledge_only(env):
 
 
 def _hello(env, share, token=None):
-    body = {"protocol": hub.PROTOCOL, "machine": MACHINE, "name": "laptop", "share": share}
+    body = {"protocol": PROTOCOL, "machine": MACHINE, "name": "laptop", "share": share}
     return _call(env["url"], "/api/hub/hello", body, {"Authorization": f"Bearer {token or env['token']}"})
 
 
@@ -49,8 +51,8 @@ def test_a_knowledge_only_hub_keeps_no_transcripts(hubenv):  # noqa: F811
     cfg, spoke = hubenv["cfg"], hubenv["spoke"]
     _knowledge_only(hubenv)
 
-    with pytest.raises(hub.HubError, match="takes knowledge only"):  # a computer that sends transcripts
-        hub.push(spoke)
+    with pytest.raises(HubError, match="takes knowledge only"):  # a computer that sends transcripts
+        push(spoke)
     status, data = _upload(hubenv, "/api/hub/file")  # and one that skips the hello
     assert status == 403 and b"takes knowledge only" in data
     status, data = _upload(hubenv, "/api/hub/analyses")

@@ -106,7 +106,7 @@ def cmd_sync(args) -> int:
         work = run_worker(cfg, export=export_markdown, progress=None if args.quiet else (lambda m: print(f"  {m}")))
         if not args.quiet:
             print(f"work: {work.summary()}")
-    from .leaderboard import send_safely
+    from .sharing.leaderboard import send_safely
 
     conn = _conn(cfg)
     send_safely(cfg, conn)  # once signed in to the leaderboard (`interlatch leaderboard join`)
@@ -420,7 +420,8 @@ def cmd_status(args) -> int:
     pending = count_pending(conn, cfg)
     spent = conn.execute("SELECT COALESCE(SUM(cost_usd),0) FROM analyses").fetchone()[0]
     console.print(f"[bold]Interlatch[/] · home {cfg.home}")
-    from .hub import last_push, read_token
+    from .sharing.push import last_push
+    from .sharing.identity import read_token
 
     if cfg.is_spoke:
         last = last_push(cfg)
@@ -1662,7 +1663,8 @@ def cmd_connect(args) -> int:
 
 
 def _push(cfg, *, quiet: bool = False) -> int:
-    from .hub import HubError, push
+    from .sharing.push import push
+    from .sharing.protocol import HubError
 
     live = not quiet and sys.stdout.isatty()
 
@@ -1715,7 +1717,13 @@ def _hub_url_guess(cfg) -> str | None:
 def cmd_hub(args) -> int:
     import platform
 
-    from . import hub
+    from .ingestion.persistence import register_local
+    from .sharing.client import dashboard_signin, leave_hub, redeem_invite
+    from .sharing.identity import new_token, read_token, token_path, write_token
+    from .sharing.projects import machines
+    from .sharing.protocol import HubError, join_command
+    from .sharing.pull import last_team
+    from .sharing.push import last_push
     from .core.machine import local_machine
     from .install import background_status, hooks_installed
 
@@ -1728,13 +1736,13 @@ def cmd_hub(args) -> int:
             console.print(f"This computer sends its sessions to the hub at {cfg.hub_url}. Run `interlatch hub leave` "
                           "first to make it a hub itself.", highlight=False)
             return 1
-        token = hub.read_token(cfg)
+        token = read_token(cfg)
         if not token or args.rotate:
-            token = hub.new_token(cfg)
+            token = new_token(cfg)
             if args.rotate:
                 console.print("New token: computers that joined with the old one must join again.")
         conn = _conn(cfg)
-        hub.register_local(conn, cfg)
+        register_local(conn, cfg)
         conn.commit()
         conn.close()
         address = (args.url_opt or args.url or "").rstrip("/")
@@ -1761,7 +1769,7 @@ def cmd_hub(args) -> int:
                               "Its dashboard then opens on other devices only for people signed in: add yourself with "
                               "`interlatch hub invite <your name> --email <email> --role admin`.", highlight=False)
         console.print("On each other computer, install Interlatch and run:\n")
-        console.print(f"  [bold]{hub.join_command(url, token)}[/]\n", highlight=False, soft_wrap=True)
+        console.print(f"  [bold]{join_command(url, token)}[/]\n", highlight=False, soft_wrap=True)
         console.print("[dim]The token lets a computer send sessions here; keep it private. "
                       "`interlatch hub enable --rotate` replaces it. To give each person a token of their own and a "
                       "dashboard sign-in instead: `interlatch hub invite <name> --email <email>`.[/]", highlight=False)
@@ -1778,7 +1786,7 @@ def cmd_hub(args) -> int:
             console.print("Usage: interlatch hub join <hub address> --code <invite code> (from the hub's admin), or "
                           "--token <token> (the hub's `interlatch hub enable` prints the whole command).")
             return 2
-        if hub.read_token(cfg) and not cfg.is_spoke:
+        if read_token(cfg) and not cfg.is_spoke:
             console.print("This computer is a hub itself (`interlatch hub disable` first).")
             return 1
         url = args.url.rstrip("/")
@@ -1787,8 +1795,8 @@ def cmd_hub(args) -> int:
         token = args.token
         if args.code:
             try:
-                got = hub.redeem_invite(cfg, url, args.code)
-            except hub.HubError as exc:
+                got = redeem_invite(cfg, url, args.code)
+            except HubError as exc:
                 console.print(f"Can't join: {exc}", highlight=False)
                 return 1
             token, who = got["token"], got.get("person") or {}
@@ -1807,7 +1815,7 @@ def cmd_hub(args) -> int:
                 console.print(f"Projects you share with it: [bold]{names}[/]. Add your folder for each one: "
                               "`interlatch hub add-folder <folder> --project <name>`; sessions elsewhere stay here.",
                               highlight=False)
-        hub.write_token(cfg, token)
+        write_token(cfg, token)
         _set_config_value(cfg, "hub", "url", json.dumps(url))
         if args.share:
             _set_config_value(cfg, "hub", "share", json.dumps(args.share))
@@ -1856,16 +1864,16 @@ def cmd_hub(args) -> int:
         if not cfg.is_spoke:
             console.print("This computer has not joined a hub.")
             return 0
-        hub.leave_hub(cfg)
+        leave_hub(cfg)
         console.print(f"Left the hub at {cfg.hub_url}. This computer records and analyzes its own sessions again; "
                       "the hub keeps what it was sent.", highlight=False)
         return 0
 
     if action == "disable":
-        if cfg.is_spoke or not hub.read_token(cfg):
+        if cfg.is_spoke or not read_token(cfg):
             console.print("This computer is not a hub.")
             return 0
-        hub.token_path(cfg).unlink(missing_ok=True)
+        token_path(cfg).unlink(missing_ok=True)
         console.print("Other computers can no longer send sessions here. What they sent is kept.")
         return 0
 
@@ -1889,8 +1897,8 @@ def cmd_hub(args) -> int:
             console.print("This computer has not joined a hub; its own dashboard is `interlatch ui`.")
             return 1
         try:
-            link = hub.dashboard_signin(cfg)
-        except hub.HubError as exc:
+            link = dashboard_signin(cfg)
+        except HubError as exc:
             console.print(f"Can't get a sign-in link: {exc}", highlight=False)
             return 1
         console.print("Open this within a few minutes to see the hub's dashboard as you (it works once):\n")
@@ -1899,13 +1907,13 @@ def cmd_hub(args) -> int:
 
     # status
     if cfg.is_spoke:
-        last = hub.last_push(cfg)
+        last = last_push(cfg)
         console.print(f"Sends its sessions to the hub at [bold]{cfg.hub_url}[/]"
                       + (" · knowledge only (transcripts stay here)" if cfg.shares_knowledge else "")
                       + ((" · from every folder" if cfg.hub_all_folders else " · from the hub's projects only")
                          if cfg.shares_knowledge else ""), highlight=False)
         console.print(f"  last push: {last['at'] + ' · ' + last['summary'] if last else 'never'}", highlight=False)
-        team = hub.last_team(cfg)
+        team = last_team(cfg)
         if team:
             console.print(f"  team lessons here: {team.get('lessons', 0)} from the hub's team store (as of {team.get('at')})",
                           highlight=False)
@@ -1914,11 +1922,11 @@ def cmd_hub(args) -> int:
             console.print(f"  {n} folder{'s' * (n != 1)} added to projects on the hub (`interlatch hub folders`)", highlight=False)
         return 0
     conn = _conn(cfg)
-    rows = hub.machines(conn, cfg)
+    rows = machines(conn, cfg)
     conn.close()
-    role = "a hub" if hub.read_token(cfg) else "not a hub (`interlatch hub enable` makes it one)"
+    role = "a hub" if read_token(cfg) else "not a hub (`interlatch hub enable` makes it one)"
     console.print(f"[bold]{local_machine(cfg)['name']}[/] is {role}.", highlight=False)
-    if hub.read_token(cfg) and cfg.hub_accept == "knowledge":
+    if read_token(cfg) and cfg.hub_accept == "knowledge":
         console.print("  takes knowledge only: computers that send transcripts are turned away "
                       "(`interlatch config set hub.accept everything` takes them again)", highlight=False)
     from .core.util import local_str
@@ -1938,7 +1946,7 @@ def cmd_hub(args) -> int:
 
 def _hub_store(cfg, console) -> int:
     """`interlatch hub store`: connect to the hub's team store, run its upgrade steps, and show what it holds."""
-    from . import hub
+    from .sharing.identity import read_token
     from .storage import team as team_store
 
     if cfg.is_spoke:
@@ -1964,7 +1972,7 @@ def _hub_store(cfg, console) -> int:
                   f"({c['lesson_sources']} statements of them) · {c['audit']} audit entries", highlight=False)
     console.print(f"  upgrade steps: {', '.join(st['steps']) or 'none'} · last activity: {st['last_activity'] or 'none'}",
                   highlight=False)
-    if not hub.read_token(cfg):
+    if not read_token(cfg):
         console.print("[yellow]This computer is not a hub yet[/]: `interlatch hub enable`.", highlight=False)
     return 0
 
@@ -1974,13 +1982,13 @@ ROLE_WORDS = {"admin": "an admin", "member": "a member", "readonly": "read-only"
 
 def _projects_arg(conn, args) -> tuple[list[str] | None, str | None]:
     """--project … (hub project names or paths) or --all-projects as people.add takes it: (projects, problem)."""
-    from . import hub
+    from .sharing.projects import hub_projects
 
     if args.all_projects and args.project:
         return None, "Pass either --project or --all-projects, not both."
     if args.all_projects:
         return None, None
-    known = hub.hub_projects(conn)
+    known = hub_projects(conn)
     out = []
     for name in args.project or []:
         project, problem = _pick_project(known, name)
@@ -2012,7 +2020,7 @@ def _find_computer(conn, key: str) -> tuple[str | None, str | None]:
 
 def _find_person(conn, key: str | None) -> dict | None:
     """A person on this hub by email, or by the id `interlatch hub people` shows."""
-    from . import people
+    from .sharing import people
 
     key = (key or "").strip()
     if key.isdigit():
@@ -2024,7 +2032,10 @@ def _find_person(conn, key: str | None) -> dict | None:
 def _hub_purge(cfg, console, args) -> int:
     """`interlatch hub purge <email|id|computer> --project <name>… | --outside-access`: remove for good what a person's
     computers (or one computer) sent to this hub, in some projects or outside the ones they see."""
-    from . import hub, people
+    from .sharing import people
+    from .sharing.projects import computers_of
+    from .sharing.protocol import HubError
+    from .sharing.receiver import purge, purge_targets
     from .core.machine import local_machine
     from .core.paths import project_name_for
 
@@ -2038,7 +2049,7 @@ def _hub_purge(cfg, console, args) -> int:
     try:
         person = _find_person(conn, args.url)
         if person:
-            machines, who = hub.computers_of(conn, person["id"]), f"{person['name']}'s computers"
+            machines, who = computers_of(conn, person["id"]), f"{person['name']}'s computers"
         else:
             key = args.url.strip().lower()
             machines = [r[0] for r in conn.execute(
@@ -2062,14 +2073,14 @@ def _hub_purge(cfg, console, args) -> int:
                 console.print(f"{person['name']} sees every project, so nothing is outside what they see. Limit them "
                               f"first: `interlatch hub access {args.url} --project <name>`.", highlight=False)
                 return 1
-            targets = hub.purge_targets(conn, machines, keep=keep)
+            targets = purge_targets(conn, machines, keep=keep)
             where = f"outside {_projects_words(conn, keep)}"
         else:
             projects, problem = _projects_arg(conn, args)
             if problem:
                 console.print(problem, highlight=False)
                 return 1
-            targets = hub.purge_targets(conn, machines, projects=projects)
+            targets = purge_targets(conn, machines, projects=projects)
             where = f"in {_projects_words(conn, projects)}"
         if not targets:
             console.print(f"Nothing from {who} {where} on this hub.", highlight=False)
@@ -2091,8 +2102,8 @@ def _hub_purge(cfg, console, args) -> int:
                 console.print("Nothing removed.")
                 return 1
         try:
-            got = hub.purge(cfg, conn, targets, person_id=person["id"] if person else None)
-        except hub.HubError as exc:
+            got = purge(cfg, conn, targets, person_id=person["id"] if person else None)
+        except HubError as exc:
             console.print(f"Can't purge: {exc}", highlight=False)
             return 1
         console.print(f"Removed {got['sessions']} session{'s' * (got['sessions'] != 1)}"
@@ -2113,7 +2124,9 @@ def _hub_people(cfg, console, args) -> int:
 
     It runs at the hub itself, so it acts as an admin (people.py: whoever is at the hub computer always is one).
     """
-    from . import hub, people
+    from .sharing import people
+    from .sharing.identity import read_token
+    from .sharing.protocol import invite_command, invite_link
     from .core.util import local_str
 
     if cfg.is_spoke:
@@ -2200,15 +2213,15 @@ def _hub_people(cfg, console, args) -> int:
                               f"{person['name']}'s.\n", highlight=False)
             if person["role"] != "readonly":
                 console.print("On their computer (it joins as them and sends what it learned, not transcripts):")
-                console.print(f"  {hub.invite_command(where, code)}\n", highlight=False, soft_wrap=True)
+                console.print(f"  {invite_command(where, code)}\n", highlight=False, soft_wrap=True)
             console.print("Or in their browser, to see the hub's dashboard:")
-            console.print(f"  {hub.invite_link(where, code)}\n", highlight=False, soft_wrap=True)
+            console.print(f"  {invite_link(where, code)}\n", highlight=False, soft_wrap=True)
             if not address:
                 console.print("[yellow]This hub has no address yet[/]: `interlatch hub enable --url https://<address>` "
                               "sets the one other computers and browsers reach it at.", highlight=False)
             console.print("[dim]Pass them on by chat; the code is not shown again. It joins one computer or opens one "
                           "browser; `interlatch hub invite` again makes another.[/]", highlight=False)
-            if not hub.read_token(cfg):
+            if not read_token(cfg):
                 console.print("[yellow]This computer is not a hub yet[/]: `interlatch hub enable`.", highlight=False)
             return 0
 
@@ -2297,7 +2310,10 @@ def _hub_people(cfg, console, args) -> int:
 
 def _hub_project(cfg, console, args) -> int:
     """`interlatch hub project add | remove | list`: projects set up on this hub ahead of time, each a folder here."""
-    from . import hub
+    from .projects.routing import declared_projects
+    from .sharing.identity import read_token
+    from .sharing.projects import add_project, hub_projects, remove_project
+    from .sharing.protocol import HubError
 
     if cfg.is_spoke:
         console.print(f"Projects belong to the hub; this computer sends to the hub at {cfg.hub_url}. To file a folder "
@@ -2311,8 +2327,8 @@ def _hub_project(cfg, console, args) -> int:
     conn = _conn(cfg)
     try:
         if verb == "list":
-            set_up = set(hub.declared_projects(conn))
-            rows = hub.hub_projects(conn)
+            set_up = set(declared_projects(conn))
+            rows = hub_projects(conn)
             if not rows:
                 console.print("No projects on this hub yet. `interlatch hub project add <folder>` sets one up.")
                 return 0
@@ -2324,8 +2340,8 @@ def _hub_project(cfg, console, args) -> int:
             console.print(f"Usage: interlatch hub project {verb} <folder>")
             return 2
         try:
-            got = hub.add_project(cfg, conn, args.value) if verb == "add" else hub.remove_project(cfg, conn, args.value)
-        except hub.HubError as exc:
+            got = add_project(cfg, conn, args.value) if verb == "add" else remove_project(cfg, conn, args.value)
+        except HubError as exc:
             console.print(f"Can't {verb} that project: {exc}", highlight=False)
             return 1
         if verb == "remove":
@@ -2341,7 +2357,7 @@ def _hub_project(cfg, console, args) -> int:
         console.print("Give people access: `interlatch hub invite <name> --email <email> --project "
                       f"{got['name']}`. On their computers: `interlatch hub add-folder <their folder> --project "
                       f"{got['name']}`.", highlight=False)
-        if not hub.read_token(cfg):
+        if not read_token(cfg):
             console.print("[yellow]This computer is not a hub yet[/]: `interlatch hub enable`.", highlight=False)
         return 0
     finally:
@@ -2373,7 +2389,9 @@ def _hub_leave_project(cfg, console, args) -> int:
     starts again) sharing to one of the hub's projects and getting its teammates' lessons."""
     from pathlib import Path
 
-    from . import hub
+    from .sharing.client import handshake, leave_project, rejoin_project
+    from .sharing.projects import last_folders
+    from .sharing.protocol import FolderError, HubError
     from .core.paths import normalize_project_path
 
     if not cfg.is_spoke:
@@ -2384,9 +2402,9 @@ def _hub_leave_project(cfg, console, args) -> int:
         return 2
     wanted = args.project[-1]
     try:  # the hub's own list if it can be reached, else the one from the last push; and the projects left
-        known = hub.handshake(cfg).get("projects") or []
-    except hub.HubError:
-        known = (hub.last_folders(cfg) or {}).get("projects") or []
+        known = handshake(cfg).get("projects") or []
+    except HubError:
+        known = (last_folders(cfg) or {}).get("projects") or []
     known += [{"path": x, "name": Path(x).name} for x in cfg.hub_left
               if x not in {normalize_project_path(k.get("path")) for k in known}]
     project, problem = _pick_project(known, wanted)
@@ -2398,13 +2416,13 @@ def _hub_leave_project(cfg, console, args) -> int:
         if normalize_project_path(project["path"]) not in cfg.hub_left:
             console.print(f"This computer hasn't left {name}.", highlight=False)
             return 0
-        cfg = hub.rejoin_project(cfg, project["path"])
+        cfg = rejoin_project(cfg, project["path"])
         console.print(f"Rejoined [bold]{name}[/]: its sessions are shared again, and its teammates' lessons come back.",
                       highlight=False)
     else:
         try:
-            cfg = hub.leave_project(cfg, project["path"])
-        except hub.FolderError as exc:
+            cfg = leave_project(cfg, project["path"])
+        except FolderError as exc:
             console.print(str(exc), highlight=False)
             return 1
         console.print(f"Left [bold]{name}[/]: this computer no longer shares its sessions there or gets its teammates' "
@@ -2420,7 +2438,10 @@ def _hub_folders(cfg, console, args) -> int:
     """`interlatch hub add-folder | remove-folder | folders`: folders here whose sessions belong to a project on the hub."""
     from pathlib import Path
 
-    from . import hub
+    from .projects.routing import git_info
+    from .sharing.client import add_folder, handshake, remove_folder
+    from .sharing.projects import last_folders
+    from .sharing.protocol import FolderError, HubError
 
     if not cfg.is_spoke:
         console.print("This computer doesn't send its sessions to a hub. Folders are added on a computer that does "
@@ -2431,8 +2452,8 @@ def _hub_folders(cfg, console, args) -> int:
     if action == "folders":
         if args.list:
             try:
-                hello = hub.handshake(cfg)
-            except hub.HubError as exc:
+                hello = handshake(cfg)
+            except HubError as exc:
                 console.print(f"Can't reach the hub: {exc}", highlight=False)
                 return 1
             for p in hello.get("projects") or []:
@@ -2447,7 +2468,7 @@ def _hub_folders(cfg, console, args) -> int:
                           "own folder. To file a folder's sessions under a project on the hub:\n\n"
                           "  interlatch hub add-folder <folder> --project <name>\n")
             return 0
-        report = (hub.last_folders(cfg) or {}).get("folders") or {}
+        report = (last_folders(cfg) or {}).get("folders") or {}
         for folder, project in sorted(cfg.hub_folders.items()):
             seen = report.get(folder) or {}
             n = seen.get("sessions")
@@ -2469,8 +2490,8 @@ def _hub_folders(cfg, console, args) -> int:
             console.print(f"{folder} was not added. `interlatch hub folders` lists the folders that were.", highlight=False)
             return 1
         try:
-            cfg, taken = hub.remove_folder(cfg, key)
-        except hub.HubError as exc:
+            cfg, taken = remove_folder(cfg, key)
+        except HubError as exc:
             console.print(f"Nothing changed: {exc}", highlight=False)
             return 1
         if taken is None:
@@ -2487,8 +2508,8 @@ def _hub_folders(cfg, console, args) -> int:
             console.print(f"{folder} is not a folder.", highlight=False)
             return 1
         try:
-            hello = hub.handshake(cfg)
-        except hub.HubError as exc:
+            hello = handshake(cfg)
+        except HubError as exc:
             console.print(f"Can't reach the hub: {exc}", highlight=False)
             return 1
         project, problem = _pick_project(hello.get("projects") or [], args.project[-1])
@@ -2497,15 +2518,15 @@ def _hub_folders(cfg, console, args) -> int:
             return 1
         name = project.get("name") or Path(project["path"]).name
         try:
-            cfg, remote = hub.add_folder(cfg, folder, project, hello)
-        except hub.FolderError as exc:
+            cfg, remote = add_folder(cfg, folder, project, hello)
+        except FolderError as exc:
             console.print(str(exc), highlight=False)
             return 1
         if remote:
             console.print(f"Sessions in {folder} already go to {name}: the hub knows its git remote ({remote}). "
                           "Nothing to add.", highlight=False)
             return 0
-        info = hub.git_info(folder)
+        info = git_info(folder)
         console.print(f"Sessions in {folder} and the folders below it now go to [bold]{name}[/] on the hub "
                       f"({project['path']}).", highlight=False)
         if info:
@@ -2516,11 +2537,11 @@ def _hub_folders(cfg, console, args) -> int:
         console.print("The hub files them at the next push (`interlatch push`, or the background sync).")
         return 0
     code = _push(cfg)
-    moved = (hub.last_folders(cfg) or {}).get("moved") or 0
+    moved = (last_folders(cfg) or {}).get("moved") or 0
     if moved:
         console.print(f"{moved} session{'s' * (moved != 1)} already on the hub moved, with {'their' if moved != 1 else 'its'} "
                       "knowledge.", highlight=False)
-    for o in (((hub.last_folders(cfg) or {}).get("folders") or {}).get(folder) or {}).get("overridden") or []:
+    for o in (((last_folders(cfg) or {}).get("folders") or {}).get(folder) or {}).get("overridden") or []:
         console.print(f"[yellow]{o['repo']}[/] inside it goes to {Path(o['project']).name} instead: the hub knows its "
                       "git remote.", highlight=False)
     return code
@@ -2528,7 +2549,7 @@ def _hub_folders(cfg, console, args) -> int:
 
 def cmd_leaderboard(args) -> int:
     """`interlatch leaderboard`: the usage leaderboard: where you stand, or join, send now, or leave."""
-    from . import leaderboard as lb
+    from .sharing import leaderboard as lb
 
     cfg = _cfg()
     console = _console()

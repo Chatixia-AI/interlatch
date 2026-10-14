@@ -26,9 +26,6 @@ log = logging.getLogger("interlatch.copilot")
 COPILOT_PARSER_VERSION = 3  # 3: Gemini list prices; 2: artifacts (files created, PRs, commits)
 
 
-# ------------------------------------------------------------------ shared helpers
-
-
 # ------------------------------------------------------------------ VS Code Copilot Chat
 def chat_files(user_dir: Path) -> list[Path]:
     """Chat session logs under a VS Code User directory."""

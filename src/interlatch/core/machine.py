@@ -12,6 +12,7 @@ import sys
 import uuid
 
 from .config import Config
+import platform
 
 MACHINE_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
@@ -47,3 +48,7 @@ def local_machine(cfg: Config) -> dict:
 
 def local_machine_id(cfg: Config) -> str:
     return local_machine(cfg)["id"]
+
+
+def platform_label() -> str:
+    return {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows"}.get(platform.system(), platform.system())

@@ -131,7 +131,10 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
   選別、キューとワーカー。`analysis/runners/` がエージェントの CLI かプロバイダーの API でモデルに尋ねます
 - `knowledge/`：プロジェクトごとのナレッジベース（`synthesize.py`）、成熟度のはしご、用語集、ケースファイル、学習の
   トピック、フリクション、提案、指示ファイル、週ごとの振り返り
-- `projects/`：まとまるフォルダー、プロジェクト名、システムマップ
+- `projects/`：まとまるフォルダー、プロジェクト名、ほかのコンピューターのフォルダーがどのプロジェクトか
+  （`routing.py`）、システムマップ
+- `sharing/`：ハブと参加するコンピューター。プロトコル、トークン、クライアントと送受信、ハブの受け取り側、ハブの
+  プロジェクト、人と見えるもの、チームページのニュース、リーダーボード
 - `application/`：ワーカーの 1 回の実行で起きること（`workflows.py`）、機能をまたぐセッションの記録と検索
 - `interfaces/exports/`：Markdown の保管庫、セッションのエクスポート、Excalidraw の図
 - `connectors.py`（ソース）、`server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`hooks.py` / `install.py`、

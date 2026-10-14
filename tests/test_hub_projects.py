@@ -7,7 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.projects import routing
+from interlatch.sharing import people
+from interlatch.projects.routing import declared_projects, folders_of
+from interlatch.sharing.identity import new_token
+from interlatch.sharing.projects import add_project, hub_projects, remove_project
+from interlatch.sharing.protocol import HubError, PROTOCOL
+from interlatch.sharing.push import _shared_records
+from interlatch.sharing.receiver import IngestTrigger
 from interlatch.cli import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
@@ -28,7 +35,7 @@ CANARIES = ("OTHER-CANARY", "PREF-CANARY", "GLOBAL-CANARY", "Fix the failing log
 
 def _project_setup(conn, cfg):
     """The synced session analyzed in PROJECTS (set up on the hub), and another client's project beside it."""
-    got = hub.add_project(cfg, conn, PROJECTS)
+    got = add_project(cfg, conn, PROJECTS)
     conn.execute("UPDATE sessions SET analysis_status = 'done', analyzed_at = '2026-09-21T00:00:00Z', "
                  "llm_title = 'Resona title', summary = 'Resona summary' WHERE id = ?", (SID,))
     for title, scope, kind in (("Resona lesson", "project", "gotcha"), ("PREF-CANARY likes tabs", "project", "preference"),
@@ -58,9 +65,9 @@ def _project_setup(conn, cfg):
 def limited(synced, monkeypatch):
     """The synced computer as a hub with PROJECTS set up, another client's project, and Bob, a member who sees only
     PROJECTS, signed in to the dashboard."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
     cfg, conn = synced["cfg"], synced["conn"]
-    token = hub.new_token(cfg)
+    token = new_token(cfg)
     got = _project_setup(conn, cfg)
     ada = people.add(conn, "Ada", "ada@example.com", "admin")
     bob = people.add(conn, "Bob", "bob@example.com", "member", by=ada, projects=[PROJECTS])
@@ -87,48 +94,48 @@ def test_projects_of():
 def test_a_project_set_up_ahead_of_time(synced):
     """A folder on the hub becomes one project: its sessions and session-less notes are filed under it, new ones too,
     another computer can add a folder to it before anything was sent, and removing it files them back."""
-    from interlatch.hub import resolver
+    from interlatch.projects.routing import resolver
 
     cfg, conn = synced["cfg"], synced["conn"]
     assert conn.execute("SELECT project_path FROM sessions WHERE id = ?", (SID,)).fetchone()[0] == CWD
-    got = hub.add_project(cfg, conn, PROJECTS + "/")
+    got = add_project(cfg, conn, PROJECTS + "/")
     assert got == {"path": PROJECTS, "name": "Projects", "moved": 1, "sessions": 1, "existed": False}
     row = conn.execute("SELECT project_path, project_name, machine_path FROM sessions WHERE id = ?", (SID,)).fetchone()
     assert tuple(row) == (PROJECTS, "Projects", CWD)
     assert not conn.execute("SELECT COUNT(*) FROM knowledge WHERE project_path = ?", (CWD,)).fetchone()[0]
     assert resolver(cfg, conn).resolve(None, CWD + "/sub") == PROJECTS  # what ingest files new sessions under
-    assert hub.add_project(cfg, conn, PROJECTS)["existed"]
-    with pytest.raises(hub.HubError, match="overlaps"):
-        hub.add_project(cfg, conn, CWD)
-    with pytest.raises(hub.HubError, match="not a folder"):
-        hub.add_project(cfg, conn, "/nowhere/at-all")
+    assert add_project(cfg, conn, PROJECTS)["existed"]
+    with pytest.raises(HubError, match="overlaps"):
+        add_project(cfg, conn, CWD)
+    with pytest.raises(HubError, match="not a folder"):
+        add_project(cfg, conn, "/nowhere/at-all")
     for everything in ("/", str(Path.home()), str(Path.home().parent)):
-        with pytest.raises(hub.HubError, match="holds every project"):
-            hub.add_project(cfg, conn, everything)
-    projects = {p["path"]: p for p in hub.hub_projects(conn)}
+        with pytest.raises(HubError, match="holds every project"):
+            add_project(cfg, conn, everything)
+    projects = {p["path"]: p for p in hub_projects(conn)}
     assert projects[PROJECTS]["set_up"] and projects[PROJECTS]["sessions"] == 1
 
     conn.execute("DELETE FROM sessions")  # a project set up before any session is still one to add folders to
     conn.execute("DELETE FROM files_state")
     conn.commit()
-    assert [p["path"] for p in hub.hub_projects(conn)] == [PROJECTS]
+    assert [p["path"] for p in hub_projects(conn)] == [PROJECTS]
     from interlatch.ingestion.service import sync
 
     sync(cfg, conn)  # recorded again: filed under the project from the start
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SID,)).fetchone()
     assert tuple(row) == (PROJECTS, CWD)
 
-    out = hub.remove_project(cfg, conn, PROJECTS)
-    assert out == {"path": PROJECTS, "moved": 1} and hub.declared_projects(conn) == []
+    out = remove_project(cfg, conn, PROJECTS)
+    assert out == {"path": PROJECTS, "moved": 1} and declared_projects(conn) == []
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SID,)).fetchone()
     assert tuple(row) == (CWD, None)
-    with pytest.raises(hub.HubError):
-        hub.remove_project(cfg, conn, PROJECTS)
+    with pytest.raises(HubError):
+        remove_project(cfg, conn, PROJECTS)
 
 
 def test_project_and_access_commands(synced, monkeypatch, capsys):
     cfg, conn = synced["cfg"], synced["conn"]
-    hub.new_token(cfg)
+    new_token(cfg)
     assert main(["hub", "project", "add", PROJECTS]) == 0
     out = capsys.readouterr().out
     assert "Set up Projects" in out and "with 1 session so far" in out
@@ -222,7 +229,7 @@ def _bob_computer(env):
 
 
 def _hello(env, token, **extra):
-    body = {"protocol": hub.PROTOCOL, "machine": MACHINE, "name": "Bob laptop", "share": "knowledge", **extra}
+    body = {"protocol": PROTOCOL, "machine": MACHINE, "name": "Bob laptop", "share": "knowledge", **extra}
     return _call(env["url"], "/api/hub/hello", body, {"Authorization": f"Bearer {token}"})
 
 
@@ -237,7 +244,7 @@ def test_a_limited_computer_hears_of_and_sends_only_its_projects(limited):
     assert status == 200 and r["scope"] == [PROJECTS]
     assert [p["path"] for p in r["projects"]] == [PROJECTS] and set(r["folders"]) == {"/home/bob/resona"}
     assert OTHER not in json.dumps(r)
-    assert hub.folders_of(conn, MACHINE) == {"/home/bob/resona": PROJECTS}
+    assert folders_of(conn, MACHINE) == {"/home/bob/resona": PROJECTS}
 
     req_status, _, data = _raw(url, f"/api/hub/file?machine={MACHINE}&root=claude&path=projects/x/a.jsonl&size=2&mtime=1",
                                {"x": 1}, auth)
@@ -278,10 +285,10 @@ def test_a_limited_computer_shares_only_its_projects(tmp_path, monkeypatch):
                      "(?, 'transcript', 'claude', ?, 'done', '2026-10-01')", (sid, path))
     conn.commit()
     conn.close()
-    monkeypatch.setattr(hub, "git_info", lambda p: ("/home/bob/misc/lib", "github.com/acme/lib") if p.endswith("lib") else None)
-    recs, _, skipped = hub._shared_records(cfg, {}, scope=["/srv/Resona"], remotes={"github.com/acme/lib": "/srv/Resona"})
+    monkeypatch.setattr(routing, "git_info", lambda p: ("/home/bob/misc/lib", "github.com/acme/lib") if p.endswith("lib") else None)
+    recs, _, skipped = _shared_records(cfg, {}, scope=["/srv/Resona"], remotes={"github.com/acme/lib": "/srv/Resona"})
     assert sorted(r["id"] for r in recs) == ["in", "repo"] and skipped == 2
-    recs, _, _ = hub._shared_records(cfg, {})  # not limited: everything analyzed, as before
+    recs, _, _ = _shared_records(cfg, {})  # not limited: everything analyzed, as before
     assert len(recs) == 4
     assert all("title" not in r and "machine_path" not in r for r in recs)
 
@@ -311,7 +318,7 @@ def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
 
 def test_a_limited_connection_hides_columns_and_tables(synced):
     """access.limit on its own: other projects' rows, prompts, paths and transcripts are gone from the connection."""
-    from interlatch import access
+    from interlatch.sharing import access
 
     cfg, conn = synced["cfg"], synced["conn"]
     _project_setup(conn, cfg)

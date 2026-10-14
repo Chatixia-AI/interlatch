@@ -13,7 +13,7 @@ from .core.agents import AGENTS, short_name, speaker
 from .core.artifact_records import KINDS as ARTIFACT_KINDS
 from .artifacts.queries import STATUS as ARTIFACT_STATUS
 from .storage.sqlite import connect
-from .hub import team_from
+from .sharing.pull import team_from
 from .knowledge.ladder import stage_label
 from .core.redact import redact
 from .application.search import search_knowledge, search_sessions

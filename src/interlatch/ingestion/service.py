@@ -39,15 +39,6 @@ from .report import SyncReport
 log = logging.getLogger("interlatch.ingest")
 
 
-# ------------------------------------------------------------------ paths
-
-
-# ------------------------------------------------------------------ archive
-
-
-# ------------------------------------------------------------------ store
-
-
 # ------------------------------------------------------------------ sync
 def _ingest_main(conn, cfg, archiver, claude_dir, proj: Path, main: Path, report: SyncReport, *, ended=False, force=False):
     sid = main.stem
@@ -142,7 +133,10 @@ def sync(cfg: Config, conn: sqlite3.Connection, *, only: Path | None = None, end
             return report
         archiver = Archiver(conn, report)
         skip = forgotten_ids(conn)
-        from ..hub import apply_analyses, machine_roots, register_local, resolver
+        from .analyses import apply_analyses
+        from .persistence import register_local
+        from .archive import machine_roots
+        from ..projects.routing import resolver
 
         me = register_local(conn, cfg)
         conn.execute("UPDATE sessions SET machine_id = ? WHERE machine_id IS NULL", (me,))  # recorded before machines existed
@@ -489,9 +483,3 @@ def _sync_codex_cloud(cfg: Config, conn, report: SyncReport, skip: set[str], *, 
         # no prompts, so analysis skips it ("too few prompts")
         store_source_session(conn, cfg, ps, report, root=dst, transcript=archive, archive=archive, sig=sig, agent="codex",
                      source="codex-cloud")
-
-
-# ------------------------------------------------------------------ history.jsonl
-
-
-# ------------------------------------------------------------------ memory files

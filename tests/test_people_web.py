@@ -8,7 +8,10 @@ from urllib.parse import quote
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.sharing import people
+from interlatch.sharing.client import dashboard_signin
+from interlatch.sharing.identity import new_token, write_token
+from interlatch.sharing.receiver import IngestTrigger
 from interlatch.core.config import load_config, set_config_value
 
 from test_hub import _serve
@@ -50,9 +53,9 @@ def _as(session, **extra):
 @pytest.fixture()
 def hubweb(synced, monkeypatch):
     """The `synced` computer as a hub serving its dashboard on a free port; no people yet."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
     cfg = synced["cfg"]
-    token = hub.new_token(cfg)
+    token = new_token(cfg)
     app, httpd, url = _serve(cfg)
     synced.update(app=app, url=url, token=token)
     yield synced
@@ -181,7 +184,7 @@ def test_this_computer_asks_for_a_signin_link_to_a_page(tmp_path):
     home.mkdir()
     (home / "config.toml").write_text('[hub]\nurl = "https://hub.example.com"\n')
     cfg = load_config(home)
-    hub.write_token(cfg, "t")
+    write_token(cfg, "t")
 
     class Client:
         def request(self, method, path, body=None, **kw):
@@ -191,9 +194,9 @@ def test_this_computer_asks_for_a_signin_link_to_a_page(tmp_path):
             pass
 
     link = "https://hub.example.com/signin?code=ABCD-EFGH-JKLM"
-    assert hub.dashboard_signin(cfg, Client()) == link
-    assert hub.dashboard_signin(cfg, Client(), page="/project?path=%2Fsrv%2FAktio") == f"{link}&next=%2Fproject%3Fpath%3D%252Fsrv%252FAktio"
-    assert hub.dashboard_signin(cfg, Client(), page="https://evil.example/") == link
+    assert dashboard_signin(cfg, Client()) == link
+    assert dashboard_signin(cfg, Client(), page="/project?path=%2Fsrv%2FAktio") == f"{link}&next=%2Fproject%3Fpath%3D%252Fsrv%252FAktio"
+    assert dashboard_signin(cfg, Client(), page="https://evil.example/") == link
 
 
 def test_company_sign_in_header(team):
