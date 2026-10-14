@@ -5438,6 +5438,10 @@ function spokeSharingCard(dv) {
 // On a hub: keep the team's record in Postgres as well (team_store.py). The password goes to the server, never back.
 function teamStoreCard(dv) {
   const st = dv.store;
+  if (!st) { // a member or read-only person: the server leaves the team store out
+    return h("section", { class: "card" }, cardHead(t("Team store"), { iconName: "data" }),
+      h("p", { class: "muted" }, t("Only an admin of this hub can change these settings.")));
+  }
   const saved = st.settings || {};
   let mode = st.enabled ? "postgres" : "off";
   const status = h("div", { class: "status-list" }, h("div", { class: "muted" }, st.enabled ? t("Checking the team store…")
