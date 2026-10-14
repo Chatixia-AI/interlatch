@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from interlatch.storage.sqlite import connect
-from interlatch.ingest import decode_project_dir, parse_frontmatter, sync
+from interlatch.ingestion.service import sync
+from interlatch.ingestion.memory import parse_frontmatter
+from interlatch.sources.claude.files import decode_project_dir
 
 from conftest import CWD, PROJECT_DIR, SID
 
@@ -107,7 +109,7 @@ def test_helpers():
 
 
 def test_forget_session(synced):
-    from interlatch.ingest import forget_session
+    from interlatch.ingestion.deletion import forget_session
 
     conn, cfg = synced["conn"], synced["cfg"]
     archive = Path(conn.execute("SELECT archive_path FROM sessions WHERE id=?", (SID,)).fetchone()[0])
@@ -123,7 +125,7 @@ def test_forget_session(synced):
 def test_forget_keeps_files_other_sessions_share(env, tmp_path):
     """A Bob task's transcript is Bob's whole database, and its archive the snapshot every Bob task shares (as with a
     chat export): forgetting one task removes neither while another session uses it."""
-    from interlatch.ingest import forget_session
+    from interlatch.ingestion.deletion import forget_session
 
     from copilot_fixture import BOB_TASK, BOB_TOOLS, write_bob_home
 

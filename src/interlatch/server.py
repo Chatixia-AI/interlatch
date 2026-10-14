@@ -40,8 +40,8 @@ from .ladder import refresh as refresh_stage
 from .llm import BACKENDS, make_runner
 from .search import search_all, search_events, search_knowledge, search_sessions
 from .synthesize import GLOBAL
-from .core.util import (PROGRESS_RE, abs_path_sql, clean_abs_path, is_abs_path, loads, normalize_project_path,
-                        path_kind, path_variants, to_iso, utcnow)
+from .core.util import PROGRESS_RE, loads, to_iso, utcnow
+from .core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
 
 log = logging.getLogger("interlatch.server")
@@ -449,7 +449,7 @@ class App:
         computers sent lately, and what `viewer` saw of it (news.py)."""
         from . import people
         from .hub import SHARED_AGENTS, declared_projects, machines
-        from .ingest import project_name_for
+        from .core.paths import project_name_for
 
         c = self.conn
         days = q.get("days") if q.get("days") in TEAM_DAYS else TEAM_DAYS[0]
@@ -523,7 +523,7 @@ class App:
     def news(self, viewer: dict | None, *, scope: list[str] | None, admin: bool, after: str | None = None) -> dict:
         """What other computers sent lately (news.py): the newest items, or with `after` those added to since; how
         many `viewer` hasn't seen; and `now`, which the page sends back once they saw it (mark_seen)."""
-        from .ingest import project_name_for
+        from .core.paths import project_name_for
 
         c = self.conn
         now = to_iso(utcnow())  # before reading: what is added meanwhile stays unseen
@@ -784,7 +784,7 @@ class App:
         (only those in `scope`, for a person limited to some projects)."""
         from .groups import assign
         from .hub import declared_projects, hub_project_of
-        from .ingest import project_name_for
+        from .core.paths import project_name_for
 
         labels = project_labels(self.conn)
         shared = set(declared_projects(self.conn))
@@ -1023,7 +1023,7 @@ class App:
 
     def _artifacts(self, **filters) -> tuple[list[dict], dict[str, int]]:
         from .artifacts.queries import query
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
 
         return query(self.conn, local_machine=local_machine_id(self.cfg), **filters)
 
@@ -1048,19 +1048,19 @@ class App:
 
     def artifact_open(self, artifact_id: int) -> dict | None:
         from .artifacts.files import open_file
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
 
         return open_file(self.conn, artifact_id, local_machine_id(self.cfg))
 
     def artifact_reveal(self, artifact_id: int, how: str) -> str | None:
         from .artifacts.files import reveal
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
 
         return reveal(self.conn, artifact_id, how, local_machine_id(self.cfg))
 
     def artifact_file(self, artifact_id: int) -> tuple[bytes, str] | None:
         from .artifacts.queries import preview_file
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
 
         return preview_file(self.conn, artifact_id, local_machine_id(self.cfg), cache_dir=self.cfg.home / "thumbs")
 
@@ -1093,7 +1093,7 @@ class App:
         return {"items": [self._reason(r) for r in rows], "counts": counts, "sources": sources, "cases": cases}
 
     def learning_interests(self, viewer: dict | None, q: dict) -> dict:
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
         from .learning import interest_profile
 
         return interest_profile(self.conn, viewer_id=(viewer or {}).get("id"), machine_id=local_machine_id(self.cfg),
@@ -2004,12 +2004,12 @@ class App:
         return self.analysis_backends()
 
     def imports(self) -> dict:
-        from .chat_import import import_status
+        from .ingestion.chat_import import import_status
 
         return import_status(self.conn)
 
     def action_import(self, upload: Path, name: str | None = None) -> bool:
-        from .chat_import import import_export, summary
+        from .ingestion.chat_import import import_export, summary
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2102,7 +2102,7 @@ class App:
 
     # ------------------------------------------------------------------ actions
     def action_sync(self) -> bool:
-        from .ingest import sync
+        from .ingestion.service import sync
         from .worker import run_worker
 
         if self.cfg.sends_files:

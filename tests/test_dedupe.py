@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from interlatch.storage.sqlite import connect
-from interlatch.ingest import sync
+from interlatch.ingestion.service import sync
 from interlatch.sources.claude.parser import PARSER_VERSION, parse_session
 
 from conftest import CWD, SID, _line, main_transcript

@@ -24,7 +24,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
-from .chat_import import FORMATS
+from .sources.chats import FORMATS
 from .core.config import Config
 from .llm import LLMError, Runner, UsageLimitError, make_runner, written_in
 from .core.redact import redact

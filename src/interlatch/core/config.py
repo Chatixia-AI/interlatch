@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .util import is_abs_path, normalize_project_path, path_kind
+from .paths import is_abs_path, normalize_project_path, path_kind
 
 DEFAULT_CONFIG_TOML = """\
 # Interlatch configuration.

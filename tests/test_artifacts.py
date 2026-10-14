@@ -155,7 +155,7 @@ def test_claude_ai_chat():
 
 
 def test_stored_with_the_session(synced):
-    from interlatch.ingest import forget_session
+    from interlatch.ingestion.deletion import forget_session
 
     conn = synced["conn"]
     rows = [dict(r) for r in conn.execute("SELECT * FROM artifacts WHERE session_id = ?", (SID,))]
@@ -245,7 +245,7 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
     from interlatch.server import App, make_handler
 
     from conftest import PROJECT_DIR

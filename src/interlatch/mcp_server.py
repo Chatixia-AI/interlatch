@@ -292,7 +292,7 @@ class Tools:
 
     def find_artifacts(self, query: str | None = None, kind: str | None = None, project: str | None = None, limit: int = 20) -> str:
         from .artifacts.queries import query as find
-        from .ingest import local_machine_id
+        from .core.machine import local_machine_id
 
         path = self._resolve_project(project) if project else None
         items, _ = find(self.conn, kind=kind or None, project=path, q=(query or "").strip() or None,

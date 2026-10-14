@@ -23,10 +23,11 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from .sources import chatgpt as chatgpt_export
-from .sources.claude import export as claude_export
-from .core.util import utcnow_iso
-from .views import NOT_ANALYZED_CHAT
+from ..sources import chatgpt as chatgpt_export
+from ..sources.claude import export as claude_export
+from ..core.util import utcnow_iso
+from ..views import NOT_ANALYZED_CHAT
+from ..sources.chats import CHATGPT, CLAUDE_AI, FORMATS, Format
 
 log = logging.getLogger("interlatch.chat_import")
 
@@ -34,32 +35,9 @@ _CONVERSATIONS_RE = re.compile(r"^conversations(?:-\d+)?\.json$")  # large expor
 _LOCAL_HEADER = struct.Struct("<4s5H3I2H")  # signature, version, flags, method, time, date, crc, sizes, name/extra lengths
 
 
-@dataclass(frozen=True)
-class Format:
-    key: str  # kv and archive name
-    label: str
-    module: object
-
-    @property
-    def agent(self) -> str:
-        return self.module.AGENT
-
-    @property
-    def source(self) -> str:
-        return self.module.SOURCE
-
-    @property
-    def last_import_key(self) -> str:
-        return f"{self.key}:last-import"
-
-    @property
-    def not_analyzed(self) -> str:
-        return NOT_ANALYZED_CHAT.format(label=self.label)
-
-
-CLAUDE_AI = Format("claude-ai", "claude.ai", claude_export)
-CHATGPT = Format("chatgpt", "ChatGPT", chatgpt_export)
-FORMATS = (CLAUDE_AI, CHATGPT)
+def not_analyzed_reason(fmt: Format) -> str:
+    """The analysis reason an imported chat gets when it is stored without being analyzed."""
+    return NOT_ANALYZED_CHAT.format(label=fmt.label)
 
 
 class ExportError(Exception):
@@ -203,9 +181,10 @@ def read_export(path: Path, name: str | None = None) -> Export:
 
 def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None, name: str | None = None) -> dict:
     """Import (or re-import) an export. `name` is the file's name when `path` is an upload's temporary copy."""
-    from .storage.kv import kv_set
-    from .ingest import _unchanged, forgotten_ids, store_parsed
-    from .core.util import file_lock
+    from ..storage.kv import kv_set
+    from .deletion import forgotten_ids
+    from .persistence import is_unchanged, store_parsed
+    from ..core.util import file_lock
 
     name = name or Path(path).name
     export = read_export(Path(path), name)
@@ -233,7 +212,7 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
             if not sid:
                 counts["empty"] += 1
                 continue
-            if sid in skip or _unchanged(conn, sid, sig, False):
+            if sid in skip or is_unchanged(conn, sid, sig, False):
                 counts["unchanged"] += 1
                 continue
             ps = mod.parse_conversation(conv, projects)
@@ -248,7 +227,7 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
                                   archive_path=archive, files_sig=sig, agent=fmt.agent, source=fmt.source)
             if not analyze and not queued:  # a chat already queued for analysis (screen --queue) stays queued
                 conn.execute("UPDATE sessions SET analysis_status = 'skipped', analysis_reason = ? "
-                             "WHERE id = ? AND analysis_status = 'pending'", (fmt.not_analyzed, sid))
+                             "WHERE id = ? AND analysis_status = 'pending'", (not_analyzed_reason(fmt), sid))
             counts["new" if result == "new" else "updated"] += 1
             conn.commit()
         kv_set(conn, fmt.last_import_key, json.dumps({"at": utcnow_iso(), "file": name, **counts}))
@@ -260,7 +239,7 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
 def reparse_archived(cfg, conn, skip: set[str] = frozenset()) -> int:
     """Re-read, from the export each was last imported from (kept in the archive), the chats an older parser stored,
     after a parser upgrade; each keeps its analysis state. Returns how many chats were re-parsed."""
-    from .ingest import store_parsed
+    from .persistence import store_parsed
 
     done = 0
     for fmt in FORMATS:
@@ -311,8 +290,8 @@ def summary(counts: dict) -> str:
 
 def import_status(conn) -> dict:
     """Per format: chats imported and analyzed, how screening sorted them, and the last import."""
-    from .storage.kv import kv_get
-    from .screen import screen_status
+    from ..storage.kv import kv_get
+    from ..screen import screen_status
 
     out = {}
     for fmt in FORMATS:

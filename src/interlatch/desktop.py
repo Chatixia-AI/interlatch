@@ -141,7 +141,7 @@ class Background:
 
     def run_once(self) -> None:
         from .storage.sqlite import connect
-        from .ingest import sync
+        from .ingestion.service import sync
         from .notify import release_check_safely
         from .worker import run_worker
 

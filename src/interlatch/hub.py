@@ -46,14 +46,15 @@ from urllib.parse import quote, urlencode, urlparse
 
 from . import __version__, news
 from .core.config import Config
-from .core.util import is_abs_path, normalize_project_path, path_kind, path_variants, utcnow_iso
+from .core.util import utcnow_iso
+from .core.paths import is_abs_path, normalize_project_path, path_kind, path_variants
 from .core.machine import MACHINE_RE, local_machine
+from .ingestion.archive import ROOT_RE
 
 log = logging.getLogger("interlatch.hub")
 
 PROTOCOL = 1
 TOKEN_FILE = "hub-token"
-ROOT_RE = re.compile(r"^(claude|codex)(-\d+)?$")
 MAX_FILE_BYTES = 4 << 30  # one transcript; far above any real one
 ANALYSES_FILE = "analyses.json.gz"
 MAX_SESSIONS_JSON = 256 << 20  # one batch of shared sessions, unpacked
@@ -310,7 +311,7 @@ class _Exclusions:
         if not self.cfg.exclude_projects:
             return False
         from .sources.codex.parser import read_meta
-        from .ingest import decode_project_dir, peek_cwd
+        from .sources.claude.files import decode_project_dir, peek_cwd
 
         parts = rel.split("/")
         if root.kind == "claude" and parts[0] == "projects" and len(parts) > 2:
@@ -326,7 +327,7 @@ class _Exclusions:
 
 def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
     """{project folder: [git top level, normalized remote]} for the Claude Code projects here, cached for a day."""
-    from .ingest import decode_project_dir, peek_cwd
+    from .sources.claude.files import decode_project_dir, peek_cwd
 
     cache_path = cfg.home / "repos-cache.json"
     try:
@@ -415,7 +416,7 @@ def clean_left(raw) -> list[str]:
 def hub_projects(conn, limit: int = 1000, only: list[str] | None = None) -> list[dict]:
     """The projects this hub files sessions under, busiest first, and the ones set up ahead of time: what another
     computer can add a folder to. `only`: just these project paths (a person limited to projects)."""
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
 
     rows = {r[0]: {"path": r[0], "name": r[1], "sessions": r[2]} for r in conn.execute(
         "SELECT project_path, MAX(project_name), COUNT(*) FROM sessions WHERE project_path IS NOT NULL "
@@ -429,7 +430,7 @@ def hub_projects(conn, limit: int = 1000, only: list[str] | None = None) -> list
 def shared_projects(conn) -> list[dict]:
     """The projects set up on this hub, for the dashboard: where each is, who sees it, and what each computer filed
     there. Everyone with every project (admins included) is counted, not listed."""
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
     from .people import listing
 
     everyone = listing(conn)
@@ -488,7 +489,7 @@ def add_project(cfg: Config, conn, folder: str, *, by: str | None = None) -> dic
     """Set up a project on this hub ahead of time: `folder`, on this computer, and everything below it. This
     computer's sessions there are filed under it at once (their knowledge moves along), and other computers can add
     folders to it before anything was sent. Returns {path, name, moved}."""
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
     from .people import LOCAL
 
     path = project_folder(folder)
@@ -532,7 +533,7 @@ def refile(cfg: Config, conn, machine_id: str, folders) -> int:
 
     Both projects' knowledge bases are rebuilt at the next synthesis. Returns how many sessions moved.
     """
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
 
     folders = list(folders)
     r = ProjectResolver(cfg, conn)
@@ -589,7 +590,7 @@ def purge(cfg: Config, conn, sessions: list[dict], *, by: str | None = None, per
     (ingest.forget_session), so the computer that sent it can't send it again, unless `keep_out` is off (withdraw).
     `owner`: the only computer whose sessions may go (withdraw). `action` and `detail` go in the audit. Returns what
     was removed."""
-    from .ingest import forget_session
+    from .ingestion.deletion import forget_session
     from .people import LOCAL, audit
 
     me = local_machine(cfg)["id"]
@@ -1192,7 +1193,7 @@ def share_own(cfg: Config, conn, store) -> int:
                                     params=(me["id"], *declared))
     if not records:
         return 0
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
     from .storage.team import payload
 
     _in_store(store.computer_seen, me["id"], me["name"], platform_label(), __version__)
@@ -1748,7 +1749,7 @@ def signin_code_for(cfg: Config, conn, person: dict | None) -> dict:
 
 def receive_file(cfg: Config, conn, params: dict, rfile, length: int) -> dict:
     """Store one gzip-compressed file a spoke sent, verified against its size and sha256, atomically."""
-    from .ingest import forgotten_ids
+    from .ingestion.deletion import forgotten_ids
 
     machine_id = check_machine(cfg, params.get("machine", ""))
     root = params.get("root", "")
@@ -1835,7 +1836,8 @@ def receive_sessions(cfg: Config, conn, params: dict, rfile, length: int, person
     """Sessions another computer analyzed itself ([hub] share = "knowledge"): their details, analysis and project
     lessons, without a transcript. Stored with source 'remote', filed like any session of that computer, and never
     analyzed here. A session the hub has the transcript of keeps its own record."""
-    from .ingest import best_title, project_name_for
+    from .core.sessions import best_title
+    from .core.paths import project_name_for
 
     machine_id = check_machine(cfg, params.get("machine", ""))
     if length > 64 << 20:
@@ -1849,7 +1851,7 @@ def receive_sessions(cfg: Config, conn, params: dict, rfile, length: int, person
         raise HubError("bad sessions")
     from .people import projects_of
 
-    from .ingest import forgotten_ids
+    from .ingestion.deletion import forgotten_ids
 
     scope = projects_of(person)
     forgotten = forgotten_ids(conn)  # forgotten or purged here: never taken again
@@ -2048,7 +2050,7 @@ def export_analyses(cfg: Config) -> tuple[bytes, int]:
 
 def apply_analyses(cfg: Config, conn) -> int:
     """Carry over analyses spokes sent for sessions the hub has now ingested; returns how many were applied."""
-    from .ingest import best_title
+    from .core.sessions import best_title
 
     applied = 0
     if not cfg.machines_dir.is_dir():

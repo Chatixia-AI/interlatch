@@ -80,7 +80,7 @@ def hubenv(synced, monkeypatch):
 
 
 def test_push_then_ingest_tags_the_computer(hubenv):
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, spoke = hubenv["cfg"], hubenv["spoke"]
     spoke_id = local_machine(spoke)["id"]
@@ -146,7 +146,8 @@ def test_damaged_upload_is_rejected(hubenv):
 
 
 def test_forgotten_session_is_not_taken_back(hubenv):
-    from interlatch.ingest import forget_session, sync
+    from interlatch.ingestion.service import sync
+    from interlatch.ingestion.deletion import forget_session
 
     hub.push(hubenv["spoke"])
     sync(hubenv["cfg"], hubenv["conn"])
@@ -166,7 +167,7 @@ def test_excluded_projects_never_leave_the_spoke(hubenv):
 
 
 def test_projects_matched_across_computers(hubenv, monkeypatch):
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn = hubenv["cfg"], hubenv["conn"]
     cfg.hub_path_map = {"/home/test/code": "/Users/test/Projects"}
@@ -220,7 +221,7 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     """`chronicle hub add-folder` on the spoke: its sessions there move to the hub's project, knowledge and all, and
     `remove-folder` moves them back."""
     from interlatch.cli import main
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     hub.push(spoke)
@@ -311,7 +312,7 @@ def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, ca
 
 def _analyzed_on_spoke(spoke, *, title: str, at: str, lessons: list[tuple[str, str, str]]):
     """Record the spoke's own session there and give it an analysis, as its own Claude Code would."""
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     sconn = connect(spoke.db_path)
     sync(spoke, sconn)
@@ -332,7 +333,8 @@ def test_knowledge_only_sharing(hubenv):
     """[hub] share = "knowledge": the spoke analyzes its own sessions and sends the hub only details, the analysis
     and project lessons; no transcript arrives, the hub never re-analyzes it, and folders still decide the project."""
     from interlatch.analyze import AnalysisSkipped, analyze_session
-    from interlatch.ingest import mark_missing_sources, sync
+    from interlatch.ingestion.service import sync
+    from interlatch.ingestion.deletion import mark_missing_sources
     from interlatch.worker import count_pending, pending_sessions
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
@@ -395,7 +397,7 @@ def test_knowledge_only_sharing(hubenv):
 def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
     """A session whose transcript the hub already has (sent before the spoke switched to knowledge only) keeps the
     hub's record; bad records are ignored."""
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     hub.push(spoke)  # everything: the transcript arrives
@@ -457,7 +459,7 @@ def test_normalize_remote():
 
 def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
     """A spoke that already analyzed its sessions sends the results once; the hub doesn't pay for them again."""
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
     from interlatch.worker import run_worker
 
     monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)

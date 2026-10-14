@@ -36,7 +36,7 @@ def test_shared_knowledge_is_news_once(teamenv):  # noqa: F811
 
 def test_transcripts_and_the_hubs_own_analysis_of_them(hubenv):  # noqa: F811
     from interlatch.analyze import store_analysis
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     me = local_machine(spoke)["id"]

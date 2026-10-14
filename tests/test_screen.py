@@ -6,7 +6,7 @@ import urllib.request
 import zipfile
 from http.server import ThreadingHTTPServer
 
-from interlatch.chat_import import import_export, import_status
+from interlatch.ingestion.chat_import import import_export, import_status
 from interlatch.cli import main
 from interlatch.storage.sqlite import connect as db_connect
 from interlatch.screen import candidates, queue, rule_verdict, screen_chats, screen_status

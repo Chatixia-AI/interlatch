@@ -85,7 +85,7 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
 
 # ------------------------------------------------------------------ H2: a sent transcript can't replace another's
 def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spokes):
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id = local_machine(a)["id"]
@@ -109,7 +109,7 @@ def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spoke
 
 def test_a_computers_history_cant_replace_anothers_stub(synced):
     """History-only stubs: one computer's history.jsonl can't replace the prompts of a stub another computer's made."""
-    from interlatch.ingest import import_history
+    from interlatch.ingestion.history import import_history
 
     cfg, conn = synced["cfg"], synced["conn"]
     stub = conn.execute("SELECT id FROM sessions WHERE source = 'history'").fetchone()
@@ -144,7 +144,7 @@ def test_a_gzip_bomb_is_refused(two_spokes, monkeypatch):
 
 # ------------------------------------------------------------------ an analysis applies only to its own computer's session
 def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]

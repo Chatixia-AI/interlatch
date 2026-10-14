@@ -6,6 +6,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
+from .util import one_line
+
 TEXT_LIMITS = {
     "prompt": 20_000,
     "text": 20_000,
@@ -206,3 +208,10 @@ class ParsedSession:
     @property
     def lines_removed(self) -> int:
         return sum(f.lines_removed for f in self.files.values())
+
+
+def best_title(row: dict) -> str:
+    for key in ("llm_title", "custom_title", "ai_title"):
+        if row.get(key):
+            return one_line(row[key], 120)
+    return one_line(row.get("first_prompt") or "(no prompt)", 90)

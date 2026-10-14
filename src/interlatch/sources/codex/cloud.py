@@ -19,7 +19,7 @@ from ...core.process import internal_env
 from ...core.sessions import FileStat, ParsedSession
 from ...core.util import safe_text
 
-log = logging.getLogger("interlatch.sources.codex.cloud")
+log = logging.getLogger("interlatch.codex_cloud")
 
 CLOUD_PARSER_VERSION = 1
 STATUS_KEY = "codex-cloud:status"  # kv: the last listing's outcome, for the Sources page

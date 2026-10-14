@@ -43,3 +43,7 @@ def local_machine(cfg: Config) -> dict:
     tmp.write_text(json.dumps(data, indent=2) + "\n")
     os.replace(tmp, path)
     return data
+
+
+def local_machine_id(cfg: Config) -> str:
+    return local_machine(cfg)["id"]

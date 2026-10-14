@@ -37,7 +37,7 @@ from .sqlite import connect
 from .kv import kv_get, kv_set
 from ..core.util import file_lock, one_line, utcnow_iso
 
-log = logging.getLogger("interlatch.storage.mirror")
+log = logging.getLogger("interlatch.mirror")
 
 ENV_FILE = "mirror.env"
 INCLUDES = ("knowledge", "everything")

@@ -6,7 +6,7 @@ import sqlite3
 from interlatch.analyze import analyze_session, store_analysis
 from interlatch.storage.sqlite import connect
 from interlatch.storage.kv import kv_set
-from interlatch.ingest import sync
+from interlatch.ingestion.service import sync
 from interlatch.reviews import review_ready, week_bounds
 from interlatch.synthesize import GLOBAL, synthesize_project
 from interlatch.worker import pending_sessions
@@ -115,7 +115,7 @@ def test_malformed_kb_reply_is_normalized_and_leaves_no_lock(synced, monkeypatch
 
 
 def test_forget_wins_over_a_racing_sync(synced, monkeypatch):
-    import interlatch.ingest as ingest
+    import interlatch.ingestion.service as ingest
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("DELETE FROM sessions WHERE id=?", (SID,))

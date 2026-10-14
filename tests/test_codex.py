@@ -7,7 +7,7 @@ from interlatch.core.config import Config, load_config, set_config_value
 from interlatch.connectors import all_status, connect, disconnect
 from interlatch.storage.sqlite import connect as db_connect
 from interlatch.digest import build_digest
-from interlatch.ingest import sync
+from interlatch.ingestion.service import sync
 
 from codex_fixture import (CODE_ID, CODEX_CWD, CODEX_ID, IMP_DUP, IMP_NEW, LEGACY_ID, RECOVERED, SUB_ID, code_mode_rollout,
                            write_codex_home)

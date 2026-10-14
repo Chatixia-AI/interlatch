@@ -11,7 +11,7 @@ from . import ladder, news
 from .cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from .core.config import Config
 from .digest import build_digest
-from .ingest import best_title
+from .core.sessions import best_title
 from .learning import TOPICS, normalize_interests, store_interests
 from .llm import (BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError, make_runner,
                   written_in)
@@ -458,7 +458,7 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
         ),
     )
     kept = ladder.before_reanalysis(conn, session_id)
-    from .ingest import local_machine_id
+    from .core.machine import local_machine_id
 
     # a hub analyzing another computer's transcript: the lessons new to it are the Team page's news (news.py)
     other = s["machine_id"] if s["machine_id"] and s["machine_id"] != local_machine_id(cfg) and s["source"] != "history" else None

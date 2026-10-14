@@ -58,7 +58,7 @@ def cmd_ingest_session(args) -> int:
     """Used by the SessionEnd hook (runs detached): ingest one transcript, then process the queue."""
     from pathlib import Path
 
-    from .ingest import sync
+    from .ingestion.service import sync
     from .core.util import setup_logging
 
     cfg = _cfg()
@@ -80,7 +80,7 @@ def cmd_ingest_session(args) -> int:
 
 
 def cmd_sync(args) -> int:
-    from .ingest import sync
+    from .ingestion.service import sync
     from .migrate import migrate_if_due
     from .notify import release_check_safely
     from .core.util import setup_logging
@@ -722,7 +722,7 @@ def _menu_bar_choice(cfg, conn, args, *, ask, login_dashboard: bool) -> bool | N
 def cmd_install(args) -> int:
     from .connectors import connect, disconnect
     from .storage.kv import kv_get, kv_set
-    from .ingest import sync
+    from .ingestion.service import sync
     from .install import (LAUNCHD_LABEL, UI_LABEL, agent_path, background_supported, executable, install_hooks,
                           install_launchd, install_mcp, install_statusline, install_ui_agent, launchd_status,
                           statusline_installed, uninstall_launchd)
@@ -1114,7 +1114,7 @@ def _config_key(cfg, provider: str | None, value: str | None, *, forget: bool) -
 
 
 def cmd_forget(args) -> int:
-    from .ingest import forget_session
+    from .ingestion.deletion import forget_session
     from .views import resolve_session_id
 
     cfg = _cfg()
@@ -1545,7 +1545,7 @@ def cmd_sources(args) -> int:
 def cmd_import(args) -> int:
     from pathlib import Path
 
-    from .chat_import import ExportError, import_export, summary
+    from .ingestion.chat_import import ExportError, import_export, summary
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -1645,7 +1645,7 @@ def cmd_connect(args) -> int:
         print(f"• {a}")
     if not args.disconnect and not args.no_sync and args.name not in MCP_CLIENTS:
         from .core.config import load_config
-        from .ingest import sync
+        from .ingestion.service import sync
 
         cfg = load_config(cfg.home)
         print("syncing…")
@@ -1984,7 +1984,7 @@ def _projects_arg(conn, args) -> tuple[list[str] | None, str | None]:
 
 
 def _projects_words(conn, projects: list[str] | None) -> str:
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
 
     if projects is None:
         return "every project"
@@ -2019,7 +2019,7 @@ def _hub_purge(cfg, console, args) -> int:
     computers (or one computer) sent to this hub, in some projects or outside the ones they see."""
     from . import hub, people
     from .core.machine import local_machine
-    from .ingest import project_name_for
+    from .core.paths import project_name_for
 
     if cfg.is_spoke:
         console.print(f"Purge runs on the hub; this computer sends to the hub at {cfg.hub_url}.", highlight=False)
@@ -2367,7 +2367,7 @@ def _hub_leave_project(cfg, console, args) -> int:
     from pathlib import Path
 
     from . import hub
-    from .core.util import normalize_project_path
+    from .core.paths import normalize_project_path
 
     if not cfg.is_spoke:
         console.print("This computer has not joined a hub.")
