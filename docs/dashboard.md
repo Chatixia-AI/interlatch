@@ -71,8 +71,10 @@ There is no overdue counter or required backlog. Changed lesson material receive
 in progress are excluded.
 
 Pages: Home (active-time headline with active days and longest run; stat tiles with sparklines and a per-day rate
-until a full prior period exists to compare against; daily chart with a 7-day average; outcome breakdown; activity
-calendar with streaks; busiest hour; projects, tools with failed calls, models and agents), a sortable, filterable
+until a full prior period exists to compare against; an **Agents** table with each agent's status from Sources, when
+it was last used and its numbers for the period as inline bars, a dash where an agent doesn't record a metric (a chat
+export has no tokens or cost), and a click on a row filtering Home to that agent; daily chart with a 7-day average;
+outcome breakdown; activity calendar with streaks; busiest hour; projects, tools with failed calls and models), a sortable, filterable
 session list, project cards with 12 weeks of activity (in [your own groups](#project-groups)), the [Systems map](#systems-map), session pages (headline figures, the summary and the knowledge
 it produced up top, then **Details**, where a session opens: goal, highlights, open threads, the knowledge items,
 context-window chart with compactions, tools, files, subagents, and the [artifacts](#artifacts) the session made; or
