@@ -16,6 +16,34 @@
   you stand). Only the totals from this computer's coding-agent sessions are sent, with your first name (rename it
   any time) and your Google picture. No email, projects, prompts or titles. **Leave** deletes your row.
 
+## 0.22.1 (2026-10-11)
+
+This release never reached PyPI (its upload failed after the repository's rename); these changes first shipped
+there in 0.23.0.
+
+- **Docs:** the quick links atop the docs home (Docs, 日本語, English) open their pages instead of a 404, Install
+  lists every way to analyze sessions (Claude Code, Codex, IBM Bob with a Bob API key, or a model provider's API with
+  your own key), and links, **What's new** and **Download** under **Status › Updates** among them, point at the
+  repository's new name, [Chatixia-AI/interlatch](https://github.com/Chatixia-AI/interlatch).
+- **Moving from Chronicle keeps the commands:** **Update** on an `agents-chronicle` install no longer leaves it
+  without the `interlatch` and `chronicle` commands, which kept the dashboard from coming back and stopped the
+  background sync, the session hooks and the MCP server. Already hit by it? [Troubleshooting](docs/troubleshooting.md#moving-from-chronicle)
+  has the two commands that put it right.
+- **Restarting, animated:** while the dashboard restarts after an update, its dialog turns the arrows inside a ring
+  that swells and fades, with a sweep along its foot (with animations off they turn slowly and the rest holds still).
+  The last places that still said Chronicle say Interlatch: the diagrams in the docs, the log file's lines, the
+  Postgres quick start, and the names the dashboard and menu-bar panel use for their requests and what the browser
+  remembers. Settings a browser kept under the old names carry over, and a sign-in to a hub from before stays valid.
+- **Windows:** `uv tool install interlatch` and `interlatch install` now work on Windows 10 and 11. Task Scheduler runs
+  the 15-minute sync and keeps the dashboard up, without a window, and the hooks run in Git Bash and in PowerShell
+  ([Windows](docs/install.md#windows)). A Windows computer can't join a team hub yet.
+- **The VS Code extension is now Interlatch:** a new extension, `Chatixia-AI.interlatch` 0.3.0, with the sections
+  **Interlatch: This File** and **Interlatch: Files in Workspace**. Your `chronicle.*` settings still apply until you
+  set their `interlatch.*` counterparts. Uninstall the Chronicle extension after installing it; Interlatch offers to,
+  once ([VS Code extension](docs/vscode.md)).
+- **The VS Code extension on the Marketplace:** install **Interlatch** from VS Code's Extensions view
+  ([VS Code extension](docs/vscode.md#install)). Releases publish it whenever its own version goes up.
+
 ## 0.22.0 (2026-10-10)
 
 - **Your Chronicle setup moves over by itself:** the first time the dashboard or the background sync starts,
