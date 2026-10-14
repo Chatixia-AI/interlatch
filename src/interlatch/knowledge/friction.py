@@ -723,6 +723,8 @@ def _summarize(entry: dict, hits: list[dict], sessions: dict, now: datetime) -> 
             weekly_sessions[_week(d)].add(h["session_id"])
     weeks = [_week(now - timedelta(weeks=i)) for i in range(WEEKS - 1, -1, -1)]
     in_projects = sum(1 for s in sessions.values() if (s.get("project_path") or "") in by_project)
+    # most sessions first, ties by name: `sids` is a set, so counting order (most_common's tie-break) differs per run
+    projects = sorted(by_project.items(), key=lambda pn: (-pn[1], names[pn[0]].lower(), pn[0]))
     # examples: prefer readable notes, newest first, one per session
     examples, used = [], set()
     for h in sorted(hits, key=lambda x: (x["kind"] != "note", -(parse_ts(x["ts"]) or now).timestamp())):
@@ -743,9 +745,9 @@ def _summarize(entry: dict, hits: list[dict], sessions: dict, now: datetime) -> 
         "errors": sum(1 for h in hits if h["kind"] == "error"),
         "notes": sum(1 for h in hits if h["kind"] == "note"),
         "immediate_repeats": sum(1 for h in hits if h["repeat"]),
-        "projects": [names[p] for p, _n in by_project.most_common() if p],
-        "project_paths": [{"path": p, "name": names[p], "sessions": n} for p, n in by_project.most_common() if p],
-        "agents": [a for a, _n in agents.most_common()],
+        "projects": [names[p] for p, _n in projects if p],
+        "project_paths": [{"path": p, "name": names[p], "sessions": n} for p, n in projects if p],
+        "agents": [a for a, _n in sorted(agents.items(), key=lambda an: (-an[1], an[0]))],
         "first_seen": dates[0].strftime("%Y-%m-%d") if dates else None,
         "last_seen": last.strftime("%Y-%m-%d") if last else None,
         "still_happening": bool(last and last >= now - timedelta(days=STILL_HAPPENING_DAYS)),
