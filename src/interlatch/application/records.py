@@ -47,7 +47,7 @@ def session_record(conn: sqlite3.Connection, sid: str) -> dict | None:
         "AND e.tool_use_id = t.tool_use_id AND e.kind = 'tool_result' WHERE t.session_id = ? AND t.is_error = 1 "
         "AND t.agent_id = '' ORDER BY t.ts LIMIT 50", (sid,))]
     s["total_tokens"] = sum(s.get(k) or 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"))
-    # the computer it ran on, named only when more than one sends sessions here (hub.py)
+    # the computer it ran on, named only when more than one sends sessions here (sharing/)
     machine = conn.execute("SELECT name, role, (SELECT COUNT(*) FROM machines) n FROM machines WHERE id = ?",
                            (s.get("machine_id"),)).fetchone()
     s["machine_name"] = machine["name"] if machine and machine["n"] > 1 else None

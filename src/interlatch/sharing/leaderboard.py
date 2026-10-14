@@ -52,7 +52,7 @@ SEND_EVERY = 10 * 60  # a sync more often than this sends nothing new
 BOARD_TTL = 5 * 60  # the board is read again at most this often, per tab
 SIGNIN_TTL = 15 * 60  # how long a sign-in may take
 TIMEOUT = 15
-AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")  # coding agents (hub.SHARED_AGENTS); chats stay out
+AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")  # coding agents (protocol.SHARED_AGENTS); chats stay out
 
 DB = f"projects/{PROJECT}/databases/(default)/documents"
 FIRESTORE = f"https://firestore.googleapis.com/v1/{DB}"

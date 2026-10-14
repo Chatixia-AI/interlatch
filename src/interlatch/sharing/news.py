@@ -1,10 +1,10 @@
 """On a hub: what other computers sent lately, for the Team overview, the rail's badge and the dashboard's toasts.
 
-A row per computer, project and kind, which a computer that keeps sending adds to (FOLD_MINUTES): sessions this hub
-had not had before and project lessons new to it ("shared"), or a computer that joined with an invite ("joined"). A
-session sent again because it grew is not news; a lesson it gained is. Recorded where sessions arrive: a computer's
-shared knowledge (hub.receive_sessions), its transcripts once stored here (ingest.store_parsed), and the lessons this
-hub's own analysis of those finds (analyze.store_analysis).
+A row per computer, project and kind, which a computer that keeps sending adds to (FOLD_MINUTES): sessions this hub had
+not had before and project lessons new to it ("shared"), or a computer that joined with an invite ("joined"). A session
+sent again because it grew is not news; a lesson it gained is. Recorded where sessions arrive: a computer's shared
+knowledge (receiver.receive_sessions), its transcripts once stored here (ingestion.persistence.store_parsed), and the
+lessons this hub's own analysis of those finds (analysis.session.store_analysis).
 
 Who hears of what follows the Team page: someone limited to projects, of theirs only (access.py shadows this table
 for them as well); joins, admins only. What each viewer saw last is kept here, per person ("here" for the hub

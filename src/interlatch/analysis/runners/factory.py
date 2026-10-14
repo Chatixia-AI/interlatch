@@ -9,7 +9,7 @@ from .claude import ClaudeRunner
 from .codex import CodexRunner
 
 AGENTS = {"claude": "Claude Code", "codex": "Codex", "bob": "IBM Bob"}  # backends that run a coding agent's CLI
-# every analysis.backend: the agents, then the model providers' APIs (providers.PROVIDERS)
+# every analysis.backend: the agents, then the model providers' APIs (settings.PROVIDERS)
 BACKENDS = {**AGENTS, "anthropic": "Anthropic API", "bedrock": "Amazon Bedrock", "openai": "OpenAI API",
             "azure": "Azure OpenAI", "openrouter": "OpenRouter", "ollama": "Ollama", "openai-compatible": "OpenAI-compatible"}
 

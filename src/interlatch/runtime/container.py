@@ -86,7 +86,7 @@ def configure(cfg: Config, env: Mapping[str, str]) -> tuple[Config, bool]:
     _set(cfg, "hub", "dedicated", True)  # a server for the team: no sessions of its own, projects set up by name
     if name := var(env, "HUB_NAME").strip():
         _set(cfg, "hub", "name", name)
-    if store:  # the connection comes from the PG* variables (team_store.connection_params)
+    if store:  # the connection comes from the PG* variables (storage.team.connection_params)
         _set(cfg, "hub", "store", store)
     if first:  # defaults an admin may change later, in the dashboard or with `interlatch config set`
         _set(cfg, "hub", "accept", "knowledge")  # every computer analyzes its own sessions; the hub needs no model

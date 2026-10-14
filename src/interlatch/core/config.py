@@ -326,7 +326,7 @@ class Config:
     suggestions_enabled: bool = True
     suggestions_notify: bool = False
     systems_read_manifests: bool = True
-    providers: dict[str, dict] = field(default_factory=dict)  # [providers.<name>]: see providers.py
+    providers: dict[str, dict] = field(default_factory=dict)  # [providers.<name>]: see analysis/runners/settings.py
     loaded: tuple[int, int] | None = field(default=None, repr=False, compare=False)  # config.toml when read: current()
 
     # ---- derived paths -------------------------------------------------

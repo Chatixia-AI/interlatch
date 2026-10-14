@@ -2,7 +2,7 @@
 
 Besides 127.0.0.1 and localhost it answers only to the names in `[server] allowed_hosts` (Tailscale Serve's, set by
 `interlatch tailnet on`), and there only to the Tailscale logins in `[server] allowed_users`. On a hub, /api/hub/* takes
-other computers' session files, authenticated by the hub's token or a person's computer token instead (hub.py).
+other computers' session files, authenticated by the hub's token or a person's computer token instead (sharing/).
 
 Once a hub has people (people.py), its API answers only someone signed in: at the hub computer itself (an admin),
 through a company sign-in proxy that names them in `[server] auth_header`, or with a session cookie from an invite or

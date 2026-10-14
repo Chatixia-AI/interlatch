@@ -255,8 +255,9 @@ def make_handler(app: App, port: int):
             self.wfile.write(f["body"])
 
         def _hub_api(self, p: str):
-            """Another computer sending its sessions (hub.py). Authenticated by the hub's shared token or a person's
-            computer token (hub.authorize), not a browser header; joining with an invite needs neither."""
+            """Another computer sending its sessions (sharing/receiver.py). Authenticated by the hub's shared token or a
+            person's computer token (sharing.identity.authorize), not a browser header; joining with an invite needs
+            neither."""
             from ...sharing.identity import authorize
             from ...sharing.protocol import HubError, UnknownInvite
             from ...sharing.receiver import (_drain, check_machine, hello, join_with_code, receive_analyses,

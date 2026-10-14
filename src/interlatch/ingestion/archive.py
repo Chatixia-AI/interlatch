@@ -21,12 +21,12 @@ from ..core.config import Config
 
 log = logging.getLogger("interlatch.ingest")
 
-ROOT_RE = re.compile(r"^(claude|codex)(-\d+)?$")  # a source root received from another computer (hub.py)
+ROOT_RE = re.compile(r"^(claude|codex)(-\d+)?$")  # a source root received from another computer (sharing/receiver.py)
 
 
 def archive_key(claude_dir: Path) -> str:
     if claude_dir.parent.parent.name == "machines" and MACHINE_RE.match(claude_dir.parent.name) and ROOT_RE.match(claude_dir.name):
-        return f"machines/{claude_dir.parent.name}/{claude_dir.name}"  # received from another computer (hub.py)
+        return f"machines/{claude_dir.parent.name}/{claude_dir.name}"  # received from another computer (sharing/)
     for name in ("claude", "codex"):
         if claude_dir.resolve() == Path(f"~/.{name}").expanduser().resolve():
             return name

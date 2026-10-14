@@ -7,7 +7,7 @@ Roles:
 
 Projects: a member or read-only person sees the projects they were given (`interlatch hub invite … --project`), or
 every project (`--all-projects`). Someone limited to projects sees only those projects' session summaries and project
-lessons on the dashboard (access.py), and their computers share knowledge only, only for those projects (hub.py).
+lessons on the dashboard (access.py), and their computers share knowledge only, only for those projects (receiver.py).
 Admins always see everything. People added before projects existed see every project, as they did.
 
 Everything starts with an invite. An admin adds a person with a role and gets a one-time code (expires after
@@ -453,7 +453,7 @@ def _by_token(conn: sqlite3.Connection, secret: str, kind: str) -> tuple[dict, d
 
 def computer_bound(conn: sqlite3.Connection, machine_id: str) -> bool:
     """Whether a computer joined this hub as a person who is still on it (a live computer token is bound to it).
-    Such a computer sends with its own token: the hub's shared token may not act as it (hub.authorize)."""
+    Such a computer sends with its own token: the hub's shared token may not act as it (identity.authorize)."""
     return conn.execute(
         "SELECT 1 FROM people_tokens t JOIN people x ON x.id = t.person_id WHERE t.machine_id = ? AND t.kind = 'computer' "
         "AND t.revoked_at IS NULL AND x.removed_at IS NULL", (machine_id,)).fetchone() is not None

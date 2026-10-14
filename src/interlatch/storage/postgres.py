@@ -1,4 +1,4 @@
-"""Connecting to a Postgres database: the settings file both the hub's team store (team_store.py) and the personal
+"""Connecting to a Postgres database: the settings file both the hub's team store (team.py) and the personal
 mirror (mirror.py) keep their connection in, and checking what the dashboard sends for it.
 
 A settings file holds PG* lines (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, PGSSLMODE), readable by this user

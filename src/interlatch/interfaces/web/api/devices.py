@@ -144,8 +144,8 @@ def action_leave_hub(ctx: Context) -> dict:
 
 
 def shared_projects(ctx: Context) -> dict:
-    """Settings › Devices › Shared projects: the projects set up on this hub (hub.add_project), and the ones that
-    could be (this hub's projects that aren't, busiest first)."""
+    """Settings › Devices › Shared projects: the projects set up on this hub (sharing.projects.add_project), and the
+    ones that could be (this hub's projects that aren't, busiest first)."""
     from ....projects.routing import declared_projects, under
     from ....sharing.identity import read_token
     from ....sharing.projects import hub_projects, shared_projects
@@ -159,10 +159,10 @@ def shared_projects(ctx: Context) -> dict:
 
 
 def action_shared_project(ctx: Context, verb: str, body: dict, *, by: dict | None = None, here: bool = True) -> tuple[dict, int]:
-    """Set up a project on this hub (its sessions and lessons then go to the team store and to the people given
-    it), or stop: hub.add_project / remove_project, recorded in the people audit log. At the hub computer itself
-    (`here`), any folder of it. Elsewhere, only on a dedicated hub and only for an admin (`by`; the handler checks):
-    a new project by its name, never a folder (hub.named_project_folder), or removing one that is set up."""
+    """Set up a project on this hub (its sessions and lessons then go to the team store and to the people given it), or
+    stop: sharing.projects.add_project / remove_project, recorded in the people audit log. At the hub computer itself
+    (`here`), any folder of it. Elsewhere, only on a dedicated hub and only for an admin (`by`; the handler checks): a
+    new project by its name, never a folder (sharing.projects.named_project_folder), or removing one that is set up."""
     from ....sharing import people
     from ....sharing.projects import add_project, named_project_folder, remove_project
     from ....sharing.protocol import PROJECT_NAME_RULE, HubError

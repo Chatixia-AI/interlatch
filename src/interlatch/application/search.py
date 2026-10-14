@@ -126,7 +126,7 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
                      cases: bool = False, lessons: bool = False, offset: int = 0) -> list[dict]:
     """`sessions`: (SQL on the sessions table, its params) to keep the lessons of those sessions only. `source`: only
     items from there ('analysis', 'memory', 'team'), filtered before the limit. `cases`: only the ones with a case
-    file (analyze.case_of). `lessons`: only the kinds a lesson is made of (learning.PRACTICE_SQL)."""
+    file (analysis.session.case_of). `lessons`: only the kinds a lesson is made of (learning.PRACTICE_SQL)."""
     where, params = [], []
     if query and query.strip():
         fts = fts_query(query)

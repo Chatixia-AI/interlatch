@@ -3,7 +3,7 @@
 With `[hub] store = "postgres"` the hub keeps every session a computer shares (`[hub] share = "knowledge"`) and its
 project lessons here as well as in its own SQLite, which stays the copy the dashboard reads. The hub is the only
 writer: members' computers never connect to the database. They get their teammates' lessons for the projects they
-work on from the hub API (hub.team_lessons).
+work on from the hub API (sharing.receiver.team_lessons).
 
 A lesson belongs to a place: the git repository it was learned in (its normalized remote), wherever each member
 cloned it, or the hub project of a folder without a remote. Lessons in the same place merge when their kind and title
@@ -423,7 +423,7 @@ def get(cfg: Config) -> TeamStore | None:
 
 def payload(rec: dict, *, project: str | None, project_name: str | None, remote: str | None, title: str | None,
             details_cols: tuple[str, ...]) -> dict:
-    """A shared session as put_sessions takes it, from what a computer sent (hub.receive_sessions checked it)."""
+    """A shared session as put_sessions takes it, from what a computer sent (receiver.receive_sessions checked it)."""
     lang = rec.get("language")
     out = {k: _text(rec.get(k)) for k in SESSION_COLS}
     out.update(id=rec["id"], project=project, project_name=project_name, remote=remote, title=title,
