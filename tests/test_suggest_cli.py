@@ -10,9 +10,9 @@ from http.server import ThreadingHTTPServer
 import pytest
 from friction_fixture import ago, make_archive
 
-from chronicle import suggest
-from chronicle.cli import main
-from chronicle.instructions import BEGIN
+from interlatch import suggest
+from interlatch.cli import main
+from interlatch.instructions import BEGIN
 
 
 @pytest.fixture()
@@ -106,7 +106,7 @@ def test_cli_friction(queued, capsys):
 
 
 def _serve(cfg):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     httpd.RequestHandlerClass = make_handler(App(cfg), httpd.server_address[1])
@@ -172,7 +172,7 @@ def test_api_routes(queued):
 
 
 def test_background_run_refreshes_and_notifies(archive, monkeypatch):
-    from chronicle.worker import run_worker
+    from interlatch.worker import run_worker
 
     a, conn, cfg = archive["a"], archive["conn"], archive["cfg"]
     cfg.ensure_dirs()
@@ -181,7 +181,7 @@ def test_background_run_refreshes_and_notifies(archive, monkeypatch):
         a.cause(f"s{i}", "zsh-nomatch", ago(1))
     conn.commit()
     posted = []
-    monkeypatch.setattr("chronicle.notify.post", lambda title, message: posted.append((title, message)) or True)
+    monkeypatch.setattr("interlatch.notify.post", lambda title, message: posted.append((title, message)) or True)
 
     report = run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=False)
     assert report.suggestions == 2 and "2 new suggestions" in report.summary()

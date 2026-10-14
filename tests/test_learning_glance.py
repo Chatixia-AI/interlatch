@@ -3,9 +3,9 @@
 import json
 from datetime import datetime, timezone
 
-from chronicle.analyze import normalize_analysis, store_analysis
-from chronicle.learning import glance
-from chronicle.server import App
+from interlatch.analyze import normalize_analysis, store_analysis
+from interlatch.learning import glance
+from interlatch.server import App
 
 from conftest import SID
 

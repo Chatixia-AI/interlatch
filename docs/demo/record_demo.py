@@ -1,7 +1,7 @@
 """Record the README demo video: a scripted walk through the dashboard on the demo data.
 
     uv run python docs/demo/make_demo.py /tmp/interlatch-demo
-    INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m chronicle ui --port 8898
+    INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898
     uv run --with playwright python docs/demo/record_demo.py --port 8898
 
 It drives headless Chromium through Home, a session (a glossary hover, an expanded tool call), the ⌘K palette, the

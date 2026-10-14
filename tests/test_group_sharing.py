@@ -5,10 +5,10 @@ import json
 
 import pytest
 
-from chronicle import groups, hub
-from chronicle.config import load_config
-from chronicle.db import connect
-from chronicle.server import App
+from interlatch import groups, hub
+from interlatch.config import load_config
+from interlatch.db import connect
+from interlatch.server import App
 
 AKTIO = "/home/yuma/Work/Aktio"
 PROJECT = "/srv/Aktio"

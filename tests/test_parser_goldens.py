@@ -13,12 +13,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from chronicle.antigravity_parser import conversation_dirs, load_db_meta, load_title, parse_antigravity_conversation
-from chronicle.bob_parser import load_tasks, parse_bob_task
-from chronicle.codex_parser import parse_codex_session
-from chronicle.copilot_parser import (agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
+from interlatch.antigravity_parser import conversation_dirs, load_db_meta, load_title, parse_antigravity_conversation
+from interlatch.bob_parser import load_tasks, parse_bob_task
+from interlatch.codex_parser import parse_codex_session
+from interlatch.copilot_parser import (agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
                                       parse_vscode_chat, workspace_folder)
-from chronicle.parser import ParsedSession, parse_session
+from interlatch.parser import ParsedSession, parse_session
 
 from antigravity_fixture import NEW_ID as AGY_ID, write_antigravity_home
 from codex_fixture import CODE_ID, CODEX_ID, code_mode_rollout, write_codex_home

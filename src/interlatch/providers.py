@@ -165,7 +165,7 @@ def http(method: str, url: str, *, body: bytes | None, headers: dict, timeout: i
         except BaseException as exc:  # noqa: BLE001 - handed to the caller
             box["err"] = exc
 
-    t = threading.Thread(target=go, name=f"chronicle-{name}", daemon=True)
+    t = threading.Thread(target=go, name=f"interlatch-{name}", daemon=True)
     t.start()
     wall0, mono0 = time.time(), time.monotonic()
     while True:

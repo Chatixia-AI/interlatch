@@ -35,9 +35,9 @@ COMMAND_MARKER = " statusline"
 
 
 def state_dir() -> Path:
-    from .config import chronicle_home
+    from .config import interlatch_home
 
-    return chronicle_home() / "statusline"
+    return interlatch_home() / "statusline"
 
 
 def samples_dir() -> Path:

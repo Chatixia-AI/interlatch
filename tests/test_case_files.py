@@ -4,8 +4,8 @@ the leads the session ruled out, so the dashboard can ask before it tells and th
 import json
 import sqlite3
 
-from chronicle.analyze import PROMPT_VERSION, case_of, normalize_analysis, normalize_knowledge, store_analysis
-from chronicle.db import SCHEMA_VERSION, connect
+from interlatch.analyze import PROMPT_VERSION, case_of, normalize_analysis, normalize_knowledge, store_analysis
+from interlatch.db import SCHEMA_VERSION, connect
 
 from conftest import SECRET, SID
 
@@ -70,8 +70,8 @@ def test_an_older_archive_gains_the_column(tmp_path):
 
 
 def test_dashboard_and_mcp_show_the_case(synced):
-    from chronicle.mcp_server import Tools
-    from chronicle.server import App
+    from interlatch.mcp_server import Tools
+    from interlatch.server import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     store_analysis(conn, cfg, SID, normalize_analysis({"title": "t", "knowledge": [

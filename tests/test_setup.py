@@ -6,11 +6,11 @@ import sys
 
 import pytest
 
-from chronicle import connectors
-from chronicle.cli import main
-from chronicle.config import load_config
-from chronicle.db import connect
-from chronicle.install import hooks_installed
+from interlatch import connectors
+from interlatch.cli import main
+from interlatch.config import load_config
+from interlatch.db import connect
+from interlatch.install import hooks_installed
 
 
 class _Tty:
@@ -26,13 +26,13 @@ def machine(env, monkeypatch):
     (home / ".cursor").mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("CODEX_HOME", str(home / ".codex"))
-    monkeypatch.setattr("chronicle.connectors.APPLICATIONS", env["tmp"] / "Applications")
-    monkeypatch.setattr("chronicle.config.Config.codex_bin", lambda self: None)
+    monkeypatch.setattr("interlatch.connectors.APPLICATIONS", env["tmp"] / "Applications")
+    monkeypatch.setattr("interlatch.config.Config.codex_bin", lambda self: None)
     monkeypatch.setitem(connectors.CONNECTORS, "bob",
                         (lambda cfg, conn: {"name": "bob", "label": "IBM Bob", "detected": False, "connected": False, "on_disk": 0},
                          None, None))
     mcp_calls = []
-    monkeypatch.setattr("chronicle.install.install_mcp", lambda cfg, exe, dry_run=False: mcp_calls.append(exe) or ["mcp ok"])
+    monkeypatch.setattr("interlatch.install.install_mcp", lambda cfg, exe, dry_run=False: mcp_calls.append(exe) or ["mcp ok"])
     env["home_dir"] = home
     env["mcp_calls"] = mcp_calls
     return env
@@ -110,9 +110,9 @@ def test_dry_run_changes_nothing(machine, capsys):
 def test_asks_whether_to_run_in_the_background(machine, monkeypatch, capsys, answer):
     calls = []
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": False})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda cfg, exe, interval=900, dry_run=False: calls.append("sync") or [])
-    monkeypatch.setattr("chronicle.install.install_ui_agent",
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": False})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda cfg, exe, interval=900, dry_run=False: calls.append("sync") or [])
+    monkeypatch.setattr("interlatch.install.install_ui_agent",
                         lambda cfg, exe, dry_run=False: calls.append("ui") or ["dashboard always available at http://127.0.0.1:11524/"])
     asked = _answer(monkeypatch, {"background": answer, "Open": "n"})
     assert main(["install", "--exe", "/opt/bin/chronicle", "--no-sync"]) == 0
@@ -128,9 +128,9 @@ def test_asks_whether_to_run_in_the_background(machine, monkeypatch, capsys, ans
 def test_background_already_running_is_kept_without_asking(machine, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda cfg, exe, interval=900, dry_run=False: calls.append("sync") or [])
-    monkeypatch.setattr("chronicle.install.install_ui_agent", lambda cfg, exe, dry_run=False: calls.append("ui") or [])
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda cfg, exe, interval=900, dry_run=False: calls.append("sync") or [])
+    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda cfg, exe, dry_run=False: calls.append("ui") or [])
     asked = _answer(monkeypatch, {"Claude Code": "y", "Codex": "y", "Cursor": "y"})
     assert main(["install", "--exe", "/opt/bin/chronicle", "--no-sync"]) == 0
     assert not any("starting at login" in q for q in asked) and calls == ["sync", "ui"]
@@ -139,10 +139,10 @@ def test_background_already_running_is_kept_without_asking(machine, monkeypatch,
 def test_no_launchd_no_ui_turns_background_running_off(machine, monkeypatch, capsys):
     removed = []
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda *a, **k: pytest.fail("installed the sync agent"))
-    monkeypatch.setattr("chronicle.install.install_ui_agent", lambda *a, **k: pytest.fail("installed the dashboard agent"))
-    monkeypatch.setattr("chronicle.install.uninstall_launchd",
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: pytest.fail("installed the sync agent"))
+    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: pytest.fail("installed the dashboard agent"))
+    monkeypatch.setattr("interlatch.install.uninstall_launchd",
                         lambda labels: removed.extend(labels) or [f"removed launchd agent {label}" for label in labels])
     _answer(monkeypatch, {"Claude Code": "y"})
     assert _install("--no-sync") == 0
@@ -153,7 +153,7 @@ def test_no_launchd_no_ui_turns_background_running_off(machine, monkeypatch, cap
 
 
 def test_uninstall_launchd_removes_only_the_given_agents(tmp_path, monkeypatch):
-    from chronicle import install
+    from interlatch import install
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr("platform.system", lambda: "Darwin")
@@ -202,9 +202,9 @@ def test_analyze_flag_runs_it_without_asking(machine, monkeypatch, capsys):
 
 def test_background_analysis_says_how_long_the_backlog_takes(machine, monkeypatch, capsys):
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda *a, **k: [])
-    monkeypatch.setattr("chronicle.install.install_ui_agent", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: [])
     _answer(monkeypatch, {"Analyze": "later", "Open": "n"})
     assert main(["install", "--exe", "/opt/bin/chronicle"]) == 0
     out = " ".join(capsys.readouterr().out.split())
@@ -224,7 +224,7 @@ def test_stage_progress_draws_one_bar_per_stage():
     from rich.console import Console
     from rich.progress import Progress
 
-    from chronicle.cli import _StageProgress
+    from interlatch.cli import _StageProgress
 
     with Progress(console=Console(file=open(os.devnull, "w"))) as bar:
         stages = _StageProgress(bar)
@@ -244,7 +244,7 @@ def test_stage_progress_takes_messages_from_several_threads_at_once():
     from rich.console import Console
     from rich.progress import Progress
 
-    from chronicle.cli import _StageProgress
+    from interlatch.cli import _StageProgress
 
     with Progress(console=Console(file=open(os.devnull, "w"))) as bar:
         stages = _StageProgress(bar)
@@ -258,7 +258,7 @@ def test_stage_progress_takes_messages_from_several_threads_at_once():
 
 
 def test_version_flag_reports_the_installed_version(capsys):
-    from chronicle import __version__
+    from interlatch import __version__
 
     with pytest.raises(SystemExit) as exit_:
         main(["--version"])
@@ -271,7 +271,7 @@ def test_tests_never_reach_this_computers_own_agents():
     import subprocess
     from pathlib import Path
 
-    from chronicle import install
+    from interlatch import install
 
     assert Path("~/Library/LaunchAgents").expanduser() not in install.plist_path(install.UI_LABEL).parents
     assert Path("~/.config").expanduser() not in install.systemd_dir().parents

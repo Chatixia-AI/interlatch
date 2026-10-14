@@ -45,4 +45,4 @@ repos:
         name: node --check (dashboard and VS Code extension JavaScript parses)
         language: system
         entry: node --check
-        files: ^(src/chronicle/web|vscode-extension)/.*\.js$
+        files: ^(src/interlatch/web|vscode-extension)/.*\.js$

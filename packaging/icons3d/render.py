@@ -1,6 +1,6 @@
 """Render Interlatch's 3D art with the Chatixia Studio Blueprint Cast and export it.
 
-Writes src/chronicle/web/art-<name>.webp (dashboard art) and packaging/macos/icon-3d.webp (the app icon source,
+Writes src/interlatch/web/art-<name>.webp (dashboard art) and packaging/macos/icon-3d.webp (the app icon source,
 which packaging/macos/make_icon.py turns into every app, dashboard and phone icon).
 
     uv run --no-project --with playwright --with pillow python packaging/icons3d/render.py
@@ -22,7 +22,7 @@ from playwright.sync_api import sync_playwright
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
-WEB = ROOT / "src" / "chronicle" / "web"
+WEB = ROOT / "src" / "interlatch" / "web"
 APP_ICON = ROOT / "packaging" / "macos" / "icon-3d.webp"
 ART_PX = 256  # shown at up to 112 CSS px, so 2x stays sharp
 

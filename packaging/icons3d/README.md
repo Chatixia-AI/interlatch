@@ -5,7 +5,7 @@ The 3D icons on the dashboard (page headers, Home tiles, empty states) and the a
 the studio's explainer films. The small line icons in the sidebar and on buttons stay as they are: they follow the
 theme colour and stay sharp at 14–20 px, where a render can't.
 
-- `art.json`: what to render. Keys become `src/chronicle/web/art-<key>.webp`; `app-icon` becomes
+- `art.json`: what to render. Keys become `src/interlatch/web/art-<key>.webp`; `app-icon` becomes
   `packaging/macos/icon-3d.webp`. A spec names a cast object (`obj`), a character (`char`, `mood`) or one of the
   members in `members.js` (`custom`), plus optional camera `az`, `pitch` and `pad`.
 - `members.js`: Interlatch's own members built from the cast's parts: the open book (Knowledge) and the 3D emblem.

@@ -6,10 +6,10 @@ import urllib.request
 import zipfile
 from http.server import ThreadingHTTPServer
 
-from chronicle.chat_import import import_export, import_status
-from chronicle.cli import main
-from chronicle.db import connect as db_connect
-from chronicle.screen import candidates, queue, rule_verdict, screen_chats, screen_status
+from interlatch.chat_import import import_export, import_status
+from interlatch.cli import main
+from interlatch.db import connect as db_connect
+from interlatch.screen import candidates, queue, rule_verdict, screen_chats, screen_status
 
 PASTED = "The quarterly report shows revenue grew in every region, led by the new subscription plans. " * 4
 
@@ -132,7 +132,7 @@ def test_cli_screen(env, capsys):
 
 
 def test_dashboard_filters_and_queues(env):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     cfg = env["cfg"]
     conn = db_connect(cfg.db_path)

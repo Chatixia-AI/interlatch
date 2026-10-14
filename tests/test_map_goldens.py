@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chronicle import systems
-from chronicle.diagram import layout, normalize_diagram, to_excalidraw, to_mermaid
+from interlatch import systems
+from interlatch.diagram import layout, normalize_diagram, to_excalidraw, to_mermaid
 
 from golden import assert_golden
 from test_diagram import SAMPLE, edge, node

@@ -30,8 +30,8 @@ Repository = "https://github.com/Chatixia-AI/interlatch"
 Issues = "https://github.com/Chatixia-AI/interlatch/issues"
 
 [project.scripts]
-interlatch = "chronicle.cli:main"
-chronicle = "chronicle.cli:main"  # the command's name before the rename (Chronicle), kept as an alias
+interlatch = "interlatch.cli:main"
+chronicle = "interlatch.cli:main"  # the command's name before the rename (Chronicle), kept as an alias
 
 [project.optional-dependencies]
 app = [
@@ -73,7 +73,7 @@ pattern = '(href="|\]\()(?!https?://|#)([^")]+)'
 replacement = '\1https://github.com/Chatixia-AI/interlatch/blob/main/\2'
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chronicle"]
+packages = ["src/interlatch", "src/chronicle"]  # chronicle: forwarding for installs from before the rename
 
 # ee/ is under its own enterprise license and builds its own package; keep it out of the MIT sdist
 [tool.hatch.build.targets.sdist]

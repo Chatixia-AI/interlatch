@@ -75,14 +75,14 @@ def test_not_ready_without_new_entries_or_with_lines_under_unreleased():
 
 
 def test_a_change_to_what_ships_needs_a_new_changelog_d_file():
-    code = ["src/chronicle/web/app.js", "tests/test_web.py"]
+    code = ["src/interlatch/web/app.js", "tests/test_web.py"]
     assert release.missing_entry([*code, "changelog.d/dots.md"], ["changelog.d/dots.md"], CHANGELOG) is None
     why = release.missing_entry(code, [], CHANGELOG)
-    assert "src/chronicle/web/app.js" in why and "tests/" not in why and "no-changelog" in why
+    assert "src/interlatch/web/app.js" in why and "tests/" not in why and "no-changelog" in why
     assert release.missing_entry(["docker/Dockerfile"], ["changelog.d/README.md"], CHANGELOG)  # the README isn't one
     assert release.missing_entry(["docker/Dockerfile", "changelog.d/old.md"], [], CHANGELOG)  # editing an old one
     assert release.missing_entry(["README.md", "docs/hub.md", ".github/workflows/ci.yml", "uv.lock"], [], CHANGELOG) is None
-    many = [f"src/chronicle/m{i}.py" for i in range(5)]
+    many = [f"src/interlatch/m{i}.py" for i in range(5)]
     assert "and 2 more" in release.missing_entry(many, [], CHANGELOG)
     # a branch written the old way: its line under Unreleased would go out unnoticed, so it fails even with docs only
     old_way = CHANGELOG.replace("## 0.6.1", "## Unreleased\n\n- Old way.\n\n## 0.6.1")

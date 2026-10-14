@@ -241,7 +241,7 @@ def home_override() -> Path | None:
     return None if os.path.abspath(path) in {str(default_home()), str(legacy_home())} else path
 
 
-def chronicle_home() -> Path:
+def interlatch_home() -> Path:
     """Interlatch's folder: INTERLATCH_HOME (or CHRONICLE_HOME), else ~/.interlatch, or ~/.claude-chronicle until
     that has been moved there."""
     override = home_override()
@@ -450,7 +450,7 @@ def _map_path(path: str) -> str:
 
 
 def load_config(home: Path | None = None, *, create: bool = True) -> Config:
-    home = (home or chronicle_home()).expanduser()
+    home = (home or interlatch_home()).expanduser()
     path = home / "config.toml"
     if create and not path.exists():
         home.mkdir(parents=True, exist_ok=True)

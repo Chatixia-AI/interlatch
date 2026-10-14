@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from chronicle.cli import build_parser
+from interlatch.cli import build_parser
 
 from golden import assert_golden
 

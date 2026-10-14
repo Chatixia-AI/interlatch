@@ -14,8 +14,8 @@ import urllib.request
 
 import pytest
 
-from chronicle import hub, people
-from chronicle.db import connect
+from interlatch import hub, people
+from interlatch.db import connect
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
 from test_people_web import REMOTE, TAILNET, _call, _raw
@@ -84,7 +84,7 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
 
 # ------------------------------------------------------------------ H2: a sent transcript can't replace another's
 def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spokes):
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id = hub.local_machine(a)["id"]
@@ -108,7 +108,7 @@ def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spoke
 
 def test_a_computers_history_cant_replace_anothers_stub(synced):
     """History-only stubs: one computer's history.jsonl can't replace the prompts of a stub another computer's made."""
-    from chronicle.ingest import import_history
+    from interlatch.ingest import import_history
 
     cfg, conn = synced["cfg"], synced["conn"]
     stub = conn.execute("SELECT id FROM sessions WHERE source = 'history'").fetchone()
@@ -143,7 +143,7 @@ def test_a_gzip_bomb_is_refused(two_spokes, monkeypatch):
 
 # ------------------------------------------------------------------ an analysis applies only to its own computer's session
 def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id, b_id = hub.local_machine(a)["id"], hub.local_machine(b)["id"]
@@ -178,7 +178,7 @@ def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
 
 # ------------------------------------------------------------------ an invite can't claim a computer the hub knows (#92)
 def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     cfg, conn, url, a, b = (two_spokes[k] for k in ("cfg", "conn", "url", "a", "b"))
     a_id, b_id = hub.local_machine(a)["id"], hub.local_machine(b)["id"]
@@ -274,7 +274,7 @@ def test_a_file_name_cant_add_response_headers(dashboard, monkeypatch):
 
 # ------------------------------------------------------------------ the dashboard page runs only its own scripts (#92)
 def test_the_dashboard_page_runs_only_its_own_scripts(dashboard):
-    from chronicle.server import WEB_DIR
+    from interlatch.server import WEB_DIR
 
     url = dashboard["url"]
     status, headers, page = _raw(url, "/")
@@ -321,7 +321,7 @@ def test_an_invite_cant_take_over_someone_elses_computer(synced):
 
 # ------------------------------------------------------------------ hardening
 def test_git_runs_no_repository_programs(monkeypatch):
-    from chronicle import server
+    from interlatch import server
 
     seen = []
     monkeypatch.setattr(server.subprocess, "run", lambda argv, **kw: seen.append(argv) or
@@ -332,7 +332,7 @@ def test_git_runs_no_repository_programs(monkeypatch):
 
 
 def test_the_launcher_runs_only_an_app_in_applications(tmp_path, monkeypatch):
-    from chronicle.install import write_shim
+    from interlatch.install import write_shim
 
     monkeypatch.setenv("CHRONICLE_HOME", str(tmp_path / "home"))
     shim = write_shim(str(tmp_path / "gone" / "Chronicle"))
@@ -349,8 +349,8 @@ def test_the_launcher_runs_only_an_app_in_applications(tmp_path, monkeypatch):
     assert not marker.exists()
 
 
-def test_chronicle_home_is_private(tmp_path):
-    from chronicle.config import load_config
+def test_interlatch_home_is_private(tmp_path):
+    from interlatch.config import load_config
 
     home = tmp_path / "home"
     home.mkdir(mode=0o755)

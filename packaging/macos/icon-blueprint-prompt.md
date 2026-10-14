@@ -10,8 +10,8 @@ Created with the built-in imagegen tool on October 3, 2026. The new Chatixia org
 - `icon-blueprint.webp`: 1024 × 1024 lossless source, resized once from the generated 1254px PNG.
 - `icon.png`: exported artwork with standard macOS Dock margins, also used by the repository READMEs and docs.
 - `Chronicle.icns`: macOS icon bundle at the standard icon sizes.
-- `src/chronicle/web/icon.png` and `favicon.png`: dashboard, source app, and browser icons.
-- `src/chronicle/web/icon-{180,192,512}.png`: opaque navy touch and maskable phone icons.
+- `src/interlatch/web/icon.png` and `favicon.png`: dashboard, source app, and browser icons.
+- `src/interlatch/web/icon-{180,192,512}.png`: opaque navy touch and maskable phone icons.
 
 Regenerate these exports with `uv run --group build python packaging/macos/make_icon.py`. The WebP stores the source
 pixels without further compression loss and stays below the repository's 600 KB limit for new files.

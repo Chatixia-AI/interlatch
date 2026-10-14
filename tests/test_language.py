@@ -13,12 +13,12 @@ from pathlib import Path
 import pytest
 from friction_fixture import ERRORS, ago, make_archive
 
-from chronicle import friction, i18n, ladder, suggest
-from chronicle.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, set_config_value
-from chronicle.i18n import tr, trn
-from chronicle.i18n_ja import JA
-from chronicle.instructions import BEGIN, END
-from chronicle.llm import JAPANESE, written_in
+from interlatch import friction, i18n, ladder, suggest
+from interlatch.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, set_config_value
+from interlatch.i18n import tr, trn
+from interlatch.i18n_ja import JA
+from interlatch.instructions import BEGIN, END
+from interlatch.llm import JAPANESE, written_in
 
 from conftest import CWD, SID, fake_log
 
@@ -53,7 +53,7 @@ def test_language_setting_defaults_parses_and_falls_back(env, caplog):
 
 
 def test_cli_config_set_checks_the_language(env, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     assert main(["config", "set", "analysis.language", "de"]) == 2
     assert "must be one of: en, ja" in capsys.readouterr().err
@@ -62,7 +62,7 @@ def test_cli_config_set_checks_the_language(env, capsys):
 
 
 def test_english_prompts_are_left_exactly_as_they_were(env):
-    from chronicle import analyze, glossary, reviews, screen, synthesize
+    from interlatch import analyze, glossary, reviews, screen, synthesize
 
     cfg = env["cfg"]
     assert analyze.system_prompt(cfg) is analyze.SYSTEM_PROMPT
@@ -83,11 +83,11 @@ def _systems(env) -> list[str]:
 
 
 def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
-    from chronicle import analyze, reviews
-    from chronicle.analyze import analyze_session
-    from chronicle.glossary import build_glossaries, build_themes
-    from chronicle.reviews import generate_review
-    from chronicle.synthesize import GLOBAL, synthesize_project
+    from interlatch import analyze, reviews
+    from interlatch.analyze import analyze_session
+    from interlatch.glossary import build_glossaries, build_themes
+    from interlatch.reviews import generate_review
+    from interlatch.synthesize import GLOBAL, synthesize_project
 
     conn = synced["conn"]
     cfg = _set_language(synced["cfg"], "ja")
@@ -118,9 +118,9 @@ def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
 
 
 def test_japanese_screening_prompt_and_rule_reasons(env):
-    from chronicle.chat_import import import_export
-    from chronicle.db import connect
-    from chronicle.screen import screen_chats
+    from interlatch.chat_import import import_export
+    from interlatch.db import connect
+    from interlatch.screen import screen_chats
     from test_screen import write_export
 
     cfg = _set_language(env["cfg"], "ja")
@@ -135,7 +135,7 @@ def test_japanese_screening_prompt_and_rule_reasons(env):
 
 
 def test_overturned_lines_follow_the_review_language():
-    from chronicle.reviews import overturned_line
+    from interlatch.reviews import overturned_line
 
     k = {"title": "Use uv sync", "project_name": "app", "stage": "established", "superseded_reason": "outdated",
          "successor_title": "Use uv sync --extra app"}
@@ -288,7 +288,7 @@ def test_a_line_outside_the_block_counts_in_either_language(archive):
 
 
 def test_japanese_knowledge_lines_compare_and_read_as_rules():
-    from chronicle.instructions import JACCARD_DUPLICATE, is_changelog, is_rule_like, jaccard, overlap, tokens
+    from interlatch.instructions import JACCARD_DUPLICATE, is_changelog, is_rule_like, jaccard, overlap, tokens
 
     assert {"編集", "直前", "該当", "当行"} <= tokens("編集の直前に該当行を読み直す")
     assert tokens("Re-read the exact lines") == {"re-read", "exact", "lines"}  # English as before
@@ -319,7 +319,7 @@ def test_tr_and_trn_fall_back_to_english(ja):
 
 
 def test_every_translated_template_has_japanese_with_the_same_fields():
-    from chronicle import update, views, worker
+    from interlatch import update, views, worker
 
     need = set()
     for path in sorted((Path(i18n.__file__).parent).glob("*.py")):
@@ -342,8 +342,8 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
 
 
 def test_stored_english_templates_are_translated_when_read(ja):
-    from chronicle.chat_import import CHATGPT
-    from chronicle.views import reason_text
+    from interlatch.chat_import import CHATGPT
+    from interlatch.views import reason_text
 
     assert reason_text("session continued after analysis") == "分析のあとにセッションが続いた"
     assert reason_text(CHATGPT.not_analyzed).startswith("取り込んだ ChatGPT のチャット：")
@@ -358,8 +358,8 @@ def test_stored_english_templates_are_translated_when_read(ja):
 
 
 def test_status_texts_follow_the_dashboard_language(synced, ja):
-    from chronicle.connectors import all_status
-    from chronicle.worker import count_pending
+    from interlatch.connectors import all_status
+    from interlatch.worker import count_pending
 
     cfg, conn = synced["cfg"], synced["conn"]
     claude = next(c for c in all_status(cfg, conn) if c["name"] == "claude")
@@ -385,7 +385,7 @@ def test_cli_and_stored_text_stay_english(archive):
 
 
 def _serve(cfg):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     httpd.RequestHandlerClass = make_handler(App(cfg), httpd.server_address[1])

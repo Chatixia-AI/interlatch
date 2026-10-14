@@ -12,10 +12,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from chronicle import hub
-from chronicle import leaderboard as lb
-from chronicle.db import connect
-from chronicle.util import to_iso, utcnow
+from interlatch import hub
+from interlatch import leaderboard as lb
+from interlatch.db import connect
+from interlatch.util import to_iso, utcnow
 
 from test_people_web import TAILNET, hubweb  # noqa: F401  (the fixture)
 from test_people_web import _call as _http

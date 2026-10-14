@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from chronicle import install, windows
-from chronicle.config import load_config
-from chronicle.util import file_lock
+from interlatch import install, windows
+from interlatch.config import load_config
+from interlatch.util import file_lock
 
 on_windows = pytest.mark.skipif(sys.platform != "win32", reason="needs Windows")
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
@@ -61,7 +61,7 @@ def test_the_sync_task_runs_every_interval_without_a_window(cfg, schtasks):
     assert settings.findtext("t:ExecutionTimeLimit", namespaces=NS) == "PT4H"
     assert task.findtext("t:Principals/t:Principal/t:LogonType", namespaces=NS) == "InteractiveToken"
     args = task.findtext("t:Actions/t:Exec/t:Arguments", namespaces=NS)
-    assert args.startswith("-m chronicle.windows --log ") and args.endswith("-- sync --work --quiet")
+    assert args.startswith("-m interlatch.windows --log ") and args.endswith("-- sync --work --quiet")
     assert str(cfg.home) in args and str(cfg.logs_dir / "sync") in args
     # replaced, then started now (launchd's RunAtLoad): the next run is the timer's
     assert [c[0] for c in schtasks["calls"]] == ["/End", "/Create", "/Run"]
@@ -119,10 +119,10 @@ def test_hook_commands_read_the_same_in_git_bash_and_powershell(cfg, monkeypatch
     assert install.hooks_installed(cfg) == {"SessionEnd": True, "SessionStart": True}
     install.install_statusline(cfg, "C:\\Users\\ada\\.local\\bin\\interlatch.exe")
     assert install.statusline_installed(cfg)
-    # without the `interlatch` command: python -m chronicle, still one word for the program
+    # without the `interlatch` command: python -m interlatch, still one word for the program
     monkeypatch.setattr(windows, "short_path", lambda p: "C:\\PROGRA~1\\Python" if p == "C:\\Program Files\\Python" else p)
-    assert install._exe_cmd("'C:\\Program Files\\Python\\python.exe' -m chronicle", "statusline") == \
-        "C:/PROGRA~1/Python/python.exe -m chronicle statusline"
+    assert install._exe_cmd("'C:\\Program Files\\Python\\python.exe' -m interlatch", "statusline") == \
+        "C:/PROGRA~1/Python/python.exe -m interlatch statusline"
 
 
 def test_a_folder_with_a_space_gets_its_short_name(monkeypatch):
@@ -152,7 +152,7 @@ def test_the_runner_starts_the_command_again_when_an_update_asks(tmp_path, monke
                                "--", "ui", "--port", "9"])
     assert code == 3 and len(runs) == 2  # the second run's exit is the task's
     argv, env = runs[0]
-    assert argv[1:] == ["-X", "utf8", "-m", "chronicle", "ui", "--port", "9"]
+    assert argv[1:] == ["-X", "utf8", "-m", "interlatch", "ui", "--port", "9"]
     assert env["INTERLATCH_HOME"] == str(tmp_path / "h") and env[windows.RUNNER_ENV] == "1"
     assert env["PATH"].split(windows.os.pathsep)[-1] == str(tmp_path / "claude-bin")
     assert (tmp_path / "logs" / "ui.out.log").exists() and (tmp_path / "logs" / "ui.err.log").exists()
@@ -172,7 +172,7 @@ def test_the_file_lock_keeps_a_second_holder_out(tmp_path):
 
 # ------------------------------------------------------------------ Windows paths (on any system)
 def test_windows_paths_are_told_apart_and_spelled_one_way():
-    from chronicle.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
+    from interlatch.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 
     for p in ("C:\\Users\\ada\\project", "c:/work/app", "\\\\server\\share\\repo", "//server/share", "/Users/ada", "/c:/x"):
         assert is_abs_path(p), p
@@ -199,7 +199,7 @@ def test_windows_paths_are_told_apart_and_spelled_one_way():
 def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
     import sqlite3
 
-    from chronicle.util import abs_path_sql
+    from interlatch.util import abs_path_sql
 
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE t (p TEXT)")
@@ -210,7 +210,7 @@ def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
 
 
 def test_under_compares_windows_paths_by_one_spelling_and_never_across_kinds():
-    from chronicle.hub import under
+    from interlatch.hub import under
 
     assert under("C:\\Users\\ada\\project\\sub\\file.py", "C:/Users/ada/project")
     assert under("c:/users/ada/Project", "C:\\")  # the drive letter's case doesn't matter
@@ -229,8 +229,8 @@ def test_under_compares_windows_paths_by_one_spelling_and_never_across_kinds():
 
 
 def test_windows_hub_and_people_path_normalization():
-    from chronicle.hub import clean_folders, clean_left
-    from chronicle.people import PeopleError, clean_projects
+    from interlatch.hub import clean_folders, clean_left
+    from interlatch.people import PeopleError, clean_projects
 
     folders = clean_folders({"C:\\Users\\ada\\app": "c:\\hub\\projects\\app\\", "/posix/path/": "/hub/posix/",
                              "1:\\x": "C:/y", "/a\\b": "/hub/ab"})
@@ -243,8 +243,8 @@ def test_windows_hub_and_people_path_normalization():
 
 
 def test_the_hub_files_a_windows_computer_s_folder_under_one_spelling(tmp_path):
-    from chronicle.db import connect
-    from chronicle.hub import ProjectResolver
+    from interlatch.db import connect
+    from interlatch.hub import ProjectResolver
 
     cfg = load_config(tmp_path / "home")
     conn = connect(cfg.db_path)
@@ -278,13 +278,13 @@ def _windows_transcript(sid: str, cwd: str) -> str:
 
 def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeypatch):
     """A Claude Code session on Windows records C:\\work\\app; the VS Code extension asks with c:\\ (fsPath) or C:/."""
-    from chronicle.db import connect
-    from chronicle.ingest import sync
-    from chronicle.server import App
+    from interlatch.db import connect
+    from interlatch.ingest import sync
+    from interlatch.server import App
 
     for name in ("COPILOT_HOME", "BOB_HOME", "ANTIGRAVITY_HOME"):
         monkeypatch.setenv(name, str(tmp_path / "none"))
-    monkeypatch.setattr("chronicle.connectors.vscode_user_dirs", lambda: [])
+    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [])
     sid = "33333333-2222-3333-4444-555555555555"
     claude = tmp_path / "claude"
     proj = claude / "projects" / "C--work-app"
@@ -324,7 +324,7 @@ def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeyp
 
 
 def test_copilot_s_file_uris_give_windows_paths():
-    from chronicle.copilot_parser import uri_path
+    from interlatch.copilot_parser import uri_path
 
     assert uri_path("file:///c%3A/Users/ada/app") == "c:/Users/ada/app"
     assert uri_path({"path": "/c:/Users/ada/app"}) == "c:/Users/ada/app"
@@ -361,7 +361,7 @@ def test_quit_from_the_icon_lasts_until_the_next_sign_in(tmp_path, monkeypatch):
 
 
 def test_the_dashboard_task_does_not_start_again_after_quit(tmp_path, monkeypatch):
-    from chronicle import server, update
+    from interlatch import server, update
 
     cfg = load_config(tmp_path / "home")
     monkeypatch.setattr(update, "RESTARTABLE", update.RESTARTABLE)  # serve() sets it
@@ -383,7 +383,7 @@ def test_installing_the_dashboard_task_undoes_a_quit(cfg, schtasks):
 
 
 def test_windows_menubar_setting_and_wants(cfg, monkeypatch):
-    from chronicle import menubar
+    from interlatch import menubar
 
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setattr(windows, "task_status", lambda name: {"installed": True, "loaded": True})
@@ -437,7 +437,7 @@ def test_open_and_reveal_use_windows_own_programs(monkeypatch):
 
 @on_windows
 def test_the_notification_script_parses_in_windows_powershell(tmp_path):
-    from chronicle import notify
+    from interlatch import notify
 
     script = tmp_path / "toast.ps1"
     script.write_text(notify.WINDOWS_SCRIPT, encoding="utf-8-sig")

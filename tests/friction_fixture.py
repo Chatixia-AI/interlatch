@@ -6,7 +6,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
-from chronicle.util import to_iso, utcnow
+from interlatch.util import to_iso, utcnow
 
 # real error texts, as the archive stores them (from the mining of the real archive)
 ERRORS = {
@@ -93,8 +93,8 @@ class Archive:
 
 def make_archive(tmp_path, monkeypatch):
     """A fresh database plus a sandboxed HOME (instruction files and ~/.claude.json live there); yields once."""
-    from chronicle.config import load_config
-    from chronicle.db import connect
+    from interlatch.config import load_config
+    from interlatch.db import connect
 
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
@@ -103,8 +103,8 @@ def make_archive(tmp_path, monkeypatch):
     monkeypatch.delenv("CODEX_HOME", raising=False)
     chome = tmp_path / "chronicle"
     monkeypatch.setenv("INTERLATCH_HOME", str(chome))
-    monkeypatch.setattr("chronicle.instructions._gh_bin", lambda: None)  # never ask GitHub from tests
-    monkeypatch.setattr("chronicle.instructions._VISIBILITY", {})
+    monkeypatch.setattr("interlatch.instructions._gh_bin", lambda: None)  # never ask GitHub from tests
+    monkeypatch.setattr("interlatch.instructions._VISIBILITY", {})
     cfg = load_config(chome)
     conn = connect(cfg.db_path)
     yield {"conn": conn, "cfg": cfg, "home": home, "a": Archive(conn, tmp_path), "tmp": tmp_path}

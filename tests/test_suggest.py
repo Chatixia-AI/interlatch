@@ -5,9 +5,9 @@ import sqlite3
 
 import pytest
 
-from chronicle import instructions, suggest
-from chronicle.db import SCHEMA_VERSION, connect
-from chronicle.instructions import BEGIN
+from interlatch import instructions, suggest
+from interlatch.db import SCHEMA_VERSION, connect
+from interlatch.instructions import BEGIN
 
 from friction_fixture import ago, make_archive
 
@@ -248,7 +248,7 @@ def test_after_sync_respects_settings(archive, monkeypatch):
     a, conn, cfg = archive["a"], archive["conn"], archive["cfg"]
     _spread(a, "zsh-nomatch")
     posted = []
-    monkeypatch.setattr("chronicle.notify.post", lambda title, msg: posted.append((title, msg)) or True)
+    monkeypatch.setattr("interlatch.notify.post", lambda title, msg: posted.append((title, msg)) or True)
     cfg.suggestions_enabled = False
     assert suggest.after_sync(conn, cfg) is None and suggest.counts(conn)["new"] == 0
     cfg.suggestions_enabled, cfg.suggestions_notify = True, True

@@ -1,17 +1,8 @@
-"""Interlatch: shared memory for your coding agents, recorded locally from every session (Claude Code, Codex, Copilot,
-Bob, Antigravity), each lesson linked to the session it came from."""
+"""The package's name before the rename to Interlatch, kept only for what installs written then still run.
 
-from importlib.metadata import PackageNotFoundError, version
+Hooks, MCP servers and background tasks set up before the rename may run `python -m chronicle …` (__main__.py), and
+Windows tasks `pythonw -m chronicle.windows …` (windows.py). Both forward to the interlatch package, which holds the
+implementation; nothing else belongs here.
+"""
 
-
-def _version() -> str:
-    """Single source of truth: pyproject.toml, via the installed package's metadata."""
-    for dist in ("interlatch", "agents-chronicle"):  # the distribution, and its name before the rename
-        try:
-            return version(dist)
-        except PackageNotFoundError:
-            continue
-    return "0.0.0+unknown"  # running from a source tree that was never installed
-
-
-__version__ = _version()
+from interlatch import __version__ as __version__

@@ -3,9 +3,9 @@
 from dataclasses import replace
 from datetime import timedelta
 
-from chronicle.db import kv_set
-from chronicle.util import to_iso, utcnow
-from chronicle.worker import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
+from interlatch.db import kv_set
+from interlatch.util import to_iso, utcnow
+from interlatch.worker import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
 
 from conftest import CWD, SID
 
@@ -67,16 +67,16 @@ def test_a_stopped_queue_says_why(synced, monkeypatch):
     conn.commit()
     off = replace(cfg, analysis=replace(cfg.analysis, auto=False))
     assert "automatic analysis is off" in count_pending(conn, off)["block"]
-    from chronicle.llm import ClaudeRunner
+    from interlatch.llm import ClaudeRunner
 
     missing = ClaudeRunner(cfg)
     missing.bin = None  # not installed
-    monkeypatch.setattr("chronicle.worker.make_runner", lambda cfg: missing)
+    monkeypatch.setattr("interlatch.worker.make_runner", lambda cfg: missing)
     assert count_pending(conn, cfg)["block"] == "Claude Code (`claude`) was not found, so nothing can be analyzed"
 
 
 def test_session_api_carries_the_reason(synced):
-    from chronicle.server import App
+    from interlatch.server import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("UPDATE sessions SET analysis_status = 'pending', n_prompts = 0 WHERE id = ?", (SID,))
@@ -88,7 +88,7 @@ def test_session_api_carries_the_reason(synced):
 
 def test_queued_ids_follow_the_reasons(synced):
     """The Queue's Analyze now takes exactly the sessions the reasons name: ready ones, or the ones still active."""
-    from chronicle.worker import queued_ids
+    from interlatch.worker import queued_ids
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("DELETE FROM sessions")
@@ -107,8 +107,8 @@ def test_analyze_the_queue_now(synced):
     """Analyze now runs the ready sessions through a usage-limit pause, and a run that gets through lifts the pause."""
     import time
 
-    from chronicle.db import kv_get
-    from chronicle.server import App
+    from interlatch.db import kv_get
+    from interlatch.server import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("UPDATE sessions SET analysis_status = 'pending', analysis_attempts = 0, ended_flag = 1")

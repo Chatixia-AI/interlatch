@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-WEB = Path(__file__).resolve().parent.parent / "src" / "chronicle" / "web"
+WEB = Path(__file__).resolve().parent.parent / "src" / "interlatch" / "web"
 HELPERS = {"t": (0,), "tx": (0,), "tn": (1, 2), "tc": (0, 1)}  # which arguments are the English text (tc: context, text)
 REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")  # a "/" after one of these starts a regex literal, not a division
 KEYWORDS_BEFORE_REGEX = {"return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do"}

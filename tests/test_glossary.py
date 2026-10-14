@@ -3,10 +3,10 @@ import os
 import subprocess
 import sys
 
-from chronicle.analyze import analyze_session
-from chronicle.export_md import export_markdown
-from chronicle.glossary import build_glossary, glossary_entries, lookup
-from chronicle.synthesize import GLOBAL
+from interlatch.analyze import analyze_session
+from interlatch.export_md import export_markdown
+from interlatch.glossary import build_glossary, glossary_entries, lookup
+from interlatch.synthesize import GLOBAL
 
 from conftest import CWD, SID
 
@@ -58,7 +58,7 @@ def test_glossary_everywhere_else(synced):
     assert "### pytest" in text and "runs the login tests" in text and "[[Glossary]]" in (cfg.notes_dir / "Home.md").read_text()
     msgs = [{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "glossary", "arguments": {"term": "TTL"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "glossary", "arguments": {"project": "demo-app"}}}]
-    out = subprocess.run([sys.executable, "-m", "chronicle", "mcp"], input="\n".join(json.dumps(m) for m in msgs) + "\n",
+    out = subprocess.run([sys.executable, "-m", "interlatch", "mcp"], input="\n".join(json.dumps(m) for m in msgs) + "\n",
                          capture_output=True, text=True, timeout=60, env={**os.environ})
     replies = {r["id"]: r["result"]["content"][0]["text"] for r in map(json.loads, out.stdout.splitlines())}
     assert "Token TTL" in replies[1] and "Lifetime of an auth token" in replies[1]
@@ -66,7 +66,7 @@ def test_glossary_everywhere_else(synced):
 
 
 def test_parallel_glossary_builds(synced):
-    from chronicle.glossary import build_glossaries
+    from interlatch.glossary import build_glossaries
 
     conn, cfg, _ = _build(synced)
     results = build_glossaries(cfg, [CWD, GLOBAL, "/no/knowledge/here"], concurrency=3)
@@ -75,7 +75,7 @@ def test_parallel_glossary_builds(synced):
 
 
 def test_map_data_links_terms_to_projects_and_knowledge(synced):
-    from chronicle.glossary import map_data
+    from interlatch.glossary import map_data
 
     conn, cfg, _ = _build(synced)
     data = map_data(conn)
@@ -93,7 +93,7 @@ def test_map_data_links_terms_to_projects_and_knowledge(synced):
 
 
 def test_themes_group_a_category_and_rerun_only_when_it_changes(synced):
-    from chronicle.glossary import build_themes, map_data, themes_due
+    from interlatch.glossary import build_themes, map_data, themes_due
 
     conn, cfg, _ = _build(synced)
     for name in ("ruff", "mypy"):  # two more tools the fake Claude leaves ungrouped
@@ -122,7 +122,7 @@ def test_themes_group_a_category_and_rerun_only_when_it_changes(synced):
 def test_dashboard_themes_job_groups_due_categories(synced):
     import time
 
-    from chronicle.server import App
+    from interlatch.server import App
 
     conn, cfg, _ = _build(synced)
     for name in [f"tool{i}" for i in range(30)]:  # a category big enough to be due

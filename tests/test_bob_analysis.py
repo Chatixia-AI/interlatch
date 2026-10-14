@@ -9,10 +9,10 @@ import sys
 
 import pytest
 
-from chronicle.config import load_config, set_config_value
-from chronicle.llm import BOB_TOOL_GROUPS, BobRunner, LLMError, UsageLimitError, make_runner
-from chronicle.providers import key_source, set_key
-from chronicle.worker import run_worker
+from interlatch.config import load_config, set_config_value
+from interlatch.llm import BOB_TOOL_GROUPS, BobRunner, LLMError, UsageLimitError, make_runner
+from interlatch.providers import key_source, set_key
+from interlatch.worker import run_worker
 
 from conftest import CWD, SID
 
@@ -117,9 +117,9 @@ def test_worker_end_to_end_with_bob(bob_env):
 
 
 def test_chronicles_own_bob_tasks_are_not_imported(env, tmp_path):
-    from chronicle.connectors import bob_status
-    from chronicle.db import connect
-    from chronicle.ingest import sync
+    from interlatch.connectors import bob_status
+    from interlatch.db import connect
+    from interlatch.ingest import sync
 
     from copilot_fixture import BOB_TASK, write_bob_home
 
@@ -142,7 +142,7 @@ def test_chronicles_own_bob_tasks_are_not_imported(env, tmp_path):
 
 
 def test_cli_set_key_bob(env):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     assert main(["config", "set-key", "bob", "k-1"]) == 0
     assert key_source(load_config(env["cfg"].home), "bob") == ("k-1", "stored")
@@ -151,7 +151,7 @@ def test_cli_set_key_bob(env):
 
 
 def test_dashboard_sets_agent_models(env):
-    from chronicle.server import App
+    from interlatch.server import App
 
     app = App(env["cfg"])
     choices = {c["name"]: c for c in app.analysis_backends()["choices"]}

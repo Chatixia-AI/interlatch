@@ -39,7 +39,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-[ -f "$TREE/pyproject.toml" ] && [ -d "$TREE/src/chronicle" ] || { echo "dev.sh: $TREE is not an Interlatch checkout" >&2; exit 1; }
+[ -f "$TREE/pyproject.toml" ] && { [ -d "$TREE/src/interlatch" ] || [ -d "$TREE/src/chronicle" ]; } || { echo "dev.sh: $TREE is not an Interlatch checkout" >&2; exit 1; }
 
 listening() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 

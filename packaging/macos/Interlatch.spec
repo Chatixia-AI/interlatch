@@ -12,16 +12,16 @@ ROOT = Path(SPECPATH).parents[1]
 HERE = Path(SPECPATH)
 # the installed package's version (from the git tag); the bundle takes its release numbers only (0.7.1.dev3+g… -> 0.7.1)
 VERSION = re.match(r"\d+(?:\.\d+)*", version("interlatch")).group(0)
-BUNDLE_ID = "com.interlatch.app"  # keep in sync with chronicle.install.APP_BUNDLE_ID
+BUNDLE_ID = "com.interlatch.app"  # keep in sync with interlatch.install.APP_BUNDLE_ID
 IDENTITY = os.environ.get("INTERLATCH_CODESIGN_IDENTITY") or None
 
 a = Analysis(
-    [str(HERE / "chronicle_app.py")],
+    [str(HERE / "interlatch_app.py")],
     pathex=[str(ROOT / "src")],
-    # the package metadata carries the version (chronicle.__version__ reads it)
-    datas=[(str(ROOT / "src" / "chronicle" / "web"), "chronicle/web")] + copy_metadata("interlatch"),
-    # chronicle imports most modules lazily inside functions, and rich loads some of its own on demand
-    hiddenimports=collect_submodules("chronicle") + collect_submodules("rich"),
+    # the package metadata carries the version (interlatch.__version__ reads it)
+    datas=[(str(ROOT / "src" / "interlatch" / "web"), "interlatch/web")] + copy_metadata("interlatch"),
+    # interlatch imports most modules lazily inside functions, and rich loads some of its own on demand
+    hiddenimports=collect_submodules("interlatch") + collect_submodules("rich"),
     excludes=["tkinter", "pytest", "PIL"],
     noarchive=False,
 )
@@ -31,7 +31,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Interlatch",  # Contents/MacOS/Interlatch, which chronicle.install's shim runs
+    name="Interlatch",  # Contents/MacOS/Interlatch, which interlatch.install's shim runs
     console=False,
     argv_emulation=False,
     target_arch=os.environ.get("INTERLATCH_TARGET_ARCH") or None,

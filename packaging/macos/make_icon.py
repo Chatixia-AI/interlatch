@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 HERE = Path(__file__).parent
-WEB = HERE.parents[1] / "src" / "chronicle" / "web"
+WEB = HERE.parents[1] / "src" / "interlatch" / "web"
 SOURCE = HERE / "icon-3d.webp"
 S, M = 1024, 100  # macOS icon grid: artwork fits within an 824px square centred in 1024
 NAVY = (8, 26, 49)

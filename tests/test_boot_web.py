@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 NODE = shutil.which("node")
-WEB = Path(__file__).resolve().parents[1] / "src" / "chronicle" / "web" / "boot.js"
+WEB = Path(__file__).resolve().parents[1] / "src" / "interlatch" / "web" / "boot.js"
 pytestmark = pytest.mark.skipif(not NODE, reason="Node is needed to run the page's boot script")
 
 

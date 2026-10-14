@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from chronicle.codex_parser import _js_string, parse_codex_session
-from chronicle.config import Config, load_config, set_config_value
-from chronicle.connectors import all_status, connect, disconnect
-from chronicle.db import connect as db_connect
-from chronicle.digest import build_digest
-from chronicle.ingest import sync
+from interlatch.codex_parser import _js_string, parse_codex_session
+from interlatch.config import Config, load_config, set_config_value
+from interlatch.connectors import all_status, connect, disconnect
+from interlatch.db import connect as db_connect
+from interlatch.digest import build_digest
+from interlatch.ingest import sync
 
 from codex_fixture import (CODE_ID, CODEX_CWD, CODEX_ID, IMP_DUP, IMP_NEW, LEGACY_ID, RECOVERED, SUB_ID, code_mode_rollout,
                            write_codex_home)

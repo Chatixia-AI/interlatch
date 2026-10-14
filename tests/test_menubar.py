@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from chronicle.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
-from chronicle.util import to_iso
+from interlatch.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
+from interlatch.util import to_iso
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 
@@ -160,8 +160,8 @@ def test_the_page_gets_the_state_and_its_picture():
 
 
 def test_snapshot_from_the_dashboards_own_app(synced):
-    from chronicle.menubar import snapshot
-    from chronicle.server import make_server
+    from interlatch.menubar import snapshot
+    from interlatch.server import make_server
 
     httpd = make_server(synced["cfg"], port=0)
     try:
@@ -176,7 +176,7 @@ def test_snapshot_from_the_dashboards_own_app(synced):
 
 
 def test_stats_count_today_and_the_last_week(synced):
-    from chronicle.menubar import stats
+    from interlatch.menubar import stats
 
     conn = synced["conn"]
     n = conn.execute("SELECT COUNT(*) FROM sessions WHERE source NOT IN ('history')").fetchone()[0]
@@ -195,7 +195,7 @@ def test_stats_count_today_and_the_last_week(synced):
 
 
 def test_recent_sessions_leave_out_imported_chats(synced):
-    from chronicle.menubar import recent_sessions
+    from interlatch.menubar import recent_sessions
 
     conn = synced["conn"]
     sid = recent_sessions(conn)[0]["id"]
@@ -206,8 +206,8 @@ def test_recent_sessions_leave_out_imported_chats(synced):
 
 
 def test_only_the_login_item_shows_the_icon_by_itself(env, monkeypatch):
-    from chronicle.install import UI_LABEL
-    from chronicle.menubar import wants_menu_bar
+    from interlatch.install import UI_LABEL
+    from interlatch.menubar import wants_menu_bar
 
     cfg = env["cfg"]
     cfg.server_menu_bar = True  # turned on at install
@@ -224,7 +224,7 @@ def test_only_the_login_item_shows_the_icon_by_itself(env, monkeypatch):
 
 
 def test_menu_bar_is_off_until_turned_on_in_config(env):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     cfg = env["cfg"]
     assert load_config(cfg.home).server_menu_bar is False
@@ -233,22 +233,22 @@ def test_menu_bar_is_off_until_turned_on_in_config(env):
 
 
 def test_agent_sync_error_reads_the_launchd_exit_code(monkeypatch):
-    from chronicle import menubar
+    from interlatch import menubar
 
     for info, expected in [({"loaded": True, "last_exit": "0"}, None),
                            ({"loaded": True, "last_exit": "(never exited)"}, None),
                            ({"loaded": False, "last_exit": "1"}, None),
                            ({"installed": False}, None)]:
-        monkeypatch.setattr("chronicle.install.background_status", lambda info=info: info)
+        monkeypatch.setattr("interlatch.install.background_status", lambda info=info: info)
         assert menubar.agent_sync_error() is expected
-    monkeypatch.setattr("chronicle.install.background_status", lambda: {"loaded": True, "last_exit": "78"})
+    monkeypatch.setattr("interlatch.install.background_status", lambda: {"loaded": True, "last_exit": "78"})
     assert "78" in menubar.agent_sync_error()
 
 
 def test_without_pyobjc_the_dashboard_serves_as_before(env, monkeypatch):
     import builtins
 
-    from chronicle import menubar
+    from interlatch import menubar
 
     real = builtins.__import__
 
@@ -265,19 +265,19 @@ def test_without_pyobjc_the_dashboard_serves_as_before(env, monkeypatch):
 @pytest.fixture
 def setup(env, monkeypatch):
     """`chronicle install` on a Mac whose dashboard runs at login."""
-    monkeypatch.setattr("chronicle.update.compares_online", lambda: False)  # no release-notification question
+    monkeypatch.setattr("interlatch.update.compares_online", lambda: False)  # no release-notification question
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda *a, **k: [])
-    monkeypatch.setattr("chronicle.install.install_ui_agent", lambda *a, **k: [])
-    monkeypatch.setattr("chronicle.install.install_mcp", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.install_mcp", lambda *a, **k: [])
     return env
 
 
 def _install(monkeypatch, answers, *extra):
     import sys
 
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     asked = []
 
@@ -292,7 +292,7 @@ def _install(monkeypatch, answers, *extra):
 
 
 def test_install_asks_once_and_defaults_to_no(setup, monkeypatch, capsys):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     asked = _install(monkeypatch, {"Open": "n"})  # Enter: the default
     assert len(asked) == 1 and "[y/N]" in asked[0]
@@ -302,7 +302,7 @@ def test_install_asks_once_and_defaults_to_no(setup, monkeypatch, capsys):
 
 
 def test_install_turns_it_on_when_asked(setup, monkeypatch, capsys):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     monkeypatch.setattr("importlib.util.find_spec", lambda name, *a: None if name == "AppKit" else object())
     assert len(_install(monkeypatch, {"menu bar": "y", "Open": "n"})) == 1
@@ -312,7 +312,7 @@ def test_install_turns_it_on_when_asked(setup, monkeypatch, capsys):
 
 
 def test_install_flag_sets_it_without_asking(setup, monkeypatch):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     assert _install(monkeypatch, {"Open": "n"}, "--menu-bar") == []
     assert load_config(setup["home"]).server_menu_bar is True
@@ -321,8 +321,8 @@ def test_install_flag_sets_it_without_asking(setup, monkeypatch):
 
 
 def test_install_does_not_ask_without_the_login_dashboard_a_terminal_or_a_mac(setup, monkeypatch):
-    from chronicle.cli import main
-    from chronicle.config import load_config
+    from interlatch.cli import main
+    from interlatch.config import load_config
 
     assert _install(monkeypatch, {"Open": "n"}, "--no-ui") == []
     monkeypatch.setattr("platform.system", lambda: "Linux")
@@ -338,7 +338,7 @@ def mac(env, monkeypatch):
     """A uv tool install from PyPI with the team extra, whose dashboard is the login item, without the icon yet."""
     import types
 
-    from chronicle import install, menubar, update
+    from interlatch import install, menubar, update
 
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setattr(update, "_method", {"kind": "uv", "label": "uv tool from PyPI", "source": None, "local": False,
@@ -356,13 +356,13 @@ def mac(env, monkeypatch):
         ran.append(cmd)
         return types.SimpleNamespace(returncode=env.get("uv_exit", 0), stdout="", stderr=env.get("uv_err", ""))
 
-    monkeypatch.setattr("chronicle.menubar.subprocess.run", run)
+    monkeypatch.setattr("interlatch.menubar.subprocess.run", run)
     env.update(restarts=restarts, ran=ran)
     return env
 
 
 def _on(env) -> bool:
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     return load_config(env["home"]).server_menu_bar
 
@@ -370,7 +370,7 @@ def _on(env) -> bool:
 def test_the_extra_is_added_keeping_the_others_and_the_version(mac, monkeypatch):
     import sys
 
-    from chronicle import __version__, menubar, update
+    from interlatch import __version__, menubar, update
 
     assert menubar.extra_command() == ["/opt/uv", "tool", "install", "--force", "--python",
                                        f"{sys.version_info[0]}.{sys.version_info[1]}", f"interlatch[app,team]=={__version__}"]
@@ -383,7 +383,7 @@ def test_the_extra_is_added_keeping_the_others_and_the_version(mac, monkeypatch)
 
 
 def test_no_switch_off_a_mac_or_in_the_app(mac, monkeypatch):
-    from chronicle import menubar, update
+    from interlatch import menubar, update
 
     monkeypatch.setitem(update._method, "kind", "app")  # Chronicle.app always shows its icon
     assert menubar.setting_info(mac["cfg"]) == {"supported": False}
@@ -393,7 +393,7 @@ def test_no_switch_off_a_mac_or_in_the_app(mac, monkeypatch):
 
 
 def test_turning_it_on_installs_the_missing_extra_then_restarts(mac):
-    from chronicle import menubar, update
+    from interlatch import menubar, update
 
     said, expected = [], menubar.extra_command()
     out = menubar.apply_setting(mac["cfg"], True, said.append)
@@ -403,7 +403,7 @@ def test_turning_it_on_installs_the_missing_extra_then_restarts(mac):
 
 
 def test_a_failed_install_leaves_it_off(mac):
-    from chronicle import menubar
+    from interlatch import menubar
 
     mac.update(uv_exit=2, uv_err="resolving…\nerror: no network")
     with pytest.raises(RuntimeError, match="error: no network"):
@@ -412,7 +412,7 @@ def test_a_failed_install_leaves_it_off(mac):
 
 
 def test_the_dashboard_restarts_only_when_the_icon_has_to_show_or_go(mac, monkeypatch):
-    from chronicle import menubar
+    from interlatch import menubar
 
     monkeypatch.setattr(menubar, "app_extra", lambda: True)
     monkeypatch.setattr(menubar, "SHOWN", True)  # shown: turning it on changes nothing here
@@ -435,8 +435,8 @@ def test_the_switch_works_only_from_this_computer(mac, monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from chronicle import menubar, update
-    from chronicle.server import App, make_handler
+    from interlatch import menubar, update
+    from interlatch.server import App, make_handler
 
     app = App(mac["cfg"])
     assert app.status()["menu_bar"]["supported"]
@@ -479,7 +479,7 @@ def test_the_login_item_restarts_through_launchd(monkeypatch):
     import os
     import subprocess
 
-    from chronicle import install, update
+    from interlatch import install, update
 
     started, execd = [], []
     monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: started.append((cmd, kw.get("start_new_session"))))
