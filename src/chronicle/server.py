@@ -2776,7 +2776,12 @@ def make_handler(app: App, port: int):
                 if p == "/api/imports":
                     return self._json(app.imports())
                 if p == "/api/devices":
-                    return self._json({**app.devices(), "here": self._from_here(), **self._me()})
+                    dv = app.devices()
+                    if self.viewer is not None and not self._can_admin():  # computers, keys and the team store: admins'
+                        dv = {**dv, "this": {"name": dv["this"]["name"]}, "machines": [], "store": None,
+                              "allowed_hosts": [], "allowed_users": [], "path_map": {}, "folders": [], "projects": [],
+                              "team": None, "last_push": None}
+                    return self._json({**dv, "here": self._from_here(), **self._me()})
                 if p == "/api/team-store":
                     return self._json(app.team_store_status())
                 if p in ("/api/mirror", "/api/mirror/status"):
