@@ -783,6 +783,54 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 .mo-text .icon { width: 13px; height: 13px; color: var(--s-ink); }
 .badge.muted-badge { color: var(--muted); }
 
+/* A project's page: its lead and usage line, the tabs, where you left off, the folder in git, week by week */
+.proj-lead { max-width: 90ch; margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); text-wrap: pretty; }
+.proj-usage { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.proj-tabbar { margin: 18px 0 14px; }
+.proj-tabs { max-width: 100%; overflow-x: auto; }
+.proj-tabs button { white-space: nowrap; }
+.o-mark { display: inline-flex; flex: none; }
+.o-mark .icon { width: 14px; height: 14px; color: var(--s-ink); }
+.leftoff .lo-when { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.leftoff .lo-when .agent-icon { width: 14px; height: 14px; }
+.leftoff .lo-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+.leftoff .lo-goal, .leftoff .lo-note { margin: 8px 0 0; font-size: 13.5px; max-width: 90ch; }
+.leftoff .lo-note { color: var(--ink-2); }
+.lo-rows { display: grid; border-top: 1px solid var(--border); }
+.lo-row { border-bottom: 1px solid var(--border); }
+.lo-row summary { display: flex; align-items: center; gap: 8px; padding: 7px 2px; cursor: pointer; font-size: 13px; list-style: none; }
+.lo-row summary::-webkit-details-marker { display: none; }
+.lo-row .lo-date { flex: none; width: 52px; color: var(--muted); font-size: 12px; }
+.lo-row .lo-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lo-row[open] .lo-name { white-space: normal; }
+.lo-row .lo-open { flex: none; font-size: 11.5px; color: var(--warning-ink); }
+.lo-row .lo-who, .tl-items .tl-who { flex: none; font-size: 12px; color: var(--muted); }
+.leftoff .lo-when b { color: var(--ink-2); font-weight: 600; }
+.lo-row .lo-body { padding: 0 2px 10px 22px; font-size: 13px; }
+.lo-row .lo-body .lo-goal { margin: 0 0 4px; }
+.lo-foot { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.repo-card .repo-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; padding: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
+.repo-card .repo-row + .repo-row { border-top: 1px solid var(--border); }
+.repo-card .repo-row > .icon { width: 15px; height: 15px; margin-top: 2px; color: var(--muted); }
+.repo-trees { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.repo-trees li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl { display: grid; }
+.tl-week { padding: 12px 0; border-top: 1px solid var(--border); }
+.tl-week:first-child { border-top: 0; padding-top: 4px; }
+.tl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13.5px; }
+.tl-head span { font-size: 12.5px; color: var(--muted); }
+.tl-items { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.tl-items li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; }
+.tl-items li a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-shipped { display: grid; gap: 3px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.tl-shipped > div { display: flex; align-items: baseline; gap: 7px; }
+.tl-shipped .icon { flex: none; width: 13px; height: 13px; color: var(--muted); align-self: center; }
+.tl-prs { list-style: none; margin: 0; padding: 0 0 0 20px; display: grid; gap: 2px; min-width: 0; }
+.tl-prs li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-shipped > .link-btn { justify-self: start; margin-left: 16px; }
+.tl-quiet { padding: 6px 0; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); text-align: center; }
+.tl-quiet + .tl-week { border-top: 1px dashed var(--border); }
+
 mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; padding: 0 1px; }
 
 .status-list { display: grid; gap: 8px; }

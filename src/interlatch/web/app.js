@@ -2702,7 +2702,7 @@ const KB_TONES = [[/prefer|convention|claude|好み|規約|慣習/i, "preference
   [/pattern|command|reusable|run|test|deploy|パターン|コマンド|実行|テスト|デプロイ|再利用/i, "command", "good"], [/decision|rationale|決定|判断|理由/i, "decision", "accent"],
   [/learn|学び|気づき/i, "learning", "accent"], [/problem|recurring|open|friction|問題|課題|未解決|繰り返|つまずき/i, "todo", "warning"],
   [/architecture|fact|overview|構成|アーキテクチャ|事実|概要/i, "fact", "accent"]];
-function kbView(p, isGlobal) {
+function kbView(p, isGlobal, { overview = true } = {}) { // overview: false when the page already shows it
   const box = h("div", { class: "kb" });
   if (!p.kb) {
     box.append(h("section", { class: "card empty" }, isGlobal ? t("No playbook yet. It is built automatically once enough cross-project knowledge is analyzed, or synthesize it now.")
@@ -2754,7 +2754,7 @@ function kbView(p, isGlobal) {
   let debounce;
   filter.addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(draw, 150); });
   draw();
-  const full = data.overview && data.tldr && data.tldr.length ? h("details", { class: "card rv-full" }, h("summary", null, t("Read the overview")), mdEl(data.overview))
+  const full = !overview ? null : data.overview && data.tldr && data.tldr.length ? h("details", { class: "card rv-full" }, h("summary", null, t("Read the overview")), mdEl(data.overview))
     : data.overview ? h("details", { class: "card rv-full" }, h("summary", null, t("Read the full overview")), mdEl(data.overview)) : null;
   append(box, [hero, !isGlobal && p.diagram && window.rough ? diagramCard(p) : null,
     h("div", { class: "kb-tools" }, nav, bullets > 10 ? filter : null), grid, full]);
@@ -2878,6 +2878,99 @@ function diagramCard(p) {
     (body) => draw(body), table, [download], "system");
 }
 
+// A project's page is for coming back to it: where its last sessions left things, its work week by week and its folder
+// in git (progress.py), read from the sessions and git with no model writing any of it. The knowledge base, every
+// lesson and session, the artifacts and the usage numbers sit in the tabs behind.
+const PROJECT_TABS = [["overview", t("Overview")], ["working", t("Working here")], ["knowledge", t("Knowledge")],
+  ["sessions", t("Sessions")], ["artifacts", t("Artifacts")], ["usage", t("Usage")]];
+function projectPulse(last) { // worked on in the last week, the last month, or before that
+  const days = last ? (Date.now() - new Date(last).getTime()) / 86400000 : Infinity;
+  return days <= 7 ? ["good", tc("project", "Active")] : days <= 30 ? ["warning", t("Quiet")] : ["", t("Dormant")];
+}
+function outcomeMark(x) { // a session's outcome as its icon alone, named on hover
+  const o = OUTCOME[x.outcome];
+  return h("span", { class: `o-mark s-${o ? o[0] || "neutral" : "none"}`, title: o ? o[1] : STATUS_LABEL[x.analysis_status] || "" },
+    icon(o ? x.outcome : x.source === "history" ? "history" : "queued"));
+}
+function leftOffCard(recent) { // the last sessions as each one ended: the newest in full, the ones before it folded
+  if (!recent || !recent.length) return null;
+  const [last, ...before] = recent;
+  const team = recent.some((x) => x.who); // a hub with people: the sessions are the team's, each with its person
+  const title = (x) => x.title || t("(untitled session)");
+  const goal = (x) => (x.goal ? h("p", { class: "lo-goal" }, h("b", null, t("Goal")), t(": "), x.goal) : null);
+  const open = (x) => (x.open_threads.length ? h("ul", { class: "checklist" }, x.open_threads.map((o) => h("li", null, o))) : null);
+  const lastEl = h("div", { class: "lo-last" },
+    h("div", { class: "lo-when" }, agentIcon(last.agent), last.who ? h("b", null, last.who) : null,
+      h("span", null, `${last.who ? "· " : ""}${fmtDT(last.started_at)} · ${ago(last.started_at)}`),
+      last.active_s ? h("span", null, ` · ${t("{dur} active", { dur: fmtDur(last.active_s) })}`) : null),
+    h("div", { class: "lo-title" }, h("a", { href: `#/session/${last.id}` }, title(last)), outcomeBadge(last.outcome, last.analysis_status, last.source)),
+    goal(last), last.outcome_note ? h("p", { class: "lo-note" }, last.outcome_note) : null,
+    last.open_threads.length ? [h("div", { class: "subhead" }, t("Left open")), open(last)] : null);
+  const rows = before.map((x) => h("details", { class: "lo-row" },
+    h("summary", null, outcomeMark(x), h("span", { class: "lo-date" }, fmtDate(x.started_at)), h("span", { class: "lo-name" }, title(x)),
+      x.who ? h("span", { class: "lo-who" }, x.who) : null,
+      x.open_threads.length ? h("span", { class: "lo-open" }, tn(x.open_threads.length, "{n} left open", "{n} left open")) : null),
+    h("div", { class: "lo-body" }, goal(x), open(x), h("a", { class: "link-arrow", href: `#/session/${x.id}` }, t("Open session"), icon("arrow")))));
+  return h("section", { class: "card leftoff" }, cardHead(team ? t("Where the team left off") : t("Where you left off"), { iconName: "history" }), lastEl,
+    rows.length ? [h("div", { class: "subhead" }, t("Before that")), h("div", { class: "lo-rows" }, rows)] : null,
+    h("p", { class: "lo-foot" }, t("What each session left open when it ended. A later session, or work outside one, may have dealt with it since.")));
+}
+function repoCard(r, path) { // the folder's git state as the page loaded (progress.repo_state): only on this computer
+  if (!r) return null;
+  const pending = r.changed + r.untracked + r.conflicts;
+  const parts = [r.changed ? t("{n} changed", { n: r.changed }) : null, r.untracked ? t("{n} new", { n: r.untracked }) : null,
+    r.conflicts ? t("{n} in conflict", { n: r.conflicts }) : null].filter(Boolean).join(" · ");
+  const sync = !r.branch ? t("detached HEAD") : !r.upstream ? t("no upstream branch")
+    : r.ahead || r.behind ? t("{ahead} ahead, {behind} behind {upstream}", { ahead: r.ahead, behind: r.behind, upstream: r.upstream })
+    : t("in step with {upstream}", { upstream: r.upstream });
+  const row = (ic, ...kids) => h("div", { class: "repo-row" }, icon(ic), h("div", null, ...kids));
+  return h("section", { class: "card repo-card" }, cardHead(t("The folder now"), { iconName: "branch", hint: t("from git, as this page loaded") }),
+    row("branch", r.branch ? h("b", { class: "mono" }, r.branch) : null, h("div", { class: "muted" }, sync)),
+    row("diff", pending ? h("b", null, tn(pending, "{n} uncommitted change", "{n} uncommitted changes")) : t("Nothing uncommitted"),
+      parts ? h("div", { class: "muted" }, parts) : null),
+    r.last ? row("commit", h("span", { title: r.last.sha }, r.last.subject), h("div", { class: "muted" }, t("last commit {ago}", { ago: ago(r.last.at) }))) : null,
+    r.worktrees.length ? [h("div", { class: "subhead" }, t("Other worktrees")), h("ul", { class: "repo-trees" }, r.worktrees.map((w) =>
+      h("li", { title: w.path }, h("span", { class: "mono" }, shortPath(w.path)), w.branch ? h("span", { class: "muted" }, ` · ${w.branch}`) : null)))] : null,
+    shortPath(r.root) !== shortPath(path) ? h("p", { class: "lo-foot" }, t("In the repository {path}", { path: shortPath(r.root) })) : null);
+}
+function timelineCard(tl) { // the work week by week, newest first (progress.timeline)
+  if (!tl || !tl.weeks.length) return null;
+  const SHOWN = 6;
+  const monday = (day) => `${day}T00:00:00`; // a week's start, in local time
+  const capped = (list, li, limit, cls = "tl-items") => { // the first few, the rest behind "+N more"
+    const ul = h("ul", { class: cls }, list.slice(0, limit).map(li));
+    if (list.length <= limit) return ul;
+    const more = h("button", { class: "link-btn", type: "button", onclick: () => { ul.append(...list.slice(limit).map(li)); more.remove(); } },
+      t("+{n} more", { n: list.length - limit }));
+    return [ul, more];
+  };
+  const session = (x) => h("li", null, outcomeMark(x), h("a", { href: `#/session/${x.id}` }, x.title || t("(untitled session)")),
+    x.who ? h("span", { class: "tl-who" }, x.who) : null);
+  const pr = (x) => h("li", null, safeUrl(x.url) ? h("a", { href: safeUrl(x.url), target: "_blank", rel: "noopener" }, x.title || x.url) : x.title || x.url);
+  const week = (w, newer) => {
+    const quiet = newer ? Math.round((new Date(monday(newer.start)) - new Date(monday(w.start))) / (7 * 86400000)) - 1 : 0;
+    const shipped = w.prs.length || w.commits ? h("div", { class: "tl-shipped" },
+      w.prs.length ? [h("div", null, icon("pr"), h("span", null, tn(w.prs.length, "{n} pull request opened", "{n} pull requests opened"))),
+        capped(w.prs, pr, 3, "tl-prs")] : null,
+      w.commits ? h("div", null, icon("commit"), h("span", null, tn(w.commits, "{n} commit", "{n} commits"))) : null) : null;
+    return [quiet > 0 ? h("div", { class: "tl-quiet" }, tn(quiet, "{n} quiet week", "{n} quiet weeks")) : null,
+      h("div", { class: "tl-week" },
+        h("div", { class: "tl-head" }, h("b", null, t("Week of {date}", { date: fmtDateY(monday(w.start)) })),
+          h("span", null, `${tn(w.sessions, "{n} session", "{n} sessions", { n: fmtNum(w.sessions) })} · ${t("{dur} active", { dur: fmtDur(w.active_s) })}`)),
+        capped(w.items, session, 5),
+        w.sessions > w.items.length ? h("div", { class: "muted small" }, t("and {n} more", { n: w.sessions - w.items.length })) : null,
+        shipped)];
+  };
+  const box = h("div", { class: "tl" });
+  const show = (from, to) => tl.weeks.slice(from, to).forEach((w, i) => append(box, week(w, tl.weeks[from + i - 1])));
+  show(0, SHOWN);
+  const rest = tl.weeks.length - SHOWN;
+  const more = rest > 0 ? h("button", { class: "btn small", type: "button", onclick: () => { show(SHOWN, tl.weeks.length); more.remove(); } },
+    tn(rest, "Show {n} earlier week", "Show {n} earlier weeks")) : null;
+  return h("section", { class: "card timeline" }, cardHead(t("Week by week"), { iconName: "calendar", hint: t("newest first") }), box, more,
+    tl.earlier ? h("p", { class: "lo-foot" }, tn(tl.earlier, "{n} earlier week with sessions isn't listed.", "{n} earlier weeks with sessions aren't listed.")) : null);
+}
+
 route(/^\/project$/, async (params) => {
   const path = params.path || "";
   const token = renderSeq;
@@ -2891,12 +2984,21 @@ route(/^\/project$/, async (params) => {
     toast(r.started ? t("Synthesizing the knowledge base with {agent}…", { agent: analyzer() }) : t("Already running"));
     watchJob(`synthesize:${path}`);
   } }, p.kb ? t("Re-synthesize") : t("Synthesize now"));
-  const kbCard = kbView(p, isGlobal);
   if (isGlobal) {
     return h("div", null, h("div", { class: "page-head" }, titled("flag", h("h1", null, t("Global playbook")),
-      h("div", { class: "sub" }, t("Cross-project learnings and your working preferences, distilled from every session"))), synth), kbCard);
+      h("div", { class: "sub" }, t("Cross-project learnings and your working preferences, distilled from every session"))), synth), kbView(p, true));
   }
   const st = p.stats;
+  const overview = p.kb ? JSON.parse(p.kb.kb_json || "{}").overview : "";
+  const lead = overview ? h("p", { class: "proj-lead gloss" }, plainText(overview)) : null;
+  const [pulseCls, pulse] = projectPulse(st.last);
+  const usage = h("div", { class: "proj-usage" },
+    h("span", { class: `badge ${pulseCls}` }, h("span", { class: "sdot" }), pulse),
+    h("span", null, t("Last session {ago}", { ago: ago(st.last) })),
+    h("span", null, tn(st.sessions, "{n} session", "{n} sessions", { n: fmtNum(st.sessions) })),
+    h("span", null, t("{dur} active", { dur: fmtDur(st.active_s) })),
+    h("span", null, t("{n} tokens", { n: fmtCompact(st.tokens) })),
+    h("span", { title: t("API list-price equivalent; subscriptions are billed differently") }, t("{cost} est. API cost", { cost: fmtCost(st.cost) })));
   const tiles = h("div", { class: "tiles" },
     tile(t("Sessions"), fmtNum(st.sessions), { iconName: "sessions" }), tile(t("Active time"), fmtDur(st.active_s), { iconName: "clock" }),
     tile(t("Prompts"), fmtNum(st.prompts), { iconName: "prompts" }), tile(t("Tokens"), fmtCompact(st.tokens), { iconName: "tokens" }),
@@ -2906,25 +3008,41 @@ route(/^\/project$/, async (params) => {
   const sessions = h("section", { class: "card", style: { padding: "4px 6px" } }, h("div", { class: "table-wrap" }, h("table", { class: "data sessions" },
     h("thead", null, h("tr", null, [t("Started"), t("Session"), t("Project"), t("Agent"), t("Prompts"), t("Tools"), t("Active"), t("Tokens"), t("Est. cost"), t("Outcome")].map((c, i) => h("th", { class: i >= 4 && i <= 8 ? "num" : "" }, c)))),
     h("tbody", null, p.sessions.map((x) => sessionRow(x))))));
+  const glossary = p.glossary && p.glossary.length ? [
+    h("h2", { style: { margin: "22px 0 10px" } }, t("Glossary ({n})", { n: p.glossary.length }), " ",
+      h("a", { class: "hint", style: { fontSize: "12.5px", fontWeight: 400 }, href: `#/glossary?project=${encodeURIComponent(path)}` }, t("open →"))),
+    h("section", { class: "card" }, h("dl", { class: "kv", style: { marginTop: 0 } }, p.glossary.map((g) => [
+      h("dt", null, h("a", { href: `#/glossary?term=${encodeURIComponent(g.term)}` }, g.term)),
+      h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)])))] : null;
+  const leftOff = leftOffCard(p.recent), repo = repoCard(p.repo, path);
+  const panes = {
+    overview: h("div", { class: "grid" }, leftOff && repo ? h("div", { class: "grid cols-main" }, leftOff, repo) : leftOff || repo, timelineCard(p.timeline)),
+    working: h("div", null, kbView(p, false, { overview: !lead }), glossary),
+    knowledge: p.knowledge.length ? h("div", { class: "kgrid" }, p.knowledge.map((k) => knowledgeCard(k, { compact: true }))) : null,
+    sessions: h("div", null, sessions, st.sessions > p.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
+      shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null),
+    artifacts: p.artifacts?.total ? artifactsCard(p.artifacts.recent, { project: false,
+      hint: ART_KINDS.filter(([k]) => p.artifacts.counts[k]).map(([k, plural]) => `${plural} ${fmtNum(p.artifacts.counts[k])}`).join(" · "),
+      all: `#/artifacts?project=${encodeURIComponent(path)}` }) : null,
+    usage: h("div", { class: "grid" }, tiles, p.files && p.files.length ? filesCard : null),
+  };
+  const counts = { knowledge: p.knowledge.length, sessions: st.sessions, artifacts: p.artifacts?.total };
+  const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Project view") }, PROJECT_TABS.filter(([k]) => panes[k]).map(([k, label]) =>
+    h("button", { type: "button", "data-tab": k, onclick: () => showTab(k) }, label, counts[k] ? h("span", { class: "seg-tag" }, fmtNum(counts[k])) : null)));
+  const showTab = (name, record = true) => {
+    for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
+    tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+    if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
+  };
+  showTab(panes[params.tab] ? params.tab : "overview", false);
   return h("div", null,
     h("div", { class: "page-head" }, titled("folder", h("div", { class: "muted", style: { fontSize: "12.5px" } }, h("a", { href: "#/projects" }, t("Projects")), " / "),
-      h("h1", null, p.label, p.shared ? [" ", sharedBadge()] : null, p.hub ? [" ", hubBadge(p)] : null), h("div", { class: "sub mono", style: { fontSize: "12px" } }, path, ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`)),
+      h("h1", null, p.label, p.shared ? [" ", sharedBadge()] : null, p.hub ? [" ", hubBadge(p)] : null), h("div", { class: "sub mono", style: { fontSize: "12px" } }, path, ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
+      usage),
       h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map")), synth)),
-    tiles,
-    h("div", { class: "section-gap" }, kbCard),
-    p.artifacts?.total ? h("div", { class: "section-gap" }, artifactsCard(p.artifacts.recent, { project: false,
-      hint: ART_KINDS.filter(([k]) => p.artifacts.counts[k]).map(([k, plural]) => `${plural} ${fmtNum(p.artifacts.counts[k])}`).join(" · "),
-      all: `#/artifacts?project=${encodeURIComponent(path)}` })) : null,
-    p.files && p.files.length ? h("div", { class: "section-gap" }, filesCard) : null,
-    p.glossary && p.glossary.length ? [
-      h("h2", { style: { margin: "22px 0 10px" } }, t("Glossary ({n})", { n: p.glossary.length }), " ",
-        h("a", { class: "hint", style: { fontSize: "12.5px", fontWeight: 400 }, href: `#/glossary?project=${encodeURIComponent(path)}` }, t("open →"))),
-      h("section", { class: "card" }, h("dl", { class: "kv", style: { marginTop: 0 } }, p.glossary.map((g) => [
-        h("dt", null, h("a", { href: `#/glossary?term=${encodeURIComponent(g.term)}` }, g.term)),
-        h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)])))] : null,
-    h("h2", { class: "section-gap", style: { margin: "22px 0 10px" } }, t("Knowledge ({n})", { n: p.knowledge.length })),
-    h("div", { class: "kgrid" }, p.knowledge.map((k) => knowledgeCard(k, { compact: true }))),
-    h("h2", { style: { margin: "22px 0 10px" } }, t("Sessions ({n})", { n: p.sessions.length })), sessions);
+    lead,
+    h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
+    Object.values(panes).filter(Boolean));
 });
 
 // =====================================================================================
