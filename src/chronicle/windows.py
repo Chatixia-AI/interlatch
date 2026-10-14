@@ -262,5 +262,308 @@ def open_path(path: str, *, reveal: bool) -> None:
         os.startfile(path)  # noqa: S606 (a recorded document, checked by artifacts.artifact_reveal)
 
 
+# ------------------------------------------------------------------ system tray
+# Quit under the Dashboard task: Task Scheduler starts the dashboard again within 5 minutes, so Quit leaves this file
+# behind (holding the sign-in it was quit in) and `interlatch ui` under the task ends at once while it stands, as the
+# macOS menu bar's Quit stops the login item until the next login. `interlatch install` clears it.
+QUIT_FILE = "ui-quit"
+QUIT_TEXT = ("The dashboard and this icon stop until you next sign in, or until you run `interlatch ui`. "
+             "Your sessions are still recorded.")
+TRAY_MENU = ((1, "Open Dashboard"), (2, "Sync Now"), (0, None), (3, "Quit Interlatch"))  # (command, label); 0: a line
+
+
+def mark_quit(home: Path, logon: str | None) -> None:
+    if logon:
+        (Path(home) / QUIT_FILE).write_text(logon)
+
+
+def quit_stands(home: Path, logon: str | None) -> bool:
+    """The dashboard was quit from the icon in this sign-in (`logon`: logon_id()); unknown, no."""
+    try:
+        return bool(logon) and (Path(home) / QUIT_FILE).read_text().strip() == logon
+    except OSError:
+        return False
+
+
+def clear_quit(home: Path) -> None:
+    (Path(home) / QUIT_FILE).unlink(missing_ok=True)
+
+
+def logon_id() -> str | None:
+    """This sign-in's logon session (the AuthenticationId of this process's token): a new one after signing out or a
+    restart. None when it can't be told (or not on Windows)."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi32.OpenProcessToken.argtypes = (wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE))
+    advapi32.GetTokenInformation.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+                                             ctypes.POINTER(wintypes.DWORD))
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):  # TOKEN_QUERY
+        return None
+    try:
+        buf, size = ctypes.create_string_buffer(64), wintypes.DWORD()
+        if not advapi32.GetTokenInformation(token, 10, buf, len(buf), ctypes.byref(size)):  # TokenStatistics
+            return None
+        return buf.raw[8:16].hex()  # TOKEN_STATISTICS: TokenId (LUID), then AuthenticationId (LUID)
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def ico_from_pngs(pngs: list[bytes]) -> bytes:
+    """An .ico file holding these PNG images (Windows Vista and later read PNG entries), each its own size."""
+    import struct
+
+    head = struct.pack("<HHH", 0, 1, len(pngs))
+    entries, offset = b"", 6 + 16 * len(pngs)
+    for png in pngs:
+        w, h = struct.unpack(">II", png[16:24])  # the IHDR chunk
+        entries += struct.pack("<BBBBHHII", w % 256, h % 256, 0, 0, 1, 32, len(png), offset)  # 256 is written 0
+        offset += len(png)
+    return head + entries + b"".join(pngs)
+
+
+def tray_icon_file(home: Path) -> Path | None:
+    """Interlatch's icon as an .ico (from the dashboard's own PNGs) in `home`, for the notification area; None if the
+    PNGs aren't there."""
+    web = Path(__file__).parent / "web"
+    try:
+        pngs = [(web / name).read_bytes() for name in ("favicon.png", "icon.png")]
+        out = Path(home) / "tray.ico"
+        data = ico_from_pngs(pngs)
+        if not out.is_file() or out.read_bytes() != data:
+            out.write_bytes(data)
+        return out
+    except OSError:
+        return None
+
+
+def run_tray_with_server(cfg, httpd, url: str) -> bool:
+    """`interlatch ui` with an icon in the notification area: the dashboard serves on a thread while this (main) thread
+    runs a Win32 message loop. Left-click opens the dashboard; right-click shows Open Dashboard, Sync Now and Quit. The
+    icon comes back when Explorer restarts (TaskbarCreated). False, with nothing started, when it can't be shown."""
+    import ctypes
+    import logging
+    import threading
+    import webbrowser
+    from ctypes import wintypes
+
+    log = logging.getLogger("interlatch.windows")
+
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    except (OSError, AttributeError) as exc:
+        log.warning("cannot show the notification-area icon: %s", exc)
+        return False
+
+    WM_DESTROY, WM_CLOSE, WM_TIMER = 0x0002, 0x0010, 0x0113
+    WM_TRAY = 0x0400 + 20  # WM_USER + 20
+    WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_RBUTTONUP = 0x0202, 0x0203, 0x0205
+    NIM_ADD, NIM_MODIFY, NIM_DELETE = 0, 1, 2
+    NIF_MESSAGE, NIF_ICON, NIF_TIP = 1, 2, 4
+    TPM_RIGHTBUTTON, TPM_RETURNCMD = 0x0002, 0x0100
+    MF_STRING, MF_SEPARATOR = 0x0000, 0x0800
+    MB_OKCANCEL, MB_ICONQUESTION, MB_SETFOREGROUND, IDOK = 0x1, 0x20, 0x10000, 1
+    IMAGE_ICON, LR_LOADFROMFILE, SM_CXSMICON, SM_CYSMICON = 1, 0x10, 49, 50
+
+    class NOTIFYICONDATAW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD), ("hWnd", wintypes.HWND), ("uID", wintypes.UINT), ("uFlags", wintypes.UINT),
+            ("uCallbackMessage", wintypes.UINT), ("hIcon", wintypes.HICON), ("szTip", wintypes.WCHAR * 128),
+            ("dwState", wintypes.DWORD), ("dwStateMask", wintypes.DWORD), ("szInfo", wintypes.WCHAR * 256),
+            ("uTimeoutOrVersion", wintypes.UINT), ("szInfoTitle", wintypes.WCHAR * 64), ("dwInfoFlags", wintypes.DWORD),
+            ("guidItem", ctypes.c_byte * 16), ("hBalloonIcon", wintypes.HICON),
+        ]
+
+    WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+
+    class WNDCLASSW(ctypes.Structure):
+        _fields_ = [
+            ("style", wintypes.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
+            ("hInstance", wintypes.HINSTANCE), ("hIcon", wintypes.HICON), ("hCursor", wintypes.HICON),
+            ("hbrBackground", wintypes.HBRUSH), ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR),
+        ]
+
+    class POINT(ctypes.Structure):
+        _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
+    # 64-bit handles: every handle-returning call gets its restype, or ctypes cuts it to an int
+    kernel32.GetModuleHandleW.argtypes = (wintypes.LPCWSTR,)
+    kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+    user32.DefWindowProcW.argtypes = (wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+    user32.DefWindowProcW.restype = ctypes.c_ssize_t
+    user32.RegisterWindowMessageW.argtypes = (wintypes.LPCWSTR,)
+    user32.RegisterWindowMessageW.restype = wintypes.UINT
+    user32.TrackPopupMenu.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                      wintypes.HWND, ctypes.c_void_p)
+    user32.TrackPopupMenu.restype = ctypes.c_int
+    user32.AppendMenuW.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR)
+    user32.AppendMenuW.restype = wintypes.BOOL
+    user32.CreatePopupMenu.restype = wintypes.HMENU
+    user32.DestroyMenu.argtypes = (wintypes.HMENU,)
+    user32.MessageBoxW.argtypes = (wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT)
+    user32.MessageBoxW.restype = ctypes.c_int
+    shell32.Shell_NotifyIconW.argtypes = (wintypes.DWORD, ctypes.c_void_p)
+    shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+    shell32.ExtractIconW.argtypes = (wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT)
+    shell32.ExtractIconW.restype = wintypes.HICON
+    user32.LoadImageW.argtypes = (wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int,
+                                  wintypes.UINT)
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.LoadIconW.argtypes = (wintypes.HINSTANCE, ctypes.c_void_p)
+    user32.LoadIconW.restype = wintypes.HICON
+    user32.GetSystemMetrics.argtypes = (ctypes.c_int,)
+    user32.CreateWindowExW.argtypes = (wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_int,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.HMENU,
+                                       wintypes.HINSTANCE, ctypes.c_void_p)
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.RegisterClassW.argtypes = (ctypes.c_void_p,)
+    user32.RegisterClassW.restype = wintypes.ATOM
+    user32.UnregisterClassW.argtypes = (wintypes.LPCWSTR, wintypes.HINSTANCE)
+    user32.GetMessageW.argtypes = (ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.UINT)
+    user32.GetMessageW.restype = wintypes.BOOL
+    user32.TranslateMessage.argtypes = (ctypes.c_void_p,)
+    user32.DispatchMessageW.argtypes = (ctypes.c_void_p,)
+    user32.DispatchMessageW.restype = ctypes.c_ssize_t
+    user32.DestroyWindow.argtypes = (wintypes.HWND,)
+    user32.PostQuitMessage.argtypes = (ctypes.c_int,)
+    user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+    user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
+    user32.GetCursorPos.argtypes = (ctypes.c_void_p,)
+    user32.SetTimer.argtypes = (wintypes.HWND, ctypes.c_size_t, wintypes.UINT, ctypes.c_void_p)
+    user32.SetTimer.restype = ctypes.c_size_t
+    user32.KillTimer.argtypes = (wintypes.HWND, ctypes.c_size_t)
+
+    hinst = kernel32.GetModuleHandleW(None)
+    class_name = f"InterlatchTray_{os.getpid()}"
+    taskbar_created = user32.RegisterWindowMessageW("TaskbarCreated")  # Explorer (re)started: add the icon again
+    nid = NOTIFYICONDATAW()
+
+    def open_dashboard() -> None:
+        threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+
+    def refresh_tip() -> None:
+        try:
+            from .menubar import snapshot
+
+            snap = snapshot(httpd.app)
+            if snap:
+                nid.szTip = f"Interlatch: {snap.headline}"[:127]
+                shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(nid))
+        except Exception:  # noqa: BLE001 (a tooltip is not worth stopping the dashboard for)
+            log.debug("tray tooltip not updated", exc_info=True)
+
+    def quit_(hwnd) -> None:
+        if os.environ.get(RUNNER_ENV):  # the Dashboard task would start it again within 5 minutes
+            if user32.MessageBoxW(hwnd, QUIT_TEXT, "Quit Interlatch?", MB_OKCANCEL | MB_ICONQUESTION | MB_SETFOREGROUND) != IDOK:
+                return
+            mark_quit(cfg.home, logon_id())
+        user32.DestroyWindow(hwnd)
+
+    def menu(hwnd) -> None:
+        hmenu, cmd = user32.CreatePopupMenu(), 0
+        try:
+            for item, label in TRAY_MENU:
+                user32.AppendMenuW(hmenu, MF_STRING if item else MF_SEPARATOR, item, label)
+            user32.SetForegroundWindow(hwnd)  # or the menu doesn't close when clicking elsewhere
+            pt = POINT()
+            user32.GetCursorPos(ctypes.byref(pt))
+            cmd = user32.TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_RETURNCMD, pt.x, pt.y, 0, hwnd, None)
+            user32.PostMessageW(hwnd, 0, 0, 0)
+        finally:
+            user32.DestroyMenu(hmenu)
+        if cmd == 1:
+            open_dashboard()
+        elif cmd == 2:
+            threading.Thread(target=httpd.app.action_sync, daemon=True).start()
+        elif cmd == 3:
+            quit_(hwnd)
+
+    def wnd_proc(hwnd, msg, wparam, lparam):
+        if msg == WM_TRAY:
+            event = lparam & 0xFFFF
+            if event in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
+                open_dashboard()
+            elif event == WM_RBUTTONUP:
+                menu(hwnd)
+            return 0
+        if taskbar_created and msg == taskbar_created:
+            shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+            return 0
+        if msg == WM_TIMER:
+            refresh_tip()
+            return 0
+        if msg in (WM_CLOSE, WM_DESTROY):
+            user32.PostQuitMessage(0)
+            return 0
+        return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    proc_ref = WNDPROC(wnd_proc)  # kept referenced while the window lives
+    wc = WNDCLASSW()
+    wc.lpfnWndProc = proc_ref
+    wc.hInstance = hinst
+    wc.lpszClassName = class_name
+    if not user32.RegisterClassW(ctypes.byref(wc)):
+        log.warning("notification-area icon: window class not registered (%s)", ctypes.get_last_error())
+        return False
+    # a hidden top-level window (not a message-only one): only those hear Explorer's TaskbarCreated broadcast
+    hwnd = user32.CreateWindowExW(0, class_name, "Interlatch", 0, 0, 0, 0, 0, None, None, hinst, None)
+    if not hwnd:
+        user32.UnregisterClassW(class_name, hinst)
+        log.warning("notification-area icon: no window (%s)", ctypes.get_last_error())
+        return False
+
+    ico = tray_icon_file(cfg.home)
+    hicon = user32.LoadImageW(None, str(ico), IMAGE_ICON, user32.GetSystemMetrics(SM_CXSMICON),
+                              user32.GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE) if ico else None
+    if not hicon:
+        hicon = shell32.ExtractIconW(hinst, sys.executable, 0)  # Python's own icon
+    if not hicon or hicon == 1:
+        hicon = user32.LoadIconW(None, 32512)  # IDI_APPLICATION
+    nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+    nid.hWnd = hwnd
+    nid.uID = 1
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP
+    nid.uCallbackMessage = WM_TRAY
+    nid.hIcon = hicon
+    nid.szTip = "Interlatch"
+    if not shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid)):
+        user32.DestroyWindow(hwnd)
+        user32.UnregisterClassW(class_name, hinst)
+        log.warning("notification-area icon not added")
+        return False
+
+    threading.Thread(target=httpd.serve_forever, name="interlatch-ui", daemon=True).start()
+    log.info("notification-area icon on, dashboard at %s", url)
+    refresh_tip()
+    user32.SetTimer(hwnd, 1, 10000, None)  # the tooltip's line, every 10 s
+    try:
+        msg = wintypes.MSG()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        try:
+            shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+            user32.KillTimer(hwnd, 1)
+            user32.DestroyWindow(hwnd)
+            user32.UnregisterClassW(class_name, hinst)
+        except Exception:  # noqa: BLE001
+            pass
+        httpd.shutdown()
+        httpd.server_close()
+    return True
+
+
 if __name__ == "__main__":
     raise SystemExit(run_hidden(sys.argv[1:]))

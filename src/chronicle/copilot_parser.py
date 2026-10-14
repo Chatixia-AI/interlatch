@@ -47,12 +47,17 @@ def shift_iso(ts: str | None, ms: float) -> str | None:
     return (dt + timedelta(milliseconds=ms)).isoformat(timespec="milliseconds").replace("+00:00", "Z") if dt else ts
 
 
+_URI_DRIVE = re.compile(r"/[A-Za-z]:(?:/|$)")  # a Windows drive as a URI's path spells it
+
+
 def uri_path(uri) -> str | None:
-    """file:///Users/x or a VS Code URI object -> /Users/x."""
+    """file:///Users/x or a VS Code URI object -> /Users/x. On Windows file:///c%3A/x -> c:/x, not /c:/x."""
     if isinstance(uri, dict):
-        return uri.get("fsPath") or uri.get("path")
+        p = uri.get("fsPath") or uri.get("path")
+        return p[1:] if isinstance(p, str) and _URI_DRIVE.match(p) else p
     if isinstance(uri, str) and uri.startswith("file:"):
-        return unquote(urlparse(uri).path) or None
+        p = unquote(urlparse(uri).path)
+        return (p[1:] if _URI_DRIVE.match(p) else p) or None
     if isinstance(uri, str) and uri.startswith("vscode-remote:"):  # vscode-remote://ssh-remote+host/path -> host:/path
         u = urlparse(uri)
         host = unquote(u.netloc).split("+", 1)[-1]

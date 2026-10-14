@@ -1,5 +1,6 @@
 """Release notifications: opt-in, at most one PyPI request a day, one desktop notification per release."""
 
+import base64
 import io
 import json
 import time
@@ -92,6 +93,34 @@ def test_post_uses_the_system_notifier(monkeypatch):
     monkeypatch.setattr("platform.system", lambda: "Linux")
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/notify-send")
     assert notify.post("T", "M") and ran[-1] == ["notify-send", "--app-name=Interlatch", "T", "M"]
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    assert not notify.post("T", "M")
+
+    # Windows: a PowerShell toast, the text on stdin as JSON (never in the command line), no console window
+    calls = []
+
+    def fake_win_run(cmd, input=None, **k):
+        calls.append((cmd, input, k))
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr("platform.system", lambda: "Windows")
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("subprocess.CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" if "powershell" in name else None)
+    monkeypatch.setattr("subprocess.run", fake_win_run)
+    title, message = "Interlatch 1.0'; Remove-Item -Recurse C:\\ #", 'run: "uv tool upgrade" $(whoami) ü'
+    assert notify.post(title, message)
+    cmd, stdin, kw = calls[-1]
+    assert cmd[0].endswith("powershell.exe") and cmd[-2] == "-EncodedCommand"
+    script = base64.b64decode(cmd[-1]).decode("utf-16-le")
+    assert script == notify.WINDOWS_SCRIPT and notify.WINDOWS_AUMID in script and "%AUMID%" not in script
+    assert "CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe')" in script
+    assert "Remove-Item" not in " ".join(cmd) and "whoami" not in " ".join(cmd)
+    assert json.loads(stdin) == {"title": title, "message": message} and stdin.isascii()
+    assert kw["creationflags"] == 0x08000000
+    calls.clear()
+    monkeypatch.setattr("subprocess.run", lambda cmd, **k: type("R", (), {"returncode": 1})())
+    assert not notify.post("T", "M")  # neither a toast nor a balloon could show
     monkeypatch.setattr("shutil.which", lambda name: None)
     assert not notify.post("T", "M")
 

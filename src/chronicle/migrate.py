@@ -43,6 +43,7 @@ try:
 except ImportError:  # Windows, where Chronicle never ran: there is no folder of its to move
     fcntl = None
 from .install import LEGACY_BUNDLE_ID, LEGACY_MCP_NAME, MCP_NAME
+from .util import abs_path_sql
 
 log = logging.getLogger("interlatch.migrate")
 
@@ -314,7 +315,7 @@ def _projects(cfg: Config) -> list[Path]:
     conn = sqlite3.connect(f"file:{cfg.db_path}?mode=ro", uri=True, timeout=30)
     try:
         rows = conn.execute("SELECT DISTINCT project_path FROM sessions WHERE agent = 'claude' "
-                            "AND project_path LIKE '/%'").fetchall()
+                            f"AND {abs_path_sql('project_path')}").fetchall()  # /x, and on Windows C:\x
     except sqlite3.Error:
         return []
     finally:

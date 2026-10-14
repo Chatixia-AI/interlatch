@@ -113,7 +113,7 @@ Claude Code と Mac 本体には、次の 4 つを設定します（それぞれ
 
 ## Windows
 
-Windows 10 と 11 では、Interlatch はコマンドライン版を使います。デスクトップアプリとメニューバーアイコンはありません。PowerShell で：
+Windows 10 と 11 では、Interlatch はコマンドライン版を使います。デスクトップアプリはありません。PowerShell で：
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
@@ -138,12 +138,19 @@ Claude Code に追加するフックは `C:/Users/<you>/.local/bin/interlatch.ex
 名前に空白を含むフォルダーは短い形式（`C:/Users/ADALOV~1/…`）で書きます。
 
 Interlatch は、Windows の表示言語にかかわらず、コーディングエージェントが書くのと同じ UTF-8 でテキストを読み書きします。
+Windows のパスは、エージェントや VS Code の書き方（`C:\work\app`、`c:/work/app`）にかかわらず同じものとして扱うので、
+[VS Code 拡張](vscode.md)のファイル履歴とフォルダーの一覧も使えます。
+
+**Settings › Status › Recording** の **Menu-bar icon** スイッチをオンにすると、Dashboard タスクがダッシュボードを動かしている間、
+通知領域（時計の横）に Interlatch のアイコンが出ます。ターミナルからは `interlatch ui --menu-bar` で表示できます。クリックで
+ダッシュボードを開き、右クリックで **Sync Now** と **Quit Interlatch** を選べます。Quit すると、次にサインインするか、
+`interlatch install` か `interlatch ui` を実行するまで、ダッシュボードとアイコンは止まります（Sync タスクは記録を続けます）。
+新しいバージョンの[通知](#アップデート)（`[updates] notify`）は Windows の通知として表示されます。
 
 Windows ではまだできないこと：
 
-- **チームのハブへの参加。** ハブの一部はプロジェクトのフォルダーを `/…` 形式のパスとして扱うため、Windows からは未検証です。
-- **VS Code 拡張のファイル履歴。** ファイルを `/…` 形式のパスで探します。
-- 新しいバージョンの**デスクトップ通知**と、メニューバーアイコン。
+- **チームのハブへの参加**は Windows から未検証です。ハブは Windows のフォルダーを書き方にかかわらず照合しますが、
+  Windows のコンピューターを含むチームではまだ運用されていません。
 
 ## メニューバーアイコン
 

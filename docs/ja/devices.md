@@ -598,5 +598,5 @@ sudo tailscale set --operator=$USER      # `interlatch tailnet on` が Tailscale
   接続するので、ハブの tailnet 内のアドレスには届きません。スマートフォンから Claude Code の Remote Control でハブのセッションを
   操作すれば、Interlatch のツールを使えます。
 - **ほかのコンピューターでオフラインで読めるコピー。**
-- **ハブに参加する Windows のコンピューター。** Interlatch は Windows 単体では動きます（[Windows](install.md#windows)）が、
-  ハブの一部はプロジェクトのフォルダーを `/…` 形式のパスとして扱います。
+- **ハブに参加する Windows のコンピューター。** Interlatch は Windows 単体では動き（[Windows](install.md#windows)）、
+  ハブは Windows のフォルダーを書き方（`C:\work\app`、`c:/work/app`）にかかわらず照合しますが、Windows からの参加は未検証です。

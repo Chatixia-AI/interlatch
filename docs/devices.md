@@ -602,5 +602,6 @@ corrupted.
   your phone, so the hub's tailnet address is out of their reach. Claude Code's Remote Control, from the phone into
   a session on the hub, does have Interlatch's tools.
 - **A copy to read offline** on the other computers.
-- **A Windows computer in a hub.** Interlatch runs on Windows on its own ([Windows](install.md#windows)), but parts of
-  the hub expect project folders as `/…` paths.
+- **A Windows computer in a hub.** Interlatch runs on Windows on its own ([Windows](install.md#windows)), and the hub
+  matches Windows folders however they're spelled (`C:\work\app`, `c:/work/app`), but joining one from Windows is
+  untested.
