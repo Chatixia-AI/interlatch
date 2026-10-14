@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from interlatch import access
+from interlatch.sharing import access
 from interlatch.analysis.session import normalize_analysis, store_analysis
 from interlatch.storage.sqlite import connect
 from interlatch.storage.kv import kv_get

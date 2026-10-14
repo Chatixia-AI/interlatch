@@ -22,7 +22,7 @@ class GroupError(ValueError):
     """A change the person asked for that can't be made, said in their words."""
 
 
-def under(path: str, folder: str) -> bool:
+def _in_folder(path: str, folder: str) -> bool:
     """`path` is `folder` or inside it, by whole folder names (`/a/Aktio` is not under `/a/Akt`)."""
     return path == folder or path.startswith(folder + "/") or path.startswith(folder + "\\")
 
@@ -59,7 +59,7 @@ def _picks(conn: sqlite3.Connection) -> dict[str, int | None]:
 
 
 def _by_rule(path: str, rules: list[tuple[str, int]]) -> int | None:
-    return next((gid for folder, gid in rules if under(path, folder)), None)
+    return next((gid for folder, gid in rules if _in_folder(path, folder)), None)
 
 
 def _rules(gs: list[dict]) -> list[tuple[str, int]]:

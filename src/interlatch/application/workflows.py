@@ -48,7 +48,8 @@ def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyse
             conn.rollback()  # never leave a write transaction (and its lock) behind on any exit path
             conn.close()
     if cfg.shares_knowledge:  # send the hub what was learned; a missed send is caught up by the next run
-        from ..hub import HubError, push_knowledge
+        from ..sharing.push import push_knowledge
+        from ..sharing.protocol import HubError
 
         try:
             report.shared = push_knowledge(cfg).summary()

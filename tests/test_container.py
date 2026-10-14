@@ -7,7 +7,10 @@ import urllib.request
 
 import pytest
 
-from interlatch import container, hub, people, update
+from interlatch import container, update
+from interlatch.sharing import people
+from interlatch.sharing.identity import read_token
+from interlatch.sharing.receiver import IngestTrigger
 from interlatch.core.config import load_config, set_config_value
 from interlatch.storage.sqlite import connect
 
@@ -34,7 +37,7 @@ def served(env, monkeypatch):
 
 def test_first_start_makes_a_knowledge_only_hub_reached_through_its_address(env):
     cfg, first = container.configure(env["cfg"], ENV)
-    assert first and hub.read_token(cfg)
+    assert first and read_token(cfg)
     assert cfg.server_host == "0.0.0.0" and cfg.server_port == 11524
     assert cfg.server_behind_proxy
     assert cfg.server_allowed_hosts == ["chronicle.example.com"]
@@ -49,12 +52,12 @@ def test_first_start_makes_a_knowledge_only_hub_reached_through_its_address(env)
 
 def test_later_starts_keep_what_an_admin_changed(env):
     cfg, _ = container.configure(env["cfg"], {**ENV, "INTERLATCH_HUB_NAME": "Platform team"})
-    token = hub.read_token(cfg)
+    token = read_token(cfg)
     set_config_value(cfg, "hub", "shared_token", "true")
     set_config_value(cfg, "hub", "accept", '"everything"')
     cfg, first = container.configure(load_config(cfg.home), {**ENV, "INTERLATCH_HUB_NAME": "", "INTERLATCH_PORT": "9000",
                                                              "INTERLATCH_ALLOWED_HOSTS": "hub.internal, Other.Example"})
-    assert not first and hub.read_token(cfg) == token  # computers that joined keep working
+    assert not first and read_token(cfg) == token  # computers that joined keep working
     assert cfg.hub_shared_token is True and 'accept = "everything"' in cfg.config_path.read_text()
     assert cfg.hub_name == "Platform team"  # an empty variable leaves config.toml alone
     assert cfg.server_port == 9000
@@ -71,7 +74,7 @@ def test_later_starts_keep_what_an_admin_changed(env):
 def test_wrong_variables_stop_the_container(env, change, problem):
     with pytest.raises(container.SetupError, match=problem):
         container.configure(env["cfg"], {**ENV, **change})
-    assert not hub.read_token(env["cfg"])
+    assert not read_token(env["cfg"])
 
 
 def test_variables_from_before_the_rename_still_count(env):
@@ -139,7 +142,7 @@ def test_plain_http_is_warned_about(served, capsys):
 def test_a_request_from_loopback_is_not_an_admin(env, monkeypatch):
     """In a container, Caddy (or anything sharing its network) reaches the dashboard from 127.0.0.1 with Host
     127.0.0.1: without behind_proxy that would count as someone at the hub, who is always an admin."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
     cfg, _ = container.configure(env["cfg"], ENV)
     conn = connect(cfg.db_path)
     container.first_admin(cfg, conn, ENV)

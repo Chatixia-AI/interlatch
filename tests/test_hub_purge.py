@@ -3,7 +3,12 @@ purge`): someone given every project shared sessions from folders they never mea
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.projects import routing
+from interlatch.sharing import people
+from interlatch.sharing.identity import machine_key, read_token, write_token
+from interlatch.sharing.protocol import HubError
+from interlatch.sharing.push import _shared_records, push
+from interlatch.sharing.receiver import purge
 from interlatch.cli import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
@@ -29,14 +34,14 @@ def test_only_the_hubs_projects_by_default(tmp_path, monkeypatch):
                      "(?, 'transcript', 'claude', ?, 'done', '2026-10-01')", (sid, path))
     conn.commit()
     conn.close()
-    monkeypatch.setattr(hub, "git_info", lambda p: ("/home/yuma/misc/lib", "github.com/acme/lib") if p.endswith("lib") else None)
+    monkeypatch.setattr(routing, "git_info", lambda p: ("/home/yuma/misc/lib", "github.com/acme/lib") if p.endswith("lib") else None)
     remotes = {"github.com/acme/lib": "/srv/Lib"}
-    recs, _, kept = hub._shared_records(cfg, {}, remotes=remotes, projects_only=True)
+    recs, _, kept = _shared_records(cfg, {}, remotes=remotes, projects_only=True)
     assert sorted(r["id"] for r in recs) == ["added", "repo"] and kept == 2
     have = {r["id"]: r["analyzed_at"] for r in recs}
-    recs, unchanged, kept = hub._shared_records(cfg, have, remotes=remotes, projects_only=True)
+    recs, unchanged, kept = _shared_records(cfg, have, remotes=remotes, projects_only=True)
     assert recs == [] and unchanged == 2 and kept == 2
-    assert len(hub._shared_records(cfg, {}, remotes=remotes)[0]) == 4  # all_folders = true
+    assert len(_shared_records(cfg, {}, remotes=remotes)[0]) == 4  # all_folders = true
 
     for raw, want in (("true", True), ('"true"', False), ("1", False), ("false", False)):  # only an explicit true
         (home / "config.toml").write_text(f'[hub]\nurl = "http://hub"\nshare = "knowledge"\nall_folders = {raw}\n')
@@ -46,7 +51,7 @@ def test_only_the_hubs_projects_by_default(tmp_path, monkeypatch):
 def test_join_keeps_to_the_hubs_projects_unless_asked(teamenv, monkeypatch, capsys):  # noqa: F811
     spoke = teamenv["spoke"]
     monkeypatch.setenv("INTERLATCH_HOME", str(spoke.home))
-    token = hub.read_token(spoke)
+    token = read_token(spoke)
     assert main(["hub", "join", teamenv["url"], f"--token={token}", "--share", "knowledge", "--no-push"]) == 0
     assert "Only sessions in the hub's projects are shared" in capsys.readouterr().out
     assert load_config(spoke.home).hub_all_folders is False
@@ -61,15 +66,15 @@ def _yuma(conn, spoke):
     shared token no longer acts as a computer that joined as a person)."""
     p = people.add(conn, "Yuma", "yuma@example.com", "member", projects=None)
     _, token = people.join_computer(conn, people.invite(conn, p["id"]), local_machine(spoke)["id"], "Yuma's Mac",
-                                    hub.machine_key(spoke))  # it pushed before: the hub has its key
-    hub.write_token(spoke, token)
+                                    machine_key(spoke))  # it pushed before: the hub has its key
+    write_token(spoke, token)
     return p
 
 
 def test_purge_what_someone_shared_outside_their_projects(teamenv, monkeypatch, capsys):  # noqa: F811
     fake, spoke, conn, cfg = teamenv["fake"], teamenv["spoke"], teamenv["conn"], teamenv["cfg"]
     _analyzed_on_spoke(spoke, title="Private work", at="2026-10-02T00:00:00Z", lessons=[("p1", "project", "fact")])
-    assert hub.push(spoke).sent == 1
+    assert push(spoke).sent == 1
     assert SPOKE_SID in fake.sessions and fake.lessons
     conn.execute("INSERT INTO project_kb(project_path, project_name, updated_at, markdown) VALUES (?, 'demo-app', "
                  "'2026-10-02', 'lesson p1')", (SPOKE_CWD,))
@@ -98,7 +103,7 @@ def test_purge_what_someone_shared_outside_their_projects(teamenv, monkeypatch, 
 
     # the computer still has it and offers it again (Yuma seeing every project once more): the hub doesn't take it back
     people.set_projects(conn, yuma["id"], None)
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.sent == 1 and not report.errors
     assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 0
     assert SPOKE_SID not in fake.sessions
@@ -107,7 +112,7 @@ def test_purge_what_someone_shared_outside_their_projects(teamenv, monkeypatch, 
 def test_purge_a_computers_project_and_never_the_hubs_own(teamenv, capsys):  # noqa: F811
     spoke, conn, cfg = teamenv["spoke"], teamenv["conn"], teamenv["cfg"]
     _analyzed_on_spoke(spoke, title="Private work", at="2026-10-02T00:00:00Z", lessons=[])
-    assert hub.push(spoke).sent == 1
+    assert push(spoke).sent == 1
     name = local_machine(spoke)["name"]
     assert main(["hub", "purge", name, "--project", SPOKE_CWD, "--yes"]) == 0
     assert "Removed 1 session" in capsys.readouterr().out
@@ -119,6 +124,6 @@ def test_purge_a_computers_project_and_never_the_hubs_own(teamenv, capsys):  # n
     assert main(["hub", "purge", name]) == 2  # which projects?
 
     own = [dict(id=SID, project_path=CWD, transcript_path=None)]
-    with pytest.raises(hub.HubError, match="not this hub's own"):
-        hub.purge(cfg, conn, own)
+    with pytest.raises(HubError, match="not this hub's own"):
+        purge(cfg, conn, own)
     assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SID,)).fetchone()[0] == 1

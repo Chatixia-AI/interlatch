@@ -26,7 +26,10 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.sharing import client, people
+from interlatch.sharing.identity import new_token
+from interlatch.sharing.protocol import PROTOCOL
+from interlatch.sharing.receiver import IngestTrigger
 from interlatch import server as server_mod
 
 from conftest import CWD, SID
@@ -372,12 +375,12 @@ class _NoWaiting:
 def matrix(synced, monkeypatch):
     """A hub with people (Ada admin, Bob member, Vic read-only, Sam a member limited to one project), each signed in in
     a browser; Bob's and Vic's computers joined with their own tokens."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
-    monkeypatch.setattr(hub, "dashboard_signin", lambda *a, **k: "http://127.0.0.1/stub")
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(client, "dashboard_signin", lambda *a, **k: "http://127.0.0.1/stub")
     monkeypatch.setattr("interlatch.knowledge.suggest.refresh", lambda *a, **k: {"stub": True})
-    monkeypatch.setattr("interlatch.leaderboard.avatar", lambda *a, **k: None)
+    monkeypatch.setattr("interlatch.sharing.leaderboard.avatar", lambda *a, **k: None)
     cfg, conn = synced["cfg"], synced["conn"]
-    shared = hub.new_token(cfg)
+    shared = new_token(cfg)
     ada = people.add(conn, "Ada", "ada@example.com", "admin")
     bob = people.add(conn, "Bob", "bob@example.com", "member", by=ada)
     vic = people.add(conn, "Vic", "vic@example.com", "member", by=ada)  # read-only once their computer joined
@@ -434,7 +437,7 @@ def _path(route: str, kind: str, machines: dict) -> str:
 
 def _body(route: str, kind: str, machines: dict) -> dict:
     if route.startswith("/api/hub/"):
-        return {"protocol": hub.PROTOCOL, "machine": machines.get(kind, SHARED_PC), "name": "matrix", "code": "AAAA-BBBB-CCCC"}
+        return {"protocol": PROTOCOL, "machine": machines.get(kind, SHARED_PC), "name": "matrix", "code": "AAAA-BBBB-CCCC"}
     return BODY.get(route, {})
 
 

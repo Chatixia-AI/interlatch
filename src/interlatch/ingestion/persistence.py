@@ -8,10 +8,12 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-from .. import news
+from ..sharing import news
 from ..core import artifact_records
 from ..core.config import Config
 from ..core.machine import local_machine_id
+from .. import __version__
+from ..core.machine import local_machine, platform_label
 from ..core.paths import project_name_for
 from ..core.sessions import ParsedSession, best_title
 from ..core.util import dumps, utcnow_iso
@@ -45,7 +47,8 @@ def store_parsed(
 ) -> str:
     """Replace a session's derived rows and upsert its metadata. Returns 'new' or 'updated', or 'foreign' (nothing
     changed) when another computer's session already has this id."""
-    from ..hub import machine_of, resolver
+    from .archive import machine_of
+    from ..projects.routing import resolver
 
     prev = conn.execute(
         "SELECT analysis_status, analyzed_prompts, ended_flag, ended_at, llm_title, analysis_reason, source, n_prompts, "
@@ -256,3 +259,16 @@ def is_unchanged(conn, sid: str, sig: str, force: bool) -> bool:
     """Whether the session is stored with these files' signature, so parsing them again would change nothing."""
     row = conn.execute("SELECT files_sig FROM sessions WHERE id = ?", (sid,)).fetchone()
     return bool(row) and row["files_sig"] == sig and not force
+
+
+def register_local(conn, cfg: Config) -> str:
+    """Record this computer in the machines table; returns its id."""
+    me = local_machine(cfg)
+    now = utcnow_iso()
+    conn.execute(
+        "INSERT INTO machines(id, name, platform, version, role, first_seen, last_seen) VALUES (?,?,?,?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET name = excluded.name, platform = excluded.platform, version = excluded.version, "
+        "role = excluded.role, last_seen = excluded.last_seen",
+        (me["id"], me["name"], platform_label(), __version__, "this", now, now),
+    )
+    return me["id"]

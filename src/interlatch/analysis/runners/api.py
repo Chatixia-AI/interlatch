@@ -45,7 +45,6 @@ _CLAUDE_ALIAS = re.compile(r"^(sonnet|haiku|opus|fable|mythos|opusplan|default)(
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0")
 
 
-
 def _tool(name: str, extra: tuple[str, ...] = ()) -> str | None:
     """A CLI on PATH, or in the usual install folders (launchd's PATH is short)."""
     found = shutil.which(name)

@@ -86,7 +86,7 @@ def _project_here(conn, cwd: str) -> str:
     """The project `cwd` belongs to: the folder set up as a project on this hub that holds it, else cwd itself."""
     import sqlite3
 
-    from .hub import under
+    from .projects.routing import under
 
     try:
         declared = [r[0] for r in conn.execute("SELECT path FROM hub_projects")]
@@ -98,7 +98,7 @@ def _project_here(conn, cwd: str) -> str:
 def build_session_context(cfg, cwd: str) -> str | None:
     """A compact digest of what previous sessions learned about this project."""
     from .storage.sqlite import connect
-    from .hub import team_from
+    from .sharing.pull import team_from
     from .knowledge.ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
 
     def trust_tag(i: dict) -> str:

@@ -196,7 +196,8 @@ def stats(conn, now: datetime | None = None) -> dict:
 
 def snapshot(app, *, sync_running: bool = False, sync_error: str | None = None) -> Snapshot:
     """What the menu shows now. `app`: the dashboard's server.App, read on the caller's thread."""
-    from .hub import last_folders, last_push
+    from .sharing.push import last_push
+    from .sharing.projects import last_folders
 
     try:
         app.refresh_config()

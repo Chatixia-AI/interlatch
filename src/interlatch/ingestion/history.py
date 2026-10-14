@@ -21,7 +21,8 @@ def import_history(conn: sqlite3.Connection, cfg: Config, path: Path) -> int:
     if kv_get(conn, f"history_sig:{path}") == marker:
         return 0
     created = 0
-    from ..hub import machine_of, resolver
+    from .archive import machine_of
+    from ..projects.routing import resolver
 
     machine = machine_of(cfg, path)
     me = local_machine_id(cfg)

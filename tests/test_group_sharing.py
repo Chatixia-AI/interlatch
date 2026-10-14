@@ -6,7 +6,11 @@ import json
 import pytest
 
 from interlatch.projects import groups
-from interlatch import hub
+from interlatch.projects import routing
+from interlatch.sharing.projects import FOLDERS_FILE, group_routes, hub_project_of, sent_folders
+from interlatch.sharing.protocol import TEAM_SOURCE
+from interlatch.sharing.pull import pull_team_lessons
+from interlatch.sharing.push import _shared_records
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.server import App
@@ -34,16 +38,16 @@ def member(tmp_path, monkeypatch):
     conn.commit()
     gid = groups.save(conn, None, "Aktio", [AKTIO, "aktio-vm:/root/Aktio"])
     groups.move(conn, [PATHS["private"]], None)  # kept out of the group by hand, inside its folder
-    (home / hub.FOLDERS_FILE).write_text(json.dumps({"hub": "Team hub", "projects": [
+    (home / FOLDERS_FILE).write_text(json.dumps({"hub": "Team hub", "projects": [
         {"path": PROJECT, "name": "Aktio", "sessions": 12}, {"path": "/srv/Resona", "name": "Resona", "sessions": "many"}]}))
-    monkeypatch.setattr(hub, "git_info", lambda p: (f"{AKTIO}/lib", "github.com/acme/lib") if p.endswith("lib") else None)
+    monkeypatch.setattr(routing, "git_info", lambda p: (f"{AKTIO}/lib", "github.com/acme/lib") if p.endswith("lib") else None)
     yield {"cfg": cfg, "conn": conn, "gid": gid}
     conn.close()
 
 
 def _sent(cfg, **kw):
-    recs, _, kept = hub._shared_records(cfg, {}, remotes=kw.pop("remotes", {}), projects_only=True,
-                                        routes=hub.group_routes(cfg), **kw)
+    recs, _, kept = _shared_records(cfg, {}, remotes=kw.pop("remotes", {}), projects_only=True,
+                                        routes=group_routes(cfg), **kw)
     return sorted(r["id"] for r in recs), kept
 
 
@@ -51,14 +55,14 @@ def test_a_shared_group_sends_every_project_in_it(member):
     cfg, conn, gid = member["cfg"], member["conn"], member["gid"]
     assert _sent(cfg) == (["resona"], 7)  # not shared yet: only the folder added by hand
     groups.share(conn, gid, PROJECT)
-    routes = hub.group_routes(cfg)
+    routes = group_routes(cfg)
     assert set(routes.active) == {PATHS[k] for k in ("root", "dash", "monitor", "lib")}  # not the VM's: not a folder here
-    assert hub.sent_folders(cfg, routes) == {"/home/yuma/resona": "/srv/Resona", AKTIO: PROJECT}  # one folder holds all
+    assert sent_folders(cfg, routes) == {"/home/yuma/resona": "/srv/Resona", AKTIO: PROJECT}  # one folder holds all
     # the private notes stay: kept out of the group by hand, though inside its folder; so do the VM's and misc
     assert _sent(cfg) == (["dash", "lib", "monitor", "resona", "root"], 3)
     # a repository whose git remote the hub files elsewhere follows its remote
     assert _sent(cfg, remotes={"github.com/acme/lib": "/srv/Lib"}) == (["dash", "lib", "monitor", "resona", "root"], 3)
-    assert hub._shared_records(cfg, {}, remotes={"github.com/acme/lib": "/srv/Lib"}, projects_only=True, scope=["/srv/Lib"],
+    assert _shared_records(cfg, {}, remotes={"github.com/acme/lib": "/srv/Lib"}, projects_only=True, scope=["/srv/Lib"],
                                routes=routes)[0][0]["id"] == "lib"
     assert _sent(cfg, scope=["/srv/Resona"]) == (["resona"], 7)  # a person limited to other projects: none of it
     left = load_config(cfg.home)
@@ -69,16 +73,16 @@ def test_a_shared_group_sends_every_project_in_it(member):
 def test_a_project_that_leaves_the_group_stays_filed_and_sends_no_more(member):
     cfg, conn, gid = member["cfg"], member["conn"], member["gid"]
     groups.share(conn, gid, PROJECT)
-    hub.group_routes(cfg).remember(cfg)  # the hub took a hello with them
+    group_routes(cfg).remember(cfg)  # the hub took a hello with them
     groups.move(conn, [PATHS["dash"]], None)
-    routes = hub.group_routes(cfg)
+    routes = group_routes(cfg)
     assert routes.kept == {PATHS["dash"]: PROJECT}  # still a folder of the project on the hub: what it sent stays there
-    assert hub.sent_folders(cfg, routes)[AKTIO] == PROJECT and PATHS["dash"] not in hub.sent_folders(cfg, routes)
+    assert sent_folders(cfg, routes)[AKTIO] == PROJECT and PATHS["dash"] not in sent_folders(cfg, routes)
     assert _sent(cfg) == (["lib", "monitor", "resona", "root"], 4)  # but nothing more goes from it
     groups.share(conn, gid, None)  # the group stops sharing: everything it shared stays filed, nothing more goes
-    routes = hub.group_routes(cfg)
+    routes = group_routes(cfg)
     assert not routes.active and set(routes.kept) == {PATHS[k] for k in ("root", "dash", "monitor", "lib")}
-    assert hub.sent_folders(cfg, routes) == {"/home/yuma/resona": "/srv/Resona", AKTIO: PROJECT}
+    assert sent_folders(cfg, routes) == {"/home/yuma/resona": "/srv/Resona", AKTIO: PROJECT}
     assert _sent(cfg) == (["resona"], 7)
     groups.share(conn, gid, PROJECT)  # shared again: it all goes again
     assert _sent(cfg) == (["lib", "monitor", "resona", "root"], 4)
@@ -87,7 +91,7 @@ def test_a_project_that_leaves_the_group_stays_filed_and_sends_no_more(member):
 def test_all_folders_still_keeps_a_project_out_of_its_group_here(member):
     cfg, conn, gid = member["cfg"], member["conn"], member["gid"]
     groups.share(conn, gid, PROJECT)
-    recs, _, kept = hub._shared_records(cfg, {}, routes=hub.group_routes(cfg))  # all_folders = true
+    recs, _, kept = _shared_records(cfg, {}, routes=group_routes(cfg))  # all_folders = true
     assert sorted(r["id"] for r in recs) == ["dash", "lib", "misc", "monitor", "resona", "root", "vm"] and kept == 1
 
 
@@ -96,7 +100,7 @@ def test_a_folder_added_by_hand_inside_the_group_wins(member):
     groups.share(conn, gid, PROJECT)
     cfg.hub_folders[PATHS["private"]] = "/srv/Private"
     assert _sent(cfg) == (["dash", "lib", "monitor", "private", "resona", "root"], 2)
-    assert hub.hub_project_of(cfg, [PATHS["private"], PATHS["dash"], PATHS["misc"]]) == {
+    assert hub_project_of(cfg, [PATHS["private"], PATHS["dash"], PATHS["misc"]]) == {
         PATHS["private"]: {"path": "/srv/Private", "name": "Private"}, PATHS["dash"]: {"path": PROJECT, "name": "Aktio"}}
 
 
@@ -111,9 +115,9 @@ def test_teammates_lessons_come_back_to_the_groups_top_project(member, monkeypat
             return {"team": True, "version": "v1", "lessons": [
                 {"id": 7, "project": PROJECT, "kind": "gotcha", "title": "Aktio lesson", "body": "b", "who": ["Ben"]}]}
 
-    assert hub.pull_team_lessons(cfg, Client(), {}) == 1
+    assert pull_team_lessons(cfg, Client(), {}) == 1
     assert PROJECT in asked["projects"]
-    row = conn.execute("SELECT project_path, title FROM knowledge WHERE source = ?", (hub.TEAM_SOURCE,)).fetchone()
+    row = conn.execute("SELECT project_path, title FROM knowledge WHERE source = ?", (TEAM_SOURCE,)).fetchone()
     assert tuple(row) == (AKTIO, "Aktio lesson")
 
 

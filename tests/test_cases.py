@@ -3,7 +3,7 @@
 import json
 import sqlite3
 
-from interlatch import access
+from interlatch.sharing import access
 from interlatch.analysis.session import case_of, normalize_analysis, store_analysis
 from interlatch.knowledge.cases import visual_of
 from interlatch.storage.sqlite import connect

@@ -14,7 +14,13 @@ import urllib.request
 
 import pytest
 
-from interlatch import hub, people
+from interlatch.sharing import people, receiver
+from interlatch.ingestion.analyses import apply_analyses
+from interlatch.sharing.client import handshake, redeem_invite
+from interlatch.sharing.identity import authorize, new_token
+from interlatch.sharing.protocol import ANALYSES_FILE, HubError
+from interlatch.sharing.push import push
+from interlatch.sharing.receiver import IngestTrigger, purge, purge_targets
 from interlatch.storage.sqlite import connect
 from interlatch.core.machine import local_machine
 
@@ -27,8 +33,8 @@ MACHINE = "11111111-2222-4333-8444-555555555555"
 @pytest.fixture()
 def dashboard(synced, monkeypatch):
     """The `synced` computer as a hub serving its dashboard on a free port; no people yet."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
-    hub.new_token(synced["cfg"])
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
+    new_token(synced["cfg"])
     app, httpd, url = _serve(synced["cfg"])
     synced.update(app=app, url=url)
     yield synced
@@ -38,8 +44,8 @@ def dashboard(synced, monkeypatch):
 @pytest.fixture()
 def two_spokes(synced, monkeypatch):
     """The `synced` computer as a hub with two spokes, A and B, whose own sessions happen to share one id."""
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
-    token = hub.new_token(synced["cfg"])
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
+    token = new_token(synced["cfg"])
     app, httpd, url = _serve(synced["cfg"])
     a, _, a_main = _make_spoke(synced["tmp"], url, token)
     (synced["tmp"] / "b").mkdir()
@@ -66,9 +72,9 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
         spoke.hub_share, spoke.hub_all_folders = "knowledge", True
     a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
     _analyzed_on_spoke(a, title="A's work", at="2026-09-20T12:00:00Z", lessons=[("a-fact", "project", "fact")])
-    assert hub.push(a).sent == 1
+    assert push(a).sent == 1
     _analyzed_on_spoke(b, title="B's version", at="2026-09-21T12:00:00Z", lessons=[("b-fact", "project", "fact")])
-    hub.push(b)  # the same session id, from another computer
+    push(b)  # the same session id, from another computer
     row = conn.execute("SELECT machine_id, title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert (row["machine_id"], row["title"]) == (a_id, "A's work")
     assert [r[0] for r in conn.execute("SELECT fingerprint FROM knowledge WHERE session_id = ?", (SPOKE_SID,))] == ["a-fact"]
@@ -77,9 +83,9 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
     status, r = _post(two_spokes["url"], "/api/hub/withdraw", "", json.dumps(
         {"machine": b_id, "folder": SPOKE_CWD}).encode(), two_spokes["token"])
     assert status == 200 and r["sessions"] == 0
-    targets = hub.purge_targets(conn, [a_id], projects=[SPOKE_CWD])
-    with pytest.raises(hub.HubError, match="only the sessions it sent"):
-        hub.purge(cfg, conn, targets, action="withdraw", keep_out=False, owner=b_id)
+    targets = purge_targets(conn, [a_id], projects=[SPOKE_CWD])
+    with pytest.raises(HubError, match="only the sessions it sent"):
+        purge(cfg, conn, targets, action="withdraw", keep_out=False, owner=b_id)
     assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 1
 
 
@@ -89,14 +95,14 @@ def test_a_transcript_under_another_computers_session_id_is_not_stored(two_spoke
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id = local_machine(a)["id"]
-    hub.push(a)
+    push(a)
     sync(cfg, conn)
     before = [tuple(r) for r in conn.execute("SELECT seq, text FROM events WHERE session_id = ? ORDER BY seq", (SPOKE_SID,))]
     assert before
     with open(two_spokes["b_main"], "a") as fh:  # B's file under the same id, saying something else
         fh.write(json.dumps({"type": "user", "sessionId": SPOKE_SID, "cwd": SPOKE_CWD, "timestamp": "2026-09-20T11:00:00.000Z",
                              "message": {"role": "user", "content": "replaced by B"}}) + "\n")
-    hub.push(b)
+    push(b)
     b_id = local_machine(b)["id"]
     received = cfg.machines_dir / b_id / "claude" / "projects" / SPOKE_CWD.replace("/", "-") / f"{SPOKE_SID}.jsonl"
     assert received.exists()
@@ -127,8 +133,8 @@ def test_a_computers_history_cant_replace_anothers_stub(synced):
 
 # ------------------------------------------------------------------ H3: uploads inflate only so far
 def test_a_gzip_bomb_is_refused(two_spokes, monkeypatch):
-    monkeypatch.setattr(hub, "MAX_SESSIONS_JSON", 64 << 10)
-    monkeypatch.setattr(hub, "MAX_ANALYSES_JSON", 64 << 10)
+    monkeypatch.setattr(receiver, "MAX_SESSIONS_JSON", 64 << 10)
+    monkeypatch.setattr(receiver, "MAX_ANALYSES_JSON", 64 << 10)
     machine = f"machine={local_machine(two_spokes['a'])['id']}"
     bomb = gzip.compress(b'{"sessions": [], "pad": "' + b"0" * (1 << 20) + b'"}')
     assert len(bomb) < 4096
@@ -148,7 +154,7 @@ def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
 
     cfg, conn, a, b = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"], two_spokes["b"]
     a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
-    hub.push(a)  # A's transcript: the hub ingests it as A's, analysis pending
+    push(a)  # A's transcript: the hub ingests it as A's, analysis pending
     sync(cfg, conn)
     row = conn.execute("SELECT machine_id, analysis_status, title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert row["machine_id"] == a_id and row["analysis_status"] != "done"
@@ -161,19 +167,19 @@ def test_another_computers_analysis_doesnt_apply_to_a_session(two_spokes):
     status, _ = _post(two_spokes["url"], "/api/hub/analyses", f"machine={b_id}", gzip.compress(json.dumps(forged).encode()),
                       two_spokes["token"])
     assert status == 200
-    assert hub.apply_analyses(cfg, conn) == 0
+    assert apply_analyses(cfg, conn) == 0
     row = conn.execute("SELECT machine_id, analysis_status, title, summary FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert (row["machine_id"], row["title"], row["summary"]) == (a_id, title, None)
     assert row["analysis_status"] != "done"
     assert conn.execute("SELECT COUNT(*) FROM knowledge WHERE session_id = ? AND fingerprint = 'b-injected'",
                         (SPOKE_SID,)).fetchone()[0] == 0
-    assert not (cfg.machines_dir / b_id / hub.ANALYSES_FILE).exists()  # not kept waiting for a session of B's either
+    assert not (cfg.machines_dir / b_id / ANALYSES_FILE).exists()  # not kept waiting for a session of B's either
 
     # the same analysis from A, the session's own computer, applies
     forged["sessions"][0]["llm_title"] = "A's own title"
     status, _ = _post(two_spokes["url"], "/api/hub/analyses", f"machine={a_id}", gzip.compress(json.dumps(forged).encode()),
                       two_spokes["token"])
-    assert status == 200 and hub.apply_analyses(cfg, conn) == 1
+    assert status == 200 and apply_analyses(cfg, conn) == 1
     assert conn.execute("SELECT title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == "A's own title"
 
 
@@ -183,7 +189,7 @@ def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsy
 
     cfg, conn, url, a, b = (two_spokes[k] for k in ("cfg", "conn", "url", "a", "b"))
     a_id, b_id = local_machine(a)["id"], local_machine(b)["id"]
-    hub.push(a)  # A joined with the shared token and sends: the hub records its key with its hello
+    push(a)  # A joined with the shared token and sends: the hub records its key with its hello
     assert conn.execute("SELECT key_hash FROM machines WHERE id = ?", (a_id,)).fetchone()[0]
     key_file = a.home / "machine-key"
     assert stat.S_IMODE(key_file.stat().st_mode) == 0o600 and "key" not in local_machine(a)
@@ -196,15 +202,15 @@ def test_an_invite_cant_claim_a_computer_the_hub_already_knows(two_spokes, capsy
     assert people.peek_invite(conn, code) and not people.computer_bound(conn, a_id)
 
     ada = people.add(conn, "Ada", "ada@example.com", "admin")  # A itself joins with an invite: it shows its key
-    assert hub.redeem_invite(a, url, people.invite(conn, ada["id"]))["person"]["name"] == "Ada"
+    assert redeem_invite(a, url, people.invite(conn, ada["id"]))["person"]["name"] == "Ada"
     assert people.computer_bound(conn, a_id)
 
     # B said hello with an older Chronicle, so no key is on record: joining says hello first, with the shared token
-    hub.handshake(b)
+    handshake(b)
     conn.execute("UPDATE machines SET key_hash = NULL WHERE id = ?", (b_id,))
     conn.commit()
     bob = people.add(conn, "Bob", "bob@example.com", "member", projects=None)
-    assert hub.redeem_invite(b, url, people.invite(conn, bob["id"]))["person"]["name"] == "Bob"
+    assert redeem_invite(b, url, people.invite(conn, bob["id"]))["person"]["name"] == "Bob"
     assert people.computer_bound(conn, b_id)
 
     # a computer known without a key that can't say hello any more: only an admin's invite for that computer
@@ -232,17 +238,17 @@ def test_the_shared_token_cant_act_as_a_persons_computer(two_spokes):
     cfg, conn, a = two_spokes["cfg"], two_spokes["conn"], two_spokes["a"]
     a_id = local_machine(a)["id"]
     shared = f"Bearer {two_spokes['token']}"
-    assert hub.authorize(cfg, conn, shared, a_id) == (True, None)  # nobody has joined as a person: any computer
+    assert authorize(cfg, conn, shared, a_id) == (True, None)  # nobody has joined as a person: any computer
     ada = people.add(conn, "Ada", "ada@example.com", "admin")
     _, ada_token = people.join_computer(conn, people.invite(conn, ada["id"]), a_id, "Ada's Mac")
-    assert hub.authorize(cfg, conn, shared, a_id) == (False, None)  # Ada's computer: only her token sends as it
-    assert hub.authorize(cfg, conn, shared, MACHINE) == (True, None)  # another computer still may, while the token is on
-    assert hub.authorize(cfg, conn, f"Bearer {ada_token}", a_id)[1]["id"] == ada["id"]
+    assert authorize(cfg, conn, shared, a_id) == (False, None)  # Ada's computer: only her token sends as it
+    assert authorize(cfg, conn, shared, MACHINE) == (True, None)  # another computer still may, while the token is on
+    assert authorize(cfg, conn, f"Bearer {ada_token}", a_id)[1]["id"] == ada["id"]
     status, _ = _post(two_spokes["url"], "/api/hub/withdraw", "", json.dumps({"machine": a_id, "folder": SPOKE_CWD}).encode(),
                       two_spokes["token"])
     assert status == 401
     people.remove(conn, ada["id"])
-    assert hub.authorize(cfg, conn, shared, a_id) == (True, None)  # once she is removed, the computer is nobody's again
+    assert authorize(cfg, conn, shared, a_id) == (True, None)  # once she is removed, the computer is nobody's again
 
 
 # ------------------------------------------------------------------ H4: no people, no other device

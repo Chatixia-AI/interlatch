@@ -153,7 +153,7 @@ class Background:
             cfg.ensure_dirs()
             release_check_safely(cfg)
             if cfg.sends_files:  # this Mac sends its sessions to a hub, which records and analyzes them
-                from .hub import push
+                from .sharing.push import push
 
                 log.info("app push: %s", push(cfg).summary())
                 self.error = None

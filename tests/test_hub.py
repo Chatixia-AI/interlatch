@@ -15,7 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import hub
+from interlatch.projects import routing
+from interlatch.sharing import client
+from interlatch.projects.routing import FOLDERS_KV, clean_folders, normalize_remote, resolver, under
+from interlatch.sharing.identity import new_token, read_token, token_path, write_token
+from interlatch.sharing.projects import last_folders, machines
+from interlatch.sharing.protocol import ANALYSES_FILE, HubError
+from interlatch.sharing.push import push
+from interlatch.sharing.receiver import IngestTrigger
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.storage.kv import kv_set
@@ -61,7 +68,7 @@ def _make_spoke(tmp: Path, url: str, token: str, *, cwd: str = SPOKE_CWD, extra:
         """) + extra)
     cfg = load_config(home)
     cfg.ensure_dirs()
-    hub.write_token(cfg, token)
+    write_token(cfg, token)
     return cfg, claude, new_proj / f"{SPOKE_SID}.jsonl"
 
 
@@ -69,8 +76,8 @@ def _make_spoke(tmp: Path, url: str, token: str, *, cwd: str = SPOKE_CWD, extra:
 def hubenv(synced, monkeypatch):
     """The `synced` computer as a hub, serving on a free port, with a spoke that joined it."""
     requests = []
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: requests.append(1))
-    token = hub.new_token(synced["cfg"])
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: requests.append(1))
+    token = new_token(synced["cfg"])
     app, httpd, url = _serve(synced["cfg"])
     spoke_cfg, spoke_claude, spoke_main = _make_spoke(synced["tmp"], url, token)
     synced.update(app=app, url=url, token=token, spoke=spoke_cfg, spoke_claude=spoke_claude, spoke_main=spoke_main,
@@ -84,7 +91,7 @@ def test_push_then_ingest_tags_the_computer(hubenv):
 
     cfg, spoke = hubenv["cfg"], hubenv["spoke"]
     spoke_id = local_machine(spoke)["id"]
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.sent >= 3 and not report.errors  # transcript, subagent files, memory notes
     assert hubenv["ingest_requests"], "the hub was not asked to ingest what arrived"
     received = cfg.machines_dir / spoke_id / "claude" / "projects" / SPOKE_CWD.replace("/", "-") / f"{SPOKE_SID}.jsonl"
@@ -98,23 +105,23 @@ def test_push_then_ingest_tags_the_computer(hubenv):
     assert f"/archive/machines/{spoke_id}/claude/" in row["archive_path"]
     own = conn.execute("SELECT machine_id FROM sessions WHERE id = ?", (SID,)).fetchone()[0]
     assert own == local_machine(cfg)["id"] != spoke_id
-    seen = {m["id"]: m for m in hub.machines(conn, cfg)}
+    seen = {m["id"]: m for m in machines(conn, cfg)}
     assert set(seen) == {own, spoke_id} and seen[own]["this"] and seen[spoke_id]["sessions"] == 1
     assert seen[spoke_id]["last_push"] and seen[spoke_id]["files"] >= 3
 
-    again = hub.push(spoke)  # the hub already has everything
+    again = push(spoke)  # the hub already has everything
     assert again.sent == 0 and again.unchanged == report.sent
     with open(hubenv["spoke_main"], "a") as fh:  # the session goes on
         fh.write(json.dumps({"type": "user", "sessionId": SPOKE_SID, "cwd": SPOKE_CWD, "timestamp": "2026-09-20T11:00:00.000Z",
                              "message": {"role": "user", "content": "one more thing"}}) + "\n")
-    assert hub.push(spoke).sent == 1
+    assert push(spoke).sent == 1
 
 
 def test_hub_api_refuses_bad_tokens_and_paths(hubenv):
     spoke = hubenv["spoke"]
-    hub.write_token(spoke, "not-the-token")
-    with pytest.raises(hub.HubError, match="token"):
-        hub.push(spoke)
+    write_token(spoke, "not-the-token")
+    with pytest.raises(HubError, match="token"):
+        push(spoke)
     body = gzip.compress(b"x")
     params = f"machine={local_machine(spoke)['id']}&root=claude&path=projects/../../evil&size=1&mtime=1&sha256={hashlib.sha256(b'x').hexdigest()}"
     req = urllib.request.Request(f"{hubenv['url']}/api/hub/file?{params}", data=body, method="POST",
@@ -127,10 +134,10 @@ def test_hub_api_refuses_bad_tokens_and_paths(hubenv):
     with pytest.raises(urllib.error.HTTPError) as exc:
         urllib.request.urlopen(bad, timeout=10)
     assert exc.value.code == 401
-    hub.write_token(spoke, hubenv["token"])
+    write_token(spoke, hubenv["token"])
     (spoke.home / "machine.json").write_text(json.dumps(local_machine(hubenv["cfg"])))  # a copied Chronicle folder
-    with pytest.raises(hub.HubError, match="own id"):
-        hub.push(spoke)
+    with pytest.raises(HubError, match="own id"):
+        push(spoke)
 
 
 def test_damaged_upload_is_rejected(hubenv):
@@ -149,10 +156,10 @@ def test_forgotten_session_is_not_taken_back(hubenv):
     from interlatch.ingestion.service import sync
     from interlatch.ingestion.deletion import forget_session
 
-    hub.push(hubenv["spoke"])
+    push(hubenv["spoke"])
     sync(hubenv["cfg"], hubenv["conn"])
     forget_session(hubenv["conn"], hubenv["cfg"], SPOKE_SID, delete_transcript=True)
-    hub.push(hubenv["spoke"])  # the spoke still has it and offers it again
+    push(hubenv["spoke"])  # the spoke still has it and offers it again
     sync(hubenv["cfg"], hubenv["conn"])
     assert hubenv["conn"].execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 0
     assert not list(hubenv["cfg"].machines_dir.rglob(f"{SPOKE_SID}.jsonl"))
@@ -161,7 +168,7 @@ def test_forgotten_session_is_not_taken_back(hubenv):
 def test_excluded_projects_never_leave_the_spoke(hubenv):
     spoke = hubenv["spoke"]
     spoke.exclude_projects = ["/home/test/code/*"]
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.skipped >= 3 and report.sent == 0
     assert not list(hubenv["cfg"].machines_dir.rglob("*.jsonl"))
 
@@ -171,7 +178,7 @@ def test_projects_matched_across_computers(hubenv, monkeypatch):
 
     cfg, conn = hubenv["cfg"], hubenv["conn"]
     cfg.hub_path_map = {"/home/test/code": "/Users/test/Projects"}
-    hub.push(hubenv["spoke"])
+    push(hubenv["spoke"])
     sync(cfg, conn)
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert row["project_path"] == CWD and row["machine_path"] == SPOKE_CWD  # same project as the hub's own session
@@ -183,7 +190,7 @@ def test_projects_matched_across_computers(hubenv, monkeypatch):
     kv_set(conn, f"git:{CWD}", json.dumps([CWD, "github.com/org/demo-app"]))
     conn.commit()
     cfg.hub_path_map = {}
-    r = hub.resolver(cfg, conn, fresh=True)
+    r = resolver(cfg, conn, fresh=True)
     assert r.resolve(spoke_id, "/srv/x/app/api") == f"{CWD}/api"
     assert r.resolve(spoke_id, "/srv/x/other") == "/srv/x/other"  # nothing known: kept as recorded
     assert r.resolve(spoke_id, "/work/demo", remote="git@github.com:Org/demo-app.git") == CWD  # Codex's own remote
@@ -195,17 +202,17 @@ def test_added_folders_and_what_wins(hubenv):
     more specific match, follows its remote."""
     cfg, conn = hubenv["cfg"], hubenv["conn"]
     spoke_id = local_machine(hubenv["spoke"])["id"]
-    hub.push(hubenv["spoke"])  # registers the computer
+    push(hubenv["spoke"])  # registers the computer
     conn.execute("UPDATE machines SET repos_json = ? WHERE id = ?", (json.dumps({
         "/w/client/app": ["/w/client/app", "github.com/org/demo-app"],      # known here: CWD
         "/w/client/fork": ["/w/client/fork", "github.com/someone/fork"],    # unknown here
         "/w/mono": ["/w/mono", "github.com/org/demo-app"],                  # known, with an added folder inside
     }), spoke_id))
     kv_set(conn, f"git:{CWD}", json.dumps([CWD, "github.com/org/demo-app"]))
-    kv_set(conn, hub.FOLDERS_KV + spoke_id, json.dumps({
+    kv_set(conn, FOLDERS_KV + spoke_id, json.dumps({
         "/w/client": "/hub/client-a", "/w/client/notes/private": "/hub/other", "/w/mono/tools": "/hub/tools"}))
     conn.commit()
-    r = hub.resolver(cfg, conn, fresh=True)
+    r = resolver(cfg, conn, fresh=True)
     assert r.resolve(spoke_id, "/w/client") == "/hub/client-a"
     assert r.resolve(spoke_id, "/w/client/notes/deep") == "/hub/client-a"  # the folder and everything below it
     assert r.resolve(spoke_id, "/w/client/notes/private/x") == "/hub/other"  # the most specific folder wins
@@ -224,7 +231,7 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
-    hub.push(spoke)
+    push(spoke)
     sync(cfg, conn)
     conn.execute("INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, confidence, source, "
                  "fingerprint, created_at, updated_at) VALUES (?, ?, 'demo-app', 'gotcha', 'A lesson', 'body', 'high', "
@@ -251,21 +258,21 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
 
     set_config_value(spoke, "hub", "folders", toml_table({**spoke.hub_folders, SPOKE_CWD: CWD}))
     spoke = load_config(spoke.home)
-    report = hub.push(spoke)
+    report = push(spoke)
     assert not report.errors
     row = conn.execute("SELECT project_path, project_name, machine_path FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert (row["project_path"], row["project_name"], row["machine_path"]) == (CWD, "demo-app", SPOKE_CWD)
     assert conn.execute("SELECT project_path FROM knowledge WHERE fingerprint = 'fp-spoke'").fetchone()[0] == CWD
     assert conn.execute("SELECT knowledge_max_id FROM project_kb WHERE project_path = ?", (CWD,)).fetchone()[0] == 0
-    seen = hub.last_folders(spoke)
+    seen = last_folders(spoke)
     assert seen["moved"] == 1 and seen["folders"][SPOKE_CWD]["sessions"] == 1
-    listed = {m["id"]: m for m in hub.machines(conn, cfg)}[local_machine(spoke)["id"]]["folders"]
+    listed = {m["id"]: m for m in machines(conn, cfg)}[local_machine(spoke)["id"]]["folders"]
     assert {f["folder"] for f in listed} == {SPOKE_CWD, str(folder.resolve())}
 
     with open(hubenv["spoke_main"], "a") as fh:  # the session goes on: ingesting it again keeps the project
         fh.write(json.dumps({"type": "user", "sessionId": SPOKE_SID, "cwd": SPOKE_CWD, "timestamp": "2026-09-20T11:00:00.000Z",
                              "message": {"role": "user", "content": "one more thing"}}) + "\n")
-    hub.push(spoke)
+    push(spoke)
     sync(cfg, conn)
     assert conn.execute("SELECT project_path FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == CWD
 
@@ -284,15 +291,15 @@ def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, ca
 
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"https://hub.example"')
-    hub.write_token(cfg, "t")
+    write_token(cfg, "t")
     folder = env["tmp"] / "client-b-app"
     folder.mkdir()
     projects = [{"path": "/hub/client-a", "name": "client-a", "sessions": 3},
                 {"path": "/hub/client-b", "name": "client-b", "sessions": 2},
                 {"path": "/other/client-b", "name": "client-b", "sessions": 1}]
-    monkeypatch.setattr(hub, "handshake", lambda cfg: {"projects": projects,
+    monkeypatch.setattr(client, "handshake", lambda cfg: {"projects": projects,
                                                        "remotes": {"github.com/org/b": "/hub/client-b"}})
-    monkeypatch.setattr(hub, "git_info", lambda path: (path, "github.com/org/b"))
+    monkeypatch.setattr(routing, "git_info", lambda path: (path, "github.com/org/b"))
 
     assert main(["hub", "add-folder", str(folder), "--project", "client-a", "--no-push"]) == 1
     assert "belongs to one project" in " ".join(capsys.readouterr().out.split())
@@ -303,7 +310,7 @@ def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, ca
     assert main(["hub", "add-folder", str(folder), "--project", "nope", "--no-push"]) == 1
     assert load_config(env["home"]).hub_folders == {}
 
-    monkeypatch.setattr(hub, "git_info", lambda path: None)  # not a repository: the member decides
+    monkeypatch.setattr(routing, "git_info", lambda path: None)  # not a repository: the member decides
     assert main(["hub", "add-folder", str(folder), "--project", "client-a", "--no-push"]) == 0
     assert load_config(env["home"]).hub_folders == {str(folder.resolve()): "/hub/client-a"}
     assert main(["hub", "remove-folder", str(folder), "--no-push"]) == 0
@@ -345,11 +352,11 @@ def test_knowledge_only_sharing(hubenv):
                        lessons=[("p-gotcha", "project", "gotcha"), ("p-pref", "project", "preference"),
                                 ("g-gotcha", "global", "gotcha")])
 
-    report = hub.push(spoke)  # its folder is no project of the hub's, and nobody added it: it stays here
+    report = push(spoke)  # its folder is no project of the hub's, and nobody added it: it stays here
     assert report.sent == 0 and report.skipped == 1 and "1 kept here" in report.summary()
     assert conn.execute("SELECT COUNT(*) FROM sessions WHERE source = 'remote'").fetchone()[0] == 0
     spoke.hub_all_folders = True  # `chronicle hub join --all-folders`
-    report = hub.push(spoke)
+    report = push(spoke)
     assert report.kind == "knowledge" and report.sent == 1 and not report.errors
     assert "1 session shared" in report.summary()
     assert hubenv["ingest_requests"], "the hub was not asked to build its knowledge"
@@ -377,20 +384,20 @@ def test_knowledge_only_sharing(hubenv):
     sync(cfg, conn)  # the hub's own sync leaves it alone
     assert conn.execute("SELECT source FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == "remote"
 
-    again = hub.push(spoke)
+    again = push(spoke)
     assert again.sent == 0 and again.unchanged == 1
 
     _analyzed_on_spoke(spoke, title="Better title", at="2026-09-21T09:00:00Z", lessons=[("p-fix", "project", "fix")])
-    assert hub.push(spoke).sent == 1  # analyzed again there: the hub's copy is replaced, lessons and all
+    assert push(spoke).sent == 1  # analyzed again there: the hub's copy is replaced, lessons and all
     assert conn.execute("SELECT title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == "Better title"
     assert [r[0] for r in conn.execute("SELECT fingerprint FROM knowledge WHERE session_id = ?", (SPOKE_SID,))] == ["p-fix"]
 
     spoke.hub_folders = {SPOKE_CWD: CWD}  # an added folder files shared sessions too
-    hub.push(spoke)
+    push(spoke)
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert (row["project_path"], row["machine_path"]) == (CWD, SPOKE_CWD)
     assert conn.execute("SELECT project_path FROM knowledge WHERE fingerprint = 'p-fix'").fetchone()[0] == CWD
-    seen = {m["id"]: m for m in hub.machines(conn, cfg)}[spoke_id]
+    seen = {m["id"]: m for m in machines(conn, cfg)}[spoke_id]
     assert seen["share"] == "knowledge" and seen["last_push"] and seen["sessions"] == 1
 
 
@@ -400,11 +407,11 @@ def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
     from interlatch.ingestion.service import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
-    hub.push(spoke)  # everything: the transcript arrives
+    push(spoke)  # everything: the transcript arrives
     sync(cfg, conn)
     spoke.hub_share = "knowledge"
     _analyzed_on_spoke(spoke, title="From the spoke", at="2026-09-20T12:00:00Z", lessons=[("p1", "project", "fact")])
-    hub.push(spoke)
+    push(spoke)
     row = conn.execute("SELECT source, title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
     assert row["source"] == "transcript" and row["title"] != "From the spoke"
 
@@ -430,7 +437,7 @@ def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"http://127.0.0.1:9"')
     set_config_value(cfg, "hub", "share", '"knowledge"')
-    hub.write_token(cfg, "t")
+    write_token(cfg, "t")
     cfg = load_config(env["home"])
     assert cfg.shares_knowledge and not cfg.sends_files
 
@@ -445,16 +452,16 @@ def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
 
 
 def test_hub_ignores_bad_folders():
-    assert hub.clean_folders({"relative/x": "/a", "/ok/": "/p/", "/b": "relative", 3: "/c"}) == {"/ok": "/p"}
-    assert hub.clean_folders(["/a"]) == {}
-    assert hub.under("/a/b", "/a") and hub.under("/a", "/a/") and not hub.under("/ab", "/a") and hub.under("/x", "/")
+    assert clean_folders({"relative/x": "/a", "/ok/": "/p/", "/b": "relative", 3: "/c"}) == {"/ok": "/p"}
+    assert clean_folders(["/a"]) == {}
+    assert under("/a/b", "/a") and under("/a", "/a/") and not under("/ab", "/a") and under("/x", "/")
 
 
 def test_normalize_remote():
     for url in ("git@github.com:Org/Repo.git", "https://github.com/org/repo", "https://tok@github.com/Org/Repo/",
                 "ssh://git@github.com/org/repo.git"):
-        assert hub.normalize_remote(url) == "github.com/org/repo"
-    assert hub.normalize_remote("not a url") is None and hub.normalize_remote(None) is None
+        assert normalize_remote(url) == "github.com/org/repo"
+    assert normalize_remote("not a url") is None and normalize_remote(None) is None
 
 
 def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
@@ -462,9 +469,9 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
     from interlatch.ingestion.service import sync
     from interlatch.application.workflows import run_worker
 
-    monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
+    monkeypatch.setattr(IngestTrigger, "request", lambda self: None)
     cfg = synced["cfg"]
-    token = hub.new_token(cfg)
+    token = new_token(cfg)
     _app, httpd, url = _serve(cfg)
     try:
         spoke, _claude, _main = _make_spoke(tmp_path, "", token, extra=textwrap.dedent(f"""\
@@ -483,18 +490,18 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
         calls = len(fake_log(synced))
 
         spoke.hub_url = url  # joins
-        report = hub.push(spoke)
+        report = push(spoke)
         assert report.analyses >= 1
         sync(cfg, synced["conn"])
         row = synced["conn"].execute("SELECT analysis_status, summary, title FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
         assert row["analysis_status"] == "done" and row["summary"] and row["title"] == "Fixed login token expiry bug"
         assert synced["conn"].execute("SELECT COUNT(*) FROM knowledge WHERE session_id = ? AND source = 'analysis'",
                                       (SPOKE_SID,)).fetchone()[0] >= 1
-        assert not list(cfg.machines_dir.glob(f"*/{hub.ANALYSES_FILE}"))  # applied, so gone
+        assert not list(cfg.machines_dir.glob(f"*/{ANALYSES_FILE}"))  # applied, so gone
         run_worker(cfg, synthesize=False, export=None)
         analyzed = [c for c in fake_log(synced)[calls:] if SPOKE_SID in json.dumps(c)]
         assert not analyzed, "the hub analyzed a session the spoke had already analyzed"
-        assert hub.push(spoke).analyses == 0  # only once
+        assert push(spoke).analyses == 0  # only once
     finally:
         httpd.shutdown()
 
@@ -587,9 +594,9 @@ def test_tailnet_on_and_hub_enable(env, monkeypatch, capsys):
 
     assert main(["hub", "enable"]) == 0
     out = capsys.readouterr().out
-    token = hub.read_token(cfg)
+    token = read_token(cfg)
     assert token and f"interlatch hub join https://pc.tail1234.ts.net --token={token}" in out.replace("\n", "")
-    assert oct(hub.token_path(cfg).stat().st_mode & 0o777) == "0o600"
+    assert oct(token_path(cfg).stat().st_mode & 0o777) == "0o600"
 
     assert main(["tailnet", "off"]) == 0
     cfg = load_config(env["home"])

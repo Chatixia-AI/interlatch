@@ -4,7 +4,9 @@ that keeps sending adds to its row; who sees what follows the Team page; each pe
 
 from datetime import timedelta
 
-from interlatch import hub, news, people
+from interlatch.sharing import news, people
+from interlatch.sharing.push import push
+from interlatch.sharing.receiver import join_with_code
 from interlatch.core.util import to_iso, utcnow
 from interlatch.core.machine import local_machine
 
@@ -25,12 +27,12 @@ def test_shared_knowledge_is_news_once(teamenv):  # noqa: F811
     me = local_machine(spoke)["id"]
     _analyzed_on_spoke(spoke, title="Mine", at="2026-10-02T00:00:00Z",
                        lessons=[("p1", "project", "gotcha"), ("pref", "project", "preference"), ("g1", "global", "fix")])
-    assert hub.push(spoke).sent == 1
+    assert push(spoke).sent == 1
     assert _rows(conn) == [{"kind": "shared", "machine_id": me, "project_path": SPOKE_CWD, "sessions": 1, "lessons": 1}]
-    hub.push(spoke)  # nothing changed: nothing new
+    push(spoke)  # nothing changed: nothing new
     _analyzed_on_spoke(spoke, title="Mine, later", at="2026-10-03T00:00:00Z",  # analyzed again: one lesson more
                        lessons=[("p1", "project", "gotcha"), ("p2", "project", "fact")])
-    assert hub.push(spoke).sent == 1  # sent again, as it grew: not a new session, but a new lesson
+    assert push(spoke).sent == 1  # sent again, as it grew: not a new session, but a new lesson
     assert _rows(conn) == [{"kind": "shared", "machine_id": me, "project_path": SPOKE_CWD, "sessions": 1, "lessons": 2}]
 
 
@@ -40,7 +42,7 @@ def test_transcripts_and_the_hubs_own_analysis_of_them(hubenv):  # noqa: F811
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     me = local_machine(spoke)["id"]
-    hub.push(spoke)
+    push(spoke)
     sync(cfg, conn)
     assert _rows(conn) == [{"kind": "shared", "machine_id": me, "project_path": SPOKE_CWD, "sessions": 1, "lessons": 0}]
     data = {"title": "T", "knowledge": [{"kind": "gotcha", "title": "A gotcha", "scope": "project"},
@@ -120,7 +122,7 @@ def test_seen_is_kept_honest(hubweb):  # noqa: F811
 def test_a_computer_joining_is_news(team, monkeypatch):  # noqa: F811
     cfg, conn = team["cfg"], team["conn"]
     code = people.invite(conn, team["bob"]["id"])
-    hub.join_with_code(cfg, conn, {"code": code, "machine": MACHINE, "name": "Bob's Mac"})
+    join_with_code(cfg, conn, {"code": code, "machine": MACHINE, "name": "Bob's Mac"})
     assert _rows(conn) == [{"kind": "joined", "machine_id": MACHINE, "project_path": None, "sessions": 0, "lessons": 0}]
 
 
