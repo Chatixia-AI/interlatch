@@ -105,8 +105,8 @@ def system(ctx: Context, key: str) -> dict | None:
     if out:
         labels = project_labels(ctx.conn)
         out["project"] = next((p for p in out["project_paths"] if p in labels), None)
-        out["recent"] = session_rows(ctx, 
-            f"project_path IN ({','.join('?' * len(out['project_paths']))}) AND source NOT IN ({','.join('?' * len(CHAT_SOURCES))})",
+        out["recent"] = session_rows(
+            ctx, f"project_path IN ({','.join('?' * len(out['project_paths']))}) AND source NOT IN ({','.join('?' * len(CHAT_SOURCES))})",
             [*out["project_paths"], *CHAT_SOURCES], "started_at DESC", 6) if out["project_paths"] else []
     return out
 
