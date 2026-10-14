@@ -21,7 +21,7 @@ def _artifact_summary(ctx: Context, project: str) -> dict:
 def artifacts(ctx: Context, q: dict) -> dict:
     """The artifacts gallery: what sessions made, newest first, filtered by kind, project, agent, words and status."""
     items, counts = _artifacts(ctx, kind=q.get("kind") or None, project=q.get("project") or None,
-                                    agent=q.get("agent") or None, q=(q.get("q") or "").strip() or None)
+                               agent=q.get("agent") or None, q=(q.get("q") or "").strip() or None)
     if q.get("hide_gone") == "1":
         items = [i for i in items if i["status"] != "gone"]
     limit, offset = min(int(q.get("limit") or 100), 500), int(q.get("offset") or 0)

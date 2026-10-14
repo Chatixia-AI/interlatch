@@ -450,11 +450,11 @@ def make_handler(app: App, port: int):
                     return self._json(api.team.who_options(ctx))
                 if p == "/api/team":
                     return self._json(api.team.team(ctx, q, scope=people.projects_of(self.viewer), admin=self._can_admin(),
-                                               viewer=self.viewer))
+                                                    viewer=self.viewer))
                 if p == "/api/team/news":
                     after = q.get("after") if news.ISO_RE.fullmatch(q.get("after") or "") else None
                     return self._json(api.team.team_news(ctx, self.viewer, scope=people.projects_of(self.viewer),
-                                               admin=self._can_admin(), after=after))
+                                                         admin=self._can_admin(), after=after))
                 if p == "/api/sessions":
                     return self._json(api.sessions.sessions(ctx, q, limited=self.limited))
                 if p == "/api/export":  # a download: one session's file, or a .zip of several
@@ -503,8 +503,8 @@ def make_handler(app: App, port: int):
                     return self._json(api.projects.file_sessions(ctx, q.get("path", ""), min(int(q.get("limit") or 50), 500)))
                 if p == "/api/files":
                     return self._json(api.projects.folder_files(ctx, q.get("root", ""), min(int(q.get("limit") or 200), 2000),
-                                                       existing=q.get("existing") == "1",
-                                                       ignored=q.get("ignored") != "0"))
+                                                                existing=q.get("existing") == "1",
+                                                                ignored=q.get("ignored") != "0"))
                 if p == "/api/knowledge":
                     return self._json(api.knowledge.knowledge(ctx, q))
                 if p == "/api/learning/interests":
@@ -726,7 +726,7 @@ def make_handler(app: App, port: int):
                     if not here and not (app.cfg.hub_dedicated and self._can_admin()):
                         return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
                     return self._json(*api.devices.action_shared_project(ctx, m.group(1), body if isinstance(body, dict) else {},
-                                                                 by=self.viewer, here=here))
+                                                                         by=self.viewer, here=here))
                 m = re.fullmatch(r"/api/project-groups/(save|delete|move|share)", p)
                 if m:
                     if m.group(1) == "share" and not self._from_here():  # what leaves this computer: only from here
@@ -737,7 +737,7 @@ def make_handler(app: App, port: int):
                     if not self._can_admin():
                         return self._json({"error": tr("only an admin of this hub can do this")}, 403)
                     return self._json(*api.hub_admin.action_people(ctx, m.group(1), body if isinstance(body, dict) else {},
-                                                         self.viewer, self._address()))
+                                                                   self.viewer, self._address()))
                 if p == "/api/team/accept":  # what this hub takes from the computers that send to it
                     if not self._can_admin():
                         return self._json({"error": tr("only an admin of this hub can do this")}, 403)
