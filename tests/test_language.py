@@ -323,7 +323,7 @@ def test_tr_and_trn_fall_back_to_english(ja):
 
 
 def test_every_translated_template_has_japanese_with_the_same_fields():
-    from interlatch import update
+    from interlatch.runtime import update
     from interlatch.core import sessions
     from interlatch.analysis import queue
 
@@ -365,7 +365,7 @@ def test_stored_english_templates_are_translated_when_read(ja):
 
 
 def test_status_texts_follow_the_dashboard_language(synced, ja):
-    from interlatch.connectors import all_status
+    from interlatch.runtime.connectors import all_status
     from interlatch.analysis.queue import count_pending
 
     cfg, conn = synced["cfg"], synced["conn"]

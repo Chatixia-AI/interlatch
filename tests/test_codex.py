@@ -4,7 +4,7 @@ import pytest
 
 from interlatch.sources.codex.parser import _js_string, parse_codex_session
 from interlatch.core.config import Config, load_config, set_config_value
-from interlatch.connectors import all_status, connect, disconnect
+from interlatch.runtime.connectors import all_status, connect, disconnect
 from interlatch.storage.sqlite import connect as db_connect
 from interlatch.analysis.digest import build_digest
 from interlatch.ingestion.service import sync

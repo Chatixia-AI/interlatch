@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from interlatch.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
+from interlatch.runtime.platforms.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
 from interlatch.core.util import to_iso
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
@@ -160,7 +160,7 @@ def test_the_page_gets_the_state_and_its_picture():
 
 
 def test_snapshot_from_the_dashboards_own_app(synced):
-    from interlatch.menubar import snapshot
+    from interlatch.runtime.platforms.menubar import snapshot
     from interlatch.server import make_server
 
     httpd = make_server(synced["cfg"], port=0)
@@ -176,7 +176,7 @@ def test_snapshot_from_the_dashboards_own_app(synced):
 
 
 def test_stats_count_today_and_the_last_week(synced):
-    from interlatch.menubar import stats
+    from interlatch.runtime.platforms.menubar import stats
 
     conn = synced["conn"]
     n = conn.execute("SELECT COUNT(*) FROM sessions WHERE source NOT IN ('history')").fetchone()[0]
@@ -195,7 +195,7 @@ def test_stats_count_today_and_the_last_week(synced):
 
 
 def test_recent_sessions_leave_out_imported_chats(synced):
-    from interlatch.menubar import recent_sessions
+    from interlatch.runtime.platforms.menubar import recent_sessions
 
     conn = synced["conn"]
     sid = recent_sessions(conn)[0]["id"]
@@ -206,8 +206,8 @@ def test_recent_sessions_leave_out_imported_chats(synced):
 
 
 def test_only_the_login_item_shows_the_icon_by_itself(env, monkeypatch):
-    from interlatch.install import UI_LABEL
-    from interlatch.menubar import wants_menu_bar
+    from interlatch.runtime.install import UI_LABEL
+    from interlatch.runtime.platforms.menubar import wants_menu_bar
 
     cfg = env["cfg"]
     cfg.server_menu_bar = True  # turned on at install
@@ -233,22 +233,22 @@ def test_menu_bar_is_off_until_turned_on_in_config(env):
 
 
 def test_agent_sync_error_reads_the_launchd_exit_code(monkeypatch):
-    from interlatch import menubar
+    from interlatch.runtime.platforms import menubar
 
     for info, expected in [({"loaded": True, "last_exit": "0"}, None),
                            ({"loaded": True, "last_exit": "(never exited)"}, None),
                            ({"loaded": False, "last_exit": "1"}, None),
                            ({"installed": False}, None)]:
-        monkeypatch.setattr("interlatch.install.background_status", lambda info=info: info)
+        monkeypatch.setattr("interlatch.runtime.install.background_status", lambda info=info: info)
         assert menubar.agent_sync_error() is expected
-    monkeypatch.setattr("interlatch.install.background_status", lambda: {"loaded": True, "last_exit": "78"})
+    monkeypatch.setattr("interlatch.runtime.install.background_status", lambda: {"loaded": True, "last_exit": "78"})
     assert "78" in menubar.agent_sync_error()
 
 
 def test_without_pyobjc_the_dashboard_serves_as_before(env, monkeypatch):
     import builtins
 
-    from interlatch import menubar
+    from interlatch.runtime.platforms import menubar
 
     real = builtins.__import__
 
@@ -265,12 +265,12 @@ def test_without_pyobjc_the_dashboard_serves_as_before(env, monkeypatch):
 @pytest.fixture
 def setup(env, monkeypatch):
     """`chronicle install` on a Mac whose dashboard runs at login."""
-    monkeypatch.setattr("interlatch.update.compares_online", lambda: False)  # no release-notification question
+    monkeypatch.setattr("interlatch.runtime.update.compares_online", lambda: False)  # no release-notification question
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: [])
-    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: [])
-    monkeypatch.setattr("interlatch.install.install_mcp", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.runtime.install.install_launchd", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.install_ui_agent", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.install_mcp", lambda *a, **k: [])
     return env
 
 
@@ -338,7 +338,8 @@ def mac(env, monkeypatch):
     """A uv tool install from PyPI with the team extra, whose dashboard is the login item, without the icon yet."""
     import types
 
-    from interlatch import install, menubar, update
+    from interlatch.runtime import install, update
+    from interlatch.runtime.platforms import menubar
 
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setattr(update, "_method", {"kind": "uv", "label": "uv tool from PyPI", "source": None, "local": False,
@@ -356,7 +357,7 @@ def mac(env, monkeypatch):
         ran.append(cmd)
         return types.SimpleNamespace(returncode=env.get("uv_exit", 0), stdout="", stderr=env.get("uv_err", ""))
 
-    monkeypatch.setattr("interlatch.menubar.subprocess.run", run)
+    monkeypatch.setattr("interlatch.runtime.platforms.menubar.subprocess.run", run)
     env.update(restarts=restarts, ran=ran)
     return env
 
@@ -370,7 +371,9 @@ def _on(env) -> bool:
 def test_the_extra_is_added_keeping_the_others_and_the_version(mac, monkeypatch):
     import sys
 
-    from interlatch import __version__, menubar, update
+    from interlatch import __version__
+    from interlatch.runtime.platforms import menubar
+    from interlatch.runtime import update
 
     assert menubar.extra_command() == ["/opt/uv", "tool", "install", "--force", "--python",
                                        f"{sys.version_info[0]}.{sys.version_info[1]}", f"interlatch[app,team]=={__version__}"]
@@ -383,7 +386,8 @@ def test_the_extra_is_added_keeping_the_others_and_the_version(mac, monkeypatch)
 
 
 def test_no_switch_off_a_mac_or_in_the_app(mac, monkeypatch):
-    from interlatch import menubar, update
+    from interlatch.runtime.platforms import menubar
+    from interlatch.runtime import update
 
     monkeypatch.setitem(update._method, "kind", "app")  # Chronicle.app always shows its icon
     assert menubar.setting_info(mac["cfg"]) == {"supported": False}
@@ -393,7 +397,8 @@ def test_no_switch_off_a_mac_or_in_the_app(mac, monkeypatch):
 
 
 def test_turning_it_on_installs_the_missing_extra_then_restarts(mac):
-    from interlatch import menubar, update
+    from interlatch.runtime.platforms import menubar
+    from interlatch.runtime import update
 
     said, expected = [], menubar.extra_command()
     out = menubar.apply_setting(mac["cfg"], True, said.append)
@@ -403,7 +408,7 @@ def test_turning_it_on_installs_the_missing_extra_then_restarts(mac):
 
 
 def test_a_failed_install_leaves_it_off(mac):
-    from interlatch import menubar
+    from interlatch.runtime.platforms import menubar
 
     mac.update(uv_exit=2, uv_err="resolving…\nerror: no network")
     with pytest.raises(RuntimeError, match="error: no network"):
@@ -412,7 +417,7 @@ def test_a_failed_install_leaves_it_off(mac):
 
 
 def test_the_dashboard_restarts_only_when_the_icon_has_to_show_or_go(mac, monkeypatch):
-    from interlatch import menubar
+    from interlatch.runtime.platforms import menubar
 
     monkeypatch.setattr(menubar, "app_extra", lambda: True)
     monkeypatch.setattr(menubar, "SHOWN", True)  # shown: turning it on changes nothing here
@@ -435,7 +440,8 @@ def test_the_switch_works_only_from_this_computer(mac, monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from interlatch import menubar, update
+    from interlatch.runtime.platforms import menubar
+    from interlatch.runtime import update
     from interlatch.server import App, make_handler
 
     app = App(mac["cfg"])
@@ -479,7 +485,7 @@ def test_the_login_item_restarts_through_launchd(monkeypatch):
     import os
     import subprocess
 
-    from interlatch import install, update
+    from interlatch.runtime import install, update
 
     started, execd = [], []
     monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: started.append((cmd, kw.get("start_new_session"))))

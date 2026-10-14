@@ -22,7 +22,7 @@ def stores(env, monkeypatch):
     env["bob"] = write_bob_home(t / "bob")
     monkeypatch.setenv("COPILOT_HOME", str(env["copilot"]))
     monkeypatch.setenv("BOB_HOME", str(env["bob"]))
-    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [env["vscode"]])
+    monkeypatch.setattr("interlatch.sources.discovery.vscode_user_dirs", lambda: [env["vscode"]])
     return env
 
 
@@ -106,7 +106,7 @@ def test_sync_copilot_and_bob(stores):
 
 
 def test_connect_registers_mcp_and_keeps_other_servers(stores):
-    from interlatch.connectors import all_status, connect, disconnect
+    from interlatch.runtime.connectors import all_status, connect, disconnect
 
     cfg = stores["cfg"]
     status = {c["name"]: c for c in all_status(cfg, db_connect(cfg.db_path))}
@@ -127,7 +127,7 @@ def test_connect_registers_mcp_and_keeps_other_servers(stores):
 
 
 def test_bob_shell_reads_mcp_json(stores):
-    from interlatch.connectors import bob_status, connect, disconnect
+    from interlatch.runtime.connectors import bob_status, connect, disconnect
 
     cfg, settings = stores["cfg"], stores["bob"] / "settings"
     current, legacy = settings / "mcp.json", settings / "mcp_settings.json"
@@ -155,8 +155,8 @@ def test_bob_shell_reads_mcp_json(stores):
 
 
 def test_mcp_clients_get_the_server_and_keep_their_settings(env, monkeypatch):
-    from interlatch import connectors
-    from interlatch.connectors import connect, disconnect, mcp_clients_status
+    from interlatch.runtime import connectors
+    from interlatch.runtime.connectors import connect, disconnect, mcp_clients_status
 
     home = env["tmp"] / "home"
     monkeypatch.setenv("HOME", str(home))

@@ -122,7 +122,7 @@ which installs from before the rename still run):
 - `core/`: configuration, session records, paths, translations, agent names, pricing, redaction, this computer's
   identity, and what counts as an artifact a session made
 - `storage/`: the SQLite archive (schema, migrations, connections) and the optional Postgres stores
-- `sources/`: a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`) and per chat export
+- `sources/`: where each agent keeps its files (`discovery.py`), a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`) and per chat export
   (`claude/export.py`, `chatgpt.py`)
 - `artifacts/`: what sessions made, where each stands, and opening it
 - `ingestion/`: syncing every source (`service.py`): the raw-file archive, storing parsed sessions, chat imports,
@@ -138,9 +138,12 @@ which installs from before the rename still run):
   the hub's receiver, projects on the hub, people and what each may see, the Team page's news, the leaderboard
 - `application/`: what a worker run does from start to finish (`workflows.py`), session records and search, which
   span the features
-- `interfaces/exports/`: the Markdown vault, session exports, Excalidraw diagrams
-- `connectors.py` (Sources), `server.py` + `web/` (dashboard), `mcp_server.py`, `hooks.py` / `install.py`, `desktop.py`
-  (macOS app), `cli.py`; `packaging/macos/` builds the app
+- `interfaces/`: the MCP server (`mcp.py`) and the files Interlatch exports (`exports/`: the Markdown vault, session
+  exports, Excalidraw diagrams)
+- `runtime/`: Interlatch on this computer: installing it (hooks, MCP servers, background jobs), connecting agents
+  (`connectors.py`), the status line, moving from Chronicle, updates, notifications, the hub in a container;
+  `runtime/platforms/`: Windows (Task Scheduler, the notification area), the macOS app and its menu-bar icon
+- `server.py` + `web/` (dashboard), `cli.py`; `packaging/macos/` builds the app
 
 The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `server.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an

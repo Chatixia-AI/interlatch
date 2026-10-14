@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from .core.config import Config
-from .core.util import parse_ts, to_iso, utcnow
+from ...core.config import Config
+from ...core.util import parse_ts, to_iso, utcnow
 
 log = logging.getLogger("interlatch.menubar")
 
@@ -196,8 +196,8 @@ def stats(conn, now: datetime | None = None) -> dict:
 
 def snapshot(app, *, sync_running: bool = False, sync_error: str | None = None) -> Snapshot:
     """What the menu shows now. `app`: the dashboard's server.App, read on the caller's thread."""
-    from .sharing.push import last_push
-    from .sharing.projects import last_folders
+    from ...sharing.push import last_push
+    from ...sharing.projects import last_folders
 
     try:
         app.refresh_config()
@@ -217,7 +217,7 @@ def snapshot(app, *, sync_running: bool = False, sync_error: str | None = None) 
 
 def agent_sync_error() -> str | None:
     """The launchd sync agent's last run, when it failed (the login item's own sync runs there, not in the menu)."""
-    from .install import background_status
+    from ..install import background_status
 
     info = background_status()
     code = str(info.get("last_exit") or "0")
@@ -239,8 +239,8 @@ def app_extra() -> bool:
 def extra_command() -> list[str] | None:
     """The command that adds the `app` extra to a uv tool install from PyPI, keeping its other extras and its version;
     None for any other install (a checkout, pip, pipx, the app), which Status › Recording explains instead."""
-    from . import __version__
-    from .update import DIST, install_method
+    from ... import __version__
+    from ..update import DIST, install_method
 
     m = install_method()
     if m["kind"] != "uv" or m.get("source") or not m.get("command"):
@@ -254,8 +254,8 @@ def setting_info(cfg: Config) -> dict:
     """Status › Recording's menu-bar switch: whether it applies here, and what turning it on takes."""
     import shlex
 
-    from .install import UI_LABEL, launchd_status
-    from .update import install_method
+    from ..install import UI_LABEL, launchd_status
+    from ..update import install_method
 
     if sys.platform == "win32":
         from .windows import task_status
@@ -278,7 +278,7 @@ def setting_info(cfg: Config) -> dict:
 def restarts(on: bool, info: dict) -> bool:
     """Whether turning the icon on or off restarts this dashboard: only the login item shows it, and only a fresh
     process picks up the setting (and an `app` extra just installed)."""
-    from . import update
+    from .. import update
 
     return bool(update.RESTARTABLE and info.get("login_item") and (on != info.get("shown") or (on and not info.get("app_extra"))))
 
@@ -286,9 +286,9 @@ def restarts(on: bool, info: dict) -> bool:
 def apply_setting(cfg: Config, on: bool, progress) -> str:
     """Turn the icon on or off ([server] menu_bar), adding the `app` extra first when it is missing, then restart the
     dashboard so it shows or goes. A job (Status › Recording); its result is the line the UI shows."""
-    from . import update
-    from .core.config import set_config_value
-    from .core.i18n import tr
+    from .. import update
+    from ...core.config import set_config_value
+    from ...core.i18n import tr
 
     info = setting_info(cfg)
     if on and not info.get("app_extra"):
@@ -313,7 +313,7 @@ def apply_setting(cfg: Config, on: bool, progress) -> str:
 def wants_menu_bar(cfg: Config) -> bool:
     """`interlatch ui` shows the icon by itself only as the login item, so a second dashboard run from a terminal
     (or a checkout's dev server) adds no second icon."""
-    from .install import UI_LABEL
+    from ..install import UI_LABEL
 
     if sys.platform == "win32":
         return cfg.server_menu_bar and bool(os.environ.get("INTERLATCH_WINDOWS_TASK"))
@@ -762,7 +762,7 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
     except ImportError:
         log.info("no menu-bar icon: it needs the `app` extra (uv tool install 'interlatch[app]')")
         return False
-    from .install import UI_LABEL
+    from ..install import UI_LABEL
 
     SHOWN = True
     app = httpd.app

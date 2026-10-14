@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import install, migrate
+from interlatch.runtime import install, migrate
 from interlatch.cli import main
 from interlatch.core.config import interlatch_home, default_home, env, legacy_home
 from interlatch.storage.sqlite import connect
@@ -55,7 +55,7 @@ def test_the_home_folder(tmp_path, monkeypatch):
 
 
 def test_internal_runs_are_not_recorded_under_either_name(env, monkeypatch):
-    from interlatch import hooks
+    from interlatch.runtime import hooks
     from interlatch.core.process import internal_env
 
     monkeypatch.setattr(hooks, "spawn_detached", lambda *a, **k: pytest.fail("recorded an internal run"))
@@ -174,7 +174,7 @@ def legacy(tmp_path, monkeypatch):
     monkeypatch.setenv("BOB_HOME", str(bob))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(agy))
     vscode = user / "Library" / "Application Support" / "Code" / "User"
-    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [vscode])
+    monkeypatch.setattr("interlatch.sources.discovery.vscode_user_dirs", lambda: [vscode])
     entry = {"command": shim, "args": ["mcp"]}
     configs = {
         "vscode": (vscode / "mcp.json", "servers", {"first": {}, "chronicle": {"type": "stdio", **entry}, "last": {}}),
@@ -193,7 +193,7 @@ def legacy(tmp_path, monkeypatch):
             plistlib.dump({"Label": label, "ProgramArguments": [shim, "ui"], "StartInterval": 600,
                            "EnvironmentVariables": {"CHRONICLE_HOME": str(old)}}, fh)
     monkeypatch.setattr(install, "executable", lambda: EXE)
-    monkeypatch.setattr("interlatch.install.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("interlatch.runtime.install.platform.system", lambda: "Darwin")
     monkeypatch.setattr(install, "uses_systemd", lambda: False)
     monkeypatch.setattr(migrate, "APP_DIRS", (tmp_path / "Applications",))
     launchctl = []
@@ -365,7 +365,7 @@ def test_a_move_that_did_not_finish_is_taken_up_again(legacy, monkeypatch):
     monkeypatch.setenv("HOME", str(legacy["user"]))
     monkeypatch.setattr(install, "executable", lambda: EXE)
     monkeypatch.setattr(install, "uses_systemd", lambda: False)
-    monkeypatch.setattr("interlatch.install.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("interlatch.runtime.install.platform.system", lambda: "Darwin")
     monkeypatch.setenv("CODEX_HOME", str(legacy["codex"]))
     migrate.migrate_if_due()
     assert not migrate.due()
@@ -374,7 +374,7 @@ def test_a_move_that_did_not_finish_is_taken_up_again(legacy, monkeypatch):
 
 def test_the_commands_that_start_the_dashboard_or_a_sync_migrate_first(env, monkeypatch):
     calls = []
-    monkeypatch.setattr("interlatch.migrate.migrate_if_due", lambda quiet=True: calls.append(quiet) or [])
+    monkeypatch.setattr("interlatch.runtime.migrate.migrate_if_due", lambda quiet=True: calls.append(quiet) or [])
     monkeypatch.setattr("interlatch.server.serve", lambda *a, **k: None)
     assert main(["sync", "--quiet"]) == 0 and main(["ui"]) == 0
     assert calls == [True, False]

@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .core.process import INTERNAL_ENVS, self_command
+from ..core.process import INTERNAL_ENVS, self_command
 
 
 def _read_payload() -> dict:
@@ -52,7 +52,7 @@ def hook_main(event: str) -> int:
 
 
 def _on_session_end(payload: dict, *, ended: bool) -> int:
-    from .core.config import interlatch_home, load_config
+    from ..core.config import interlatch_home, load_config
 
     transcript = payload.get("transcript_path")
     home = interlatch_home()
@@ -70,7 +70,7 @@ def _on_session_end(payload: dict, *, ended: bool) -> int:
 
 
 def _on_session_start(payload: dict) -> int:
-    from .core.config import load_config
+    from ..core.config import load_config
 
     cfg = load_config(create=False)
     if not cfg.inject_session_start or not cfg.db_path.exists():
@@ -86,7 +86,7 @@ def _project_here(conn, cwd: str) -> str:
     """The project `cwd` belongs to: the folder set up as a project on this hub that holds it, else cwd itself."""
     import sqlite3
 
-    from .projects.routing import under
+    from ..projects.routing import under
 
     try:
         declared = [r[0] for r in conn.execute("SELECT path FROM hub_projects")]
@@ -97,14 +97,14 @@ def _project_here(conn, cwd: str) -> str:
 
 def build_session_context(cfg, cwd: str) -> str | None:
     """A compact digest of what previous sessions learned about this project."""
-    from .storage.sqlite import connect
-    from .sharing.pull import team_from
-    from .knowledge.ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
+    from ..storage.sqlite import connect
+    from ..sharing.pull import team_from
+    from ..knowledge.ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
 
     def trust_tag(i: dict) -> str:
         return i["stage"] + (f" ×{i['sessions']}" if (i.get("sessions") or 0) > 1 else "")
-    from .knowledge.synthesize import kb_for_path, kb_sections
-    from .core.util import local_str, one_line
+    from ..knowledge.synthesize import kb_for_path, kb_sections
+    from ..core.util import local_str, one_line
 
     conn = connect(cfg.db_path, readonly=True)
     try:

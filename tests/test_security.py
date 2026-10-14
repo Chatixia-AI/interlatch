@@ -339,7 +339,7 @@ def test_git_runs_no_repository_programs(monkeypatch):
 
 
 def test_the_launcher_runs_only_an_app_in_applications(tmp_path, monkeypatch):
-    from interlatch.install import write_shim
+    from interlatch.runtime.install import write_shim
 
     monkeypatch.setenv("CHRONICLE_HOME", str(tmp_path / "home"))
     shim = write_shim(str(tmp_path / "gone" / "Chronicle"))

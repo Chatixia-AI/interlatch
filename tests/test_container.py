@@ -7,7 +7,7 @@ import urllib.request
 
 import pytest
 
-from interlatch import container, update
+from interlatch.runtime import container, update
 from interlatch.sharing import people
 from interlatch.sharing.identity import read_token
 from interlatch.sharing.receiver import IngestTrigger

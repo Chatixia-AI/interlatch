@@ -13,10 +13,12 @@ import time
 import tomllib
 from pathlib import Path
 
-from .core.config import Config, set_config_value
-from .core.process import internal_env
-from .core.i18n import tr
+from ..core.config import Config, set_config_value
+from ..core.process import internal_env
+from ..core.i18n import tr
 from .install import LEGACY_MCP_NAME, MCP_NAME, exe_argv
+from ..sources import discovery  # discovery.vscode_user_dirs() through the module: one patch there reaches every caller
+from ..sources.discovery import antigravity_home, app_support_dir, bob_home, codex_home, copilot_home
 
 MCP_NAMES = (MCP_NAME, LEGACY_MCP_NAME)  # an agent that still has Chronicle's 'chronicle' server runs the same one
 
@@ -119,8 +121,6 @@ def disconnect_claude(cfg: Config) -> list[str]:
 
 
 # ------------------------------------------------------------------ Codex
-def codex_home() -> Path:
-    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
 
 
 def codex_mcp_registered(home: Path | None = None) -> bool:
@@ -139,7 +139,7 @@ def _codex_notify(home: Path) -> list | None:
 
 
 def codex_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .sources.codex.parser import load_imports, rollout_files
+    from ..sources.codex.parser import load_imports, rollout_files
 
     binary = cfg.codex_bin()
     home = cfg.codex_dirs[0] if cfg.codex_dirs else codex_home()
@@ -220,7 +220,7 @@ def disconnect_codex(cfg: Config) -> list[str]:
 
 # ------------------------------------------------------------------ Codex Cloud
 def codex_cloud_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .sources.codex.cloud import load_status
+    from ..sources.codex.cloud import load_status
 
     binary = cfg.codex_bin()
     connected = cfg.codex_cloud
@@ -342,25 +342,7 @@ def _split_exe(exe: str) -> tuple[str, list[str]]:
     return parts[0], [*parts[1:], "mcp"]
 
 
-def app_support_dir() -> Path:
-    """Where this system keeps apps' settings: ~/Library/Application Support, %APPDATA%, or ~/.config."""
-    import sys
-
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support"
-    if sys.platform == "win32":
-        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-
-
 # ------------------------------------------------------------------ GitHub Copilot
-def copilot_home() -> Path:
-    return Path(os.environ.get("COPILOT_HOME", "~/.copilot")).expanduser()
-
-
-def vscode_user_dirs() -> list[Path]:
-    base = app_support_dir()
-    return [d for d in (base / "Code" / "User", base / "Code - Insiders" / "User") if d.is_dir()]
 
 
 def _copilot_extension_version() -> str | None:
@@ -369,10 +351,10 @@ def _copilot_extension_version() -> str | None:
 
 
 def copilot_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .sources.copilot import agent_session_dirs, chat_files
+    from ..sources.copilot import agent_session_dirs, chat_files
 
     home = next((d for d in cfg.copilot_dirs if (d / "session-state").is_dir()), copilot_home())
-    users = [d for d in cfg.copilot_dirs if (d / "workspaceStorage").is_dir()] or vscode_user_dirs()
+    users = [d for d in cfg.copilot_dirs if (d / "workspaceStorage").is_dir()] or discovery.vscode_user_dirs()
     agent_sessions = agent_session_dirs(home)
     chats = [f for u in users for f in chat_files(u)]
     connected = bool(cfg.copilot_dirs)
@@ -416,12 +398,12 @@ def copilot_status(cfg: Config, conn: sqlite3.Connection) -> dict:
 def connect_copilot(cfg: Config, exe: str) -> list[str]:
     actions = []
     home = copilot_home()
-    dirs = [d for d in (home, *vscode_user_dirs()) if d.is_dir()]
+    dirs = [d for d in (home, *discovery.vscode_user_dirs()) if d.is_dir()]
     if not cfg.copilot_dirs and dirs:
         set_config_value(cfg, "sources", "copilot_dirs", json.dumps([_tilde(d) for d in dirs], ensure_ascii=False))
         actions.append(tr("recording {where}", where=", ".join(_tilde(d) for d in dirs)))
     command, args = _split_exe(exe)
-    for u in vscode_user_dirs():
+    for u in discovery.vscode_user_dirs():
         actions.append(_mcp_json_set(cfg, u / "mcp.json", "servers", {"type": "stdio", "command": command, "args": args}, "VS Code"))
     if home.is_dir():
         actions.append(_mcp_json_set(cfg, home / "mcp-config.json", "mcpServers",
@@ -432,7 +414,7 @@ def connect_copilot(cfg: Config, exe: str) -> list[str]:
 def disconnect_copilot(cfg: Config) -> list[str]:
     set_config_value(cfg, "sources", "copilot_dirs", "[]")
     actions = [tr("stopped recording {label} (recorded sessions are kept)", label="GitHub Copilot")]
-    for u in vscode_user_dirs():
+    for u in discovery.vscode_user_dirs():
         if _mcp_json_has(u / "mcp.json", "servers"):
             actions.append(_mcp_json_set(cfg, u / "mcp.json", "servers", None, "VS Code"))
     if _mcp_json_has(copilot_home() / "mcp-config.json", "mcpServers"):
@@ -441,8 +423,6 @@ def disconnect_copilot(cfg: Config) -> list[str]:
 
 
 # ------------------------------------------------------------------ IBM Bob
-def bob_home() -> Path:
-    return Path(os.environ.get("BOB_HOME", "~/.bob")).expanduser()
 
 
 def bob_mcp_files(home: Path) -> tuple[Path, Path]:
@@ -460,7 +440,7 @@ def _bob_mcp_registered(home: Path) -> bool:
 
 
 def bob_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .sources.bob import bob_db, load_tasks, task_folder
+    from ..sources.bob import bob_db, load_tasks, task_folder
 
     home = cfg.bob_dirs[0] if cfg.bob_dirs else bob_home()
     tasks = [t for t in load_tasks(home) if not cfg.is_internal_path(task_folder(t))]  # not Interlatch's own analyses
@@ -523,8 +503,6 @@ def disconnect_bob(cfg: Config) -> list[str]:
 
 
 # ------------------------------------------------------------------ Google Antigravity
-def antigravity_home() -> Path:
-    return Path(os.environ.get("ANTIGRAVITY_HOME", "~/.gemini/antigravity")).expanduser()
 
 
 def antigravity_mcp_config(home: Path) -> Path:
@@ -541,7 +519,7 @@ def _app_version(app: Path) -> str | None:
 
 
 def antigravity_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .sources.antigravity import conversation_dirs, stored_conversations
+    from ..sources.antigravity import conversation_dirs, stored_conversations
 
     home = cfg.antigravity_dirs[0] if cfg.antigravity_dirs else antigravity_home()
     readable = {d.name for d in conversation_dirs(home)}

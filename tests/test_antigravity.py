@@ -15,7 +15,7 @@ from antigravity_fixture import EMPTY_ID, FOLDER, GAME, NEW_ID, OLD_ID, write_an
 def agy(env, monkeypatch):
     env["agy"] = write_antigravity_home(env["tmp"] / "home" / ".gemini" / "antigravity")
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(env["agy"]))
-    monkeypatch.setattr("interlatch.connectors.APPLICATIONS", env["tmp"] / "Applications")
+    monkeypatch.setattr("interlatch.runtime.connectors.APPLICATIONS", env["tmp"] / "Applications")
     return env
 
 
@@ -80,7 +80,7 @@ def test_sync_antigravity(agy):
 
 
 def test_connect_antigravity(agy):
-    from interlatch.connectors import all_status, connect, disconnect
+    from interlatch.runtime.connectors import all_status, connect, disconnect
 
     cfg = agy["cfg"]
     mcp = agy["agy"].parent / "config" / "mcp_config.json"

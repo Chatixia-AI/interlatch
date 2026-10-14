@@ -13,9 +13,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .core.config import Config
-from .core.i18n import tr
-from .core.util import utcnow_iso
+from ..core.config import Config
+from ..core.i18n import tr
+from ..core.util import utcnow_iso
 
 LAUNCHD_LABEL = "com.interlatch.sync"
 UI_LABEL = "com.interlatch.ui"
@@ -32,7 +32,7 @@ WINDOWS_TASKS = {LAUNCHD_LABEL: "Sync", UI_LABEL: "Dashboard"}  # in Task Schedu
 
 
 def shim_path() -> Path:
-    from .core.config import interlatch_home
+    from ..core.config import interlatch_home
 
     return interlatch_home() / "bin" / "interlatch"
 
@@ -97,7 +97,7 @@ def exe_argv(exe: str) -> list[str]:
 def _exe_cmd(exe: str, *args: str) -> str:
     """The command line Claude Code runs (a hook, the status line)."""
     if on_windows():
-        from .windows import shell_command
+        from .platforms.windows import shell_command
 
         return shell_command([*exe_argv(exe), *args])
     base = exe if " -m " in exe else shlex.quote(exe)
@@ -369,7 +369,7 @@ def _task_python(exe: str) -> Path:
 def _windows_install(cfg: Config, exe: str, label: str, args: list[str], *, every_minutes: int, keep_alive: bool,
                      description: str, dry_run: bool) -> str | None:
     """Register the task for `label` that runs `interlatch <args>` without a window; an error message, or None."""
-    from . import windows
+    from .platforms import windows
 
     python = _task_python(exe)
     pythonw = next((p for p in (python.with_name("pythonw.exe"), python) if p.is_file()), python)
@@ -555,7 +555,7 @@ def uninstall_launchd(labels=(LAUNCHD_LABEL, UI_LABEL)) -> list[str]:
             _systemctl("daemon-reload")
         return out
     if on_windows():
-        from .windows import delete_task
+        from .platforms.windows import delete_task
 
         return [f"removed Task Scheduler task \\Interlatch\\{WINDOWS_TASKS[label]}" for label in labels
                 if label in WINDOWS_TASKS and delete_task(WINDOWS_TASKS[label])]
@@ -582,7 +582,7 @@ def launchd_status(label: str = LAUNCHD_LABEL) -> dict:
     if uses_systemd() and label in SYSTEMD_UNITS:
         return _systemd_status(label)
     if on_windows() and label in WINDOWS_TASKS:
-        from .windows import task_status
+        from .platforms.windows import task_status
 
         return task_status(WINDOWS_TASKS[label])
     if platform.system() != "Darwin":
@@ -607,7 +607,7 @@ def background_status() -> dict:
 def agent_path(label: str) -> Path | str:
     """Where the agent for `label` is defined: its unit or plist file, or on Windows its task's name."""
     if on_windows():
-        from .windows import task_name
+        from .platforms.windows import task_name
 
         return task_name(WINDOWS_TASKS[label])
     return systemd_dir() / SYSTEMD_UNITS[label][0] if uses_systemd() else plist_path(label)
@@ -641,7 +641,7 @@ def install_mcp(cfg: Config, exe: str, *, dry_run: bool = False) -> list[str]:
     cmd = [claude, "mcp", "add", "--scope", "user", "--transport", "stdio", MCP_NAME, "--", *args]
     if dry_run:
         return ["would run: " + " ".join(shlex.quote(c) for c in cmd)]
-    from .core.process import internal_env
+    from ..core.process import internal_env
 
     legacy = LEGACY_MCP_NAME in mcp_servers()
     for name in (MCP_NAME, LEGACY_MCP_NAME) if legacy else (MCP_NAME,):

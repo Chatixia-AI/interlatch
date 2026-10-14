@@ -106,7 +106,7 @@ def test_codex_cloud_is_opt_in(cloud):
 
 
 def test_sync_records_tasks_and_skips_unchanged(cloud):
-    from interlatch.connectors import all_status, connect, disconnect
+    from interlatch.runtime.connectors import all_status, connect, disconnect
 
     cfg = cloud["cfg"]
     assert connect(cfg, "codex-cloud", "/opt/bin/chronicle") == ["recording Codex Cloud tasks"]
@@ -139,7 +139,7 @@ def test_sync_records_tasks_and_skips_unchanged(cloud):
 
 
 def test_listing_failure_is_reported_not_raised(cloud):
-    from interlatch.connectors import connect
+    from interlatch.runtime.connectors import connect
 
     connect(cloud["cfg"], "codex-cloud", "/opt/bin/chronicle")
     cfg = load_config(cloud["cfg"].home)

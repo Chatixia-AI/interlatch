@@ -430,7 +430,7 @@ def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
 def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     """A knowledge-only computer keeps its own Chronicle running: the hook ingests here instead of pushing files,
     and the worker runs, then tries to share (an unreachable hub is just noted)."""
-    from interlatch import hooks
+    from interlatch.runtime import hooks
     from interlatch.core.config import set_config_value
     from interlatch.application.workflows import run_worker
 
@@ -507,7 +507,7 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
 
 
 def test_spoke_sends_instead_of_recording(env, monkeypatch):
-    from interlatch import hooks
+    from interlatch.runtime import hooks
     from interlatch.application.workflows import run_worker
 
     cfg = env["cfg"]
@@ -604,7 +604,7 @@ def test_tailnet_on_and_hub_enable(env, monkeypatch, capsys):
 
 
 def test_systemd_units_quote_commands(env):
-    from interlatch.install import systemd_units
+    from interlatch.runtime.install import systemd_units
 
     units = systemd_units(env["cfg"], "/usr/bin/python3 -m interlatch", interval=600)
     assert "ExecStart=/usr/bin/python3 -m interlatch sync --work --quiet" in units["interlatch-sync.service"]

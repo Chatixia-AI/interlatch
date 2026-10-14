@@ -71,7 +71,7 @@ def test_an_older_archive_gains_the_column(tmp_path):
 
 
 def test_dashboard_and_mcp_show_the_case(synced):
-    from interlatch.mcp_server import Tools
+    from interlatch.interfaces.mcp import Tools
     from interlatch.server import App
 
     conn, cfg = synced["conn"], synced["cfg"]

@@ -6,8 +6,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-from interlatch import statusline
-from interlatch.install import install_statusline, settings_path, statusline_installed, uninstall_statusline
+from interlatch.runtime import statusline
+from interlatch.runtime.install import install_statusline, settings_path, statusline_installed, uninstall_statusline
 from interlatch.server import App
 
 from conftest import SID

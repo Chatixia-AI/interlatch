@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from interlatch import notify, update
+from interlatch.runtime import notify, update
 from interlatch.cli import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
@@ -135,12 +135,12 @@ def test_how_to_update_matches_the_install(env):
 @pytest.fixture
 def setup(env, monkeypatch):
     """`chronicle install` with the background sync running and a PyPI install."""
-    monkeypatch.setattr("interlatch.update.compares_online", lambda: True)
+    monkeypatch.setattr("interlatch.runtime.update.compares_online", lambda: True)
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: [])
-    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: [])
-    monkeypatch.setattr("interlatch.install.install_mcp", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.runtime.install.install_launchd", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.install_ui_agent", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.runtime.install.install_mcp", lambda *a, **k: [])
     return env
 
 
