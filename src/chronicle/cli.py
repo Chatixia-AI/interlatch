@@ -2364,6 +2364,7 @@ def _hub_leave_project(cfg, console, args) -> int:
     from pathlib import Path
 
     from . import hub
+    from .util import normalize_project_path
 
     if not cfg.is_spoke:
         console.print("This computer has not joined a hub.")
@@ -2376,14 +2377,15 @@ def _hub_leave_project(cfg, console, args) -> int:
         known = hub.handshake(cfg).get("projects") or []
     except hub.HubError:
         known = (hub.last_folders(cfg) or {}).get("projects") or []
-    known += [{"path": x, "name": Path(x).name} for x in cfg.hub_left if x not in {k["path"] for k in known}]
+    known += [{"path": x, "name": Path(x).name} for x in cfg.hub_left
+              if x not in {normalize_project_path(k.get("path")) for k in known}]
     project, problem = _pick_project(known, wanted)
     if problem:
         console.print(problem, highlight=False)
         return 1
     name = project.get("name") or Path(project["path"]).name
     if args.action == "rejoin":
-        if project["path"] not in cfg.hub_left:
+        if normalize_project_path(project["path"]) not in cfg.hub_left:
             console.print(f"This computer hasn't left {name}.", highlight=False)
             return 0
         cfg = hub.rejoin_project(cfg, project["path"])

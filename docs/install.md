@@ -117,7 +117,7 @@ launchd agents do not run alongside it (harmless, but redundant).
 
 ## Windows
 
-On Windows 10 and 11 Interlatch is the command-line install; there is no desktop app or menu-bar icon. In PowerShell:
+On Windows 10 and 11 Interlatch is the command-line install; there is no desktop app. In PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
@@ -141,13 +141,20 @@ The hooks it adds to Claude Code run `C:/Users/<you>/.local/bin/interlatch.exe h
 hook in Git Bash, or in PowerShell without Git for Windows, and forward slashes read the same in both. A folder with
 a space in its name is written in its short form (`C:/Users/ADALOV~1/…`).
 
-Interlatch reads and writes text in UTF-8, as the coding agents write it, whatever language Windows is set to.
+Interlatch reads and writes text in UTF-8, as the coding agents write it, whatever language Windows is set to. It
+matches a Windows path however an agent or VS Code spells it (`C:\work\app`, `c:/work/app`), so the
+[VS Code extension](vscode.md)'s file history and folder list work there too.
+
+The **Menu-bar icon** switch under **Settings › Status › Recording** puts Interlatch's icon in the notification area
+(by the clock) while the Dashboard task runs the dashboard; `interlatch ui --menu-bar` shows it from a terminal. Click
+it to open the dashboard, or right-click for **Sync Now** and **Quit Interlatch**. Quit stops the dashboard and the icon
+until you next sign in, run `interlatch install`, or run `interlatch ui`; the Sync task keeps recording. A new
+version's [notification](#updating) (`[updates] notify`) shows as a Windows notification.
 
 Not on Windows yet:
 
-- **Joining a team hub.** Parts of the hub expect project folders as `/…` paths, so it is untested from Windows.
-- **The VS Code extension's file history,** which looks files up by `/…` paths.
-- **Desktop notifications** of a new version, and the menu-bar icon.
+- **Joining a team hub** is untested from Windows: the hub matches Windows folders however they're spelled, but no
+  team has run one with a Windows computer yet.
 
 ## The menu-bar icon
 

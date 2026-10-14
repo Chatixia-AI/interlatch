@@ -49,7 +49,7 @@ from urllib.parse import quote, urlencode, urlparse
 
 from . import __version__, news
 from .config import Config
-from .util import is_abs_path, normalize_project_path, utcnow_iso
+from .util import is_abs_path, normalize_project_path, path_kind, path_variants, utcnow_iso
 
 log = logging.getLogger("interlatch.hub")
 
@@ -388,11 +388,13 @@ def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
 
 # ------------------------------------------------------------------ folders added by hand
 def under(path: str | None, folder: str) -> bool:
-    """`path` is `folder` or somewhere below it."""
+    """`path` is `folder` or somewhere below it, compared as normalize_project_path spells them (C:\\x is under c:/).
+    A POSIX folder never holds a Windows path (a drive or a UNC share), nor the other way round; no folder (""), nothing."""
     if not path or not folder:
         return False
-    path = normalize_project_path(path)
-    folder = normalize_project_path(folder)
+    path, folder = normalize_project_path(path), normalize_project_path(folder)
+    if path_kind(path) != path_kind(folder):
+        return False
     return path == folder or path.startswith(folder if folder.endswith("/") else folder + "/")
 
 
@@ -1150,11 +1152,12 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
                 else routes.decide(rec["project_path"], cfg.hub_folders)
             if via is not None:
                 goes, ok = via
+                goes = normalize_project_path(goes)  # [hub] left and a person's projects are spelled so
                 if not ok or goes in left or (scope is not None and goes not in scope):
                     excluded += 1  # kept out of the group, out of it now, left, or a project this person doesn't share
                     continue
             elif limited or left:
-                goes = destination(cfg, rec["project_path"], rec["remote"], remotes or {})
+                goes = normalize_project_path(destination(cfg, rec["project_path"], rec["remote"], remotes or {}))
                 if goes in left or (limited and (goes is None or (scope is not None and goes not in scope))):
                     excluded += 1  # not one of the hub's projects, one this person doesn't share, or one it left
                     continue
@@ -1200,7 +1203,7 @@ def hub_project_of(cfg: Config, paths, conn=None) -> dict[str, dict]:
         top = max((f for f in repos if under(path, f)), key=len, default=None)
         via = None if top else routes.decide(path, cfg.hub_folders)
         goes = repos[top] if top else (via[0] if via[1] else None) if via else destination(cfg, path, None, {})
-        if goes and goes not in cfg.hub_left:
+        if goes and normalize_project_path(goes) not in cfg.hub_left:
             out[path] = {"path": goes, "name": names.get(goes) or Path(goes).name or goes}
     return out
 
@@ -1973,7 +1976,12 @@ def team_lessons(cfg: Config, body: dict, person: dict | None = None, conn=None)
                 if isinstance(x, str) and is_abs_path(x) and len(x) <= 1024]
     left = clean_left(body.get("left"))  # projects the computer left: none of their lessons
     within = projects_of(person)
-    data = _in_store(lambda: store.lessons_for(machine_id, remotes, projects[:MAX_FOLDERS], within=within, left=left))
+
+    def spelled(paths):  # a Windows project the store may hold as C:\x or c:/x (filed before it was normalized)
+        return None if paths is None else list(dict.fromkeys(v for p in paths for v in path_variants(p)))
+
+    data = _in_store(lambda: store.lessons_for(machine_id, remotes, spelled(projects[:MAX_FOLDERS]), within=spelled(within),
+                                               left=spelled(left)))
     version = hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:32]
     if body.get("version") == version:
         return {"team": True, "version": version, "unchanged": True}
@@ -2250,13 +2258,15 @@ class ProjectResolver:
     def resolve(self, machine_id: str | None, path: str | None, remote: str | None = None) -> str | None:
         if not path or not machine_id or machine_id == self.me:
             return self.project_of(path)
+        if path_kind(path) in ("drive", "unc"):  # another computer's Windows folder: spelled one way, as its [hub]
+            path = normalize_project_path(path)  # folders and left are, so C:\app and c:/app are one project here
         return self.project_of(self._resolve(machine_id, path, remote))
 
     def _resolve(self, machine_id: str, path: str, remote: str | None) -> str:
         norm, top = normalize_remote(remote), None
         for repo_top, repo_remote in sorted(self.repos(machine_id).values(), key=lambda v: -len(v[0])):
-            if path == repo_top or path.startswith(repo_top.rstrip("/") + "/"):
-                top, norm = repo_top, norm or repo_remote
+            if under(path, repo_top):
+                top, norm = normalize_project_path(repo_top), norm or repo_remote
                 break
         local_top = self.local_remotes().get(norm) if norm else None
         added = self.folders(machine_id)

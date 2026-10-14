@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .util import is_abs_path, normalize_project_path
+from .util import is_abs_path, normalize_project_path, path_kind
 
 DEFAULT_CONFIG_TOML = """\
 # Interlatch configuration.
@@ -443,6 +443,12 @@ def _pick(cls, values: dict):
     return cls(**{k: v for k, v in values.items() if k in allowed})
 
 
+def _map_path(path: str) -> str:
+    """A [hub] path_map side: a Windows folder as normalize_project_path spells it; a POSIX one without a trailing /
+    ("/" becomes "", which maps every path)."""
+    return normalize_project_path(path) if path_kind(path) in ("drive", "unc") else path.rstrip("/")
+
+
 def load_config(home: Path | None = None, *, create: bool = True) -> Config:
     home = (home or chronicle_home()).expanduser()
     path = home / "config.toml"
@@ -500,7 +506,7 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
         server_menu_bar=bool(server.get("menu_bar", False)),
         server_trusted_proxies=[str(x).strip() for x in server.get("trusted_proxies", ["127.0.0.1", "::1"]) or [] if str(x).strip()],
         hub_url=str(hub.get("url") or "").strip().rstrip("/"),
-        hub_path_map={normalize_project_path(str(k)): normalize_project_path(str(v)) for k, v in path_map.items()} if isinstance(path_map, dict) else {},
+        hub_path_map={_map_path(str(k)): _map_path(str(v)) for k, v in path_map.items()} if isinstance(path_map, dict) else {},
         hub_folders={normalize_project_path(str(Path(str(k)).expanduser())): normalize_project_path(str(v)) for k, v in folders.items()
                      if str(k).strip() and str(v).strip()} if isinstance(folders, dict) else {},
         hub_share=share if share in SHARE_MODES else "everything",

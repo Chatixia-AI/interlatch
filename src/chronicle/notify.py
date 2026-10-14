@@ -2,7 +2,7 @@
 
 The background sync calls release_check() on every run. It asks pypi.org at most once a day (update.check_due) and
 notifies once per release, so a notification that was ignored or dismissed does not come back. macOS posts through
-osascript, Linux through notify-send; neither needs anything installed.
+osascript, Linux through notify-send, Windows through PowerShell (a toast); none needs anything installed.
 """
 
 from __future__ import annotations
@@ -22,40 +22,47 @@ UPGRADE = {"uv": "uv tool upgrade interlatch", "pipx": "pipx upgrade interlatch"
            "pip": "pip install -U interlatch"}
 
 
-_WIN_NOTIFY_SCRIPT = """\
-$ErrorActionPreference = 'Stop'
+def _applescript(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+# Windows shows a toast only for an app it knows by its AppUserModelID: an unknown one ("Interlatch") shows nothing and
+# raises nothing. This is the ID of the Windows PowerShell shortcut that every Windows has (BurntToast uses it too).
+WINDOWS_AUMID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+# The title and message come on stdin as JSON (ASCII: json.dumps escapes the rest), never inside the script itself.
+# A toast, else (no WinRT) a notification-area balloon; exit 1 when neither could be shown.
+WINDOWS_SCRIPT = r"""$ErrorActionPreference = 'Stop'
 try {
-    $raw = [Console]::In.ReadToEnd()
-    $data = ConvertFrom-Json $raw
-    $title = $data.title
-    $msg = $data.message
+    $data = [Console]::In.ReadToEnd() | ConvertFrom-Json
     try {
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-        $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-        $text = $template.GetElementsByTagName("text")
-        $null = $text.Item(0).AppendChild($template.CreateTextNode($title))
-        $null = $text.Item(1).AppendChild($template.CreateTextNode($msg))
-        $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Interlatch").Show($toast)
+        $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+        $text = $xml.GetElementsByTagName('text')
+        $null = $text.Item(0).AppendChild($xml.CreateTextNode([string]$data.title))
+        $null = $text.Item(1).AppendChild($xml.CreateTextNode([string]$data.message))
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%AUMID%').Show($toast)
     } catch {
-        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
         $icon = New-Object System.Windows.Forms.NotifyIcon
         $icon.Icon = [System.Drawing.SystemIcons]::Information
-        $icon.BalloonTipTitle = $title
-        $icon.BalloonTipText = $msg
         $icon.Visible = $true
-        $icon.ShowBalloonTip(5000)
-        Start-Sleep -Milliseconds 500
+        $icon.ShowBalloonTip(10000, [string]$data.title, [string]$data.message, [System.Windows.Forms.ToolTipIcon]::Info)
+        Start-Sleep -Seconds 8  # the balloon goes with its icon
         $icon.Dispose()
     }
 } catch {
     exit 1
 }
-"""
+""".replace("%AUMID%", WINDOWS_AUMID)
 
 
-def _applescript(text: str) -> str:
-    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+def windows_command(ps: str) -> list[str]:
+    """powershell.exe running WINDOWS_SCRIPT: -EncodedCommand (UTF-16LE, base64), so no quoting of the script is needed."""
+    import base64
+
+    return [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
+            base64.b64encode(WINDOWS_SCRIPT.encode("utf-16-le")).decode("ascii")]
 
 
 def _post_windows(title: str, message: str) -> bool:
@@ -64,13 +71,12 @@ def _post_windows(title: str, message: str) -> bool:
     ps = shutil.which("powershell.exe") or shutil.which("powershell")
     if not ps:
         return False
-    payload = json.dumps({"title": title, "message": message})
-    cmd = [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", _WIN_NOTIFY_SCRIPT]
-    try:
-        proc = subprocess.run(cmd, input=payload, text=True, capture_output=True, timeout=10)
-        return proc.returncode == 0
+    try:  # no console window flashes up when the background sync (pythonw) posts it
+        proc = subprocess.run(windows_command(ps), input=json.dumps({"title": title, "message": message}), text=True,
+                              capture_output=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.SubprocessError):
         return False
+    return proc.returncode == 0
 
 
 def post(title: str, message: str) -> bool:

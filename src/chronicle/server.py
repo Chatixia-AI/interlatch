@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -37,7 +38,8 @@ from .ladder import refresh as refresh_stage
 from .llm import BACKENDS, make_runner
 from .search import search_all, search_events, search_knowledge, search_sessions
 from .synthesize import GLOBAL
-from .util import PROGRESS_RE, is_abs_path, loads, normalize_project_path, to_iso, utcnow
+from .util import (PROGRESS_RE, abs_path_sql, clean_abs_path, is_abs_path, loads, normalize_project_path, path_kind,
+                   path_variants, to_iso, utcnow)
 from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
 
 log = logging.getLogger("interlatch.server")
@@ -919,17 +921,21 @@ class App:
 
     def file_sessions(self, path: str, limit: int = 50) -> dict:
         """The sessions that read or changed one file, newest first (the VS Code extension's per-file history)."""
-        path = normalize_project_path(os.path.normpath(path)) if is_abs_path(path) else ""
+        path = clean_abs_path(path)
         if not path:
             return {"path": path, "total": 0, "sessions": []}
         c = self.conn
-        # most agents record absolute paths; Codex sometimes records them relative to the session's folder
-        where, params = ["f.path = ?"], [path]
-        for (root,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%' OR project_path LIKE '_:/%'"):
-            base = root.rstrip("/") + "/"
-            if path.startswith(base):
-                where.append("(s.project_path = ? AND f.path = ?)")
-                params += [root, path[len(base):]]
+        # most agents record absolute paths, on Windows with either slash and either case of drive letter (C:\x, c:/x);
+        # Codex sometimes records them relative to the session's folder
+        spelled = path_variants(path)
+        where, params = [f"f.path IN ({','.join('?' * len(spelled))})"], spelled
+        for (root,) in c.execute(f"SELECT DISTINCT project_path FROM sessions WHERE {abs_path_sql('project_path')}"):
+            base = normalize_project_path(root).rstrip("/") + "/"
+            if is_abs_path(root) and path.startswith(base):
+                rel = path[len(base):]
+                rels = [rel] if path_kind(path) == "posix" or "/" not in rel else [rel, rel.replace("/", "\\")]
+                where.append(f"(s.project_path = ? AND f.path IN ({','.join('?' * len(rels))}))")
+                params += [root, *rels]
         stats = {r["session_id"]: dict(r) for r in c.execute(
             "SELECT f.session_id, SUM(f.reads) reads, SUM(f.edits + f.writes) changes, SUM(f.lines_added) added, "
             "SUM(f.lines_removed) removed FROM session_files f JOIN sessions s ON s.id = f.session_id "
@@ -942,23 +948,28 @@ class App:
 
     def folder_files(self, root: str, limit: int = 200, existing: bool = False, ignored: bool = True) -> dict:
         """The files under a folder that sessions read or changed, most recently touched first (the extension's file list)."""
-        root = normalize_project_path(os.path.normpath(root)) if is_abs_path(root) else ""
-        if root in ("", "/") or (len(root) == 3 and root[1] == ":" and root[2] == "/"):
+        root = clean_abs_path(root)
+        if not root or root == "/" or (path_kind(root) == "drive" and len(root) == 3):  # a whole disk: C:/
             return {"root": root, "total": 0, "files": []}
         base, c = root.rstrip("/") + "/", self.conn
         cols = "f.path, f.session_id, f.edits + f.writes changes, s.started_at"
-        # a range on the indexed path ('0' sorts right after '/'), so a big archive isn't scanned
-        rows = [dict(r) for r in c.execute(
-            f"SELECT {cols} FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE f.path >= ? AND f.path < ?",
-            (base, root + "0"))]
+        # a range on the indexed path for each way it may be spelled (C:\x, c:/x, …; the character after the separator
+        # sorts right after it: '0' after '/', ']' after '\\'), so a big archive isn't scanned
+        rows = []
+        for spelled in path_variants(root):
+            sep = "\\" if path_kind(root) != "posix" and "\\" in spelled else "/"
+            rows += [{**dict(r), "path": normalize_project_path(r["path"])} for r in c.execute(
+                f"SELECT {cols} FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE f.path >= ? AND f.path < ?",
+                (spelled + sep, spelled + chr(ord(sep) + 1)))]
         # Codex sometimes records paths relative to the session's folder: a folder inside this one, or one containing it
-        for (folder,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%' OR project_path LIKE '_:/%'"):
-            folder_base = folder.rstrip("/") + "/"
-            if not folder_base.startswith(base) and not base.startswith(folder_base):
+        for (folder,) in c.execute(f"SELECT DISTINCT project_path FROM sessions WHERE {abs_path_sql('project_path')}"):
+            folder_base = normalize_project_path(folder).rstrip("/") + "/"
+            if not is_abs_path(folder) or (not folder_base.startswith(base) and not base.startswith(folder_base)):
                 continue
+            windows = path_kind(folder) != "posix"
             for r in c.execute(f"SELECT {cols} FROM session_files f JOIN sessions s ON s.id = f.session_id "
-                               "WHERE s.project_path = ? AND f.path NOT LIKE '/%' AND f.path NOT LIKE '_:/%'", (folder,)):
-                full = normalize_project_path(os.path.normpath(os.path.join(folder, r["path"])))
+                               f"WHERE s.project_path = ? AND NOT {abs_path_sql('f.path')}", (folder,)):
+                full = clean_abs_path(folder_base + (r["path"].replace("\\", "/") if windows else r["path"]))
                 if full.startswith(base):
                     rows.append({**dict(r), "path": full})
         files: dict[str, dict] = {}
@@ -1333,9 +1344,10 @@ class App:
         names = {p["path"]: p.get("name") for p in recorded.get("projects") or [] if isinstance(p, dict) and p.get("path")}
         out: dict[str, dict] = {}
 
-        def row(path: str) -> dict:
-            return out.setdefault(path, {"path": path, "name": names.get(path) or Path(path).name or path,
-                                         "folders": [], "repos": [], "groups": [], "left": path in self.cfg.hub_left})
+        def row(path: str) -> dict:  # [hub] left spells a Windows project one way (C:/x), the hub perhaps another
+            return out.setdefault(normalize_project_path(path), {
+                "path": path, "name": names.get(path) or Path(path).name or path, "folders": [], "repos": [], "groups": [],
+                "left": normalize_project_path(path) in self.cfg.hub_left})
 
         for f in folders:
             row(f["project"])["folders"].append(f)
@@ -1362,7 +1374,7 @@ class App:
             return {"error": tr("Can't reach the hub: {error}", error=str(exc))}
         marks = ", ".join("?" for _ in SHARED_AGENTS)
         local = [{"path": r[0], "name": r[1] or Path(r[0]).name, "sessions": r[2]} for r in self.conn.execute(
-            "SELECT project_path, MAX(project_name), COUNT(*) FROM sessions WHERE (project_path LIKE '/%' OR project_path LIKE '_:/%') "
+            f"SELECT project_path, MAX(project_name), COUNT(*) FROM sessions WHERE {abs_path_sql('project_path')} "
             f"AND source NOT IN ('history', 'remote') AND agent IN ({marks}) GROUP BY project_path "
             "ORDER BY MAX(started_at) DESC LIMIT 300", SHARED_AGENTS)]
         projects = [{"path": p["path"], "name": p.get("name") or Path(p["path"]).name, "sessions": p.get("sessions") or 0}
@@ -3110,6 +3122,12 @@ def serve(cfg: Config, host: str | None = None, port: int | None = None, open_br
     `menu_bar`: the macOS menu-bar item too; None shows it when this is the login item (menubar.wants_menu_bar)."""
     from . import update
 
+    if sys.platform == "win32" and os.environ.get("INTERLATCH_WINDOWS_TASK"):
+        from .windows import QUIT_TEXT, logon_id, quit_stands
+
+        if quit_stands(cfg.home, logon_id()):  # quit from its notification-area icon: not back before the next sign-in
+            print(f"Quit from the notification-area icon. {QUIT_TEXT}", flush=True)
+            return
     update.RESTARTABLE = True  # this process is only the dashboard, so an update can re-exec it
     try:
         httpd = make_server(cfg, host, port)

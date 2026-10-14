@@ -377,6 +377,8 @@ def _windows_install(cfg: Config, exe: str, label: str, args: list[str], *, ever
     arguments = windows.runner_arguments(args, log=log, home=cfg.home, path_dirs=[str(Path(claude).parent)] if claude else [])
     if dry_run:
         return None
+    if label == UI_LABEL:
+        windows.clear_quit(cfg.home)  # a Quit from the icon lasts until this: the dashboard runs again now
     xml = windows.task_xml(description=description, command=str(pythonw), arguments=arguments,
                            every_minutes=every_minutes, keep_alive=keep_alive)
     return windows.install_task(WINDOWS_TASKS[label], xml)

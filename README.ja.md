@@ -154,7 +154,7 @@ Ollama。**Status › Analysis** または `interlatch config set analysis.backe
 
 **Windows や Linux は？** デスクトップアプリは macOS 専用です。Windows では `uv tool install interlatch` と `interlatch install` が
 Mac と同じように使え、同期とダッシュボードはタスク スケジューラが動かします（[Windows](docs/ja/install.md#windows)）。
-Windows のコンピューターはまだチームのハブに参加できません。Linux では `interlatch install` が同期とダッシュボードを systemd の
+Windows のコンピューターからのチームのハブへの参加はまだ未検証です。Linux では `interlatch install` が同期とダッシュボードを systemd の
 ユーザーユニットとして動かすので、Linux マシンをほかのコンピューターの[ハブ](docs/ja/devices.md#linux-のハブ)にできます。
 チームのハブは [Docker](docs/ja/docker.md) でも動かせます。
 

@@ -3,6 +3,7 @@ system with Windows' answers faked; the tests marked `on_windows` need the real 
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -169,43 +170,216 @@ def test_the_file_lock_keeps_a_second_holder_out(tmp_path):
         assert again
 
 
-def test_windows_path_normalization_and_detection():
-    from chronicle.util import is_abs_path, normalize_project_path
+# ------------------------------------------------------------------ Windows paths (on any system)
+def test_windows_paths_are_told_apart_and_spelled_one_way():
+    from chronicle.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 
-    assert is_abs_path("C:\\Users\\ada\\project")
-    assert is_abs_path("c:/work/app")
-    assert is_abs_path("\\\\server\\share\\repo")
-    assert is_abs_path("/Users/ada/project")
-    assert not is_abs_path("relative/path")
-    assert not is_abs_path("")
-    assert not is_abs_path(None)
+    for p in ("C:\\Users\\ada\\project", "c:/work/app", "\\\\server\\share\\repo", "//server/share", "/Users/ada", "/c:/x"):
+        assert is_abs_path(p), p
+    for p in ("relative/path", "", None, "C:", "C:relative", "1:/x", "::/x", "é:/x", "\\\\", "\\x"):
+        assert not is_abs_path(p), p  # a drive is an ASCII letter
+    assert [path_kind(p) for p in ("C:\\x", "/c:/x", "\\\\s\\x", "//s/x", "/x", "x")] == ["drive", "drive", "unc", "unc",
+                                                                                         "posix", None]
+    # one spelling: forward slashes, an upper-case drive letter (the rest's case kept), no trailing separator
+    assert normalize_project_path("C:\\Users\\Ada\\Project\\") == "C:/Users/Ada/Project"
+    assert normalize_project_path("c:/Users/Ada") == normalize_project_path("C:\\Users\\Ada") == "C:/Users/Ada"
+    assert normalize_project_path("/c:/Users/Ada") == "C:/Users/Ada"  # a VS Code file URI's path
+    assert [normalize_project_path(p) for p in ("C:\\", "c:/", "/c:")] == ["C:/"] * 3
+    assert normalize_project_path("\\\\server\\share\\repo\\") == "//server/share/repo"
+    # a POSIX path keeps its backslashes: there they are part of a name
+    assert normalize_project_path("/Users/ada/a\\b/") == "/Users/ada/a\\b"
+    assert normalize_project_path("/") == "/" and normalize_project_path("relative/path/") == "relative/path/"
+    assert path_variants("c:\\work\\app") == ["C:/work/app", "C:\\work\\app", "/C:/work/app",
+                                              "c:/work/app", "c:\\work\\app", "/c:/work/app"]
+    assert path_variants("\\\\s\\share") == ["//s/share", "\\\\s\\share"] and path_variants("/a\\b") == ["/a\\b"]
+    assert clean_abs_path("C:\\work\\.\\app\\..\\lib\\x.py") == "C:/work/lib/x.py"
+    assert clean_abs_path("/a/./b/../c") == "/a/c" and clean_abs_path("c:\\") == "C:/" and clean_abs_path("x.py") == ""
 
-    assert normalize_project_path("C:\\Users\\ada\\project\\") == "C:/Users/ada/project"
-    assert normalize_project_path("C:\\") == "C:/"
-    assert normalize_project_path("C:/") == "C:/"
-    assert normalize_project_path("/Users/ada/project/") == "/Users/ada/project"
-    assert normalize_project_path("/") == "/"
-    assert normalize_project_path("relative/path/") == "relative/path/"
+
+def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
+    import sqlite3
+
+    from chronicle.util import abs_path_sql
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE t (p TEXT)")
+    rows = ["/x", "C:\\x", "c:/x", "\\\\s\\x", "x/y", "x", None]
+    conn.executemany("INSERT INTO t VALUES (?)", [(r,) for r in rows])
+    assert [r[0] for r in conn.execute(f"SELECT p FROM t WHERE {abs_path_sql('p')}")] == rows[:4]
+    assert [r[0] for r in conn.execute(f"SELECT p FROM t WHERE NOT {abs_path_sql('p')}")] == ["x/y", "x"]
+
+
+def test_under_compares_windows_paths_by_one_spelling_and_never_across_kinds():
+    from chronicle.hub import under
+
+    assert under("C:\\Users\\ada\\project\\sub\\file.py", "C:/Users/ada/project")
+    assert under("c:/users/ada/Project", "C:\\")  # the drive letter's case doesn't matter
+    assert under("C:/Users/ada/project", "C:\\Users\\ada\\project\\")
+    assert not under("C:/Users/ada/project2", "C:/Users/ada/project")
+    assert not under("C:/Users/Ada/project", "C:/Users/ada/project")  # only the drive letter is case-folded
+    assert not under("D:/Users/ada/project", "C:/")
+    # a POSIX folder never holds a drive or a UNC path, nor the other way round
+    assert not under("C:/work/app", "/") and not under("\\\\server\\share\\app", "/")
+    assert not under("//server/share/app", "/") and not under("/Users/ada", "C:/")
+    assert not under("/C:/x", "/")  # a VS Code URI's drive is a drive
+    assert under("\\\\server\\share\\app", "//server/share") and not under("//server/share2", "//server/share")
+    assert under("/Users/ada/app", "/") and under("/Users/ada/a\\b/c", "/Users/ada/a\\b")
+    # no folder holds nothing (it used to hold every absolute path)
+    assert not under("/Users/ada", "") and not under("C:/x", "") and not under("", "/") and not under(None, "/")
 
 
 def test_windows_hub_and_people_path_normalization():
-    from chronicle.hub import clean_folders, clean_left, under
-    from chronicle.people import clean_projects
+    from chronicle.hub import clean_folders, clean_left
+    from chronicle.people import PeopleError, clean_projects
 
-    assert under("C:\\Users\\ada\\project\\sub\\file.py", "C:/Users/ada/project")
-    assert under("C:/Users/ada/project", "C:\\Users\\ada\\project\\")
-    assert not under("C:/Users/ada/other", "C:/Users/ada/project")
-
-    folders = clean_folders({"C:\\Users\\ada\\app": "C:\\hub\\projects\\app\\",
-                             "/posix/path/": "/hub/posix/"})
-    assert folders == {"C:/Users/ada/app": "C:/hub/projects/app",
-                       "/posix/path": "/hub/posix"}
-
-    left = clean_left(["C:\\Users\\ada\\app\\", "C:/Users/ada/app", "/posix/proj"])
+    folders = clean_folders({"C:\\Users\\ada\\app": "c:\\hub\\projects\\app\\", "/posix/path/": "/hub/posix/",
+                             "1:\\x": "C:/y", "/a\\b": "/hub/ab"})
+    assert folders == {"C:/Users/ada/app": "C:/hub/projects/app", "/posix/path": "/hub/posix", "/a\\b": "/hub/ab"}
+    left = clean_left(["C:\\Users\\ada\\app\\", "c:/Users/ada/app", "/posix/proj", "1:/x", "relative"])
     assert left == ["/posix/proj", "C:/Users/ada/app"]
+    assert clean_projects(["C:\\Users\\ada\\app", "c:/Users/ada/app", "/var/repo"]) == ["/var/repo", "C:/Users/ada/app"]
+    with pytest.raises(PeopleError):
+        clean_projects(["1:/x"])
 
-    projects = clean_projects(["C:\\Users\\ada\\app", "C:/Users/ada/app", "/var/repo"])
-    assert projects == ["/var/repo", "C:/Users/ada/app"]
+
+def test_the_hub_files_a_windows_computer_s_folder_under_one_spelling(tmp_path):
+    from chronicle.db import connect
+    from chronicle.hub import ProjectResolver
+
+    cfg = load_config(tmp_path / "home")
+    conn = connect(cfg.db_path)
+    r = ProjectResolver(cfg, conn)
+    assert r.resolve("windows-pc", "c:\\work\\app") == r.resolve("windows-pc", "C:/work/app\\") == "C:/work/app"
+    assert r.resolve("windows-pc", "/Users/ada/a\\b") == "/Users/ada/a\\b"  # a POSIX path as it is
+    assert r.resolve(r.me, "c:\\work\\app") == "c:\\work\\app"  # this computer's own sessions: as recorded
+    conn.close()
+
+
+def _windows_transcript(sid: str, cwd: str) -> str:
+    def line(**kw):
+        return json.dumps({"isSidechain": False, "userType": "external", "entrypoint": "cli", "cwd": cwd,
+                           "sessionId": sid, "version": "2.1.282", **kw})
+
+    def tool(n, ts, name, inp, result):
+        return [line(type="assistant", uuid=f"a{n}", timestamp=ts, message={
+                    "id": f"msg_{n}", "model": "claude-opus-5-5", "role": "assistant",
+                    "content": [{"type": "tool_use", "id": f"toolu_{n}", "name": name, "input": inp}],
+                    "usage": {"input_tokens": 5, "output_tokens": 5}}),
+                line(type="user", uuid=f"r{n}", timestamp=ts.replace(":10.", ":12."), message={
+                    "role": "user", "content": [{"type": "tool_result", "tool_use_id": f"toolu_{n}", "content": result}]})]
+
+    lines = [line(type="user", uuid="u1", timestamp="2026-10-14T10:00:00.000Z",
+                  message={"role": "user", "content": "Fix main.py"})]
+    lines += tool(1, "2026-10-14T10:01:10.000Z", "Read", {"file_path": f"{cwd}\\src\\util.py"}, "x = 1")
+    lines += tool(2, "2026-10-14T10:02:10.000Z", "Edit",
+                  {"file_path": f"{cwd}\\main.py", "old_string": "a", "new_string": "b"}, "The file was updated")
+    return "\n".join(lines) + "\n"
+
+
+def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeypatch):
+    """A Claude Code session on Windows records C:\\work\\app; the VS Code extension asks with c:\\ (fsPath) or C:/."""
+    from chronicle.db import connect
+    from chronicle.ingest import sync
+    from chronicle.server import App
+
+    for name in ("COPILOT_HOME", "BOB_HOME", "ANTIGRAVITY_HOME"):
+        monkeypatch.setenv(name, str(tmp_path / "none"))
+    monkeypatch.setattr("chronicle.connectors.vscode_user_dirs", lambda: [])
+    sid = "33333333-2222-3333-4444-555555555555"
+    claude = tmp_path / "claude"
+    proj = claude / "projects" / "C--work-app"
+    proj.mkdir(parents=True)
+    (proj / f"{sid}.jsonl").write_text(_windows_transcript(sid, "C:\\work\\app"))
+    cfg = load_config(tmp_path / "home")
+    cfg.claude_dirs, cfg.codex_dirs = [claude], []
+    cfg.ensure_dirs()
+    conn = connect(cfg.db_path)
+    sync(cfg, conn)
+    assert conn.execute("SELECT project_path FROM sessions WHERE id = ?", (sid,)).fetchone()[0] == "C:\\work\\app"
+    assert sorted(r[0] for r in conn.execute("SELECT path FROM session_files WHERE session_id = ?", (sid,))) == [
+        "C:\\work\\app\\main.py", "C:\\work\\app\\src\\util.py"]  # stored as recorded: matched when asked
+    # Codex on Windows: a path relative to the session's folder, with a backslash
+    conn.execute("INSERT INTO sessions(id, agent, project_path, started_at) VALUES ('codex-w', 'codex', 'c:\\work\\app', "
+                 "'2026-10-15T09:00:00Z')")
+    conn.executemany("INSERT INTO session_files(session_id, path, reads, edits) VALUES (?,?,?,?)",
+                     [("codex-w", "src\\util.py", 1, 0), ("codex-w", "main.py", 0, 1)])
+    conn.commit()
+    conn.close()
+
+    app = App(cfg)
+    for asked in ("C:\\work\\app\\main.py", "c:\\work\\app\\main.py", "C:/work/app/main.py", "/c:/work/app/main.py"):
+        found = app.file_sessions(asked)
+        assert found["path"] == "C:/work/app/main.py" and [s["id"] for s in found["sessions"]] == ["codex-w", sid], asked
+    assert next(s for s in found["sessions"] if s["id"] == sid)["file"]["changes"] == 1
+    assert [s["id"] for s in app.file_sessions("c:\\work\\app\\src\\util.py")["sessions"]] == ["codex-w", sid]
+    assert app.file_sessions("D:\\work\\app\\main.py")["sessions"] == []
+    for root in ("C:\\work\\app", "c:\\work\\app\\", "C:/work/app"):
+        listed = app.folder_files(root)
+        assert listed["root"] == "C:/work/app"
+        assert sorted((f["rel"], f["sessions"]) for f in listed["files"]) == [("main.py", 2), ("src/util.py", 2)], root
+        assert all(f["path"] == "C:/work/app/" + f["rel"] for f in listed["files"])
+    assert [f["rel"] for f in app.folder_files("C:\\work\\app\\src")["files"]] == ["util.py"]
+    assert app.folder_files("C:\\")["files"] == [] and app.folder_files("c:")["files"] == []
+    assert app.folder_files("C:\\work\\ap")["files"] == []  # a folder that only shares the prefix
+
+
+def test_copilot_s_file_uris_give_windows_paths():
+    from chronicle.copilot_parser import uri_path
+
+    assert uri_path("file:///c%3A/Users/ada/app") == "c:/Users/ada/app"
+    assert uri_path({"path": "/c:/Users/ada/app"}) == "c:/Users/ada/app"
+    assert uri_path({"fsPath": "c:\\Users\\ada\\app", "path": "/c:/Users/ada/app"}) == "c:\\Users\\ada\\app"
+    assert uri_path("file:///Users/ada/app") == "/Users/ada/app" and uri_path("file:///c%3A") == "c:"
+
+
+# ------------------------------------------------------------------ the notification-area icon (pure parts)
+def test_the_tray_icon_is_interlatch_s_own(tmp_path):
+    import struct
+
+    png = (Path(windows.__file__).parent / "web" / "favicon.png").read_bytes()
+    ico = windows.ico_from_pngs([png])
+    assert struct.unpack("<HHH", ico[:6]) == (0, 1, 1)
+    w, h, _, _, planes, bits, size, offset = struct.unpack("<BBBBHHII", ico[6:22])
+    assert (w, h, planes, bits, size, offset) == (32, 32, 1, 32, len(png), 22) and ico[22:] == png
+    path = windows.tray_icon_file(tmp_path)
+    data = path.read_bytes()
+    assert path.name == "tray.ico" and struct.unpack("<H", data[4:6]) == (2,)
+    assert data[6] == 32 and data[22] == 0  # 32 px, and 256 px (written 0)
+
+
+def test_quit_from_the_icon_lasts_until_the_next_sign_in(tmp_path, monkeypatch):
+    windows.mark_quit(tmp_path, "logon-1")
+    assert windows.quit_stands(tmp_path, "logon-1")
+    assert not windows.quit_stands(tmp_path, "logon-2")  # signed in again
+    assert not windows.quit_stands(tmp_path, None)  # can't tell: start
+    windows.clear_quit(tmp_path)
+    assert not windows.quit_stands(tmp_path, "logon-1")
+    windows.mark_quit(tmp_path, None)
+    assert not (tmp_path / windows.QUIT_FILE).exists()
+    if sys.platform != "win32":
+        assert windows.logon_id() is None
+
+
+def test_the_dashboard_task_does_not_start_again_after_quit(tmp_path, monkeypatch):
+    from chronicle import server, update
+
+    cfg = load_config(tmp_path / "home")
+    monkeypatch.setattr(update, "RESTARTABLE", update.RESTARTABLE)  # serve() sets it
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr(windows, "logon_id", lambda: "logon-1")
+    monkeypatch.setattr(server, "make_server", lambda *a, **k: pytest.fail("started after Quit"))
+    windows.mark_quit(cfg.home, "logon-1")
+    monkeypatch.setenv(windows.RUNNER_ENV, "1")
+    server.serve(cfg)  # returns at once
+    monkeypatch.delenv(windows.RUNNER_ENV)
+    with pytest.raises(pytest.fail.Exception):
+        server.serve(cfg)  # `interlatch ui` by hand starts it
+
+
+def test_installing_the_dashboard_task_undoes_a_quit(cfg, schtasks):
+    windows.mark_quit(cfg.home, "logon-1")
+    install.install_ui_agent(cfg, "C:\\Users\\ada\\.local\\bin\\interlatch.exe")
+    assert not windows.quit_stands(cfg.home, "logon-1")
 
 
 def test_windows_menubar_setting_and_wants(cfg, monkeypatch):
@@ -225,38 +399,6 @@ def test_windows_menubar_setting_and_wants(cfg, monkeypatch):
     assert menubar.wants_menu_bar(cfg) is True
     monkeypatch.delenv("INTERLATCH_WINDOWS_TASK", raising=False)
     assert menubar.wants_menu_bar(cfg) is False
-
-
-def test_server_file_and_folder_queries_with_windows_paths(tmp_path):
-    import sqlite3
-    from chronicle.config import load_config
-    from chronicle.server import App
-
-    cfg = load_config(tmp_path / "home")
-    conn = sqlite3.connect(cfg.db_path)
-    conn.row_factory = sqlite3.Row
-    conn.executescript("""
-        CREATE TABLE sessions (
-            id TEXT PRIMARY KEY, started_at TEXT, ended_at TEXT, project_path TEXT,
-            project_name TEXT, agent TEXT, source TEXT, outcome TEXT, analysis_status TEXT
-        );
-        CREATE TABLE session_files (
-            session_id TEXT, path TEXT, reads INT, edits INT, writes INT, lines_added INT, lines_removed INT
-        );
-        INSERT INTO sessions VALUES ('s1', '2026-10-14T10:00:00Z', '2026-10-14T10:05:00Z', 'C:/work/app', 'app', 'claude', 'local', 'success', 'done');
-        INSERT INTO session_files VALUES ('s1', 'C:/work/app/main.py', 1, 2, 0, 10, 2);
-    """)
-    conn.commit()
-    conn.close()
-
-    app = App(cfg)
-    files = app.folder_files("C:\\work\\app")
-    assert files["total"] == 1
-    assert files["files"][0]["path"] == "C:/work/app/main.py"
-
-    file_hist = app.file_sessions("C:\\work\\app\\main.py")
-    assert file_hist["total"] == 1
-    assert file_hist["sessions"][0]["id"] == "s1"
 
 
 # ------------------------------------------------------------------ on Windows itself
@@ -291,3 +433,33 @@ def test_open_and_reveal_use_windows_own_programs(monkeypatch):
     windows.open_path("C:\\x\\report.pdf", reveal=False)
     windows.open_path("C:\\x\\report.pdf", reveal=True)
     assert seen == [("open", "C:\\x\\report.pdf"), ("reveal", ["explorer", "/select,C:\\x\\report.pdf"])]
+
+
+@on_windows
+def test_the_notification_script_parses_in_windows_powershell(tmp_path):
+    from chronicle import notify
+
+    script = tmp_path / "toast.ps1"
+    script.write_text(notify.WINDOWS_SCRIPT, encoding="utf-8-sig")
+    check = (f"$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('{script}', [ref]$null, "
+             "[ref]$e); $e | ForEach-Object { $_.Message }; exit $e.Count")
+    proc = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", check], capture_output=True,
+                          text=True, timeout=60)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@on_windows
+def test_the_sign_in_is_known_and_the_tray_icon_loads(tmp_path):
+    import ctypes
+    from ctypes import wintypes
+
+    assert windows.logon_id() and windows.logon_id() == windows.logon_id()
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.LoadImageW.argtypes = (wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int,
+                                  wintypes.UINT)
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.DestroyIcon.argtypes = (wintypes.HICON,)
+    for size in (16, 32):
+        icon = user32.LoadImageW(None, str(windows.tray_icon_file(tmp_path)), 1, size, size, 0x10)  # IMAGE_ICON, from file
+        assert icon, ctypes.get_last_error()
+        user32.DestroyIcon(icon)

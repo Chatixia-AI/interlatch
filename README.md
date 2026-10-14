@@ -156,7 +156,7 @@ sessions are archived and wait in the analysis queue.
 
 **Windows or Linux?** The desktop app is macOS only. On Windows, `uv tool install interlatch` and `interlatch install`
 work as on a Mac, with Task Scheduler running the sync and the dashboard ([Windows](docs/install.md#windows)); a
-Windows computer can't join a team hub yet. On Linux, `interlatch install` runs the sync and the dashboard
+Windows computer joining a team hub is untested yet. On Linux, `interlatch install` runs the sync and the dashboard
 as systemd user units, so a Linux box can be the [hub](docs/devices.md#a-linux-hub) for your other computers. A
 team's hub also runs [in Docker](docs/docker.md).
 

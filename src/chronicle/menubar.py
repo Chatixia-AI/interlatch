@@ -752,8 +752,9 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
     if sys.platform == "win32":
         from .windows import run_tray_with_server
 
-        SHOWN = True
-        return run_tray_with_server(cfg, httpd, url)
+        SHOWN = True  # while the icon shows: run_tray_with_server returns when it is gone
+        SHOWN = run_tray_with_server(cfg, httpd, url)
+        return SHOWN
     try:
         import AppKit
         from PyObjCTools import AppHelper
