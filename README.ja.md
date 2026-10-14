@@ -164,7 +164,8 @@ Windows のコンピューターからのチームのハブへの参加はまだ
 **削除するには？** `interlatch uninstall` でフック、バックグラウンドのエージェント、MCP の登録を削除します（データは残ります）。
 データも消すには `--purge` を付けます。
 
-うまく動かないときは[トラブルシューティング](docs/ja/troubleshooting.md)を参照してください。
+プライバシー、費用、チーム、アップデートなど、ほかの質問は[よくある質問](docs/ja/faq.md)にあります。うまく動かないときは
+[トラブルシューティング](docs/ja/troubleshooting.md)を参照してください。
 
 ## ドキュメント
 
@@ -173,7 +174,7 @@ Windows のコンピューターからのチームのハブへの参加はまだ
 [スマートフォンとほかのコンピューター](docs/ja/devices.md) · [Docker でハブを動かす](docs/ja/docker.md) ·
 [チームのハブに参加する](docs/ja/join-a-hub.md) · [Postgres へのコピー](docs/ja/postgres.md) ·
 [記録内容と分析の仕組み](docs/ja/analysis.md) · [設定](docs/ja/configuration.md) ·
-[データとプライバシー](docs/ja/privacy.md) · [トラブルシューティング](docs/ja/troubleshooting.md) ·
+[データとプライバシー](docs/ja/privacy.md) · [よくある質問](docs/ja/faq.md) · [トラブルシューティング](docs/ja/troubleshooting.md) ·
 [Chronicle からの移行](docs/ja/moving-from-chronicle.md) · [開発](docs/ja/development.md)
 
 ## コントリビュート

@@ -5,12 +5,15 @@
 **What leaves your machine:** one thing. When a session is analyzed, a condensed digest of it (secrets redacted
 first) goes to whatever you chose for analysis: Anthropic with Claude Code (`claude -p`, the default) or OpenAI with
 Codex (`codex exec`), through your own login, IBM with Bob Shell (`bob run`) and your Bob API key, or the [model provider](analysis.md#model-providers) you set up, with
-your own key (with Ollama on your computer, nothing leaves it). Nothing is sent to Interlatch's authors or any other service, and there is no telemetry. One other
+your own key (with Ollama on your computer, nothing leaves it). Nothing is sent to Interlatch's authors or any other service unless you join the leaderboard (below), and there is no telemetry. One other
 connection is the update check: it asks pypi.org for the latest version number and sends nothing about you. It
 runs when you click **Check for updates** on the Status page, and once a day only if you turn on **Check for
 updates daily** or **Notify me about new versions** there (both off by default; `interlatch install` asks about
 the second). If you connect Codex Cloud, each sync also runs the
 `codex cloud` CLI, which fetches your own tasks from OpenAI with your Codex login; nothing is sent the other way.
+If you sign in to the **Leaderboard** with Google, each sync sends Interlatch's Firebase project your totals for the
+last 7, 30 and 90 days (active hours, sessions, tokens) with the name and picture you show: no email, project,
+prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is
