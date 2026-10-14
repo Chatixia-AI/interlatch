@@ -134,7 +134,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
     """What the launchd agent or systemd timer runs elsewhere: read what computers sent, then analyze, synthesize and
     export. On a hub that takes knowledge only, with no model set up, this is mostly the Markdown export."""
     from .storage.sqlite import connect
-    from .ingest import sync
+    from .ingestion.service import sync
     from .worker import run_worker
 
     while not stop.wait(minutes * 60):

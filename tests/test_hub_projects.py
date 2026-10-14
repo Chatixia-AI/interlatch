@@ -112,7 +112,7 @@ def test_a_project_set_up_ahead_of_time(synced):
     conn.execute("DELETE FROM files_state")
     conn.commit()
     assert [p["path"] for p in hub.hub_projects(conn)] == [PROJECTS]
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     sync(cfg, conn)  # recorded again: filed under the project from the start
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SID,)).fetchone()

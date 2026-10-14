@@ -89,7 +89,7 @@ def test_uninstall_without_an_original_removes_it(env):
 
 
 def test_sync_imports_records_and_the_dashboard_shows_them(synced):
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     conn, cfg = synced["conn"], synced["cfg"]
     s = statusline.merge({}, _payload(ctx=30, five=20, seven=40, reset=4102444800), T0)  # resets in 2100

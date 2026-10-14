@@ -227,7 +227,7 @@ class _Thread:
             if self.ps.parse_errors <= 3:
                 import logging
 
-                logging.getLogger("interlatch.sources.claude.parser").warning("skipped a malformed line in %s: %r", self.ps.id, exc)
+                logging.getLogger("interlatch.parser").warning("skipped a malformed line in %s: %r", self.ps.id, exc)
 
     def _feed(self, d: dict) -> None:
         t = d.get("type")

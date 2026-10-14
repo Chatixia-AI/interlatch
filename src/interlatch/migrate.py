@@ -43,7 +43,7 @@ try:
 except ImportError:  # Windows, where Chronicle never ran: there is no folder of its to move
     fcntl = None
 from .install import LEGACY_BUNDLE_ID, LEGACY_MCP_NAME, MCP_NAME
-from .core.util import abs_path_sql
+from .core.paths import abs_path_sql
 
 log = logging.getLogger("interlatch.migrate")
 

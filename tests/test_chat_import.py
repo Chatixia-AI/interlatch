@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from interlatch.chat_import import CHATGPT, CLAUDE_AI, ExportError, import_export, import_status, read_export, summary
+from interlatch.ingestion.chat_import import (ExportError, import_export, import_status, not_analyzed_reason, read_export,
+                                              summary)
+from interlatch.sources.chats import CHATGPT, CLAUDE_AI
 from interlatch.sources.chatgpt import parse_conversation as parse_chatgpt
 from interlatch.sources.claude.export import parse_conversation
 from interlatch.storage.sqlite import connect as db_connect
@@ -94,7 +96,7 @@ def test_import_and_reimport(env):
     assert counts == {"format": "claude.ai", "conversations": 3, "new": 2, "updated": 0, "unchanged": 0, "empty": 1, "excluded": 0}
     row = dict(conn.execute("SELECT * FROM sessions WHERE id = ?", (CHAT,)).fetchone())
     assert row["agent"] == "claude-ai" and row["source"] == "claude-ai-export" and row["project_name"] == "Backend"
-    assert row["analysis_status"] == "skipped" and row["analysis_reason"] == CLAUDE_AI.not_analyzed
+    assert row["analysis_status"] == "skipped" and row["analysis_reason"] == not_analyzed_reason(CLAUDE_AI)
     archived = list((cfg.archive_dir / "claude-ai").glob("*/*"))
     assert sorted(p.name for p in archived) == ["conversations.json.gz", "projects.json.gz"]  # users.json is not kept
     with gzip.open(archived[0].parent / "conversations.json.gz") as f:
@@ -198,7 +200,7 @@ def test_import_chatgpt_export(env):
     assert counts["format"] == "ChatGPT" and counts["new"] == 1
     row = dict(conn.execute("SELECT * FROM sessions WHERE id = 'gpt-1'").fetchone())
     assert row["agent"] == "chatgpt" and row["source"] == "chatgpt-export" and row["project_name"] == "chatgpt.com"
-    assert row["analysis_reason"] == CHATGPT.not_analyzed
+    assert row["analysis_reason"] == not_analyzed_reason(CHATGPT)
     assert [p.name for p in (cfg.archive_dir / "chatgpt").glob("*/*")] == ["conversations.json.gz"]  # not user.json or chat.html
     assert import_export(cfg, conn, env["tmp"] / "chatgpt.zip")["unchanged"] == 1
     assert import_status(conn)["chatgpt"]["sessions"] == 1

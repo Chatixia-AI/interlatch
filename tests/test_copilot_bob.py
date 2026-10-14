@@ -8,7 +8,7 @@ from interlatch.core.config import load_config
 from interlatch.sources.copilot import load_chat, load_usage, parse_copilot_agent, parse_vscode_chat, workspace_folder
 from interlatch.sources.builder import uri_path
 from interlatch.storage.sqlite import connect as db_connect
-from interlatch.ingest import sync
+from interlatch.ingestion.service import sync
 
 from copilot_fixture import (AGENT_ID, BOB_EMPTY, BOB_SUB, BOB_TASK, BOB_TOOLS, CHAT_ID, EMPTY_CHAT, FOLDER,
                              write_bob_home, write_copilot_home, write_vscode_user)

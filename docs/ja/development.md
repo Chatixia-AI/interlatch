@@ -116,11 +116,21 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 
 ## コードの構成
 
-`parser.py`（Claude のトランスクリプト形式）、`codex_parser.py`（Codex のロールアウト）、`copilot_parser.py`（Copilot の
-エージェントセッション＋VS Code のチャットログ）、`bob_parser.py`（Bob のタスク）、`antigravity_parser.py`（Antigravity のステップログ）、`agents.py`（エージェント名）、`connectors.py`（ソース）、
-`ingest.py`（アーカイブ＋保存）、`digest.py` / `analyze.py` /
-`llm.py`（分析）、`synthesize.py`（ナレッジベース）、`diagram.py`（アーキテクチャ図）、`artifacts.py`（セッションが作ったものと、その今の状態）、`glossary.py`、`reviews.py`、`worker.py`（キュー）、`server.py` ＋ `web/`
-（ダッシュボード）、`mcp_server.py`、`export_md.py`、`hooks.py` / `install.py`、`desktop.py`（macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします。
+コードは `src/interlatch/` の `interlatch` パッケージです（`src/chronicle/` は、改名前のインストールがまだ実行する
+`python -m chronicle` を転送するだけです）。
+
+- `core/`：設定、セッションの記録、パス、翻訳、エージェント名、料金、伏せ字処理、このコンピューターの識別子、
+  セッションが作ったものの見分け方
+- `storage/`：SQLite のアーカイブ（スキーマ、マイグレーション、接続）と、任意の Postgres ストア
+- `sources/`：エージェントごとの読み取り（`claude/`、`codex/`、`copilot.py`、`bob.py`、`antigravity.py`）と、
+  チャットのエクスポートごとの読み取り（`claude/export.py`、`chatgpt.py`）
+- `artifacts/`：セッションが作ったもの、その今の状態、開くこと
+- `ingestion/`：すべてのソースの同期（`service.py`）。生ファイルのアーカイブ、解析したセッションの保存、チャットの
+  取り込み、エージェントのメモリーと履歴、忘れること
+- `connectors.py`（ソース）、`digest.py` / `analyze.py` / `llm.py`（分析）、`synthesize.py`（ナレッジベース）、
+  `diagram.py`（アーキテクチャ図）、`glossary.py`、`reviews.py`、`worker.py`（キュー）
+- `server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`export_md.py`、`hooks.py` / `install.py`、`desktop.py`
+  （macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします
 
 ダッシュボードのページは Content-Security-Policy（`server.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは

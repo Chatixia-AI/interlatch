@@ -119,7 +119,7 @@ def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
 
 
 def test_japanese_screening_prompt_and_rule_reasons(env):
-    from interlatch.chat_import import import_export
+    from interlatch.ingestion.chat_import import import_export
     from interlatch.storage.sqlite import connect
     from interlatch.screen import screen_chats
     from test_screen import write_export
@@ -343,11 +343,12 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
 
 
 def test_stored_english_templates_are_translated_when_read(ja):
-    from interlatch.chat_import import CHATGPT
+    from interlatch.ingestion.chat_import import not_analyzed_reason
+    from interlatch.sources.chats import CHATGPT
     from interlatch.views import reason_text
 
     assert reason_text("session continued after analysis") == "分析のあとにセッションが続いた"
-    assert reason_text(CHATGPT.not_analyzed).startswith("取り込んだ ChatGPT のチャット：")
+    assert reason_text(not_analyzed_reason(CHATGPT)).startswith("取り込んだ ChatGPT のチャット：")
     assert reason_text("claude -p exited 1: overloaded") == "claude -p exited 1: overloaded"  # the analyzer's own words
     assert ladder.reason_text("confirmed in 3 sessions over 19 days (2026-09-01 → 2026-09-20)") == \
         "19 日間の 3 セッションで確認（2026-09-01 → 2026-09-20）"

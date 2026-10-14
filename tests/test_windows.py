@@ -172,7 +172,7 @@ def test_the_file_lock_keeps_a_second_holder_out(tmp_path):
 
 # ------------------------------------------------------------------ Windows paths (on any system)
 def test_windows_paths_are_told_apart_and_spelled_one_way():
-    from interlatch.core.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
+    from interlatch.core.paths import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 
     for p in ("C:\\Users\\ada\\project", "c:/work/app", "\\\\server\\share\\repo", "//server/share", "/Users/ada", "/c:/x"):
         assert is_abs_path(p), p
@@ -199,7 +199,7 @@ def test_windows_paths_are_told_apart_and_spelled_one_way():
 def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
     import sqlite3
 
-    from interlatch.core.util import abs_path_sql
+    from interlatch.core.paths import abs_path_sql
 
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE t (p TEXT)")
@@ -279,7 +279,7 @@ def _windows_transcript(sid: str, cwd: str) -> str:
 def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeypatch):
     """A Claude Code session on Windows records C:\\work\\app; the VS Code extension asks with c:\\ (fsPath) or C:/."""
     from interlatch.storage.sqlite import connect
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
     from interlatch.server import App
 
     for name in ("COPILOT_HOME", "BOB_HOME", "ANTIGRAVITY_HOME"):

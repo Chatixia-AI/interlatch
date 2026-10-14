@@ -324,7 +324,7 @@ def env(tmp_path, monkeypatch):
 @pytest.fixture()
 def synced(env):
     from interlatch.storage.sqlite import connect
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     conn = connect(env["cfg"].db_path)
     report = sync(env["cfg"], conn)

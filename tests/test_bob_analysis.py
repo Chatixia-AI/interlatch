@@ -119,7 +119,7 @@ def test_worker_end_to_end_with_bob(bob_env):
 def test_chronicles_own_bob_tasks_are_not_imported(env, tmp_path):
     from interlatch.connectors import bob_status
     from interlatch.storage.sqlite import connect
-    from interlatch.ingest import sync
+    from interlatch.ingestion.service import sync
 
     from copilot_fixture import BOB_TASK, write_bob_home
 

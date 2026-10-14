@@ -119,13 +119,15 @@ Excalidraw VS Code extension (`pomdtr.excalidraw-editor`) or on excalidraw.com; 
 The code is the `interlatch` package in `src/interlatch/` (`src/chronicle/` only forwards `python -m chronicle`,
 which installs from before the rename still run):
 
-- `core/`: configuration, session records, translations, agent names, pricing, redaction, this computer's identity,
-  and what counts as an artifact a session made
+- `core/`: configuration, session records, paths, translations, agent names, pricing, redaction, this computer's
+  identity, and what counts as an artifact a session made
 - `storage/`: the SQLite archive (schema, migrations, connections) and the optional Postgres stores
 - `sources/`: a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`) and per chat export
   (`claude/export.py`, `chatgpt.py`)
 - `artifacts/`: what sessions made, where each stands, and opening it
-- `connectors.py` (Sources), `ingest.py` (archive + store), `digest.py` / `analyze.py` / `llm.py` (analysis),
+- `ingestion/`: syncing every source (`service.py`): the raw-file archive, storing parsed sessions, chat imports,
+  agent memory and history, forgetting
+- `connectors.py` (Sources), `digest.py` / `analyze.py` / `llm.py` (analysis),
   `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and Mermaid export),
   `glossary.py`, `reviews.py`, `worker.py` (queue)
 - `server.py` + `web/` (dashboard), `mcp_server.py`, `export_md.py`, `hooks.py` / `install.py`, `desktop.py` (macOS
