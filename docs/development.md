@@ -146,10 +146,10 @@ which installs from before the rename still run):
 - `interfaces/cli/`: the command line: `parser.py` assembles the commands, and each module in `commands/` holds a
   group of them (recording, archive, knowledge, setup, sharing, operations), each command's options beside its code;
   `cli.py` at the top is the entry point the `interlatch` command runs
-- `interfaces/web/`: the dashboard: `server.py` starts it, `handler.py` checks who asks and routes each request to
-  `api/`, where each page's reads and actions are functions of a `Context` (the config, this request's connection, the
-  jobs), one module per feature; `app.py` holds what lives as long as the dashboard; `assets.py` serves the page from
-  `web/`; `packaging/macos/` builds the app
+- `interfaces/web/`: the dashboard: `server.py` starts it, `handler.py` checks who asks, `routes.py` lists every route
+  with who may call it and what answers it, mostly a function in `api/`, where each page's reads and actions are
+  functions of a `Context` (the config, this request's connection, the jobs), one module per feature; `app.py` holds
+  what lives as long as the dashboard; `assets.py` serves the page from `web/`; `packaging/macos/` builds the app
 
 Each layer imports only the ones below it: `core`, then `storage` and `sources`, then the features (`ingestion`,
 `analysis`, `knowledge`, `projects`, `artifacts`, `sharing`), then `application`, then `interfaces`; `runtime` starts
@@ -163,7 +163,7 @@ Where to add:
 - **an analysis backend**: a `Runner` in `analysis/runners/` (`base.py` is the contract), named in `factory.py`; a
   model provider's API is a `Provider` in `analysis/runners/settings.py`
 - **a dashboard endpoint**: a function of a `Context` in the feature's module in `interfaces/web/api/`, its route and
-  who may call it in `interfaces/web/handler.py`, and its row in `ROUTES` in `tests/test_route_matrix.py` (a route
+  who may call it in `interfaces/web/routes.py`, and its row in `ROUTES` in `tests/test_route_matrix.py` (a route
   without one fails the suite)
 - **a command**: `add_<command>` and `cmd_<command>` in the fitting group in `interfaces/cli/commands/`, and the
   command in `COMMANDS` in `interfaces/cli/parser.py`, whose order is `interlatch --help`'s; `tests/goldens/cli.json`

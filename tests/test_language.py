@@ -335,6 +335,9 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
                     need.add(node.args[0].value)
                 if node.func.id == "trn" and len(node.args) >= 3 and isinstance(node.args[2], ast.Constant):
                     need.add(node.args[2].value)
+    from interlatch.interfaces.web import routes
+
+    need.update(r.access.refusal for r in routes.GET + routes.POST if r.access.refusal)  # tr() when refused
     for c in friction.CATALOG:  # translated where they are shown (friction.display, suggest.display)
         need.add(c["name"])
         need.update(f["title"] for f in c["fixes"])
