@@ -11,7 +11,7 @@ from ....core.i18n import tr
 from ....core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 from ....core.util import loads, to_iso, utcnow
 from .artifacts import _artifact_summary
-from .common import knowledge_item, session_rows
+from .common import knowledge_item, label_who, session_rows
 
 pass
 import subprocess
@@ -144,7 +144,9 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
         return {"error": tr(str(exc))}, 400
 
 
-def project(ctx: Context, path: str) -> dict | None:
+def project(ctx: Context, path: str, here: bool = False, limited: bool = False) -> dict | None:
+    """One project's page. here: the request comes from this computer, so its folder's git state is read too.
+    limited: someone limited to some projects, who isn't shown the pull requests a session lists (as on its page)."""
     c = ctx.conn
     if path == GLOBAL:
         kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (GLOBAL,)).fetchone()
@@ -170,6 +172,7 @@ def project(ctx: Context, path: str) -> dict | None:
     from ...exports.diagrams import for_kb
     kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
     labels = project_labels(c)
+    from ....projects import progress
     from ....projects.groups import group_of
     from ....projects.routing import declared_projects
     from ....sharing.projects import hub_project_of
@@ -184,6 +187,9 @@ def project(ctx: Context, path: str) -> dict | None:
         "kb": dict(kb) if kb else None,
         "diagram": for_kb(kb["kb_json"]) if kb else None,
         "artifacts": _artifact_summary(ctx, path),
+        "recent": label_who(ctx, progress.recent(c, path)),  # on a hub with people, whose session each one is
+        "timeline": _labelled(ctx, progress.timeline(c, path, session_prs=not limited)),
+        "repo": progress.repo_state(path) if here else None,
         "sessions": session_rows(ctx, "project_path = ?", [path], "started_at DESC", 200),
         "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
             "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
@@ -196,6 +202,11 @@ def project(ctx: Context, path: str) -> dict | None:
             "FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE s.project_path = ? AND (f.edits + f.writes) > 0 "
             "GROUP BY f.path ORDER BY edits DESC LIMIT 25", (path,))],
     }
+
+
+def _labelled(ctx: Context, timeline: dict) -> dict:
+    label_who(ctx, [x for w in timeline["weeks"] for x in w["items"]])  # all weeks at once: one look-up of who's who
+    return timeline
 
 
 def file_sessions(ctx: Context, path: str, limit: int = 50) -> dict:

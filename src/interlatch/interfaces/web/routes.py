@@ -120,7 +120,7 @@ def _artifact_file(h, ctx, m, q):  # an image or diagram an agent made, still on
 
 
 def _project(h, ctx, m, q):
-    proj = api.projects.project(ctx, unquote(q.get("path", "")))
+    proj = api.projects.project(ctx, unquote(q.get("path", "")), here=h._from_here(), limited=h.limited)
     return h._json({**proj, "local": h._local()}) if proj else h._json({"error": tr("not found")}, 404)
 
 

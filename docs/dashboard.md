@@ -75,7 +75,7 @@ until a full prior period exists to compare against; an **Agents** table with ea
 it was last used and its numbers for the period as inline bars, a dash where an agent doesn't record a metric (a chat
 export has no tokens or cost), and a click on a row filtering Home to that agent; daily chart with a 7-day average;
 outcome breakdown; activity calendar with streaks; busiest hour; projects, tools with failed calls and models), a sortable, filterable
-session list, project cards with 12 weeks of activity (in [your own groups](#project-groups)), the [Systems map](#systems-map), session pages (headline figures, the summary and the knowledge
+session list, project cards with 12 weeks of activity (in [your own groups](#project-groups)), [project pages](#a-projects-page), the [Systems map](#systems-map), session pages (headline figures, the summary and the knowledge
 it produced up top, then **Details**, where a session opens: goal, highlights, open threads, the knowledge items,
 context-window chart with compactions, tools, files, subagents, and the [artifacts](#artifacts) the session made; or
 **Transcript**, where a search result opens: the conversation with one-line tool calls that expand to their input and
@@ -95,6 +95,32 @@ mentions highlighted in transcript order; **Show all** lists every one, and clic
 there with the terms still marked. Glossary
 terms are underlined wherever they appear (transcripts, knowledge, summaries): hover for the definition, click for
 the entry. Every chart has a table view; light and dark themes.
+
+## A project's page
+
+A project's page is for coming back to a project. Under its name: whether it is **Active** (a session in the last
+week), **Quiet** (in the last month) or **Dormant**, when the last session was, and its sessions, active time, tokens
+and estimated API cost. Below that, the overview from its knowledge base says what the project is.
+
+**Overview** shows where things stand, read from your sessions and git, with nothing written by a model:
+
+- **Where you left off:** the last session's goal, how it ended and what it left open, then the four sessions before
+  it, each opening to its own goal and open threads. These are what each session left open when it ended: a later
+  session, or work you did outside one, may have dealt with them since.
+- **The folder now:** the folder's git branch and how far it is from its upstream, how many changes aren't committed,
+  the last commit and the repository's other worktrees. It shows only in a browser on the computer the folder is on.
+  Git only reads: it takes no lock, and the repository's own hooks and fsmonitor don't run.
+- **Week by week:** each week with sessions, newest first, with its sessions and their outcomes, the pull requests
+  they opened and the commits they made (each counted once), and the quiet weeks between marked.
+
+The other tabs hold the rest: **Working here** (the knowledge base, its [architecture sketch](#architecture-sketch)
+and the glossary), **Knowledge**, **Sessions**, **Artifacts** and **Usage** (the totals and the most edited files).
+The tab you pick stays in the address, so a link or a reload opens it again.
+
+On a hub with people, the card is **Where the team left off**, and each session shows whose it is. Pull requests come
+from the transcripts computers send (`share = "everything"`), or from the links a session lists when a computer shares
+knowledge; commits only from transcripts. Someone limited to some projects sees the sessions, not their pull requests,
+as on a session's page.
 
 ## Project groups
 
