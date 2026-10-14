@@ -240,3 +240,27 @@ def setup_logging(logs_dir: Path, *, verbose: bool = False, console: bool = Fals
         ch.setLevel(logging.DEBUG if verbose else logging.WARNING)
         root.addHandler(ch)
     root._interlatch_configured = True  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------- paths
+def is_abs_path(path: str) -> bool:
+    r"""Whether `path` is an absolute path on POSIX or Windows (e.g. /..., C:/..., C:\..., \\...)."""
+    if not isinstance(path, str) or not path:
+        return False
+    if path.startswith("/"):
+        return True
+    if len(path) >= 3 and path[1] == ":" and path[2] in ("/", "\\"):
+        return True
+    if path.startswith("\\\\"):
+        return True
+    return False
+
+
+def normalize_project_path(path: str) -> str:
+    """Normalize a project path: forward slashes, trailing slash stripped (root / or C:/ kept)."""
+    if not is_abs_path(path):
+        return path
+    p = path.replace("\\", "/")
+    if p != "/" and not (len(p) == 3 and p[1] == ":" and p[2] == "/"):
+        p = p.rstrip("/")
+    return p

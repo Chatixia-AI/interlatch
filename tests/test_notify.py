@@ -95,6 +95,22 @@ def test_post_uses_the_system_notifier(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)
     assert not notify.post("T", "M")
 
+    # Windows: uses powershell with JSON stdin
+    calls = []
+
+    def fake_win_run(cmd, input=None, **k):
+        calls.append((cmd, input))
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr("platform.system", lambda: "Windows")
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("shutil.which", lambda name: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" if "powershell" in name else None)
+    monkeypatch.setattr("subprocess.run", fake_win_run)
+    assert notify.post("Windows Title", "Windows Message")
+    assert "powershell.exe" in calls[-1][0][0]
+    payload = json.loads(calls[-1][1])
+    assert payload == {"title": "Windows Title", "message": "Windows Message"}
+
 
 def test_how_to_update_matches_the_install(env):
     cfg = env["cfg"]

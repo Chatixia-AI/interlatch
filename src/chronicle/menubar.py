@@ -256,6 +256,13 @@ def setting_info(cfg: Config) -> dict:
     from .install import UI_LABEL, launchd_status
     from .update import install_method
 
+    if sys.platform == "win32":
+        from .windows import task_status
+        return {"supported": True, "on": cfg.server_menu_bar, "shown": SHOWN, "app_extra": True,
+                "login_item": bool(os.environ.get("INTERLATCH_WINDOWS_TASK")),
+                "agent": bool(task_status("Dashboard").get("installed")), "can_install": False,
+                "command": "", "listed_as": "Interlatch"}
+
     if sys.platform != "darwin" or install_method()["kind"] in ("app", "container"):  # the app always shows it
         return {"supported": False}
     cmd = extra_command()
@@ -307,6 +314,8 @@ def wants_menu_bar(cfg: Config) -> bool:
     (or a checkout's dev server) adds no second icon."""
     from .install import UI_LABEL
 
+    if sys.platform == "win32":
+        return cfg.server_menu_bar and bool(os.environ.get("INTERLATCH_WINDOWS_TASK"))
     return (sys.platform == "darwin" and cfg.server_menu_bar
             and os.environ.get("XPC_SERVICE_NAME") == UI_LABEL)
 
@@ -737,8 +746,14 @@ class StatusMenu:
 
 # ---------------------------------------------------------------------------------------------- `interlatch ui`
 def run_with_server(cfg: Config, httpd, url: str) -> bool:
-    """`interlatch ui` with the menu-bar item: the dashboard serves on a thread, AppKit runs on this (main) thread
-    until Quit or Ctrl+C. False, with nothing started, when the `app` extra (PyObjC) is not installed."""
+    """`interlatch ui` with the menu-bar item: the dashboard serves on a thread, AppKit (or Windows tray) runs on this
+    (main) thread until Quit or Ctrl+C. False, with nothing started, when not supported."""
+    global SHOWN
+    if sys.platform == "win32":
+        from .windows import run_tray_with_server
+
+        SHOWN = True
+        return run_tray_with_server(cfg, httpd, url)
     try:
         import AppKit
         from PyObjCTools import AppHelper
@@ -747,7 +762,6 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
         return False
     from .install import UI_LABEL
 
-    global SHOWN
     SHOWN = True
     app = httpd.app
     AppKit.NSApplication.sharedApplication().setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)

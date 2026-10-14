@@ -169,6 +169,96 @@ def test_the_file_lock_keeps_a_second_holder_out(tmp_path):
         assert again
 
 
+def test_windows_path_normalization_and_detection():
+    from chronicle.util import is_abs_path, normalize_project_path
+
+    assert is_abs_path("C:\\Users\\ada\\project")
+    assert is_abs_path("c:/work/app")
+    assert is_abs_path("\\\\server\\share\\repo")
+    assert is_abs_path("/Users/ada/project")
+    assert not is_abs_path("relative/path")
+    assert not is_abs_path("")
+    assert not is_abs_path(None)
+
+    assert normalize_project_path("C:\\Users\\ada\\project\\") == "C:/Users/ada/project"
+    assert normalize_project_path("C:\\") == "C:/"
+    assert normalize_project_path("C:/") == "C:/"
+    assert normalize_project_path("/Users/ada/project/") == "/Users/ada/project"
+    assert normalize_project_path("/") == "/"
+    assert normalize_project_path("relative/path/") == "relative/path/"
+
+
+def test_windows_hub_and_people_path_normalization():
+    from chronicle.hub import clean_folders, clean_left, under
+    from chronicle.people import clean_projects
+
+    assert under("C:\\Users\\ada\\project\\sub\\file.py", "C:/Users/ada/project")
+    assert under("C:/Users/ada/project", "C:\\Users\\ada\\project\\")
+    assert not under("C:/Users/ada/other", "C:/Users/ada/project")
+
+    folders = clean_folders({"C:\\Users\\ada\\app": "C:\\hub\\projects\\app\\",
+                             "/posix/path/": "/hub/posix/"})
+    assert folders == {"C:/Users/ada/app": "C:/hub/projects/app",
+                       "/posix/path": "/hub/posix"}
+
+    left = clean_left(["C:\\Users\\ada\\app\\", "C:/Users/ada/app", "/posix/proj"])
+    assert left == ["/posix/proj", "C:/Users/ada/app"]
+
+    projects = clean_projects(["C:\\Users\\ada\\app", "C:/Users/ada/app", "/var/repo"])
+    assert projects == ["/var/repo", "C:/Users/ada/app"]
+
+
+def test_windows_menubar_setting_and_wants(cfg, monkeypatch):
+    from chronicle import menubar
+
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr(windows, "task_status", lambda name: {"installed": True, "loaded": True})
+    monkeypatch.setenv("INTERLATCH_WINDOWS_TASK", "1")
+
+    info = menubar.setting_info(cfg)
+    assert info["supported"] is True
+    assert info["app_extra"] is True
+    assert info["login_item"] is True
+    assert info["agent"] is True
+
+    cfg.server_menu_bar = True
+    assert menubar.wants_menu_bar(cfg) is True
+    monkeypatch.delenv("INTERLATCH_WINDOWS_TASK", raising=False)
+    assert menubar.wants_menu_bar(cfg) is False
+
+
+def test_server_file_and_folder_queries_with_windows_paths(tmp_path):
+    import sqlite3
+    from chronicle.config import load_config
+    from chronicle.server import App
+
+    cfg = load_config(tmp_path / "home")
+    conn = sqlite3.connect(cfg.db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript("""
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY, started_at TEXT, ended_at TEXT, project_path TEXT,
+            project_name TEXT, agent TEXT, source TEXT, outcome TEXT, analysis_status TEXT
+        );
+        CREATE TABLE session_files (
+            session_id TEXT, path TEXT, reads INT, edits INT, writes INT, lines_added INT, lines_removed INT
+        );
+        INSERT INTO sessions VALUES ('s1', '2026-10-14T10:00:00Z', '2026-10-14T10:05:00Z', 'C:/work/app', 'app', 'claude', 'local', 'success', 'done');
+        INSERT INTO session_files VALUES ('s1', 'C:/work/app/main.py', 1, 2, 0, 10, 2);
+    """)
+    conn.commit()
+    conn.close()
+
+    app = App(cfg)
+    files = app.folder_files("C:\\work\\app")
+    assert files["total"] == 1
+    assert files["files"][0]["path"] == "C:/work/app/main.py"
+
+    file_hist = app.file_sessions("C:\\work\\app\\main.py")
+    assert file_hist["total"] == 1
+    assert file_hist["sessions"][0]["id"] == "s1"
+
+
 # ------------------------------------------------------------------ on Windows itself
 @on_windows
 def test_internal_runs_are_known_in_any_case_and_with_either_slash(cfg):

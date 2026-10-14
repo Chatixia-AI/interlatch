@@ -1,0 +1,1 @@
+- **Windows polish:** Added Windows system tray icon support for the dashboard (`interlatch ui --menu-bar`), native PowerShell desktop notifications for release updates, and normalized Windows drive paths (`C:/...`) across hub folders, projects, and file session lookups.

@@ -314,7 +314,7 @@ def _projects(cfg: Config) -> list[Path]:
     conn = sqlite3.connect(f"file:{cfg.db_path}?mode=ro", uri=True, timeout=30)
     try:
         rows = conn.execute("SELECT DISTINCT project_path FROM sessions WHERE agent = 'claude' "
-                            "AND project_path LIKE '/%'").fetchall()
+                            "AND (project_path LIKE '/%' OR project_path LIKE '_:/%')").fetchall()
     except sqlite3.Error:
         return []
     finally:

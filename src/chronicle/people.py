@@ -39,7 +39,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from .util import utcnow_iso
+from .util import is_abs_path, normalize_project_path, utcnow_iso
 
 ROLES = ("admin", "member", "readonly")
 ROLE_RANK = {"readonly": 0, "member": 1, "admin": 2}
@@ -149,8 +149,8 @@ def clean_projects(projects) -> list[str] | None:
     out = set()
     for x in projects:
         x = str(x or "").strip()
-        x = x.rstrip("/") or x
-        if not x.startswith("/") or len(x) > 1024 or "\0" in x:
+        x = normalize_project_path(x)
+        if not is_abs_path(x) or len(x) > 1024 or "\0" in x:
             raise PeopleError("{project} is not a project on this hub", project=x or "''")
         out.add(x)
     return sorted(out)

@@ -11,6 +11,7 @@ import logging
 import platform
 import shutil
 import subprocess
+import sys
 
 from .config import Config
 
@@ -21,14 +22,63 @@ UPGRADE = {"uv": "uv tool upgrade interlatch", "pipx": "pipx upgrade interlatch"
            "pip": "pip install -U interlatch"}
 
 
+_WIN_NOTIFY_SCRIPT = """\
+$ErrorActionPreference = 'Stop'
+try {
+    $raw = [Console]::In.ReadToEnd()
+    $data = ConvertFrom-Json $raw
+    $title = $data.title
+    $msg = $data.message
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+        $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+        $text = $template.GetElementsByTagName("text")
+        $null = $text.Item(0).AppendChild($template.CreateTextNode($title))
+        $null = $text.Item(1).AppendChild($template.CreateTextNode($msg))
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Interlatch").Show($toast)
+    } catch {
+        Add-Type -AssemblyName System.Windows.Forms
+        $icon = New-Object System.Windows.Forms.NotifyIcon
+        $icon.Icon = [System.Drawing.SystemIcons]::Information
+        $icon.BalloonTipTitle = $title
+        $icon.BalloonTipText = $msg
+        $icon.Visible = $true
+        $icon.ShowBalloonTip(5000)
+        Start-Sleep -Milliseconds 500
+        $icon.Dispose()
+    }
+} catch {
+    exit 1
+}
+"""
+
+
 def _applescript(text: str) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _post_windows(title: str, message: str) -> bool:
+    import json
+
+    ps = shutil.which("powershell.exe") or shutil.which("powershell")
+    if not ps:
+        return False
+    payload = json.dumps({"title": title, "message": message})
+    cmd = [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", _WIN_NOTIFY_SCRIPT]
+    try:
+        proc = subprocess.run(cmd, input=payload, text=True, capture_output=True, timeout=10)
+        return proc.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def post(title: str, message: str) -> bool:
     """Show a desktop notification; False when this system has no way to (or it failed)."""
     if platform.system() == "Darwin":
         cmd = ["osascript", "-e", f"display notification {_applescript(message)} with title {_applescript(title)}"]
+    elif sys.platform == "win32" or platform.system() == "Windows":
+        return _post_windows(title, message)
     elif shutil.which("notify-send"):
         cmd = ["notify-send", "--app-name=Interlatch", title, message]
     else:

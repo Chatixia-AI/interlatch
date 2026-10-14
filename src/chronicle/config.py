@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .util import is_abs_path, normalize_project_path
+
 DEFAULT_CONFIG_TOML = """\
 # Interlatch configuration.
 # Edit freely; changes apply on the next sync / worker run.
@@ -498,12 +500,12 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
         server_menu_bar=bool(server.get("menu_bar", False)),
         server_trusted_proxies=[str(x).strip() for x in server.get("trusted_proxies", ["127.0.0.1", "::1"]) or [] if str(x).strip()],
         hub_url=str(hub.get("url") or "").strip().rstrip("/"),
-        hub_path_map={str(k).rstrip("/"): str(v).rstrip("/") for k, v in path_map.items()} if isinstance(path_map, dict) else {},
-        hub_folders={str(Path(str(k)).expanduser()).rstrip("/") or "/": str(v).rstrip("/") for k, v in folders.items()
+        hub_path_map={normalize_project_path(str(k)): normalize_project_path(str(v)) for k, v in path_map.items()} if isinstance(path_map, dict) else {},
+        hub_folders={normalize_project_path(str(Path(str(k)).expanduser())): normalize_project_path(str(v)) for k, v in folders.items()
                      if str(k).strip() and str(v).strip()} if isinstance(folders, dict) else {},
         hub_share=share if share in SHARE_MODES else "everything",
         hub_all_folders=hub.get("all_folders") is True,  # only an explicit true shares every folder
-        hub_left=sorted({str(x).rstrip("/") for x in hub.get("left") or [] if str(x).startswith("/")})
+        hub_left=sorted({normalize_project_path(str(x)) for x in hub.get("left") or [] if is_abs_path(str(x))})
         if isinstance(hub.get("left"), list) else [],
         hub_accept="everything" if accept == "everything" else "knowledge",  # a typo never lets transcripts in
         hub_store=store if store in STORES else "",

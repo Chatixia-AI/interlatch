@@ -262,5 +262,255 @@ def open_path(path: str, *, reveal: bool) -> None:
         os.startfile(path)  # noqa: S606 (a recorded document, checked by artifacts.artifact_reveal)
 
 
+# ------------------------------------------------------------------ system tray
+def run_tray_with_server(cfg, httpd, url: str) -> bool:
+    """`interlatch ui` with the Windows notification area (system tray) icon: the dashboard serves on a
+    background thread, while this (main) thread runs a lightweight Win32 message loop with a tray icon.
+    Right-click shows a menu (Open Dashboard, Sync Now, Quit); left-click opens the dashboard.
+    Ctrl+C or Quit removes the icon and closes the server."""
+    import ctypes
+    from ctypes import wintypes
+    import logging
+    import threading
+    import webbrowser
+
+    log = logging.getLogger("interlatch.windows")
+
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    except (OSError, AttributeError) as exc:
+        log.warning("cannot run Windows tray icon: %s", exc)
+        return False
+
+    WM_DESTROY = 0x0002
+    WM_CLOSE = 0x0010
+    WM_USER = 0x0400
+    WM_TRAY = WM_USER + 20
+    WM_TIMER = 0x0113
+    WM_RBUTTONUP = 0x0205
+    WM_LBUTTONUP = 0x0202
+    WM_LBUTTONDBLCLK = 0x0203
+
+    NIM_ADD = 0x00000000
+    NIM_MODIFY = 0x00000001
+    NIM_DELETE = 0x00000002
+    NIF_MESSAGE = 0x00000001
+    NIF_ICON = 0x00000002
+    NIF_TIP = 0x00000004
+
+    TPM_RIGHTBUTTON = 0x0002
+    TPM_RETURNCMD = 0x0100
+    MF_STRING = 0x0000
+    MF_SEPARATOR = 0x0800
+
+    class NOTIFYICONDATAW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("hWnd", wintypes.HWND),
+            ("uID", wintypes.UINT),
+            ("uFlags", wintypes.UINT),
+            ("uCallbackMessage", wintypes.UINT),
+            ("hIcon", wintypes.HICON),
+            ("szTip", wintypes.WCHAR * 128),
+            ("dwState", wintypes.DWORD),
+            ("dwStateMask", wintypes.DWORD),
+            ("szInfo", wintypes.WCHAR * 256),
+            ("uTimeoutOrVersion", wintypes.UINT),
+            ("szInfoTitle", wintypes.WCHAR * 64),
+            ("dwInfoFlags", wintypes.DWORD),
+            ("guidItem", ctypes.c_byte * 16),
+            ("hBalloonIcon", wintypes.HICON),
+        ]
+
+    WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+
+    class WNDCLASSW(ctypes.Structure):
+        _fields_ = [
+            ("style", wintypes.UINT),
+            ("lpfnWndProc", WNDPROC),
+            ("cbClsExtra", ctypes.c_int),
+            ("cbWndExtra", ctypes.c_int),
+            ("hInstance", wintypes.HINSTANCE),
+            ("hIcon", wintypes.HICON),
+            ("hCursor", wintypes.HICON),
+            ("hbrBackground", wintypes.HBRUSH),
+            ("lpszMenuName", wintypes.LPCWSTR),
+            ("lpszClassName", wintypes.LPCWSTR),
+        ]
+
+    class POINT(ctypes.Structure):
+        _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
+    # Declare function prototypes
+    user32.DefWindowProcW.argtypes = (wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+    user32.DefWindowProcW.restype = ctypes.c_ssize_t
+    user32.TrackPopupMenu.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, ctypes.c_void_p)
+    user32.TrackPopupMenu.restype = ctypes.c_int
+    user32.AppendMenuW.argtypes = (wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR)
+    user32.AppendMenuW.restype = wintypes.BOOL
+    user32.CreatePopupMenu.restype = wintypes.HMENU
+    user32.DestroyMenu.argtypes = (wintypes.HMENU,)
+    user32.DestroyMenu.restype = wintypes.BOOL
+    shell32.Shell_NotifyIconW.argtypes = (wintypes.DWORD, ctypes.c_void_p)
+    shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+    user32.CreateWindowExW.argtypes = (
+        wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, ctypes.c_void_p
+    )
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.RegisterClassW.argtypes = (ctypes.c_void_p,)
+    user32.RegisterClassW.restype = wintypes.ATOM
+    user32.UnregisterClassW.argtypes = (wintypes.LPCWSTR, wintypes.HINSTANCE)
+    user32.UnregisterClassW.restype = wintypes.BOOL
+    user32.GetMessageW.argtypes = (ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.UINT)
+    user32.GetMessageW.restype = wintypes.BOOL
+    user32.TranslateMessage.argtypes = (ctypes.c_void_p,)
+    user32.DispatchMessageW.argtypes = (ctypes.c_void_p,)
+    user32.DispatchMessageW.restype = ctypes.c_ssize_t
+    user32.DestroyWindow.argtypes = (wintypes.HWND,)
+    user32.DestroyWindow.restype = wintypes.BOOL
+    user32.PostQuitMessage.argtypes = (ctypes.c_int,)
+    user32.PostQuitMessage.restype = None
+    user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t)
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.GetCursorPos.argtypes = (ctypes.c_void_p,)
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.SetTimer.argtypes = (wintypes.HWND, ctypes.c_size_t, wintypes.UINT, ctypes.c_void_p)
+    user32.SetTimer.restype = ctypes.c_size_t
+    user32.KillTimer.argtypes = (wintypes.HWND, ctypes.c_size_t)
+    user32.KillTimer.restype = wintypes.BOOL
+
+    hinst = kernel32.GetModuleHandleW(None)
+    class_name = f"InterlatchTray_{os.getpid()}"
+
+    nid = NOTIFYICONDATAW()
+
+    def update_tooltip(tip: str) -> None:
+        nid.szTip = tip[:127]
+        shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(nid))
+
+    def on_tray_event(hwnd: int, event: int) -> None:
+        if event in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
+            threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+        elif event == WM_RBUTTONUP:
+            hmenu = user32.CreatePopupMenu()
+            try:
+                user32.AppendMenuW(hmenu, MF_STRING, 1, "Open Dashboard")
+                user32.AppendMenuW(hmenu, MF_STRING, 2, "Sync Now")
+                user32.AppendMenuW(hmenu, MF_SEPARATOR, 0, None)
+                user32.AppendMenuW(hmenu, MF_STRING, 3, "Quit Interlatch")
+
+                user32.SetForegroundWindow(hwnd)
+                pt = POINT()
+                user32.GetCursorPos(ctypes.byref(pt))
+                cmd = user32.TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_RETURNCMD, pt.x, pt.y, 0, hwnd, None)
+                user32.PostMessageW(hwnd, 0, 0, 0)
+            finally:
+                user32.DestroyMenu(hmenu)
+
+            if cmd == 1:
+                threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+            elif cmd == 2:
+                threading.Thread(target=httpd.app.action_sync, daemon=True).start()
+            elif cmd == 3:
+                user32.DestroyWindow(hwnd)
+
+    def wnd_proc(hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+        if msg == WM_TRAY:
+            on_tray_event(hwnd, lparam)
+            return 0
+        if msg == WM_TIMER:
+            try:
+                from .menubar import snapshot
+                snap = snapshot(httpd.app)
+                if snap:
+                    update_tooltip(f"Interlatch: {snap.headline}")
+            except Exception:
+                pass
+            return 0
+        if msg in (WM_CLOSE, WM_DESTROY):
+            user32.PostQuitMessage(0)
+            return 0
+        return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    proc_ref = WNDPROC(wnd_proc)
+
+    wc = WNDCLASSW()
+    wc.lpfnWndProc = proc_ref
+    wc.hInstance = hinst
+    wc.lpszClassName = class_name
+    atom = user32.RegisterClassW(ctypes.byref(wc))
+    if not atom:
+        log.warning("failed to register tray window class")
+        return False
+
+    hwnd = user32.CreateWindowExW(0, class_name, "Interlatch Tray", 0, 0, 0, 0, 0, None, None, hinst, None)
+    if not hwnd:
+        user32.UnregisterClassW(class_name, hinst)
+        log.warning("failed to create tray window")
+        return False
+
+    hicon = None
+    try:
+        hicon = shell32.ExtractIconW(hinst, sys.executable, 0)
+    except Exception:
+        pass
+    if not hicon or hicon == 1:
+        hicon = user32.LoadIconW(None, 32512)  # IDI_APPLICATION
+
+    nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+    nid.hWnd = hwnd
+    nid.uID = 1
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP
+    nid.uCallbackMessage = WM_TRAY
+    nid.hIcon = hicon
+    nid.szTip = "Interlatch"
+
+    if not shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid)):
+        user32.DestroyWindow(hwnd)
+        user32.UnregisterClassW(class_name, hinst)
+        log.warning("failed to add tray icon")
+        return False
+
+    # Start dashboard server on background daemon thread
+    threading.Thread(target=httpd.serve_forever, name="interlatch-ui", daemon=True).start()
+    log.info("tray icon on, dashboard at %s", url)
+
+    # Initial tooltip update if snapshot is available
+    try:
+        from .menubar import snapshot
+        snap = snapshot(httpd.app)
+        if snap:
+            update_tooltip(f"Interlatch: {snap.headline}")
+    except Exception:
+        pass
+
+    # Periodic refresh every 10 seconds
+    user32.SetTimer(hwnd, 1, 10000, None)
+
+    try:
+        msg = wintypes.MSG()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        try:
+            shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+            user32.KillTimer(hwnd, 1)
+            user32.DestroyWindow(hwnd)
+            user32.UnregisterClassW(class_name, hinst)
+        except Exception:
+            pass
+        httpd.server_close()
+    return True
+
+
 if __name__ == "__main__":
     raise SystemExit(run_hidden(sys.argv[1:]))

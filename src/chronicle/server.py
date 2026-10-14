@@ -37,7 +37,7 @@ from .ladder import refresh as refresh_stage
 from .llm import BACKENDS, make_runner
 from .search import search_all, search_events, search_knowledge, search_sessions
 from .synthesize import GLOBAL
-from .util import PROGRESS_RE, loads, to_iso, utcnow
+from .util import PROGRESS_RE, is_abs_path, loads, normalize_project_path, to_iso, utcnow
 from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
 
 log = logging.getLogger("interlatch.server")
@@ -919,13 +919,13 @@ class App:
 
     def file_sessions(self, path: str, limit: int = 50) -> dict:
         """The sessions that read or changed one file, newest first (the VS Code extension's per-file history)."""
-        path = os.path.normpath(path) if path.startswith("/") else ""
+        path = normalize_project_path(os.path.normpath(path)) if is_abs_path(path) else ""
         if not path:
             return {"path": path, "total": 0, "sessions": []}
         c = self.conn
         # most agents record absolute paths; Codex sometimes records them relative to the session's folder
         where, params = ["f.path = ?"], [path]
-        for (root,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%'"):
+        for (root,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%' OR project_path LIKE '_:/%'"):
             base = root.rstrip("/") + "/"
             if path.startswith(base):
                 where.append("(s.project_path = ? AND f.path = ?)")
@@ -942,22 +942,23 @@ class App:
 
     def folder_files(self, root: str, limit: int = 200, existing: bool = False, ignored: bool = True) -> dict:
         """The files under a folder that sessions read or changed, most recently touched first (the extension's file list)."""
-        root = os.path.normpath(root) if root.startswith("/") else ""
-        if root in ("", "/"):
+        root = normalize_project_path(os.path.normpath(root)) if is_abs_path(root) else ""
+        if root in ("", "/") or (len(root) == 3 and root[1] == ":" and root[2] == "/"):
             return {"root": root, "total": 0, "files": []}
-        base, c = root + "/", self.conn
+        base, c = root.rstrip("/") + "/", self.conn
         cols = "f.path, f.session_id, f.edits + f.writes changes, s.started_at"
         # a range on the indexed path ('0' sorts right after '/'), so a big archive isn't scanned
         rows = [dict(r) for r in c.execute(
             f"SELECT {cols} FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE f.path >= ? AND f.path < ?",
             (base, root + "0"))]
         # Codex sometimes records paths relative to the session's folder: a folder inside this one, or one containing it
-        for (folder,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%'"):
-            if not (folder + "/").startswith(base) and not base.startswith(folder.rstrip("/") + "/"):
+        for (folder,) in c.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path LIKE '/%' OR project_path LIKE '_:/%'"):
+            folder_base = folder.rstrip("/") + "/"
+            if not folder_base.startswith(base) and not base.startswith(folder_base):
                 continue
             for r in c.execute(f"SELECT {cols} FROM session_files f JOIN sessions s ON s.id = f.session_id "
-                               "WHERE s.project_path = ? AND f.path NOT LIKE '/%'", (folder,)):
-                full = os.path.normpath(os.path.join(folder, r["path"]))
+                               "WHERE s.project_path = ? AND f.path NOT LIKE '/%' AND f.path NOT LIKE '_:/%'", (folder,)):
+                full = normalize_project_path(os.path.normpath(os.path.join(folder, r["path"])))
                 if full.startswith(base):
                     rows.append({**dict(r), "path": full})
         files: dict[str, dict] = {}
@@ -1361,7 +1362,7 @@ class App:
             return {"error": tr("Can't reach the hub: {error}", error=str(exc))}
         marks = ", ".join("?" for _ in SHARED_AGENTS)
         local = [{"path": r[0], "name": r[1] or Path(r[0]).name, "sessions": r[2]} for r in self.conn.execute(
-            "SELECT project_path, MAX(project_name), COUNT(*) FROM sessions WHERE project_path LIKE '/%' "
+            "SELECT project_path, MAX(project_name), COUNT(*) FROM sessions WHERE (project_path LIKE '/%' OR project_path LIKE '_:/%') "
             f"AND source NOT IN ('history', 'remote') AND agent IN ({marks}) GROUP BY project_path "
             "ORDER BY MAX(started_at) DESC LIMIT 300", SHARED_AGENTS)]
         projects = [{"path": p["path"], "name": p.get("name") or Path(p["path"]).name, "sessions": p.get("sessions") or 0}
@@ -1379,9 +1380,9 @@ class App:
         try:
             if verb == "add":
                 folder = str(body.get("folder") or "").strip()
-                if not folder.startswith(("/", "~")):
+                if not (folder.startswith("~") or is_abs_path(folder)):
                     return {"error": tr("Give the folder's full path, such as /Users/you/code/app.")}, 400
-                folder = str(Path(folder).expanduser().resolve())
+                folder = normalize_project_path(str(Path(folder).expanduser().resolve()))
                 hello = hub.handshake(self.cfg)
                 project = next((p for p in hello.get("projects") or [] if isinstance(p, dict)
                                 and p.get("path") == body.get("project")), None)
@@ -1393,8 +1394,9 @@ class App:
                 self.cfg, out["taken"] = hub.remove_folder(self.cfg, str(body.get("folder") or ""))
             else:
                 path = str(body.get("project") or "")
-                if not path.startswith("/") or len(path) > 1024:
+                if not is_abs_path(path) or len(path) > 1024:
                     return {"error": tr("Which project?")}, 400
+                path = normalize_project_path(path)
                 self.cfg = hub.leave_project(self.cfg, path) if verb == "leave" else hub.rejoin_project(self.cfg, path)
         except hub.FolderError as exc:
             return {"error": exc.shown()}, 400

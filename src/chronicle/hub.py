@@ -49,7 +49,7 @@ from urllib.parse import quote, urlencode, urlparse
 
 from . import __version__, news
 from .config import Config
-from .util import utcnow_iso
+from .util import is_abs_path, normalize_project_path, utcnow_iso
 
 log = logging.getLogger("interlatch.hub")
 
@@ -389,10 +389,11 @@ def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
 # ------------------------------------------------------------------ folders added by hand
 def under(path: str | None, folder: str) -> bool:
     """`path` is `folder` or somewhere below it."""
-    if not path:
+    if not path or not folder:
         return False
-    folder = folder.rstrip("/") or "/"
-    return path == folder or path.startswith(folder if folder == "/" else folder + "/")
+    path = normalize_project_path(path)
+    folder = normalize_project_path(folder)
+    return path == folder or path.startswith(folder if folder.endswith("/") else folder + "/")
 
 
 def clean_folders(raw) -> dict[str, str]:
@@ -402,8 +403,8 @@ def clean_folders(raw) -> dict[str, str]:
     out: dict[str, str] = {}
     for k, v in list(raw.items())[:MAX_FOLDERS]:
         k, v = str(k).strip(), str(v).strip()
-        if k.startswith("/") and v.startswith("/") and len(k) <= 1024 and len(v) <= 1024 and "\0" not in k + v:
-            out[k.rstrip("/") or "/"] = v.rstrip("/") or "/"
+        if is_abs_path(k) and is_abs_path(v) and len(k) <= 1024 and len(v) <= 1024 and "\0" not in k + v:
+            out[normalize_project_path(k)] = normalize_project_path(v)
     return out
 
 
@@ -435,8 +436,8 @@ def clean_left(raw) -> list[str]:
     """A spoke's [hub] left as the hub accepts it: absolute project paths, a bounded number of them."""
     if not isinstance(raw, list):
         return []
-    return sorted({x.rstrip("/") or "/" for x in raw[:MAX_FOLDERS]
-                   if isinstance(x, str) and x.startswith("/") and len(x) <= 1024 and "\0" not in x})
+    return sorted({normalize_project_path(x) for x in raw[:MAX_FOLDERS]
+                   if isinstance(x, str) and is_abs_path(x) and len(x) <= 1024 and "\0" not in x})
 
 
 def hub_projects(conn, limit: int = 1000, only: list[str] | None = None) -> list[dict]:
@@ -874,7 +875,7 @@ def group_routes(cfg: Config, conn=None) -> GroupRoutes:
         linked = {g["id"]: g["hub_project"] for g in groups(conn) if g.get("hub_project")}
         paths = [r[0] for r in conn.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL")]
         group_of = {p: gid for p, (gid, _) in assign(conn, paths).items()}
-        active = {p: (linked[gid], gid) for p, gid in group_of.items() if gid in linked and p.startswith("/")}
+        active = {p: (linked[gid], gid) for p, gid in group_of.items() if gid in linked and is_abs_path(p)}
         kept = {r[0]: r[1] for r in conn.execute("SELECT path, hub_project FROM group_shares") if r[0] not in active}
     finally:
         if own:
@@ -1483,19 +1484,21 @@ def add_folder(cfg: Config, folder: str, project: dict, hello: dict) -> tuple[Co
     `project`; one this computer left is joined again. `hello`: the hub's answer to handshake(), for the git remotes
     it knows. Returns the reloaded config and, when nothing changed because the folder's repository already goes
     there by its git remote, that remote. Raises FolderError when the folder can't go there."""
-    name = project.get("name") or Path(project["path"]).name
+    folder = normalize_project_path(folder)
+    project_path = normalize_project_path(project["path"])
+    name = project.get("name") or Path(project_path).name
     if not Path(folder).is_dir():
         raise FolderError("{folder} is not a folder.", folder=folder)
     info = git_info(folder)
     owner = (hello.get("remotes") or {}).get(info[1]) if info else None
-    if owner and owner != project["path"]:
+    if owner and normalize_project_path(owner) != project_path:
         raise FolderError("{folder} is in the git repository {remote}, which the hub files under {owner}. A repository "
                           "belongs to one project, so its sessions can't go to {name}.",
                           folder=folder, remote=info[1], owner=Path(owner).name, name=name)
-    left = [x for x in cfg.hub_left if x != project["path"]]
+    left = [x for x in cfg.hub_left if x != project_path]
     if owner:
         return _save_hub(cfg, left=left) if left != cfg.hub_left else cfg, info[1]
-    return _save_hub(cfg, folders={**cfg.hub_folders, folder: project["path"]},
+    return _save_hub(cfg, folders={**cfg.hub_folders, folder: project_path},
                      left=left if left != cfg.hub_left else None), None
 
 
@@ -1505,6 +1508,7 @@ def remove_folder(cfg: Config, folder: str, client: HubClient | None = None) -> 
     shares knowledge first has the hub take back what it shared from there (withdraw); one that sends transcripts
     leaves them to the hub, which files them by their git remote or their own folder again. Returns the reloaded
     config and how many sessions the hub took back (None: it wasn't asked)."""
+    folder = normalize_project_path(folder)
     if folder not in cfg.hub_folders:
         raise FolderError("{folder} was not added.", folder=folder)
     taken = None
@@ -1539,12 +1543,14 @@ def leave_project(cfg: Config, project: str) -> Config:
     if not cfg.shares_knowledge:
         raise FolderError("Only a computer that shares knowledge can leave a project: one that sends its transcripts "
                           "sends them all.")
+    project = normalize_project_path(project)
     return cfg if project in cfg.hub_left else _save_hub(cfg, left=[*cfg.hub_left, project])
 
 
 @_one_change
 def rejoin_project(cfg: Config, project: str) -> Config:
     """Undo leave_project: sessions filed under `project` are shared again, and its teammates' lessons come back."""
+    project = normalize_project_path(project)
     return _save_hub(cfg, left=[x for x in cfg.hub_left if x != project]) if project in cfg.hub_left else cfg
 
 
@@ -1963,7 +1969,8 @@ def team_lessons(cfg: Config, body: dict, person: dict | None = None, conn=None)
         except HubError as exc:
             log.warning("team store: this hub's own sessions not shared: %s", exc)
     remotes = [normalize_remote(x) or x for x in body.get("remotes") or [] if isinstance(x, str) and len(x) <= 300][:500]
-    projects = [x for x in body.get("projects") or [] if isinstance(x, str) and x.startswith("/") and len(x) <= 1024]
+    projects = [normalize_project_path(x) for x in body.get("projects") or []
+                if isinstance(x, str) and is_abs_path(x) and len(x) <= 1024]
     left = clean_left(body.get("left"))  # projects the computer left: none of their lessons
     within = projects_of(person)
     data = _in_store(lambda: store.lessons_for(machine_id, remotes, projects[:MAX_FOLDERS], within=within, left=left))
