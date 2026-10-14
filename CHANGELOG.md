@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.23.1 (2026-10-13)
+
+- **`agents-chronicle` is retired:** Interlatch is published only as `interlatch` now, and `agents-chronicle` is no
+  longer on PyPI. An install under the old name gets no more updates: **Update** in the dashboard still moves it to
+  `interlatch`, or see [Moving from Chronicle](docs/moving-from-chronicle.md) for the commands.
+
 ## 0.23.0 (2026-10-13)
 
 - **Leaderboard:** sign in with Google and compare your hours of agent time, sessions and tokens over 7, 30 or 90
