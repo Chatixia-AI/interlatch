@@ -146,9 +146,11 @@ which installs from before the rename still run):
 - `interfaces/cli/`: the command line: `parser.py` assembles the commands, and each module in `commands/` holds a
   group of them (recording, archive, knowledge, setup, sharing, operations), each command's options beside its code;
   `cli.py` at the top is the entry point the `interlatch` command runs
-- `server.py` + `web/` (dashboard); `packaging/macos/` builds the app
+- `interfaces/web/`: the dashboard: `server.py` starts it, `handler.py` checks who asks and routes each request,
+  `app.py` answers from the archive, `jobs.py` runs long actions, `assets.py` serves the page from `web/`;
+  `packaging/macos/` builds the app
 
-The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `server.py`) that allows scripts and styles
+The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `interfaces/web/assets.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an
 object (`style: { "--h": "40px" }`), never a string: a string becomes a style attribute the policy refuses.
 `tests/test_security.py` checks both.

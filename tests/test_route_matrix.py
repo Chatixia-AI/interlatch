@@ -1,10 +1,10 @@
-"""Safety net: the dashboard's route matrix. Every route server.py serves, with the status code each kind of caller
-gets, so splitting server.py (make_handler, a route table, an api/ package) can't quietly change who may do what.
+"""Safety net: the dashboard's route matrix. Every route the dashboard serves, with the status code each kind of caller
+gets, so splitting the dashboard (make_handler, a route table, an api/ package) can't quietly change who may do what.
 
 - ROUTES lists every GET and POST route under /api/ (and /signin) with its access class. test_every_served_route_has_an_
-  access_decision reads the routes server.py's handler code actually matches (`p == "..."`, `p in (...)`, `p in NAME`,
+  access_decision reads the routes the handler's code (interfaces/web/handler.py) actually matches (`p == "..."`, `p in (...)`, `p in NAME`,
   `startswith` and `re.fullmatch` patterns, alternations expanded) and fails when one is missing from ROUTES: a new
-  route has to say who may call it. A route in ROUTES that server.py no longer serves fails too.
+  route has to say who may call it. A route in ROUTES that the handler no longer serves fails too.
 - The matrix tests send one representative request per route and caller and compare the whole matrix at once, so the
   assertion shows every cell that changed. Callers: anyone remote and signed out, a read-only person, a member, a
   member limited to one project, an admin person, the hub computer itself (localhost); on /api/hub/* also the hub's
@@ -30,7 +30,7 @@ from interlatch.sharing import client, people
 from interlatch.sharing.identity import new_token
 from interlatch.sharing.protocol import PROTOCOL
 from interlatch.sharing.receiver import IngestTrigger
-from interlatch import server as server_mod
+from interlatch.interfaces.web import handler as handler_mod
 
 from conftest import CWD, SID
 from test_hub import _serve
@@ -275,7 +275,7 @@ STUBS = {
 }
 
 
-# ------------------------------------------------------------------ the routes server.py serves
+# ------------------------------------------------------------------ the routes the handler serves
 def _expand(pattern: str) -> list[str]:
     """A re.fullmatch route as the paths it matches: alternations expanded, parameters as {id} and {n}."""
     path = pattern.replace(r"([\w-]+)", "{id}").replace(r"(\d+)", "{n}")
@@ -296,8 +296,8 @@ def _is_path(node: ast.AST) -> bool:
 
 
 def served_routes() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
-    """(routes, prefixes) the handler in server.py matches, read from its syntax tree."""
-    tree = ast.parse(Path(server_mod.__file__).read_text(encoding="utf-8"))
+    """(routes, prefixes) the dashboard's handler matches, read from its syntax tree."""
+    tree = ast.parse(Path(handler_mod.__file__).read_text(encoding="utf-8"))
     consts = {t.id: node.value for node in tree.body if isinstance(node, ast.Assign)
               for t in node.targets if isinstance(t, ast.Name)}
     handler = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "Handler")
@@ -485,7 +485,7 @@ def test_hub_api_matrix(matrix):
 @pytest.mark.parametrize("route", [pytest.param(r, marks=pytest.mark.xfail(strict=True, reason=why), id=f"{r[0]} {r[1]}")
                                    for r, why in sorted(FAIL_OPEN.items())])
 def test_suspected_fail_open(matrix, route):
-    """ROUTES' secure expectation for a route that fails open today: fails (xfail) until server.py is fixed."""
+    """ROUTES' secure expectation for a route that fails open today: fails (xfail) until the handler is fixed."""
     _check(*_run(matrix, route[0], [route[1]]))
 
 

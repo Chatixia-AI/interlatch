@@ -177,7 +177,7 @@ def test_setup_offers_codex_when_claude_is_missing(env, monkeypatch):
 
 
 def test_dashboard_switches_the_backend(env, monkeypatch):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     monkeypatch.setattr(type(env["cfg"]), "codex_bin", lambda self: "/opt/bin/codex")
     app = App(env["cfg"])

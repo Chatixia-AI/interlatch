@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from interlatch.analysis.session import normalize_analysis, store_analysis
 from interlatch.knowledge.learning import glance
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 from conftest import SID
 

@@ -195,7 +195,7 @@ class DesktopApp:
         import webview
 
         from ..install import write_shim
-        from ...server import make_server
+        from ...interfaces.web.server import make_server
 
         adopt_login_path()
         if self.frozen:
@@ -345,7 +345,7 @@ class DesktopApp:
         """From source the Dock would show Python's icon; Interlatch.app has its own .icns."""
         import AppKit
 
-        from ...server import WEB_DIR
+        from ...interfaces.web.assets import WEB_DIR
 
         image = AppKit.NSImage.alloc().initWithContentsOfFile_(str(WEB_DIR / "icon.png"))
         if image is not None:

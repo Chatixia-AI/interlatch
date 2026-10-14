@@ -8,7 +8,7 @@ from interlatch.analysis.session import case_of, normalize_analysis, store_analy
 from interlatch.knowledge.cases import visual_of
 from interlatch.storage.sqlite import connect
 from interlatch.application.search import search_knowledge
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 from conftest import CWD, SECRET, SID
 

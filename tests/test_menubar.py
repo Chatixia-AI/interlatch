@@ -161,7 +161,7 @@ def test_the_page_gets_the_state_and_its_picture():
 
 def test_snapshot_from_the_dashboards_own_app(synced):
     from interlatch.runtime.platforms.menubar import snapshot
-    from interlatch.server import make_server
+    from interlatch.interfaces.web.server import make_server
 
     httpd = make_server(synced["cfg"], port=0)
     try:
@@ -442,7 +442,8 @@ def test_the_switch_works_only_from_this_computer(mac, monkeypatch):
 
     from interlatch.runtime.platforms import menubar
     from interlatch.runtime import update
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     app = App(mac["cfg"])
     assert app.status()["menu_bar"]["supported"]

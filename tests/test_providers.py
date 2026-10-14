@@ -270,7 +270,7 @@ def test_keys_are_private_and_a_stored_key_wins(env, monkeypatch):
 
 
 def test_the_dashboard_never_sees_a_key(env):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     set_key(env["cfg"], "openrouter", "sk-or-secret")
     app = App(env["cfg"])
@@ -396,7 +396,7 @@ def test_cli_config(env, capsys, monkeypatch):
 
 
 def test_dashboard_saves_tests_and_lists(env, fake):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     app = App(env["cfg"])
     out = app.action_provider({"provider": "openai-compatible", "key": "sk-local",
@@ -421,7 +421,8 @@ def test_dashboard_saves_tests_and_lists(env, fake):
 
 
 def test_provider_settings_are_refused_from_another_device(env):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     app = App(env["cfg"])
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)

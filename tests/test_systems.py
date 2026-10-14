@@ -172,7 +172,8 @@ def test_commands_split_outside_quotes():
 
 
 def test_api(world):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     systems._CACHE.update(sig=None, data=None)
     app = App(world["cfg"])

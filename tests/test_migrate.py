@@ -375,7 +375,7 @@ def test_a_move_that_did_not_finish_is_taken_up_again(legacy, monkeypatch):
 def test_the_commands_that_start_the_dashboard_or_a_sync_migrate_first(env, monkeypatch):
     calls = []
     monkeypatch.setattr("interlatch.runtime.migrate.migrate_if_due", lambda quiet=True: calls.append(quiet) or [])
-    monkeypatch.setattr("interlatch.server.serve", lambda *a, **k: None)
+    monkeypatch.setattr("interlatch.interfaces.web.server.serve", lambda *a, **k: None)
     assert main(["sync", "--quiet"]) == 0 and main(["ui"]) == 0
     assert calls == [True, False]
 

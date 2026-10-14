@@ -281,7 +281,7 @@ def test_a_file_name_cant_add_response_headers(dashboard, monkeypatch):
 
 # ------------------------------------------------------------------ the dashboard page runs only its own scripts (#92)
 def test_the_dashboard_page_runs_only_its_own_scripts(dashboard):
-    from interlatch.server import WEB_DIR
+    from interlatch.interfaces.web.assets import WEB_DIR
 
     url = dashboard["url"]
     status, headers, page = _raw(url, "/")
@@ -328,12 +328,13 @@ def test_an_invite_cant_take_over_someone_elses_computer(synced):
 
 # ------------------------------------------------------------------ hardening
 def test_git_runs_no_repository_programs(monkeypatch):
-    from interlatch import server
+    from interlatch.interfaces.web import app
+    from interlatch.interfaces.web.app import git_ignored
 
     seen = []
-    monkeypatch.setattr(server.subprocess, "run", lambda argv, **kw: seen.append(argv) or
+    monkeypatch.setattr(app.subprocess, "run", lambda argv, **kw: seen.append(argv) or
                         subprocess.CompletedProcess(argv, 1, "", ""))
-    server.git_ignored("/somewhere", ["/somewhere/a"])
+    git_ignored("/somewhere", ["/somewhere/a"])
     argv = seen[0]
     assert argv[:5] == ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"]
 

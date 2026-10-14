@@ -117,7 +117,8 @@ def test_import_and_reimport(env):
 
 
 def test_import_from_dashboard_upload(env):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     app = App(env["cfg"])
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)

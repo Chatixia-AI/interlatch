@@ -187,7 +187,7 @@ def test_pypi_check_is_kept_in_the_database(method, env, monkeypatch):
 
 
 def test_daily_check_is_opt_in_and_runs_once_a_day(method, env, monkeypatch):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     method(kind="uv", command=["uv", "tool", "upgrade", "interlatch"])
     calls = []

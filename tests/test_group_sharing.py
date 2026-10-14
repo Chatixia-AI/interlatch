@@ -13,7 +13,7 @@ from interlatch.sharing.pull import pull_team_lessons
 from interlatch.sharing.push import _shared_records
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 AKTIO = "/home/yuma/Work/Aktio"
 PROJECT = "/srv/Aktio"
