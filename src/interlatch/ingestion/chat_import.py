@@ -26,7 +26,7 @@ from pathlib import Path
 from ..sources import chatgpt as chatgpt_export
 from ..sources.claude import export as claude_export
 from ..core.util import utcnow_iso
-from ..views import NOT_ANALYZED_CHAT
+from ..core.sessions import NOT_ANALYZED_CHAT
 from ..sources.chats import CHATGPT, CLAUDE_AI, FORMATS, Format
 
 log = logging.getLogger("interlatch.chat_import")

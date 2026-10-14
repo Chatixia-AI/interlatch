@@ -840,7 +840,7 @@ def group_routes(cfg: Config, conn=None) -> GroupRoutes:
     if not cfg.is_spoke or (conn is None and not cfg.db_path.exists()):
         return GroupRoutes()
     from .storage.sqlite import connect
-    from .groups import assign, groups
+    from .projects.groups import assign, groups
 
     own = conn is None
     conn = conn or connect(cfg.db_path)
@@ -1318,7 +1318,7 @@ def apply_team_lessons(cfg: Config, data: dict, repos: dict) -> int:
     of that repository with the most sessions, else a folder added to that hub project. Lessons with no folder here
     are skipped. A lesson the hub no longer sends is removed; one dismissed here stays dismissed. Returns how many are
     held."""
-    from . import ladder
+    from .knowledge import ladder
     from .storage.sqlite import connect
     from .core.util import dumps
 

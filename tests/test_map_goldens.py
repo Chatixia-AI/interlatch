@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from interlatch import systems
-from interlatch.diagram import layout, normalize_diagram, to_excalidraw, to_mermaid
+from interlatch.projects import systems
+from interlatch.core.diagrams import normalize_diagram, to_mermaid
+from interlatch.interfaces.exports.diagrams import layout, to_excalidraw
 
 from golden import assert_golden
 from test_diagram import SAMPLE, edge, node

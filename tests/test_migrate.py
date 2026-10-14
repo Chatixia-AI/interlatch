@@ -429,7 +429,7 @@ def test_permission_rules_are_renamed_and_nothing_else():
 
 
 def test_the_block_from_before_the_rename_is_read_and_rewritten():
-    from interlatch import instructions as ins
+    from interlatch.knowledge import instructions as ins
 
     old = "# A\n\n<!-- BEGIN chronicle -->\n- Rule. <!-- chronicle:friction:k -->\n- mine\n<!-- END chronicle -->\n"
     assert ins.parse_block(old) == ([("friction:k", "Rule.")], ["- mine"])

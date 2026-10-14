@@ -35,14 +35,16 @@ from .core.config import LANGUAGES, Config, env
 from .storage.sqlite import connect
 from .storage.kv import kv_get, kv_set
 from .core.i18n import tr
-from .ladder import reason_text
-from .ladder import refresh as refresh_stage
+from .knowledge.ladder import reason_text
+from .knowledge.ladder import refresh as refresh_stage
 from .analysis.runners.factory import BACKENDS, make_runner
-from .search import search_all, search_events, search_knowledge, search_sessions
-from .synthesize import GLOBAL
+from .application.search import search_all, search_events, search_knowledge, search_sessions
+from .knowledge.synthesize import GLOBAL
 from .core.util import PROGRESS_RE, loads, to_iso, utcnow
 from .core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
-from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
+from .application.records import resolve_session_id, session_record
+from .projects.labels import project_labels
+from .core.sessions import analysis_reason_text
 
 log = logging.getLogger("interlatch.server")
 MAX_SELECTION = 1000  # sessions one "analyze selected" may cover
@@ -606,7 +608,7 @@ class App:
     @staticmethod
     def _reason(k: dict) -> dict:
         from .analysis.session import case_of
-        from .learning import topics_for
+        from .knowledge.learning import topics_for
 
         raw_case = loads(k.pop("case_json", None), k.get("case"))  # lesson material: a case file, principle, diagram
         k["case"] = case_of({"kind": k.get("kind"), "case": raw_case}) if isinstance(raw_case, dict) else None
@@ -626,7 +628,7 @@ class App:
             [*params, limit, offset]):
             d = dict(r)
             d["tags"] = loads(d.pop("tags_json", None), []) or []
-            d["analysis_reason"] = analysis_reason(d.get("analysis_reason"))
+            d["analysis_reason"] = analysis_reason_text(d.get("analysis_reason"))
             rows.append(d)
         return self._label_who(rows)
 
@@ -636,7 +638,7 @@ class App:
             where.append("project_path = ?")
             params.append(q["project"])
         elif str(q.get("group") or "").isdigit():  # every project in one of your groups (groups.py)
-            from .groups import paths_in
+            from .projects.groups import paths_in
 
             paths = paths_in(self.conn, int(q["group"]))
             where.append(f"project_path IN ({','.join('?' * len(paths))})" if paths else "0")
@@ -717,7 +719,7 @@ class App:
             return None
         s = session_record(self.conn, real)
         s["knowledge"] = [self._reason(k) for k in s["knowledge"]]
-        s["analysis_reason"] = analysis_reason(s.get("analysis_reason"))
+        s["analysis_reason"] = analysis_reason_text(s.get("analysis_reason"))
         from .analysis.queue import waiting_reason
 
         row = self.conn.execute("SELECT * FROM sessions WHERE id = ?", (real,)).fetchone()
@@ -782,7 +784,7 @@ class App:
     def projects(self, scope: list[str] | None = None) -> list[dict]:
         """Every project with sessions here, most recent first; on a hub, then the ones set up there that have none yet
         (only those in `scope`, for a person limited to some projects)."""
-        from .groups import assign
+        from .projects.groups import assign
         from .hub import declared_projects, hub_project_of
         from .core.paths import project_name_for
 
@@ -838,7 +840,7 @@ class App:
         """The groups; home: a rule typed as ~/… shows as it'll be kept; hub: on a computer that sends to a hub, the
         hub's projects as of the last push (which a group can be shared as, and the Projects lists show this computer's
         projects under), with the team's sessions in each and the hub's address."""
-        from .groups import groups
+        from .projects.groups import groups
 
         return {"groups": groups(self.conn), "home": str(Path.home()),
                 "hub": self._hub_choices() if self.cfg.is_spoke else None}
@@ -862,7 +864,7 @@ class App:
 
     def action_project_groups(self, verb: str, body: dict) -> tuple[dict, int]:
         """Make, change or remove a group of projects, or move projects into one (groups.py)."""
-        from . import groups
+        from .projects import groups
 
         def gid(v):
             try:
@@ -917,13 +919,13 @@ class App:
             (path,)).fetchone()
         if not stats or not stats["sessions"]:
             return None
-        from .diagram import for_kb
-        from .glossary import glossary_entries
+        from .interfaces.exports.diagrams import for_kb
+        from .knowledge.glossary import glossary_entries
         kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
         labels = project_labels(c)
         from .hub import declared_projects
 
-        from .groups import group_of
+        from .projects.groups import group_of
         from .hub import hub_project_of
 
         return {
@@ -1094,14 +1096,14 @@ class App:
 
     def learning_interests(self, viewer: dict | None, q: dict) -> dict:
         from .core.machine import local_machine_id
-        from .learning import interest_profile
+        from .knowledge.learning import interest_profile
 
         return interest_profile(self.conn, viewer_id=(viewer or {}).get("id"), machine_id=local_machine_id(self.cfg),
                                 project=q.get("project") or "")
 
     def learning_glance(self, viewer: dict | None, q: dict) -> dict:
         """The Knowledge page's Learn band (learning.glance), without sending every lesson to the browser."""
-        from .learning import glance
+        from .knowledge.learning import glance
 
         rows = search_knowledge(self.conn, project=q.get("project") or None, lessons=True, limit=10000)
         return glance([self._reason(r) for r in rows], self.learning_interests(viewer, q)["interests"])
@@ -1116,7 +1118,7 @@ class App:
         return found
 
     def glossary(self, q: dict) -> dict:
-        from .glossary import CATEGORIES, glossary_entries
+        from .knowledge.glossary import CATEGORIES, glossary_entries
 
         items = glossary_entries(self.conn, query=q.get("q") or None, project=q.get("project") or None,
                                  category=q.get("category") or None)
@@ -1130,13 +1132,13 @@ class App:
                  "category": r["category"]} for r in self.conn.execute("SELECT term, aliases_json, definition, category FROM glossary")]
 
     def map(self) -> dict:
-        from .glossary import map_data
+        from .knowledge.glossary import map_data
 
         return map_data(self.conn)
 
     def systems(self) -> dict:
         """The Systems map's top level: groups, systems and the links between them (without each system's parts)."""
-        from .systems import cached, landscape
+        from .projects.systems import cached, landscape
 
         data = landscape(cached(self.conn, self.cfg))
         labels = project_labels(self.conn)
@@ -1146,7 +1148,7 @@ class App:
 
     def system(self, key: str) -> dict | None:
         """One system's parts, connections and links, with the evidence for each."""
-        from .systems import CHAT_SOURCES, cached, system
+        from .projects.systems import CHAT_SOURCES, cached, system
 
         out = system(cached(self.conn, self.cfg), key)
         if out:
@@ -1158,7 +1160,7 @@ class App:
         return out
 
     def action_themes(self, force: bool) -> bool:
-        from .glossary import build_themes
+        from .knowledge.glossary import build_themes
 
         def job(progress):
             results = build_themes(self.cfg, force=force, concurrency=self.cfg.analysis.concurrency + 1, progress=progress)
@@ -1169,7 +1171,7 @@ class App:
         return self.jobs.start("themes", job)
 
     def action_glossary(self, path: str | None) -> bool:
-        from .glossary import build_glossaries
+        from .knowledge.glossary import build_glossaries
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -1238,7 +1240,7 @@ class App:
         return {"actions": actions, "sync_started": started}
 
     def reviews(self) -> dict:
-        from .reviews import _stats, normalize_review, review_ready, week_bounds, week_glance
+        from .knowledge.reviews import _stats, normalize_review, review_ready, week_bounds, week_glance
 
         items = [dict(r) for r in self.conn.execute(
             "SELECT period, start, end, created_at, model, n_sessions, markdown, review_json, stats_json FROM reviews "
@@ -1257,7 +1259,7 @@ class App:
 
     def knowledge_hub(self) -> dict:
         """The Knowledge section's landing page: a glance at each of its tools."""
-        from .reviews import _stats, normalize_review, week_glance
+        from .knowledge.reviews import _stats, normalize_review, week_glance
 
         counts = {r["kind"]: r["n"] for r in self.conn.execute(
             "SELECT kind, COUNT(*) n FROM knowledge WHERE status = 'active' GROUP BY kind")}
@@ -1293,7 +1295,7 @@ class App:
                 "review": review, "reviews": self.conn.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]}
 
     def action_review(self, week: str | None) -> bool:
-        from .reviews import generate_review
+        from .knowledge.reviews import generate_review
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -1370,7 +1372,7 @@ class App:
     def _my_hub_projects(self, folders: list[dict], recorded: dict) -> list[dict]:
         """The hub's projects this computer is in: through a folder added to one, a repository whose git remote the hub
         files there (as of the last push), a group shared as it, or one it left. Its name as the hub gives it."""
-        from .groups import groups
+        from .projects.groups import groups
 
         names = {p["path"]: p.get("name") for p in recorded.get("projects") or [] if isinstance(p, dict) and p.get("path")}
         out: dict[str, dict] = {}
@@ -2096,7 +2098,7 @@ class App:
         st["config"] = {"model": make_runner(self.cfg).model_label(), "auto": self.cfg.analysis.auto,
                         "backfill": self.cfg.analysis.backfill, "max_per_run": self.cfg.analysis.max_per_run}
         st["analysis"].update(self.analysis_backends())
-        st["errors"] = [{**dict(r), "analysis_reason": analysis_reason(r["analysis_reason"])} for r in c.execute(
+        st["errors"] = [{**dict(r), "analysis_reason": analysis_reason_text(r["analysis_reason"])} for r in c.execute(
             "SELECT id, title, analysis_reason FROM sessions WHERE analysis_status = 'error' ORDER BY ended_at DESC LIMIT 10")]
         return st
 
@@ -2104,6 +2106,7 @@ class App:
     def action_sync(self) -> bool:
         from .ingestion.service import sync
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
         if self.cfg.sends_files:
             from .hub import push
@@ -2119,7 +2122,7 @@ class App:
                 conn.rollback()
                 conn.close()
             progress("processing…")
-            work = run_worker(self.cfg, progress=progress)
+            work = run_worker(self.cfg, export=export_markdown, progress=progress)
             conn = connect(self.cfg.db_path)
             try:
                 from .leaderboard import send_safely
@@ -2133,13 +2136,15 @@ class App:
 
     def action_analyze(self, sid: str) -> bool:
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
         real = resolve_session_id(self.conn, sid)
         if not real:
             return False
 
         def job(progress):
-            report = run_worker(self.cfg, session_ids=[real], synthesize=True, export=True, progress=progress, wait=True)
+            report = run_worker(self.cfg, session_ids=[real], synthesize=True, export=export_markdown,
+                                progress=progress, wait=True)
             if report.failed:
                 raise RuntimeError(report.failed[0][1])
             return report.summary()
@@ -2147,7 +2152,7 @@ class App:
         return self.jobs.start(f"analyze:{real}", job)
 
     def _export_ids(self, ids: str) -> list[str]:
-        from .session_export import MAX_SESSIONS, ExportError
+        from .interfaces.exports.sessions import MAX_SESSIONS, ExportError
 
         real = [r for r in (resolve_session_id(self.conn, x.strip()) for x in ids.split(",")[:MAX_SESSIONS] if x.strip()) if r]
         if not real:
@@ -2155,13 +2160,14 @@ class App:
         return list(dict.fromkeys(real))
 
     def export(self, ids: str, fmt: str) -> tuple[str, str, bytes]:
-        from .session_export import export_sessions
+        from .interfaces.exports.sessions import export_sessions
 
         return export_sessions(self.conn, self._export_ids(ids), fmt)
 
     def diagram_file(self, path: str) -> tuple[str, str, bytes] | None:
         """A project's architecture sketch as an .excalidraw file, to open and edit in Excalidraw."""
-        from .diagram import normalize_diagram, to_excalidraw
+        from .core.diagrams import normalize_diagram
+        from .interfaces.exports.diagrams import to_excalidraw
 
         kb = self.conn.execute("SELECT project_name, kb_json FROM project_kb WHERE project_path = ?", (path,)).fetchone()
         d = normalize_diagram((loads(kb["kb_json"], {}) or {}).get("diagram")) if kb and path != GLOBAL else None
@@ -2173,7 +2179,7 @@ class App:
         return f"{slug}-architecture.excalidraw", "application/vnd.excalidraw+json", json.dumps(scene, ensure_ascii=False, indent=1).encode()
 
     def export_check(self, ids: str, fmt: str) -> dict:
-        from .session_export import FORMATS, ExportError, has_original
+        from .interfaces.exports.sessions import FORMATS, ExportError, has_original
 
         if fmt not in FORMATS:
             raise ExportError(tr("unknown format {fmt!r}", fmt=fmt))
@@ -2187,6 +2193,7 @@ class App:
     def action_analyze_many(self, refs: list) -> dict:
         """Analyze the sessions picked in the list, in one background job (history-only ones have nothing to send)."""
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
         ids = []
         for ref in refs[:MAX_SELECTION]:
@@ -2198,7 +2205,8 @@ class App:
             return {"started": False, "error": tr("Nothing in the selection can be analyzed")}
 
         def job(progress):
-            report = run_worker(self.cfg, session_ids=ids, synthesize=True, export=True, progress=progress, wait=True)
+            report = run_worker(self.cfg, session_ids=ids, synthesize=True, export=export_markdown, progress=progress,
+                                wait=True)
             if report.paused_until and report.failed:
                 left = len(ids) - len(report.analyzed) - len(report.skipped)
                 return f"{report.summary()}; hit the Claude usage limit: {left} not analyzed, select them again later"
@@ -2213,6 +2221,7 @@ class App:
         at once instead of on the background run. It runs with automatic analysis off and through a usage-limit
         pause (the limit may be over by now); a run that gets through lifts the pause for the background run too."""
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
         from .analysis.queue import PAUSE_KEY, queued_ids
 
         if which not in ("ready", "active"):
@@ -2224,7 +2233,8 @@ class App:
             return {"started": False, "error": tr("Nothing in the queue to analyze")}
 
         def job(progress):
-            report = run_worker(self.cfg, session_ids=ids, synthesize=True, export=True, progress=progress, wait=True)
+            report = run_worker(self.cfg, session_ids=ids, synthesize=True, export=export_markdown, progress=progress,
+                                wait=True)
             if report.analyzed and not report.paused_until:
                 conn = connect(self.cfg.db_path)
                 try:
@@ -2242,7 +2252,7 @@ class App:
                 **({} if started else {"error": tr("The queue is already being analyzed")})}
 
     def action_synthesize(self, path: str) -> bool:
-        from .synthesize import synthesize_project
+        from .knowledge.synthesize import synthesize_project
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2276,7 +2286,7 @@ class App:
 
     # ------------------------------------------------------------------ suggestions / what goes wrong
     def suggestions(self, q: dict) -> dict:
-        from . import suggest
+        from .knowledge import suggest
 
         status = q.get("status") if q.get("status") in suggest.STATUSES else None
         rows = suggest.list_suggestions(self.conn, status=status, project=q.get("project") or None)
@@ -2285,7 +2295,7 @@ class App:
                 "counts": suggest.counts(self.conn)}
 
     def suggestion_preview(self, sid: int, q: dict) -> tuple[dict, int]:
-        from . import suggest
+        from .knowledge import suggest
 
         if suggest.get(self.conn, sid) is None:
             return {"ok": False, "error": tr("no such suggestion")}, 404
@@ -2293,7 +2303,7 @@ class App:
 
     def action_suggestion(self, sid: int, verb: str, body: dict) -> tuple[dict, int]:
         """apply / unapply / dismiss / done / edit / move. A refusal is a 400 carrying the reason; an unknown id a 404."""
-        from . import suggest
+        from .knowledge import suggest
 
         if suggest.get(self.conn, sid) is None:
             return {"ok": False, "error": tr("no such suggestion")}, 404
@@ -2314,7 +2324,7 @@ class App:
         return got, (200 if got.get("ok") else 400)
 
     def friction(self, q: dict) -> dict:
-        from .friction import display, report
+        from .knowledge.friction import display, report
 
         days = q.get("days")
         days = int(days) if days and days.isdigit() and int(days) > 0 else None
@@ -2738,7 +2748,7 @@ def make_handler(app: App, port: int):
                 if p == "/api/sessions":
                     return self._json(app.sessions(q, limited=self.limited))
                 if p == "/api/export":  # a download: one session's file, or a .zip of several
-                    from .session_export import ExportError
+                    from .interfaces.exports.sessions import ExportError
 
                     try:
                         if q.get("check"):  # asked first, so a refusal shows as a message, not a downloaded error
@@ -2848,7 +2858,7 @@ def make_handler(app: App, port: int):
                 if p == "/api/suggestions":
                     return self._json(app.suggestions(q))
                 if p == "/api/suggestions/unseen":
-                    from .suggest import count_unseen
+                    from .knowledge.suggest import count_unseen
 
                     return self._json({"unseen": count_unseen(app.conn)})
                 m = re.fullmatch(r"/api/suggestions/(\d+)/preview", p)
@@ -3076,12 +3086,12 @@ def make_handler(app: App, port: int):
                 if m:
                     return self._json({"ok": app.action_knowledge(int(m.group(1)), body)})
                 if p == "/api/suggestions/seen":
-                    from .suggest import mark_seen
+                    from .knowledge.suggest import mark_seen
 
                     mark_seen(app.conn)
                     return self._json({"ok": True})
                 if p == "/api/suggestions/refresh":
-                    from .suggest import refresh
+                    from .knowledge.suggest import refresh
 
                     return self._json(refresh(app.conn, app.cfg))
                 m = re.fullmatch(r"/api/suggestions/(\d+)/(apply|unapply|dismiss|done|edit|move)", p)

@@ -10,7 +10,7 @@ from pathlib import Path
 from ..core.config import Config
 from ..core.paths import project_name_for
 from ..core.util import dumps, one_line, safe_text, to_iso, utcnow_iso
-from ..ladder import MEMORY_STAGE_REASON
+from ..knowledge.ladder import MEMORY_STAGE_REASON
 from ..sources.claude.files import decode_project_dir, peek_cwd
 
 _APPLIES_RE = re.compile(r"applies_to:.*?cwd=(\S+?)(?:;|\s|$)")

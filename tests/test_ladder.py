@@ -4,13 +4,13 @@ import json
 
 import pytest
 
-from interlatch import ladder
+from interlatch.knowledge import ladder
 from interlatch.analysis.session import analyze_session
 from interlatch.storage.sqlite import connect
 from interlatch.storage.migrations import init_schema
-from interlatch.reviews import generate_review
-from interlatch.search import search_knowledge
-from interlatch.synthesize import normalize_kb, render_kb_markdown, synthesize_project
+from interlatch.knowledge.reviews import generate_review
+from interlatch.application.search import search_knowledge
+from interlatch.knowledge.synthesize import normalize_kb, render_kb_markdown, synthesize_project
 
 from conftest import CWD, SID
 

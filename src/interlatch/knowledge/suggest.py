@@ -21,9 +21,9 @@ import sqlite3
 from pathlib import Path
 
 from . import friction, instructions
-from .core.config import Config
-from .core.i18n import lang, tr, trn
-from .core.util import dumps, loads, one_line, utcnow_iso
+from ..core.config import Config
+from ..core.i18n import lang, tr, trn
+from ..core.util import dumps, loads, one_line, utcnow_iso
 
 log = logging.getLogger("interlatch.suggest")
 
@@ -404,7 +404,7 @@ def after_sync(conn: sqlite3.Connection, cfg: Config) -> dict[str, int] | None:
         log.exception("suggestions refresh failed")
         return None
     if cfg.suggestions_notify and report["new"] > 0:
-        from .notify import post
+        from ..notify import post
 
         post("Interlatch", f"{report['new']} new suggestion{'s' if report['new'] != 1 else ''}. "
                           "Open the dashboard > Suggestions")

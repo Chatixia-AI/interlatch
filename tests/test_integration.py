@@ -237,7 +237,7 @@ def test_hooks_are_inert_for_internal_runs(env):
 def test_session_start_context(synced):
     from interlatch.analysis.session import analyze_session
     from interlatch.hooks import build_session_context
-    from interlatch.synthesize import synthesize_project
+    from interlatch.knowledge.synthesize import synthesize_project
 
     analyze_session(synced["conn"], synced["cfg"], SID)
     synthesize_project(synced["conn"], synced["cfg"], CWD)
@@ -318,7 +318,7 @@ def test_export_sessions(synced):
     import zipfile
 
     from interlatch.server import App
-    from interlatch.session_export import ExportError
+    from interlatch.interfaces.exports.sessions import ExportError
 
     conn = synced["conn"]
     app = App(synced["cfg"])

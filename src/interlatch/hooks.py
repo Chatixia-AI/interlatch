@@ -99,11 +99,11 @@ def build_session_context(cfg, cwd: str) -> str | None:
     """A compact digest of what previous sessions learned about this project."""
     from .storage.sqlite import connect
     from .hub import team_from
-    from .ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
+    from .knowledge.ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
 
     def trust_tag(i: dict) -> str:
         return i["stage"] + (f" ×{i['sessions']}" if (i.get("sessions") or 0) > 1 else "")
-    from .synthesize import kb_for_path, kb_sections
+    from .knowledge.synthesize import kb_for_path, kb_sections
     from .core.util import local_str, one_line
 
     conn = connect(cfg.db_path, readonly=True)

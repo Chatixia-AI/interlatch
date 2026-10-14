@@ -17,8 +17,8 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
-from .core.i18n import tr
-from .core.util import loads, one_line, parse_ts, utcnow
+from ..core.i18n import tr
+from ..core.util import loads, one_line, parse_ts, utcnow
 
 STILL_HAPPENING_DAYS = 14
 WEEKS = 12  # sparkline length

@@ -439,7 +439,7 @@ def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     hooks._on_session_end({"transcript_path": "/x.jsonl"}, ended=True)
     assert "ingest-session" in spawned[0] and "push" not in spawned[0]
 
-    report = run_worker(cfg, analyze=False, synthesize=False, export=False)
+    report = run_worker(cfg, analyze=False, synthesize=False, export=None)
     assert report.note is None or "hub" not in report.note
     assert report.shared and report.shared.startswith("not sent")
 
@@ -476,7 +476,7 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
         conn = connect(spoke.db_path)
         sync(spoke, conn)  # the spoke's own Chronicle, before it joins
         conn.close()
-        run_worker(spoke, synthesize=False, export=False)
+        run_worker(spoke, synthesize=False, export=None)
         spoke_conn = connect(spoke.db_path)
         assert spoke_conn.execute("SELECT analysis_status FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == "done"
         spoke_conn.close()
@@ -491,7 +491,7 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
         assert synced["conn"].execute("SELECT COUNT(*) FROM knowledge WHERE session_id = ? AND source = 'analysis'",
                                       (SPOKE_SID,)).fetchone()[0] >= 1
         assert not list(cfg.machines_dir.glob(f"*/{hub.ANALYSES_FILE}"))  # applied, so gone
-        run_worker(cfg, synthesize=False, export=False)
+        run_worker(cfg, synthesize=False, export=None)
         analyzed = [c for c in fake_log(synced)[calls:] if SPOKE_SID in json.dumps(c)]
         assert not analyzed, "the hub analyzed a session the spoke had already analyzed"
         assert hub.push(spoke).analyses == 0  # only once

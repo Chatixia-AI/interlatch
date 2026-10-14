@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .storage.fts import fts_query, short_terms
-from .ladder import STAGE_ORDER_SQL, confirmations
-from .core.util import loads
+from ..storage.fts import fts_query, short_terms
+from ..knowledge.ladder import STAGE_ORDER_SQL, confirmations
+from ..core.util import loads
 
 
 def query_terms(query: str) -> list[str]:
@@ -150,11 +150,11 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
         where.append("k.source = ?")
         params.append(source)
     if cases:
-        from .analysis.session import CASE_FILE_SQL
+        from ..analysis.session import CASE_FILE_SQL
 
         where.append(CASE_FILE_SQL)
     if lessons:
-        from .learning import PRACTICE_SQL
+        from ..knowledge.learning import PRACTICE_SQL
 
         where.append(PRACTICE_SQL)
     if sessions:

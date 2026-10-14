@@ -78,11 +78,11 @@ def test_the_background_run_writes_it(env, monkeypatch):
     calls = []
     monkeypatch.setattr(mirror, "sync", lambda cfg, **kw: calls.append(cfg.mirror_include) or mirror.Result(sessions=2, removed=0))
     cfg = env["cfg"]
-    assert run_worker(cfg, analyze=False, synthesize=False, export=False).mirrored is None and not calls  # off
+    assert run_worker(cfg, analyze=False, synthesize=False, export=None).mirrored is None and not calls  # off
     cfg.mirror_to = "postgres"
-    report = run_worker(cfg, analyze=False, synthesize=False, export=False)
+    report = run_worker(cfg, analyze=False, synthesize=False, export=None)
     assert calls == ["knowledge"] and report.mirrored == "2 sessions written, 0 removed" and "mirror: 2 sessions" in report.summary()
-    run_worker(cfg, session_ids=["nope"], analyze=False, synthesize=False, export=False)
+    run_worker(cfg, session_ids=["nope"], analyze=False, synthesize=False, export=None)
     assert len(calls) == 1  # one session analyzed from its page: the next background run writes it
 
 

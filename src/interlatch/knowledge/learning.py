@@ -7,9 +7,9 @@ import re
 import sqlite3
 from datetime import datetime, timedelta
 
-from .storage.kv import kv_set
-from .core.redact import redact
-from .core.util import dumps, loads, to_iso, utcnow
+from ..storage.kv import kv_set
+from ..core.redact import redact
+from ..core.util import dumps, loads, to_iso, utcnow
 
 TOPICS = {
     "system_design": r"\bsystem design\b|\barchitect(?:ure|ural)\b|\bdistributed\b|\bmicroservices?\b|\btrade.?offs?\b|システム設計|アーキテクチャ|システムデザイン|系统设计|架构",

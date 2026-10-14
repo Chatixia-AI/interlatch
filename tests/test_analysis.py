@@ -5,10 +5,11 @@ import pytest
 from interlatch.analysis.session import analyze_session, normalize_analysis
 from interlatch.storage.kv import kv_get
 from interlatch.analysis.digest import build_digest
+from interlatch.interfaces.exports.vault import export_markdown
 from interlatch.analysis.runners.base import UsageLimitError
 from interlatch.analysis.runners.replies import parse_json_object
 from interlatch.core.redact import redact
-from interlatch.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
+from interlatch.knowledge.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
 from interlatch.application.workflows import run_worker
 from interlatch.analysis.queue import PAUSE_KEY, pending_sessions
 
@@ -91,20 +92,20 @@ def test_usage_limit_pauses_the_worker(synced, monkeypatch):
     with pytest.raises(UsageLimitError):
         analyze_session(conn, cfg, SID)
     assert conn.execute("SELECT analysis_status FROM sessions WHERE id=?", (SID,)).fetchone()[0] == "pending"
-    report = run_worker(cfg, synthesize=False, export=False)
+    report = run_worker(cfg, synthesize=False, export=None)
     assert report.paused_until and report.failed
     assert kv_get(conn, PAUSE_KEY)
     # while paused, the worker does not call Claude again
     before = len(fake_log(synced))
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "ok")
-    report = run_worker(cfg, synthesize=False, export=False)
+    report = run_worker(cfg, synthesize=False, export=None)
     assert report.paused_until and len(fake_log(synced)) == before
 
 
 def test_worker_end_to_end(synced):
     cfg, conn = synced["cfg"], synced["conn"]
     assert pending_sessions(conn, cfg, 10) == [SID]
-    report = run_worker(cfg)
+    report = run_worker(cfg, export=export_markdown)
     assert report.analyzed == [SID] and not report.failed
     assert CWD in report.synthesized
     kb = conn.execute("SELECT * FROM project_kb WHERE project_path=?", (CWD,)).fetchone()
@@ -116,7 +117,7 @@ def test_worker_end_to_end(synced):
     assert text.startswith("---\nsession_id: " + SID) and "Token TTL compared" in text and SECRET not in text
     assert (cfg.notes_dir / "Home.md").exists() and (cfg.notes_dir / "Projects" / "demo-app.md").exists()
     # nothing left to do: a second run is a no-op
-    again = run_worker(cfg)
+    again = run_worker(cfg, export=export_markdown)
     assert not again.analyzed and again.exported == 0
 
 
@@ -189,7 +190,7 @@ def test_redaction_of_prefixed_names():
 
 
 def test_weekly_review(synced):
-    from interlatch.reviews import generate_review, review_ready, week_bounds
+    from interlatch.knowledge.reviews import generate_review, review_ready, week_bounds
 
     conn, cfg = synced["conn"], synced["cfg"]
     key = week_bounds("2026-W38")[0]
@@ -199,12 +200,12 @@ def test_weekly_review(synced):
     row = conn.execute("SELECT * FROM reviews WHERE period=?", (key,)).fetchone()
     assert row["n_sessions"] == 1 and "## Suggestions" in row["markdown"] and "- [ ] logout" in row["markdown"]
     assert "- Login fixed" in row["markdown"]
-    from interlatch.reviews import week_glance
+    from interlatch.knowledge.reviews import week_glance
 
     glance = week_glance(conn, row["start"], row["end"])
     assert len(glance["daily"]) == 7 and sum(glance["daily"]) > 0 and glance["projects"][0]["sessions"] == 1
     assert review_ready(conn, key) == (False, "exists")
-    from interlatch.export_md import export_markdown
+    from interlatch.interfaces.exports.vault import export_markdown
 
     export_markdown(conn, cfg)
     assert (cfg.notes_dir / "Reviews" / f"{key}.md").exists()
@@ -280,7 +281,7 @@ def test_synthesis_waits_for_queued_sessions(synced):
 
 
 def test_kb_titles_and_tldr_survive_normalizing_and_rendering():
-    from interlatch.synthesize import normalize_kb, render_kb_markdown
+    from interlatch.knowledge.synthesize import normalize_kb, render_kb_markdown
 
     data = normalize_kb({"tldr": ["Branch first", " ", "Verify in a browser", "Keep tests green", "dropped"],
                          "overview": "o", "superseded_ids": [],

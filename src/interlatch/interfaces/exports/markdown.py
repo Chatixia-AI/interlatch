@@ -1,15 +1,11 @@
-"""Shared read models: session records, project labels, and Markdown renderings."""
+"""A session as Markdown: its numbers, what it was about, the lessons it taught, and its prompts; the vault
+export, session exports, the CLI and the MCP server all write it this way."""
 
 from __future__ import annotations
 
-import re
-import sqlite3
-from collections import Counter
-
-from .core.redact import redact
-from .core.agents import full_name
-from .core.i18n import lang, tr
-from .core.util import human_cost, human_count, human_duration, local_str, loads, one_line
+from ...core.agents import full_name
+from ...core.redact import redact
+from ...core.util import human_cost, human_count, human_duration, loads, local_str, one_line
 
 OUTCOME_ICON = {
     "completed": "✅", "partial": "🟡", "blocked": "⛔", "abandoned": "🗑️", "exploratory": "🧭", "unclear": "❔",
@@ -18,82 +14,6 @@ KIND_ICON = {
     "fix": "🐛", "gotcha": "⚠️", "learning": "💡", "decision": "🧭", "pattern": "🧩", "command": "⌨️",
     "fact": "📌", "preference": "🙋", "reference": "🔗", "todo": "☑️",
 }
-
-
-# why a session was not analyzed, as ingest, analyze and chat_import store it (the analyzer's own errors aside)
-ANALYSIS_REASONS = ("too little content", "too few prompts", "excluded project", "session continued during analysis",
-                    "session continued after analysis", "history only (transcript deleted before Interlatch)")
-NOT_ANALYZED_CHAT = "imported {label} chat: not analyzed automatically (Analyze now, or import with --analyze)"
-RENAMED_REASONS = {  # what ingest stored before Chronicle became Interlatch, shown as it reads now
-    "history only (transcript deleted before Chronicle)": "history only (transcript deleted before Interlatch)"}
-
-
-def reason_text(reason: str | None) -> str | None:
-    """A stored analysis_reason in the dashboard viewer's language (i18n), when it is one Interlatch writes itself."""
-    reason = RENAMED_REASONS.get(reason, reason)
-    if not reason or lang.get() == "en":
-        return reason
-    m = re.fullmatch(r"imported (.+) chat: not analyzed automatically \(Analyze now, or import with --analyze\)", reason)
-    if m:
-        return tr(NOT_ANALYZED_CHAT, label=m.group(1))
-    return tr(reason) if reason in ANALYSIS_REASONS else reason
-
-
-def resolve_session_id(conn: sqlite3.Connection, ref: str) -> str | None:
-    ref = ref.strip()
-    if not ref:
-        return None
-    row = conn.execute("SELECT id FROM sessions WHERE id = ?", (ref,)).fetchone()
-    if row:
-        return row[0]
-    matches = conn.execute("SELECT id FROM sessions WHERE id LIKE ? LIMIT 2", (ref + "%",)).fetchall()
-    return matches[0][0] if len(matches) == 1 else None
-
-
-def project_labels(conn: sqlite3.Connection) -> dict[str, str]:
-    """Unique display label per project path (basename, disambiguated by parent when needed)."""
-    paths = [r[0] for r in conn.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL")]
-    names = Counter(p.rstrip("/").rsplit("/", 1)[-1] for p in paths)
-    labels = {}
-    for p in paths:
-        parts = p.rstrip("/").split("/")
-        labels[p] = parts[-1] if names[parts[-1]] == 1 or len(parts) < 2 else f"{parts[-2]}-{parts[-1]}"
-    return labels
-
-
-def session_record(conn: sqlite3.Connection, sid: str) -> dict | None:
-    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
-    if not row:
-        return None
-    s = dict(row)
-    for key in ("models", "tools", "skills", "mcp", "commands", "branches", "hooks"):
-        s[key] = loads(s.pop(f"{key}_json", None), {}) or {}
-    for key in ("prs", "artifacts", "workflows", "work_types", "tags", "highlights", "open_threads", "friction"):
-        s[key] = loads(s.pop(f"{key}_json", None), []) or []
-    s.pop("analysis_json", None)
-    s["files"] = [dict(r) for r in conn.execute(
-        "SELECT path, reads, edits, writes, lines_added, lines_removed FROM session_files WHERE session_id = ? "
-        "ORDER BY (edits + writes) DESC, (lines_added + lines_removed) DESC, reads DESC", (sid,))]
-    s["subagents"] = [dict(r) for r in conn.execute(
-        "SELECT * FROM subagents WHERE session_id = ? ORDER BY started_at", (sid,))]
-    s["knowledge"] = [dict(r) for r in conn.execute(
-        "SELECT * FROM knowledge WHERE session_id = ? AND status != 'dismissed' ORDER BY "
-        "CASE kind WHEN 'fix' THEN 0 WHEN 'gotcha' THEN 1 WHEN 'decision' THEN 2 ELSE 3 END, id", (sid,))]
-    for k in s["knowledge"]:
-        k["tags"] = loads(k.pop("tags_json", None), []) or []
-    s["prompts"] = [dict(r) for r in conn.execute(
-        "SELECT seq, ts, kind, text FROM events WHERE session_id = ? AND agent_id = '' AND kind IN ('prompt', 'command') "
-        "ORDER BY seq", (sid,))]
-    s["tool_errors"] = [dict(r) for r in conn.execute(
-        "SELECT t.name, t.summary, e.text FROM tool_calls t LEFT JOIN events e ON e.session_id = t.session_id "
-        "AND e.tool_use_id = t.tool_use_id AND e.kind = 'tool_result' WHERE t.session_id = ? AND t.is_error = 1 "
-        "AND t.agent_id = '' ORDER BY t.ts LIMIT 50", (sid,))]
-    s["total_tokens"] = sum(s.get(k) or 0 for k in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"))
-    # the computer it ran on, named only when more than one sends sessions here (hub.py)
-    machine = conn.execute("SELECT name, role, (SELECT COUNT(*) FROM machines) n FROM machines WHERE id = ?",
-                           (s.get("machine_id"),)).fetchone()
-    s["machine_name"] = machine["name"] if machine and machine["n"] > 1 else None
-    return s
 
 
 def _rel(path: str, root: str | None) -> str:

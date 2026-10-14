@@ -7,12 +7,12 @@ import sqlite3
 from datetime import date, datetime, time, timedelta
 
 from . import ladder
-from .core.config import Config
-from .core.i18n import tr
-from .analysis.runners.base import Runner
-from .analysis.runners.factory import make_runner
-from .analysis.language import written_in
-from .core.util import dumps, human_cost, human_count, human_duration, loads, one_line, to_iso, utcnow_iso
+from ..core.config import Config
+from ..core.i18n import tr
+from ..analysis.runners.base import Runner
+from ..analysis.runners.factory import make_runner
+from ..analysis.language import written_in
+from ..core.util import dumps, human_cost, human_count, human_duration, loads, one_line, to_iso, utcnow_iso
 
 log = logging.getLogger("interlatch.reviews")
 
@@ -84,7 +84,7 @@ def _stats(conn, since: str, until: str) -> dict:
 
 def week_glance(conn, since: str, until: str) -> dict:
     """The numbers a review is drawn with: active time per local day, top projects, outcomes and new knowledge."""
-    from .views import project_labels
+    from ..projects.labels import project_labels
 
     start = datetime.fromisoformat(since.replace("Z", "+00:00")).astimezone()
     daily = [0.0] * 7

@@ -79,7 +79,7 @@ def test_single_session_ingest_marks_ended(env):
 
 
 def test_fts_search(synced):
-    from interlatch.search import search_events, search_knowledge, search_sessions
+    from interlatch.application.search import search_events, search_knowledge, search_sessions
 
     hits = search_events(synced["conn"], "logout flow")
     assert hits and hits[0]["session_id"] == SID and "«logout»" in hits[0]["snippet"]
@@ -89,7 +89,7 @@ def test_fts_search(synced):
 
 
 def test_search_all_sessions(synced):
-    from interlatch.search import search_all
+    from interlatch.application.search import search_all
 
     found = search_all(synced["conn"], "logout", per_session=1)
     top = found["sessions"][0]

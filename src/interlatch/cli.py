@@ -74,8 +74,9 @@ def cmd_ingest_session(args) -> int:
     conn.close()
     if args.work:
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
-        run_worker(cfg, wait=False)
+        run_worker(cfg, export=export_markdown, wait=False)
     return 0
 
 
@@ -100,8 +101,9 @@ def cmd_sync(args) -> int:
     conn.close()
     if args.work:
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
-        work = run_worker(cfg, progress=None if args.quiet else (lambda m: print(f"  {m}")))
+        work = run_worker(cfg, export=export_markdown, progress=None if args.quiet else (lambda m: print(f"  {m}")))
         if not args.quiet:
             print(f"work: {work.summary()}")
     from .leaderboard import send_safely
@@ -115,6 +117,7 @@ def cmd_sync(args) -> int:
 def cmd_work(args) -> int:
     from .core.util import setup_logging
     from .application.workflows import run_worker
+    from .interfaces.exports.vault import export_markdown
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -122,7 +125,7 @@ def cmd_work(args) -> int:
         print(f"This computer sends its sessions to the hub at {cfg.hub_url}, which analyzes them.")
         return 0
     report = run_worker(cfg, max_analyses=args.limit, analyze=not args.no_analyze, synthesize=not args.no_synthesize,
-                        export=not args.no_export, force=args.force, model=args.model, wait=True,
+                        export=None if args.no_export else export_markdown, force=args.force, model=args.model, wait=True,
                         progress=lambda m: print(f"  {m}"))
     print(report.summary())
     for sid, err in report.failed:
@@ -132,8 +135,9 @@ def cmd_work(args) -> int:
 
 def cmd_analyze(args) -> int:
     from .core.util import human_cost, setup_logging
-    from .views import resolve_session_id
+    from .application.records import resolve_session_id
     from .application.workflows import run_worker
+    from .interfaces.exports.vault import export_markdown
     from .analysis.queue import pending_sessions
 
     cfg = _cfg()
@@ -176,7 +180,7 @@ def cmd_analyze(args) -> int:
         cfg.analysis.concurrency = args.concurrency
     print(f"analyzing {len(ids)} session(s) with {runner.label} ({runner.model_label(args.model)})…")
     report = run_worker(cfg, session_ids=ids, model=args.model, synthesize=not args.no_synthesize, force=True, wait=True,
-                        progress=lambda m: print(f"  {m}"))
+                        export=export_markdown, progress=lambda m: print(f"  {m}"))
     print(f"{report.summary()} · analysis cost {human_cost(report.cost_usd)}")
     for sid, err in report.failed:
         print(f"  ! {sid[:8]}: {err[:300]}", file=sys.stderr)
@@ -184,7 +188,7 @@ def cmd_analyze(args) -> int:
 
 
 def cmd_synthesize(args) -> int:
-    from .synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
+    from .knowledge.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
     from .core.util import setup_logging
 
     cfg = _cfg()
@@ -255,7 +259,8 @@ def cmd_sessions(args) -> int:
 def cmd_show(args) -> int:
     from rich.markdown import Markdown
 
-    from .views import resolve_session_id, session_markdown, session_record
+    from .application.records import resolve_session_id, session_record
+    from .interfaces.exports.markdown import session_markdown
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -289,7 +294,7 @@ def cmd_show(args) -> int:
 def cmd_search(args) -> int:
     from rich.markup import escape
 
-    from .search import search_knowledge, search_sessions
+    from .application.search import search_knowledge, search_sessions
     from .core.util import local_str
 
     cfg = _cfg()
@@ -316,8 +321,8 @@ def cmd_search(args) -> int:
 
 
 def cmd_knowledge(args) -> int:
-    from .ladder import stage_label
-    from .search import search_knowledge
+    from .knowledge.ladder import stage_label
+    from .application.search import search_knowledge
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -340,7 +345,7 @@ def cmd_projects(args) -> int:
     from rich.table import Table
 
     from .core.util import human_cost, human_duration, local_str
-    from .views import project_labels
+    from .projects.labels import project_labels
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -616,7 +621,7 @@ class _StageProgress:
             self._update(message)
 
     def _update(self, message: str) -> None:
-        from .synthesize import GLOBAL
+        from .knowledge.synthesize import GLOBAL
         from .core.util import PROGRESS_RE
 
         stage = next((s for s in self.STAGES if message.startswith(s)), None)
@@ -649,6 +654,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
     from .application.workflows import run_worker
+    from .interfaces.exports.vault import export_markdown
 
     console.print(f"\nAnalyzing {len(ids)} session{'s' * (len(ids) != 1)}. Ctrl-C stops; what is left is analyzed {later}.",
                   highlight=False)
@@ -656,7 +662,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
         with Progress(SpinnerColumn(), TextColumn("{task.description:<16}"), BarColumn(), TextColumn("{task.fields[detail]}"),
                       TimeElapsedColumn(), console=console) as bar:
             stages = _StageProgress(bar)
-            report = run_worker(cfg, session_ids=ids, force=True, wait=True, progress=stages)
+            report = run_worker(cfg, export=export_markdown, session_ids=ids, force=True, wait=True, progress=stages)
             stages.finish()
     except KeyboardInterrupt:
         console.print(f"[yellow]Stopped.[/] The rest is analyzed {later}; the Glossary and the Map are built after.",
@@ -967,7 +973,7 @@ def cmd_migrate(args) -> int:
 def cmd_export(args) -> int:
     from pathlib import Path
 
-    from .export_md import export_markdown
+    from .interfaces.exports.vault import export_markdown
 
     cfg = _cfg()
     if args.sessions:
@@ -984,8 +990,8 @@ def _export_sessions(cfg, args) -> int:
     """`interlatch export ID...`: the sessions as one file (or a .zip of several) instead of the vault."""
     from pathlib import Path
 
-    from .session_export import ExportError, export_sessions
-    from .views import resolve_session_id
+    from .interfaces.exports.sessions import ExportError, export_sessions
+    from .application.records import resolve_session_id
 
     conn = _conn(cfg)
     ids = []
@@ -1116,7 +1122,7 @@ def _config_key(cfg, provider: str | None, value: str | None, *, forget: bool) -
 
 def cmd_forget(args) -> int:
     from .ingestion.deletion import forget_session
-    from .views import resolve_session_id
+    from .application.records import resolve_session_id
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -1135,8 +1141,8 @@ def cmd_forget(args) -> int:
 
 
 def cmd_glossary(args) -> int:
-    from .glossary import build_glossaries, glossary_entries, lookup
-    from .synthesize import GLOBAL
+    from .knowledge.glossary import build_glossaries, glossary_entries, lookup
+    from .knowledge.synthesize import GLOBAL
     from .core.util import local_str, setup_logging
 
     cfg = _cfg()
@@ -1149,7 +1155,7 @@ def cmd_glossary(args) -> int:
                            (args.project, args.project)).fetchone()
         project = row[0] if row else args.project
     if args.themes:
-        from .glossary import build_themes, themes_due
+        from .knowledge.glossary import build_themes, themes_due
 
         due = themes_due(conn, force=args.force)
         conn.close()
@@ -1200,7 +1206,7 @@ def cmd_systems(args) -> int:
     """The Systems map in the terminal: every system grouped by folder, or one system's parts with their evidence."""
     from rich.markup import escape
 
-    from .systems import build, landscape, system
+    from .projects.systems import build, landscape, system
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -1276,7 +1282,7 @@ def cmd_systems(args) -> int:
 def cmd_review(args) -> int:
     from rich.markdown import Markdown
 
-    from .reviews import generate_review, week_bounds
+    from .knowledge.reviews import generate_review, week_bounds
     from .core.util import setup_logging
 
     cfg = _cfg()
@@ -1358,7 +1364,7 @@ def _show_suggestion(console, s: dict, pv: dict) -> None:
 
 
 def cmd_suggest(args) -> int:
-    from . import suggest
+    from .knowledge import suggest
     from .core.util import setup_logging
 
     cfg = _cfg()
@@ -1473,7 +1479,7 @@ def cmd_friction(args) -> int:
     from rich import box
     from rich.table import Table
 
-    from .friction import report
+    from .knowledge.friction import report
 
     cfg = _cfg()
     conn = _conn(cfg)

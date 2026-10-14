@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from .core.util import utcnow_iso
+from ..core.util import utcnow_iso
 
 NAME_MAX = 60
 

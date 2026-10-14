@@ -14,12 +14,14 @@ from .core.artifact_records import KINDS as ARTIFACT_KINDS
 from .artifacts.queries import STATUS as ARTIFACT_STATUS
 from .storage.sqlite import connect
 from .hub import team_from
-from .ladder import stage_label
+from .knowledge.ladder import stage_label
 from .core.redact import redact
-from .search import search_knowledge, search_sessions
-from .synthesize import GLOBAL, kb_for_path
+from .application.search import search_knowledge, search_sessions
+from .knowledge.synthesize import GLOBAL, kb_for_path
 from .core.util import human_duration, local_str, one_line, to_iso, truncate, utcnow
-from .views import case_lines, project_labels, resolve_session_id, session_markdown, session_record
+from .application.records import resolve_session_id, session_record
+from .interfaces.exports.markdown import case_lines, session_markdown
+from .projects.labels import project_labels
 
 SUPPORTED_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
 
@@ -266,7 +268,7 @@ class Tools:
         return "\n".join(lines)
 
     def glossary(self, term: str | None = None, project: str | None = None) -> str:
-        from .glossary import glossary_entries, lookup
+        from .knowledge.glossary import glossary_entries, lookup
 
         if term:
             e = lookup(self.conn, term)

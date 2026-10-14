@@ -28,9 +28,9 @@ from pathlib import Path
 
 from collections.abc import Callable
 
-from .core.config import Config
-from .core.i18n import tr
-from .core.util import dumps, loads, one_line, parse_ts, utcnow
+from ..core.config import Config
+from ..core.i18n import tr
+from ..core.util import dumps, loads, one_line, parse_ts, utcnow
 
 BEGIN = "<!-- BEGIN interlatch -->"
 END = "<!-- END interlatch -->"
@@ -203,10 +203,10 @@ def write_atomic(path: Path, text: str, *, cfg: Config | None = None, mkdir: boo
     A symlinked file (dotfiles) is written where it points, so the link stays a link. With mkdir=False a missing
     directory is an error rather than created (a project that was moved or deleted is never re-created).
     """
-    from .install import _backup
+    from ..install import _backup
 
     if cfg is None:
-        from .core.config import load_config
+        from ..core.config import load_config
 
         cfg = load_config(create=False)
     path = Path(os.path.realpath(path))
@@ -355,7 +355,7 @@ def sensitive(text: str | None) -> list[str]:
         if host.count(".") == 1 and host.endswith(".sh") and "://" not in text[max(0, m.start() - 3):m.start()]:
             continue  # a shell script (build.sh), not a host
         hits.append(f"host: {host}")
-    from .core.redact import _PATTERNS
+    from ..core.redact import _PATTERNS
 
     for rx, _repl in _PATTERNS:
         m = rx.search(text)
@@ -389,7 +389,7 @@ def repo_visibility(project_path: str | None, conn: sqlite3.Connection | None = 
         return _VISIBILITY[project_path]
     key = f"repo_visibility:{project_path}"
     if conn is not None:
-        from .storage.kv import kv_get
+        from ..storage.kv import kv_get
 
         cached = loads(kv_get(conn, key), None)
         at = parse_ts((cached or {}).get("at"))
@@ -399,7 +399,7 @@ def repo_visibility(project_path: str | None, conn: sqlite3.Connection | None = 
     value = _visibility_now(Path(project_path))
     _VISIBILITY[project_path] = value
     if conn is not None and value != "unknown":
-        from .storage.kv import kv_set
+        from ..storage.kv import kv_set
 
         try:
             kv_set(conn, key, dumps({"v": value, "at": utcnow().isoformat()}))
