@@ -11,6 +11,7 @@ from interlatch.application.search import search_knowledge
 from interlatch.interfaces.web.app import App
 
 from conftest import CWD, SECRET, SID
+from interlatch.interfaces.web import api
 
 
 def material(**extra):
@@ -118,7 +119,7 @@ def test_member_only_gets_cases_from_allowed_projects(synced):
     app = App(cfg)
     try:
         access.limit(app.conn, [CWD])
-        data = app.knowledge({"cases": "1"})
+        data = api.knowledge.knowledge(app.context(), {"cases": "1"})
         assert data["cases"] == 1 and len(data["items"]) == 1
         assert data["items"][0]["case"]["scene"] == material()["scene"]
         assert "case_json" not in data["items"][0]

@@ -11,6 +11,7 @@ from interlatch.runtime.install import install_statusline, settings_path, status
 from interlatch.interfaces.web.app import App
 
 from conftest import SID
+from interlatch.interfaces.web import api
 
 T0 = datetime(2026, 9, 20, 10, 0, tzinfo=timezone.utc)
 RESET_A, RESET_B = 1790000000, 1790018000  # two 5-hour windows
@@ -102,12 +103,12 @@ def test_sync_imports_records_and_the_dashboard_shows_them(synced):
     assert (statusline.samples_dir() / "not-synced-yet.json").exists()  # kept for when its session arrives
 
     app = App(cfg)
-    assert app.session(SID)["usage"]["limits_moved"]["five_hour"] == 12.0
-    plan = app.status()["statusline"]["plan"]
+    assert api.sessions.session(app.context(), SID)["usage"]["limits_moved"]["five_hour"] == 12.0
+    plan = api.status.status(app.context())["statusline"]["plan"]
     assert plan["limits"]["five_hour"]["used_pct"] == 32 and plan["as_of"] == "2026-09-20T10:00:00Z"
     other = conn.execute("SELECT id FROM sessions WHERE id != ? LIMIT 1", (SID,)).fetchone()
     if other:
-        assert app.session(other[0])["usage"] is None  # not recorded stays unknown
+        assert api.sessions.session(app.context(), other[0])["usage"] is None  # not recorded stays unknown
 
 
 def test_expired_windows_are_not_reported(synced):

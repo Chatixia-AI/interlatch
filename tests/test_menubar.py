@@ -8,6 +8,7 @@ import pytest
 
 from interlatch.runtime.platforms.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
 from interlatch.core.util import to_iso
+from interlatch.interfaces.web import api
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 
@@ -446,7 +447,7 @@ def test_the_switch_works_only_from_this_computer(mac, monkeypatch):
     from interlatch.interfaces.web.handler import make_handler
 
     app = App(mac["cfg"])
-    assert app.status()["menu_bar"]["supported"]
+    assert api.status.status(app.context())["menu_bar"]["supported"]
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     port = httpd.server_address[1]
     httpd.RequestHandlerClass = make_handler(app, port)

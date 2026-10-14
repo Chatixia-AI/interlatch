@@ -21,6 +21,7 @@ from interlatch.analysis.runners.settings import key_source, set_key
 from interlatch.application.workflows import run_worker
 
 from conftest import CWD, SID
+from interlatch.interfaces.web import api
 
 
 class FakeProvider:
@@ -274,7 +275,7 @@ def test_the_dashboard_never_sees_a_key(env):
 
     set_key(env["cfg"], "openrouter", "sk-or-secret")
     app = App(env["cfg"])
-    out = app.analysis_backends()
+    out = api.settings.analysis_backends(app.context())
     assert "sk-or-secret" not in json.dumps(out)
     choice = next(c for c in out["choices"] if c["name"] == "openrouter")
     assert choice["key"]["source"] == "stored" and choice["kind"] == "api"
@@ -399,25 +400,25 @@ def test_dashboard_saves_tests_and_lists(env, fake):
     from interlatch.interfaces.web.app import App
 
     app = App(env["cfg"])
-    out = app.action_provider({"provider": "openai-compatible", "key": "sk-local",
+    out = api.settings.action_provider(app.context(), {"provider": "openai-compatible", "key": "sk-local",
                                "settings": {"base_url": fake.url, "model": "m-big", "num_ctx": 4096, "bogus": 1}})
     assert out["error"] == "not saved: bogus"
     cfg = load_config(env["cfg"].home)
     assert cfg.providers["openai-compatible"] == {"base_url": fake.url, "model": "m-big", "num_ctx": 4096}
     assert key_source(cfg, "openai-compatible") == ("sk-local", "stored")
-    assert "error" in app.action_provider({"provider": "openai-compatible", "settings": {"base_url": "file:///etc/passwd"}})
-    assert app.action_provider({"provider": "openai-compatible", "settings": {"num_ctx": 0}})  # 0 removes it
+    assert "error" in api.settings.action_provider(app.context(), {"provider": "openai-compatible", "settings": {"base_url": "file:///etc/passwd"}})
+    assert api.settings.action_provider(app.context(), {"provider": "openai-compatible", "settings": {"num_ctx": 0}})  # 0 removes it
     assert "num_ctx" not in load_config(env["cfg"].home).providers["openai-compatible"]
-    test = app.action_provider_test("openai-compatible")
+    test = api.settings.action_provider_test(app.context(), "openai-compatible")
     assert test["model"] == "m-big" and "ok" in test
-    assert app.provider_models("openai-compatible") == {"models": ["m-big", "m-small"]}
-    assert app.action_backend("openai-compatible")["backend"] == "openai-compatible"
-    assert app.status_small()["analysis"]["label"] == "OpenAI-compatible"
-    assert app.status_small()["analysis"]["billed"] is False  # its endpoint is on this computer
+    assert api.settings.provider_models(app.context(), "openai-compatible") == {"models": ["m-big", "m-small"]}
+    assert api.settings.action_backend(app.context(), "openai-compatible")["backend"] == "openai-compatible"
+    assert api.status.status_small(app.context())["analysis"]["label"] == "OpenAI-compatible"
+    assert api.status.status_small(app.context())["analysis"]["billed"] is False  # its endpoint is on this computer
     for backend, billed in (("openai", True), ("ollama", False), ("claude", False), ("codex", False)):
         app.cfg.analysis.backend = backend
-        assert app.status_small()["analysis"]["billed"] is billed, backend  # what "Analyze N sessions" warns of
-    assert "error" in app.action_provider_test("gemini")
+        assert api.status.status_small(app.context())["analysis"]["billed"] is billed, backend  # what "Analyze N sessions" warns of
+    assert "error" in api.settings.action_provider_test(app.context(), "gemini")
 
 
 def test_provider_settings_are_refused_from_another_device(env):

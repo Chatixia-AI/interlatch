@@ -20,6 +20,7 @@ import ast
 import itertools
 import json
 import re
+import types
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -30,6 +31,7 @@ from interlatch.sharing import client, people
 from interlatch.sharing.identity import new_token
 from interlatch.sharing.protocol import PROTOCOL
 from interlatch.sharing.receiver import IngestTrigger
+from interlatch.interfaces.web import api
 from interlatch.interfaces.web import handler as handler_mod
 
 from conftest import CWD, SID
@@ -256,7 +258,8 @@ PARAMS = {"{id}": SID, "{n}": "999999"}
 PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connectors/{id}/disconnect": {"{id}": "claude"},
               "/api/leaderboard/avatar/{id}": {"{id}": "nobody"}}
 
-# App methods that would reach outside the temporary home (processes, network, the desktop): stubbed, recording calls
+# Dashboard api functions that would reach outside the temporary home (processes, network, the desktop): stubbed,
+# recording calls
 STUBS = {
     "action_sync": False, "action_mirror_sync": False, "action_screen": False, "action_analyze": False,
     "action_themes": False, "action_glossary": False, "action_review": False, "action_synthesize": False,
@@ -273,6 +276,12 @@ STUBS = {
     "action_leave_hub": {"stub": True}, "action_share_mode": {"stub": True}, "action_share_folders": {"stub": True},
     "artifact_reveal": None,
 }
+
+
+def _api_module(name: str):
+    """The api module that defines `name`, where the handler looks it up (api.<feature>.<name>)."""
+    return next(mod for mod in vars(api).values() if isinstance(mod, types.ModuleType)
+                and getattr(getattr(mod, name, None), "__module__", None) == mod.__name__)
 
 
 # ------------------------------------------------------------------ the routes the handler serves
@@ -398,10 +407,10 @@ def matrix(synced, monkeypatch):
         return fn
 
     for name, value in STUBS.items():
-        monkeypatch.setattr(app, name, stub(name, value))
-    real_update_info = app.update_info
-    monkeypatch.setattr(app, "update_info", lambda remote: stub("update_info(remote)", {"stub": True})()
-                        if remote else real_update_info(remote))
+        monkeypatch.setattr(_api_module(name), name, stub(name, value))
+    real_update_info = api.settings.update_info
+    monkeypatch.setattr(api.settings, "update_info", lambda ctx, remote: stub("update_info(remote)", {"stub": True})()
+                        if remote else real_update_info(ctx, remote))
 
     tokens = {}
     for kind, who, machine in (("member_pc", bob, BOB_PC), ("readonly_pc", vic, VIC_PC)):

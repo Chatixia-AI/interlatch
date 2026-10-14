@@ -14,6 +14,7 @@ from interlatch.sharing.push import _shared_records
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.interfaces.web.app import App
+from interlatch.interfaces.web import api
 
 AKTIO = "/home/yuma/Work/Aktio"
 PROJECT = "/srv/Aktio"
@@ -124,17 +125,17 @@ def test_teammates_lessons_come_back_to_the_groups_top_project(member, monkeypat
 def test_sharing_a_group_from_the_dashboard(member):
     cfg, gid = member["cfg"], member["gid"]
     app = App(cfg)
-    got = app.project_groups()
+    got = api.projects.project_groups(app.context())
     assert got["hub"] == {"name": "Team hub", "url": "http://hub", "share": "knowledge", "projects": [  # the team's sessions there, as of the last push
         {"path": PROJECT, "name": "Aktio", "sessions": 12}, {"path": "/srv/Resona", "name": "Resona", "sessions": None}]}
-    assert app.action_project_groups("share", {"id": gid, "hub_project": "/srv/Nope"})[1] == 400  # not one of the hub's
-    assert app.action_project_groups("share", {"id": gid, "hub_project": PROJECT}) == ({"ok": True}, 200)
-    assert app.project_groups()["groups"][0]["hub_project"] == PROJECT
-    assert next(p for p in app.devices()["projects"] if p["path"] == PROJECT)["groups"] == [{"id": gid, "name": "Aktio"}]
-    rows = {p["project_path"]: p["hub"] for p in app.projects()}
+    assert api.projects.action_project_groups(app.context(), "share", {"id": gid, "hub_project": "/srv/Nope"})[1] == 400  # not one of the hub's
+    assert api.projects.action_project_groups(app.context(), "share", {"id": gid, "hub_project": PROJECT}) == ({"ok": True}, 200)
+    assert api.projects.project_groups(app.context())["groups"][0]["hub_project"] == PROJECT
+    assert next(p for p in api.devices.devices(app.context())["projects"] if p["path"] == PROJECT)["groups"] == [{"id": gid, "name": "Aktio"}]
+    rows = {p["project_path"]: p["hub"] for p in api.projects.projects(app.context())}
     assert rows[PATHS["dash"]] == {"path": PROJECT, "name": "Aktio"} and rows[PATHS["private"]] is None
-    assert app.action_project_groups("share", {"id": gid, "hub_project": None}) == ({"ok": True}, 200)
-    assert app.project_groups()["groups"][0]["hub_project"] is None
+    assert api.projects.action_project_groups(app.context(), "share", {"id": gid, "hub_project": None}) == ({"ok": True}, 200)
+    assert api.projects.project_groups(app.context())["groups"][0]["hub_project"] is None
 
 
 def test_only_this_computer_itself_shares_a_group(member):

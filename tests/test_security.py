@@ -14,6 +14,7 @@ import urllib.request
 
 import pytest
 
+from interlatch.interfaces.web import api
 from interlatch.sharing import people, receiver
 from interlatch.ingestion.analyses import apply_analyses
 from interlatch.sharing.client import handshake, redeem_invite
@@ -268,8 +269,7 @@ def test_a_hub_without_people_lets_no_other_device_in(dashboard):
 
 # ------------------------------------------------------------------ M1: no header injection from a file name
 def test_a_file_name_cant_add_response_headers(dashboard, monkeypatch):
-    app = dashboard["app"]
-    monkeypatch.setattr(app, "artifact_open", lambda i: {
+    monkeypatch.setattr(api.artifacts, "artifact_open", lambda ctx, i: {
         "name": 'x.txt\r\nSet-Cookie: interlatch_session=evil\r\n\r\n<script>alert(1)</script>', "ctype": "text/plain",
         "inline": False, "body": b"hi", "policy": None, "source": "disk"})
     status, headers, body = _raw(dashboard["url"], "/api/artifacts/1/open")
@@ -328,11 +328,10 @@ def test_an_invite_cant_take_over_someone_elses_computer(synced):
 
 # ------------------------------------------------------------------ hardening
 def test_git_runs_no_repository_programs(monkeypatch):
-    from interlatch.interfaces.web import app
-    from interlatch.interfaces.web.app import git_ignored
+    from interlatch.interfaces.web.api.projects import git_ignored
 
     seen = []
-    monkeypatch.setattr(app.subprocess, "run", lambda argv, **kw: seen.append(argv) or
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: seen.append(argv) or
                         subprocess.CompletedProcess(argv, 1, "", ""))
     git_ignored("/somewhere", ["/somewhere/a"])
     argv = seen[0]

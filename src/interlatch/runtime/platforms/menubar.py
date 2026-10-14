@@ -195,13 +195,14 @@ def stats(conn, now: datetime | None = None) -> dict:
 
 
 def snapshot(app, *, sync_running: bool = False, sync_error: str | None = None) -> Snapshot:
-    """What the menu shows now. `app`: the dashboard's server.App, read on the caller's thread."""
-    from ...sharing.push import last_push
+    """What the menu shows now. `app`: the dashboard's App (interfaces/web/app.py), read on the caller's thread."""
+    from ...interfaces.web import api
     from ...sharing.projects import last_folders
+    from ...sharing.push import last_push
 
     try:
         app.refresh_config()
-        st = app.status_small()
+        st = api.status.status_small(app.context())
         conn = app.conn
         analyzing = conn.execute("SELECT COUNT(*) FROM sessions WHERE analysis_status = 'running'").fetchone()[0]
         spoke = app.cfg.is_spoke
@@ -762,6 +763,7 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
     except ImportError:
         log.info("no menu-bar icon: it needs the `app` extra (uv tool install 'interlatch[app]')")
         return False
+    from ...interfaces.web import api
     from ..install import UI_LABEL
 
     SHOWN = True
@@ -779,7 +781,7 @@ def run_with_server(cfg: Config, httpd, url: str) -> bool:
         AppHelper.callAfter(AppKit.NSApp.terminate_, None)
 
     menu = StatusMenu(refresh=lambda: snapshot(app, sync_error=agent_sync_error()),
-                      open_page=lambda page: webbrowser.open(url + page), sync_now=app.action_sync, quit=quit_,
+                      open_page=lambda page: webbrowser.open(url + page), sync_now=lambda: api.status.action_sync(app.context()), quit=quit_,
                       base_url=url)
     AppHelper.callAfter(menu.install)
     log.info("menu-bar icon on, dashboard at %s", url)

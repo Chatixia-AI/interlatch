@@ -144,8 +144,9 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `interfaces/cli/`：コマンドライン。`parser.py` がコマンドをまとめ、`commands/` の各モジュールがコマンドの
   グループ（記録、アーカイブ、ナレッジ、セットアップ、共有、運用）を持ち、各コマンドのオプションはその処理の隣に
   あります。最上位の `cli.py` は `interlatch` コマンドが実行する入り口です
-- `interfaces/web/`：ダッシュボード。`server.py` が起動し、`handler.py` が誰からかを確かめて各リクエストを振り分け、
-  `app.py` がアーカイブから答え、`jobs.py` が時間のかかる操作を走らせ、`assets.py` が `web/` のページを返します。
+- `interfaces/web/`：ダッシュボード。`server.py` が起動し、`handler.py` が誰からかを確かめて各リクエストを `api/` に
+  振り分けます。`api/` では各ページの読み取りと操作が `Context`（設定、このリクエストの接続、ジョブ）の関数で、
+  機能ごとに 1 モジュールです。`app.py` はダッシュボードが動く間保つもの、`assets.py` は `web/` のページを返します。
   `packaging/macos/` がアプリをビルドします
 
 ダッシュボードのページは Content-Security-Policy（`interfaces/web/assets.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの

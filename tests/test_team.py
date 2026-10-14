@@ -24,6 +24,7 @@ from interlatch.core.util import fingerprint
 from interlatch.core.machine import local_machine
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
+from interlatch.interfaces.web import api
 
 TEAMMATE = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
@@ -420,11 +421,11 @@ def test_what_a_member_sends_from_the_dashboard(teamenv):
 
     spoke = teamenv["spoke"]
     app = App(spoke)
-    assert app.devices()["share"] == "knowledge" and app.devices()["store"] is None
-    assert app.action_share_mode("everything") == {"ok": True, "share": "everything"}
+    assert api.devices.devices(app.context())["share"] == "knowledge" and api.devices.devices(app.context())["store"] is None
+    assert api.devices.action_share_mode(app.context(), "everything") == {"ok": True, "share": "everything"}
     assert load_config(spoke.home).hub_share == "everything"
-    assert "unknown share mode" in app.action_share_mode("all")["error"]
-    assert App(teamenv["cfg"]).action_share_mode("knowledge")["error"] == "this computer has not joined a hub"
+    assert "unknown share mode" in api.devices.action_share_mode(app.context(), "all")["error"]
+    assert api.devices.action_share_mode(App(teamenv["cfg"]).context(), "knowledge")["error"] == "this computer has not joined a hub"
 
 
 def test_settings_file_round_trip(tmp_path):

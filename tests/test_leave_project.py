@@ -16,13 +16,13 @@ from interlatch.sharing.push import push
 from interlatch.sharing.receiver import team_lessons
 from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config, set_config_value, toml_table
-from interlatch.interfaces.web.app import App
 from interlatch.core.machine import local_machine
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _serve
 from test_people_web import REMOTE, _as, _call, hubweb, team  # noqa: F401  (the fixtures)
 from test_team import TEAMMATE, FakeStore, _team_rows, _teammate_session, teamenv  # noqa: F401
+from interlatch.interfaces.web import api
 
 
 def _in_project(teamenv):  # noqa: F811
@@ -182,7 +182,7 @@ def test_the_command_line_leaves_and_rejoins(teamenv, monkeypatch, capsys):  # n
 def test_the_dashboard_lists_leaves_and_rejoins_from_this_computer_only(teamenv, monkeypatch):  # noqa: F811
     spoke = _in_project(teamenv)
     handshake(spoke)  # the hub counts what a folder sent as of the hello: the next one has the push before
-    monkeypatch.setattr(App, "action_push", lambda self: False)  # the hub hears of it at the next push
+    monkeypatch.setattr(api.devices, "action_push", lambda ctx: False)  # the hub hears of it at the next push
     app, httpd, url = _serve(spoke)
     try:
         dv = _call(url, "/api/devices")[1]

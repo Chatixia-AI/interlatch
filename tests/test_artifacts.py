@@ -14,6 +14,7 @@ from interlatch.sources.builder import tool_summary
 from interlatch.sources.claude.parser import parse_session
 
 from conftest import CWD, SID, _line
+from interlatch.interfaces.web import api
 
 
 def test_only_deliverables_count():
@@ -169,10 +170,10 @@ def test_stored_with_the_session(synced):
     assert "**x/y#7**" in out and "github.com/x/y/pull/7" in out and "link" in out
     assert Tools(synced["cfg"]).find_artifacts(query="nothing-like-this") == "No artifacts match."
     app = App(synced["cfg"])
-    data = app.artifacts({"kind": "pr"})
+    data = api.artifacts.artifacts(app.context(), {"kind": "pr"})
     assert data["total"] == 1 and data["counts"] == {"pr": 1} and data["items"][0]["status"] == "link"
-    assert app.session(SID)["outputs"][0]["url"] == "https://github.com/x/y/pull/7"
-    assert app.project(CWD)["artifacts"]["total"] == 1
+    assert api.sessions.session(app.context(), SID)["outputs"][0]["url"] == "https://github.com/x/y/pull/7"
+    assert api.projects.project(app.context(), CWD)["artifacts"]["total"] == 1
     forget_session(conn, synced["cfg"], SID)
     assert not conn.execute("SELECT COUNT(*) FROM artifacts WHERE session_id = ?", (SID,)).fetchone()[0]
 
@@ -214,10 +215,10 @@ def test_images_are_served_only_as_recorded_artifacts(synced, tmp_path):
     svg_id, note_id, gone_id = add(svg, "diagram"), add(note, "doc"), add(tmp_path / "gone.png", "image")
     conn.commit()
     app = App(synced["cfg"])
-    items = {i["id"]: i for i in app.artifacts({})["items"]}
+    items = {i["id"]: i for i in api.artifacts.artifacts(app.context(), {})["items"]}
     assert items[svg_id]["preview"] and not items[note_id]["preview"] and not items[gone_id]["preview"]
-    assert app.artifact_file(svg_id)[1] == "image/svg+xml"
-    assert app.artifact_file(note_id) is None and app.artifact_file(gone_id) is None and app.artifact_file(999999) is None
+    assert api.artifacts.artifact_file(app.context(), svg_id)[1] == "image/svg+xml"
+    assert api.artifacts.artifact_file(app.context(), note_id) is None and api.artifacts.artifact_file(app.context(), gone_id) is None and api.artifacts.artifact_file(app.context(), 999999) is None
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     httpd.RequestHandlerClass = make_handler(app, httpd.server_address[1])
@@ -269,16 +270,16 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
     report.unlink()  # gone from disk; the archive still holds what was written
 
     app = App(cfg)
-    items = {i["id"]: i for i in app.artifacts({})["items"]}
+    items = {i["id"]: i for i in api.artifacts.artifacts(app.context(), {})["items"]}
     assert items[ids[str(report)]]["status"] == "gone" and items[ids[str(report)]]["openable"]
-    f = app.artifact_open(ids[str(report)])
+    f = api.artifacts.artifact_open(app.context(), ids[str(report)])
     assert (f["body"].decode(), f["source"], f["ctype"]) == (html, "archive", "text/html; charset=utf-8")
     assert "sandbox allow-scripts" in f["policy"] and "allow-same-origin" not in f["policy"]  # its scripts run, walled off
-    assert app.artifact_open(ids[str(notes)])["ctype"] == "text/plain; charset=utf-8"
+    assert api.artifacts.artifact_open(app.context(), ids[str(notes)])["ctype"] == "text/plain; charset=utf-8"
 
     launched = []
     monkeypatch.setattr("subprocess.Popen", lambda cmd, **kw: launched.append(cmd))
-    assert app.artifact_reveal(ids[str(report)], "open") == "that file is not on this computer"
+    assert api.artifacts.artifact_reveal(app.context(), ids[str(report)], "open") == "that file is not on this computer"
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     port = httpd.server_address[1]
     httpd.RequestHandlerClass = make_handler(app, port)

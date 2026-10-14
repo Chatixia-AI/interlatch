@@ -483,7 +483,9 @@ def run_tray_with_server(cfg, httpd, url: str) -> bool:
         if cmd == 1:
             open_dashboard()
         elif cmd == 2:
-            threading.Thread(target=httpd.app.action_sync, daemon=True).start()
+            from ...interfaces.web import api
+
+            threading.Thread(target=lambda: api.status.action_sync(httpd.app.context()), daemon=True).start()
         elif cmd == 3:
             quit_(hwnd)
 

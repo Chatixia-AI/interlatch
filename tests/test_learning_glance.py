@@ -8,6 +8,7 @@ from interlatch.knowledge.learning import glance
 from interlatch.interfaces.web.app import App
 
 from conftest import SID
+from interlatch.interfaces.web import api
 
 NOW = datetime(2026, 10, 9, tzinfo=timezone.utc)
 
@@ -52,7 +53,7 @@ def test_endpoint_sends_shaped_lessons(synced):
     conn.commit()
     app = App(cfg)
     try:
-        g = json.loads(json.dumps(app.learning_glance(None, {})))
+        g = json.loads(json.dumps(api.knowledge.learning_glance(app.context(), None, {})))
         assert g["latest"]["case"]["principle"] == item["principle"] and "case_json" not in g["latest"]
         assert g["cases"][0]["case"]["question"] == item["question"]
         assert g["topic"]["id"] == "backend"
