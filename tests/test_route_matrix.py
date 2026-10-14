@@ -33,6 +33,7 @@ from interlatch.sharing.protocol import PROTOCOL
 from interlatch.sharing.receiver import IngestTrigger
 from interlatch.interfaces.web import api
 from interlatch.interfaces.web import handler as handler_mod
+from interlatch.interfaces.web import routes as route_table
 
 from conftest import CWD, SID
 from test_hub import _serve
@@ -305,7 +306,8 @@ def _is_path(node: ast.AST) -> bool:
 
 
 def served_routes() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
-    """(routes, prefixes) the dashboard's handler matches, read from its syntax tree."""
+    """(routes, prefixes) the dashboard serves: its route table (routes.py), and what the handler matches itself (the
+    page, signing in and out, the hub API), read from its syntax tree."""
     tree = ast.parse(Path(handler_mod.__file__).read_text(encoding="utf-8"))
     consts = {t.id: node.value for node in tree.body if isinstance(node, ast.Assign)
               for t in node.targets if isinstance(t, ast.Name)}
@@ -333,6 +335,14 @@ def served_routes() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
                 elif (node.func.attr == "fullmatch" and isinstance(node.func.value, ast.Name)
                       and node.func.value.id == "re" and len(node.args) == 2 and _is_path(node.args[1])):
                     routes |= {(verb, r) for r in _expand(node.args[0].value)}
+    for verb, table in (("GET", route_table.GET), ("POST", route_table.POST)):
+        for route in table:
+            if route.prefix:
+                prefixes.add((verb, route.path))
+            elif "(" in route.path:
+                routes |= {(verb, r) for r in _expand(route.path)}
+            else:
+                routes.add((verb, route.path))
     return routes, prefixes
 
 

@@ -144,8 +144,8 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `interfaces/cli/`：コマンドライン。`parser.py` がコマンドをまとめ、`commands/` の各モジュールがコマンドの
   グループ（記録、アーカイブ、ナレッジ、セットアップ、共有、運用）を持ち、各コマンドのオプションはその処理の隣に
   あります。最上位の `cli.py` は `interlatch` コマンドが実行する入り口です
-- `interfaces/web/`：ダッシュボード。`server.py` が起動し、`handler.py` が誰からかを確かめて各リクエストを `api/` に
-  振り分けます。`api/` では各ページの読み取りと操作が `Context`（設定、このリクエストの接続、ジョブ）の関数で、
+- `interfaces/web/`：ダッシュボード。`server.py` が起動し、`handler.py` が誰からかを確かめ、`routes.py` がすべての
+  ルートと呼べる人と答えるもの（多くは `api/` の関数）を並べます。`api/` では各ページの読み取りと操作が `Context`（設定、このリクエストの接続、ジョブ）の関数で、
   機能ごとに 1 モジュールです。`app.py` はダッシュボードが動く間保つもの、`assets.py` は `web/` のページを返します。
   `packaging/macos/` がアプリをビルドします
 
@@ -162,7 +162,7 @@ import をこれと照らし合わせます。
 - **分析のバックエンド**：`analysis/runners/` の `Runner`（`base.py` が約束事）、`factory.py` に名前を。モデル
   プロバイダーの API は `analysis/runners/settings.py` の `Provider`
 - **ダッシュボードのエンドポイント**：`interfaces/web/api/` の該当機能のモジュールに `Context` を取る関数を、
-  `interfaces/web/handler.py` にルートと呼べる人を、`tests/test_route_matrix.py` の `ROUTES` に行を（行のない
+  `interfaces/web/routes.py` にルートと呼べる人を、`tests/test_route_matrix.py` の `ROUTES` に行を（行のない
   ルートはテストが失敗します）
 - **コマンド**：`interfaces/cli/commands/` の合うグループに `add_<command>` と `cmd_<command>` を、
   `interfaces/cli/parser.py` の `COMMANDS` にコマンドを（その順が `interlatch --help` の順です）。
