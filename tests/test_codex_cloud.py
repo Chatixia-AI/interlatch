@@ -149,3 +149,22 @@ def test_listing_failure_is_reported_not_raised(cloud):
     assert not report.errors
     status = load_status(conn)
     assert status["ok"] is False and "not logged in" in status["error"]
+
+
+def test_codex_cloud_runs_from_the_temporary_folder(monkeypatch, tmp_path):
+    """codex writes an error.log where it runs: never into the folder Interlatch was started in."""
+    import subprocess
+    import tempfile
+
+    from interlatch.sources.codex import cloud
+
+    seen = {}
+
+    def run(argv, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(argv, 0, '{"tasks": []}', "")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cloud.subprocess, "run", run)
+    assert cloud.list_tasks("codex") == []
+    assert seen["cwd"] == tempfile.gettempdir() != os.getcwd()

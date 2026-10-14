@@ -110,12 +110,6 @@ def one_line(text, limit: int = 160) -> str:
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
-def slugify(text: str, limit: int = 60) -> str:
-    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
-    text = re.sub(r"[\s_]+", "-", text)
-    return text[:limit].strip("-") or "untitled"
-
-
 def fingerprint(*parts: str) -> str:
     norm = "\x1f".join(re.sub(r"\W+", " ", (p or "").lower()).strip() for p in parts)
     return hashlib.sha1(norm.encode()).hexdigest()

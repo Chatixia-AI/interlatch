@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import subprocess
+import tempfile
 import time
 
 from ..builder import SessionBuilder, finish_session
@@ -33,8 +34,9 @@ class CloudError(Exception):
 
 def _run(binary: str, *args: str, timeout: float = 120) -> str:
     try:
+        # from the temporary folder: codex writes an error.log where it runs, not in the folder Interlatch started in
         proc = subprocess.run([binary, "cloud", *args], capture_output=True, text=True, timeout=timeout,
-                              stdin=subprocess.DEVNULL, env=internal_env())
+                              stdin=subprocess.DEVNULL, env=internal_env(), cwd=tempfile.gettempdir())
     except subprocess.TimeoutExpired as exc:
         raise CloudError(f"codex cloud {args[0]} timed out") from exc
     except OSError as exc:
