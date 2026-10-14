@@ -2935,17 +2935,17 @@ function repoCard(r, path) { // the folder's git state as the page loaded (progr
       h("li", { title: w.path }, h("span", { class: "mono" }, shortPath(w.path)), w.branch ? h("span", { class: "muted" }, ` · ${w.branch}`) : null)))] : null,
     shortPath(r.root) !== shortPath(path) ? h("p", { class: "lo-foot" }, t("In the repository {path}", { path: shortPath(r.root) })) : null);
 }
+function capped(list, li, limit, cls = "tl-items") { // the first few, the rest behind "+N more"
+  const ul = h("ul", { class: cls }, list.slice(0, limit).map(li));
+  if (list.length <= limit) return ul;
+  const more = h("button", { class: "link-btn", type: "button", onclick: () => { ul.append(...list.slice(limit).map(li)); more.remove(); } },
+    t("+{n} more", { n: list.length - limit }));
+  return [ul, more];
+}
 function timelineCard(tl) { // the work week by week, newest first (progress.timeline)
   if (!tl || !tl.weeks.length) return null;
   const SHOWN = 6;
   const monday = (day) => `${day}T00:00:00`; // a week's start, in local time
-  const capped = (list, li, limit, cls = "tl-items") => { // the first few, the rest behind "+N more"
-    const ul = h("ul", { class: cls }, list.slice(0, limit).map(li));
-    if (list.length <= limit) return ul;
-    const more = h("button", { class: "link-btn", type: "button", onclick: () => { ul.append(...list.slice(limit).map(li)); more.remove(); } },
-      t("+{n} more", { n: list.length - limit }));
-    return [ul, more];
-  };
   const session = (x) => h("li", null, outcomeMark(x), h("a", { href: `#/session/${x.id}` }, x.title || t("(untitled session)")),
     sessionWho(x) ? h("span", { class: "tl-who" }, sessionWho(x)) : null);
   const pr = (x) => h("li", null, safeUrl(x.url) ? h("a", { href: safeUrl(x.url), target: "_blank", rel: "noopener" }, x.title || x.url) : x.title || x.url);
@@ -2971,6 +2971,69 @@ function timelineCard(tl) { // the work week by week, newest first (progress.tim
     tn(rest, "Show {n} earlier week", "Show {n} earlier weeks")) : null;
   return h("section", { class: "card timeline" }, cardHead(t("Week by week"), { iconName: "calendar", hint: t("newest first") }), box, more,
     tl.earlier ? h("p", { class: "lo-foot" }, tn(tl.earlier, "{n} earlier week with sessions isn't listed.", "{n} earlier weeks with sessions aren't listed.")) : null);
+}
+// What's waiting on a person: work in the folder not yet committed or pushed (git, as the page loaded), and the decisions
+// and questions the last sessions left open (progress.asks). Waiting more than two days turns it amber; nothing is red.
+const WAITING_LONG = 2 * 86400000;
+function needsYouCard(p) {
+  const r = p.repo, long = (ts) => ts && Date.now() - new Date(ts).getTime() > WAITING_LONG;
+  const row = (ic, text, sub, since) => h("li", { class: long(since) ? "ny-long" : "" }, icon(ic), h("div", null, h("div", null, text), sub ? h("div", { class: "ny-sub" }, sub) : null));
+  const git = [];
+  if (r && r.changed + r.conflicts) {
+    git.push(row("diff", tn(r.changed + r.conflicts, "{n} changed file not committed", "{n} changed files not committed"),
+      [r.changed_since ? t("oldest edit {ago}", { ago: ago(r.changed_since) }) : null,
+        r.untracked ? tn(r.untracked, "{n} new file not in git", "{n} new files not in git") : null].filter(Boolean).join(" · "), r.changed_since));
+  }
+  if (r && r.unpushed) {
+    git.push(row("commit", tn(r.unpushed, "{n} commit only on this computer", "{n} commits only on this computer"),
+      t("oldest {ago}", { ago: ago(r.unpushed_since) }), r.unpushed_since));
+  }
+  const asks = (p.asks || []).map((a) => row("todo", a.text, [sessionWho(a) ? `${sessionWho(a)} · ` : "", tx("left open {ago} in {session}", {
+    ago: ago(a.started_at), session: h("a", { href: `#/session/${a.session_id}` }, t("this session")) })], a.started_at));
+  if (!git.length && !asks.length) return null;
+  const team = !!ME?.hub?.team;
+  const waited = [...git, ...asks].some((li) => li.classList.contains("ny-long"));
+  return h("section", { class: `card needs-you${waited ? " long" : ""}` }, cardHead(team ? t("Needs attention") : t("Needs you"), { iconName: "flame" }),
+    git.length ? [h("div", { class: "subhead" }, t("Not saved in git yet")), h("ul", { class: "ny-list" }, git)] : null,
+    asks.length ? [h("div", { class: "subhead" }, t("Decisions and open questions")), h("ul", { class: "ny-list" }, asks),
+      h("p", { class: "lo-foot" }, t("From what the last sessions left open, picked by how it's worded: check before acting on it."))] : null);
+}
+// Where the project is going: its own ROADMAP / BACKLOG / TODO file (progress.roadmap, on this computer), else the
+// backlog its sessions keep: to-do items (Done dismisses one) and the knowledge base's open threads, as of their dates.
+function planCard(p) {
+  const rm = p.roadmap;
+  if (rm) {
+    const SHOWN = 3;
+    const sec = (s) => h("div", { class: "rm-sec" },
+      h("div", { class: "rm-head" }, h("b", null, s.title || rm.file),
+        h("span", null, s.open || s.done ? t("{open} open · {done} done", { open: fmtNum(s.open), done: fmtNum(s.done) })
+          : tn(s.total, "{n} item", "{n} items", { n: fmtNum(s.total) }))),
+      capped(s.items, (x) => h("li", null, x), 4, "rm-items"));
+    return h("section", { class: "card plan-card" }, cardHead(t("Roadmap"), { iconName: "map", hint: t("{file} · updated {ago}", { file: rm.file, ago: ago(rm.updated) }) }),
+      rm.sections.slice(0, SHOWN).map(sec),
+      rm.sections.length > SHOWN ? h("p", { class: "lo-foot" }, tn(rm.sections.length - SHOWN, "and {n} more section in the file", "and {n} more sections in the file")) : null,
+      h("div", { class: "rm-path" }, h("span", { class: "mono", title: rm.path }, shortPath(rm.path)),
+        h("button", { class: "link-btn", type: "button", onclick: () => copyPath(rm.path) }, t("Copy the path"))));
+  }
+  const todos = (p.knowledge || []).filter((k) => k.kind === "todo");
+  const kb = p.kb ? JSON.parse(p.kb.kb_json || "{}") : null;
+  const open = (kb?.sections || []).find((sec) => (KB_TONES.find(([re]) => re.test(sec.title)) || [])[1] === "todo");
+  if (!todos.length && !open?.items?.length) return null;
+  const todo = (k) => {
+    const li = h("li", null, h("div", null, k.session_id ? h("a", { href: `#/session/${k.session_id}` }, k.title) : k.title,
+      h("span", { class: "muted" }, ` · ${fmtDate(k.created_at)}`)),
+    h("button", { class: "link-btn admin-only", type: "button", title: t("Dismiss (hide and exclude from knowledge bases)"), onclick: async () => {
+      await post(`/api/knowledge/${k.id}`, { status: "dismissed" });
+      li.remove();
+      toast(t("Done"));
+    } }, t("Done")));
+    return li;
+  };
+  return h("section", { class: "card plan-card" }, cardHead(t("Backlog"), { iconName: "todo", hint: t("from your sessions") }),
+    todos.length ? [h("div", { class: "subhead" }, t("To do")), capped(todos, todo, 5, "rm-items bl-todos")] : null,
+    open?.items?.length ? [h("div", { class: "subhead" }, open.title),
+      capped(open.items, (it) => h("li", { title: plainText(it.text) }, it.title || plainText(it.text)), 5, "rm-items"),
+      h("p", { class: "lo-foot" }, t("From the knowledge base, updated {ago}.", { ago: ago(p.kb.updated_at) }))] : null);
 }
 
 route(/^\/project$/, async (params) => {
@@ -3016,9 +3079,11 @@ route(/^\/project$/, async (params) => {
     h("section", { class: "card" }, h("dl", { class: "kv", style: { marginTop: 0 } }, p.glossary.map((g) => [
       h("dt", null, h("a", { href: `#/glossary?term=${encodeURIComponent(g.term)}` }, g.term)),
       h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)])))] : null;
-  const leftOff = leftOffCard(p.recent), repo = repoCard(p.repo, path);
+  const leftOff = leftOffCard(p.recent), side = [repoCard(p.repo, path), planCard(p)].filter(Boolean);
+  const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
   const panes = {
-    overview: h("div", { class: "grid" }, leftOff && repo ? h("div", { class: "grid cols-main" }, leftOff, repo) : leftOff || repo, timelineCard(p.timeline)),
+    overview: h("div", { class: "grid" }, needsYouCard(p),
+      leftOff && sideCol ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, leftOff, sideCol) : leftOff || sideCol, timelineCard(p.timeline)),
     working: h("div", null, kbView(p, false, { overview: !lead }), glossary),
     knowledge: p.knowledge.length ? h("div", { class: "kgrid" }, p.knowledge.map((k) => knowledgeCard(k, { compact: true }))) : null,
     sessions: h("div", null, sessions, st.sessions > p.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {

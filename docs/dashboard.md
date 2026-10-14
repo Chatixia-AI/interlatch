@@ -104,6 +104,18 @@ and estimated API cost. Below that, the overview from its knowledge base says wh
 
 **Overview** shows where things stand, read from your sessions and git, with nothing written by a model:
 
+- **Needs you,** shown only when something waits:
+  - **Not saved in git yet:** tracked files changed but not committed, with the date of the oldest edit, and commits
+    on no remote branch, with the oldest one's date (none counted in a repository without remotes). New, untracked
+    files are only counted, since build output and scratch files stay there for good.
+  - **Decisions and open questions:** what the last three analyzed sessions left open that waits on a person (a
+    decision, an approval, an answer), picked by how the session's analysis worded it, so check it before acting.
+  - Anything waiting more than two days turns amber. Nothing turns red.
+- **Roadmap:** when the folder, or its repository's root, has a `ROADMAP.md`, `BACKLOG.md`, `TODO.md` or `TODOS.md`
+  (there or in `docs/`, in any case): its first three `##` sections with their items (each top-level bullet by its
+  bold lead or first words, or else its `###` headings), how many checkboxes are open and done, and when the file was
+  last committed. Without one, **Backlog** lists the project's to-do items (**Done** dismisses one) and the knowledge
+  base's open threads, as of its last update.
 - **Where you left off:** the last session's goal, how it ended and what it left open, then the four sessions before
   it, each opening to its own goal and open threads. These are what each session left open when it ended: a later
   session, or work you did outside one, may have dealt with them since.
@@ -117,7 +129,8 @@ The other tabs hold the rest: **Working here** (the knowledge base, its [archite
 and the glossary), **Knowledge**, **Sessions**, **Artifacts** and **Usage** (the totals and the most edited files).
 The tab you pick stays in the address, so a link or a reload opens it again.
 
-On a hub with people, the card is **Where the team left off**, and each session shows whose it is. Pull requests come
+The git rows and the roadmap file are read only in a browser on the computer the folder is on. On a hub with people,
+the cards are **Needs attention** and **Where the team left off**, and each session shows whose it is. Pull requests come
 from the transcripts computers send (`share = "everything"`), or from the links a session lists when a computer shares
 knowledge; commits only from transcripts. Someone limited to some projects sees the sessions, not their pull requests,
 as on a session's page.

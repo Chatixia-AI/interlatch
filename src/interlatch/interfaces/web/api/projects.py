@@ -145,7 +145,8 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
 
 
 def project(ctx: Context, path: str, here: bool = False, limited: bool = False) -> dict | None:
-    """One project's page. here: the request comes from this computer, so its folder's git state is read too.
+    """One project's page. here: the request comes from this computer, so its folder's git state and roadmap file
+    are read too.
     limited: someone limited to some projects, who isn't shown the pull requests a session lists (as on its page)."""
     c = ctx.conn
     if path == GLOBAL:
@@ -177,6 +178,8 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
     from ....projects.routing import declared_projects
     from ....sharing.projects import hub_project_of
 
+    recent = label_who(ctx, progress.recent(c, path))  # on a hub with people, whose session each one is
+    repo = progress.repo_state(path) if here else None  # the folder, and a roadmap in it, only on this computer
     return {
         "project_path": path,
         "shared": path in declared_projects(c),
@@ -187,9 +190,11 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
         "kb": dict(kb) if kb else None,
         "diagram": for_kb(kb["kb_json"]) if kb else None,
         "artifacts": _artifact_summary(ctx, path),
-        "recent": label_who(ctx, progress.recent(c, path)),  # on a hub with people, whose session each one is
+        "recent": recent,
+        "asks": progress.asks(recent),
         "timeline": _labelled(ctx, progress.timeline(c, path, session_prs=not limited)),
-        "repo": progress.repo_state(path) if here else None,
+        "repo": repo,
+        "roadmap": progress.roadmap(path, repo["root"] if repo else None) if here else None,
         "sessions": session_rows(ctx, "project_path = ?", [path], "started_at DESC", 200),
         "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
             "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
