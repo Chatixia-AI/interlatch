@@ -48,7 +48,7 @@ def member(tmp_path, monkeypatch):
 
 def _sent(cfg, **kw):
     recs, _, kept = _shared_records(cfg, {}, remotes=kw.pop("remotes", {}), projects_only=True,
-                                        routes=group_routes(cfg), **kw)
+                                    routes=group_routes(cfg), **kw)
     return sorted(r["id"] for r in recs), kept
 
 
@@ -64,7 +64,7 @@ def test_a_shared_group_sends_every_project_in_it(member):
     # a repository whose git remote the hub files elsewhere follows its remote
     assert _sent(cfg, remotes={"github.com/acme/lib": "/srv/Lib"}) == (["dash", "lib", "monitor", "resona", "root"], 3)
     assert _shared_records(cfg, {}, remotes={"github.com/acme/lib": "/srv/Lib"}, projects_only=True, scope=["/srv/Lib"],
-                               routes=routes)[0][0]["id"] == "lib"
+                           routes=routes)[0][0]["id"] == "lib"
     assert _sent(cfg, scope=["/srv/Resona"]) == (["resona"], 7)  # a person limited to other projects: none of it
     left = load_config(cfg.home)
     left.hub_left = [PROJECT]

@@ -31,7 +31,7 @@ def knowledge(ctx: Context, q: dict) -> dict:
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
             machine.update(ctx.conn.execute(f"SELECT id, machine_id FROM sessions WHERE id IN ({','.join('?' * len(chunk))})",
-                                             chunk).fetchall())
+                                            chunk).fetchall())
         for r in rows:
             r["session_machine"] = machine.get(r.get("session_id"))
         label_who(ctx, [r for r in rows if r.get("session_id") in machine], "session_machine")
@@ -190,7 +190,7 @@ def knowledge_hub(ctx: Context) -> dict:
     top_terms = [dict(r) for r in ctx.conn.execute(
         "SELECT term, category, n_sessions FROM glossary ORDER BY n_sessions DESC, n_mentions DESC LIMIT 16")]
     map_projects = ctx.conn.execute("SELECT COUNT(DISTINCT project_path) FROM glossary_usage WHERE project_path != ?",
-                                     (GLOBAL,)).fetchone()[0]
+                                    (GLOBAL,)).fetchone()[0]
     themes = ctx.conn.execute("SELECT COUNT(*) FROM glossary_themes").fetchone()[0]
     row = ctx.conn.execute("SELECT period, start, end, n_sessions, review_json, stats_json FROM reviews "
                             "ORDER BY period DESC LIMIT 1").fetchone()

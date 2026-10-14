@@ -168,9 +168,9 @@ class SessionBuilder:
             if fp and name.rsplit(".", 1)[-1].lower() in _WRITE_TOOLS:
                 content = args.get("content") if isinstance(args.get("content"), str) else args.get("file_text")
                 artifact_records.file_written(self.ps, fp, content=content, ts=ts, agent_id=self.agent_id, tool_use_id=call_id,
-                                       where=self.where)
+                                              where=self.where)
             artifact_records.from_tool(self.ps, call.name, args, result if isinstance(result, str) else "", ts=ts,
-                                agent_id=self.agent_id, tool_use_id=call_id, command=cmd)
+                                       agent_id=self.agent_id, tool_use_id=call_id, command=cmd)
         self.event(ts, "assistant", "tool_use", f"{call.name}: {summary}" if summary and summary != name else call.name,
                    tool_name=call.name, tool_use_id=call_id, meta={"input": truncate(json.dumps(args, ensure_ascii=False, default=str), 1_500)} if args else None)
         if result is not None:

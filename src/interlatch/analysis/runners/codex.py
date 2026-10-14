@@ -83,7 +83,7 @@ class CodexRunner(Runner):
         t0 = time.monotonic()
         try:
             stdout, stderr, returncode = run_sleep_aware(cmd, prompt, cwd=workdir, env=env,
-                                                          timeout=timeout or a.timeout_seconds, name=self.cli)
+                                                         timeout=timeout or a.timeout_seconds, name=self.cli)
         finally:
             os.unlink(fh.name)
         elapsed = int((time.monotonic() - t0) * 1000)
