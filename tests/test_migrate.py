@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from interlatch.runtime import install, migrate
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import interlatch_home, default_home, env, legacy_home
 from interlatch.storage.sqlite import connect
 
@@ -476,7 +476,7 @@ def test_chronicle_apps_shim_runs_the_new_app_too(tmp_path):
 
 
 def test_the_command_name(monkeypatch):
-    from interlatch.cli import prog_name
+    from interlatch.interfaces.cli.parser import prog_name
 
     for argv0, name in (("/u/.local/bin/interlatch", "interlatch"), ("/u/.local/bin/chronicle", "chronicle"),
                         ("/x/chronicle/__main__.py", "interlatch")):

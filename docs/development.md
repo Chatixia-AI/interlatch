@@ -143,7 +143,10 @@ which installs from before the rename still run):
 - `runtime/`: Interlatch on this computer: installing it (hooks, MCP servers, background jobs), connecting agents
   (`connectors.py`), the status line, moving from Chronicle, updates, notifications, the hub in a container;
   `runtime/platforms/`: Windows (Task Scheduler, the notification area), the macOS app and its menu-bar icon
-- `server.py` + `web/` (dashboard), `cli.py`; `packaging/macos/` builds the app
+- `interfaces/cli/`: the command line: `parser.py` assembles the commands, and each module in `commands/` holds a
+  group of them (recording, archive, knowledge, setup, sharing, operations), each command's options beside its code;
+  `cli.py` at the top is the entry point the `interlatch` command runs
+- `server.py` + `web/` (dashboard); `packaging/macos/` builds the app
 
 The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `server.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an

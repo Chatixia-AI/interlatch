@@ -54,7 +54,7 @@ def test_language_setting_defaults_parses_and_falls_back(env, caplog):
 
 
 def test_cli_config_set_checks_the_language(env, capsys):
-    from interlatch.cli import main
+    from interlatch.interfaces.cli.main import main
 
     assert main(["config", "set", "analysis.language", "de"]) == 2
     assert "must be one of: en, ja" in capsys.readouterr().err

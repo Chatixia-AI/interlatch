@@ -8,7 +8,7 @@ import time
 import pytest
 
 from interlatch.runtime import notify, update
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 

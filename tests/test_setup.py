@@ -7,7 +7,7 @@ import sys
 import pytest
 
 from interlatch.runtime import connectors
-from interlatch.cli import main
+from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.runtime.install import hooks_installed
@@ -224,7 +224,7 @@ def test_stage_progress_draws_one_bar_per_stage():
     from rich.console import Console
     from rich.progress import Progress
 
-    from interlatch.cli import _StageProgress
+    from interlatch.interfaces.cli.commands.setup import _StageProgress
 
     with Progress(console=Console(file=open(os.devnull, "w"))) as bar:
         stages = _StageProgress(bar)
@@ -244,7 +244,7 @@ def test_stage_progress_takes_messages_from_several_threads_at_once():
     from rich.console import Console
     from rich.progress import Progress
 
-    from interlatch.cli import _StageProgress
+    from interlatch.interfaces.cli.commands.setup import _StageProgress
 
     with Progress(console=Console(file=open(os.devnull, "w"))) as bar:
         stages = _StageProgress(bar)
