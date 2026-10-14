@@ -119,7 +119,8 @@ def test_only_project_knowledge_bases_draw_a_sketch():
 
 
 def test_synthesis_stores_the_sketch_and_serves_it(synced, monkeypatch):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "diagram")
     cfg, conn = synced["cfg"], synced["conn"]

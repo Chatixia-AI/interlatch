@@ -153,7 +153,7 @@ def test_cli_set_key_bob(env):
 
 
 def test_dashboard_sets_agent_models(env):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     app = App(env["cfg"])
     choices = {c["name"]: c for c in app.analysis_backends()["choices"]}

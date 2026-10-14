@@ -416,7 +416,7 @@ def test_team_store_settings_from_the_dashboard(teamenv, monkeypatch):
 
 
 def test_what_a_member_sends_from_the_dashboard(teamenv):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     spoke = teamenv["spoke"]
     app = App(spoke)

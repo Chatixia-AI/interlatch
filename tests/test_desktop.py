@@ -61,7 +61,7 @@ def test_self_command(monkeypatch):
 
 
 def test_make_server_falls_back_to_a_free_port(env):
-    from interlatch.server import make_server
+    from interlatch.interfaces.web.server import make_server
 
     with socket.socket() as taken:
         taken.bind(("127.0.0.1", 0))

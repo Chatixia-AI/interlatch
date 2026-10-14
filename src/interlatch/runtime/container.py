@@ -157,7 +157,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
 def main(env: Mapping[str, str] | None = None) -> int:
     from ..ingestion.persistence import register_local
     from ..storage.sqlite import connect
-    from ..server import serve
+    from ..interfaces.web.server import serve
     from ..core.util import setup_logging
 
     env = os.environ if env is None else env

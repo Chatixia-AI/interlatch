@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from interlatch.runtime import statusline
 from interlatch.runtime.install import install_statusline, settings_path, statusline_installed, uninstall_statusline
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 from conftest import SID
 

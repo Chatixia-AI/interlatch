@@ -5,7 +5,7 @@ import json
 from dataclasses import replace
 
 from interlatch.sharing.projects import FOLDERS_FILE, add_project, hub_project_of
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 from conftest import CWD
 

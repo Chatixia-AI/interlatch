@@ -72,7 +72,7 @@ def test_an_older_archive_gains_the_column(tmp_path):
 
 def test_dashboard_and_mcp_show_the_case(synced):
     from interlatch.interfaces.mcp import Tools
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     store_analysis(conn, cfg, SID, normalize_analysis({"title": "t", "knowledge": [

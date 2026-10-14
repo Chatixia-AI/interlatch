@@ -5,7 +5,7 @@ import pytest
 
 from interlatch.sharing import access
 from interlatch.projects import groups
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 
 AKTIO = "/Users/me/Work/AI-BPO/Aktio"
 VM = "aktio-vm:/root/Aktio"

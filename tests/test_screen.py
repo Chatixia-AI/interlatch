@@ -132,7 +132,8 @@ def test_cli_screen(env, capsys):
 
 
 def test_dashboard_filters_and_queues(env):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     cfg = env["cfg"]
     conn = db_connect(cfg.db_path)

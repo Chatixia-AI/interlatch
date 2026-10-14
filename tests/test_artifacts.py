@@ -162,7 +162,7 @@ def test_stored_with_the_session(synced):
     pr = next(r for r in rows if r["kind"] == "pr")  # the transcript's pr-link record
     assert pr["url"] == "https://github.com/x/y/pull/7" and pr["title"] == "x/y#7"
     from interlatch.interfaces.mcp import TOOLS, Tools
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     assert any(t["name"] == "find_artifacts" and t["annotations"]["readOnlyHint"] for t in TOOLS)
     out = Tools(synced["cfg"]).find_artifacts(kind="pr")
@@ -198,7 +198,8 @@ def test_images_are_served_only_as_recorded_artifacts(synced, tmp_path):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     conn = synced["conn"]
     svg = tmp_path / "flow.svg"
@@ -246,7 +247,8 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
     from http.server import ThreadingHTTPServer
 
     from interlatch.ingestion.service import sync
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     from conftest import PROJECT_DIR
 

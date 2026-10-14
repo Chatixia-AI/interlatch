@@ -11,41 +11,37 @@ sign-in link (/signin). Everyone signed in may look; only admins change things. 
 
 from __future__ import annotations
 
-import errno
 import json
 import logging
-import mimetypes
 import os
 import re
 import shlex
 import subprocess
-import sys
 import threading
 import time
-import webbrowser
 from dataclasses import replace
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import urlparse
 
-from . import __version__
-from .sharing import news
-from .core import i18n
-from .core.config import LANGUAGES, Config, env
-from .storage.sqlite import connect
-from .storage.kv import kv_get, kv_set
-from .core.i18n import tr
-from .knowledge.ladder import reason_text
-from .knowledge.ladder import refresh as refresh_stage
-from .analysis.runners.factory import BACKENDS, make_runner
-from .application.search import search_all, search_events, search_knowledge, search_sessions
-from .knowledge.synthesize import GLOBAL
-from .core.util import PROGRESS_RE, loads, to_iso, utcnow
-from .core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
-from .application.records import resolve_session_id, session_record
-from .projects.labels import project_labels
-from .core.sessions import analysis_reason_text
+from ... import __version__
+from ...analysis.runners.factory import BACKENDS, make_runner
+from ...application.records import resolve_session_id, session_record
+from ...application.search import search_all, search_events, search_knowledge, search_sessions
+from ...core.config import LANGUAGES, Config, env
+from ...core.i18n import tr
+from ...core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
+from ...core.sessions import analysis_reason_text
+from ...core.util import loads, to_iso, utcnow
+from ...knowledge.ladder import reason_text
+from ...knowledge.ladder import refresh as refresh_stage
+from ...knowledge.synthesize import GLOBAL
+from ...projects.labels import project_labels
+from ...sharing import news
+from ...storage.kv import kv_get, kv_set
+from ...storage.sqlite import connect
+from .assets import UI_BUILD
+from .jobs import Jobs
 
 log = logging.getLogger("interlatch.server")
 MAX_SELECTION = 1000  # sessions one "analyze selected" may cover
@@ -56,10 +52,6 @@ AGENT_SETTINGS = {
     "codex": {"model": ("analysis", "codex_model"), "effort": ("analysis", "effort")},
 }
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-WEB_DIR = Path(__file__).parent / "web"
-LOOPBACK = ("127.0.0.1", "localhost", "[::1]")
-SESSION_COOKIE = "interlatch_session"  # a person's dashboard session on a hub (people.py)
-LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the rename: still honoured until it expires
 TEAM_DAYS = ("7", "30", "90")  # the team Home's periods, first the default
 TEAM_MAX_PROJECTS = 500
 # Home's Agents card: the metrics a session may carry. An agent none of whose sessions ever had one does not record it
@@ -67,40 +59,7 @@ TEAM_MAX_PROJECTS = 500
 AGENT_METRICS = {"tool_calls": "n_tool_calls > 0", "lines": "lines_added + lines_removed > 0",
                  "tokens": "input_tokens + output_tokens + cache_read_tokens + cache_write_tokens > 0", "cost": "est_cost_usd > 0"}
 AGENT_TOTALS = ("sessions", "active_s", "prompts", "tool_calls", "tool_errors", "lines_added", "lines_removed", "tokens", "cost")
-# headers a proxy adds: a request with any of them came through one, so it is not from someone at this computer
-PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
-HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub/done", "/api/hub/hello",
-            "/api/hub/withdraw")
-SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "
-               "(Settings › Devices).")
-TOO_MANY_CODES = "too many wrong codes from this address; try again in {seconds} s"  # people.CodeAttempts
-# The dashboard page's Content-Security-Policy: scripts, styles, images, fonts and requests from the dashboard itself
-# only, no inline script or style (index.html loads boot.js; app.js sets styles through the CSSOM), no plugins, no
-# <base>. A mistake that lets a transcript's text into the page as HTML can't run anything. The macOS app's window
-# (?app=mac, at this computer) also allows eval: pywebview builds its bridge to the window (theme, drag, zoom) with
-# new Function.
-PAGE_CSP = "default-src 'self'; script-src 'self'{eval}; object-src 'none'; base-uri 'none'; form-action 'self'"
-mimetypes.add_type("application/manifest+json", ".webmanifest")
-mimetypes.add_type("font/woff2", ".woff2")
-mimetypes.add_type("image/webp", ".webp")
 
-
-# The page is served from the files as they were when this process started, so it always matches the code
-# answering its API calls: an upgrade (or an edit to an editable install) takes effect with the restart.
-WEB_FILES = {p.name: p.read_bytes() for p in sorted(WEB_DIR.glob("*")) if p.is_file()}
-
-
-def _ui_build() -> str:
-    """Content hash of the web assets; open tabs reload themselves when it changes (after an upgrade)."""
-    import hashlib
-
-    h = hashlib.sha1()
-    for body in WEB_FILES.values():
-        h.update(body)
-    return h.hexdigest()[:12]
-
-
-UI_BUILD = _ui_build()
 
 SESSION_LIST_COLS = (
     "id, source, agent, title, project_name, project_path, started_at, ended_at, duration_s, active_s, n_prompts, "
@@ -123,45 +82,6 @@ SORTABLE = {"started_at", "ended_at", "active_s", "duration_s", "n_prompts", "n_
 def _local_offset_modifier() -> str:
     offset = datetime.now().astimezone().utcoffset() or timedelta(0)
     return f"{int(offset.total_seconds() // 60):+d} minutes"
-
-
-class Jobs:
-    """Tiny in-process registry of background jobs started from the UI."""
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.jobs: dict[str, dict] = {}
-
-    def start(self, name: str, fn) -> bool:
-        with self.lock:
-            if self.jobs.get(name, {}).get("state") == "running":
-                return False
-            self.jobs[name] = {"state": "running", "started": time.time(), "message": "", "result": None, "done": None, "total": None}
-
-        def run():
-            try:
-                result = fn(lambda m: self._msg(name, m))
-                self._finish(name, "done", result)
-            except Exception as exc:  # surfaced in the UI
-                log.exception("job %s failed", name)
-                self._finish(name, "error", str(exc))
-
-        threading.Thread(target=run, daemon=True).start()
-        return True
-
-    def _msg(self, name, message):
-        m = PROGRESS_RE.search(message or "")
-        done, total = (int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))) if m else (None, None)
-        with self.lock:
-            self.jobs[name].update(message=message, done=done, total=total if total and done <= total else None)
-
-    def _finish(self, name, state, result):
-        with self.lock:
-            self.jobs[name].update(state=state, result=result, finished=time.time())
-
-    def snapshot(self) -> dict:
-        with self.lock:
-            return {k: dict(v) for k, v in self.jobs.items()}
 
 
 def git_ignored(root: str, paths: list[str]) -> set[str]:
@@ -189,10 +109,10 @@ class App:
         self._lb_signin: dict | None = None  # a leaderboard sign-in waiting to come back from the hosted page
         self._cfg_sig = self._config_sig()
         self._update_check = threading.Lock()  # one daily update check at a time
-        from .sharing.receiver import IngestTrigger
+        from ...sharing.receiver import IngestTrigger
 
         self.ingest = IngestTrigger(cfg)  # a hub ingests what other computers send, right after they send it
-        from .sharing.people import CodeAttempts
+        from ...sharing.people import CodeAttempts
 
         self.code_attempts = CodeAttempts()  # wrong invite and sign-in codes per address
 
@@ -204,7 +124,7 @@ class App:
 
     def refresh_config(self) -> None:
         """The dashboard runs for days: pick up config.toml edits (e.g. `interlatch connect codex`) without a restart."""
-        from .core.config import load_config
+        from ...core.config import load_config
 
         sig = self._config_sig()
         if sig != self._cfg_sig:
@@ -379,9 +299,9 @@ class App:
         """This computer as a hub: the name its dashboard shows, whether it has people (then Home is the team's), its
         address, whether it takes knowledge only, and whether it is a dedicated hub (`[hub] dedicated`: a server for
         the team, whose dashboard leaves out a person's own computer). None on a computer that isn't a hub."""
-        from .sharing.identity import read_token
-        from .core.machine import local_machine
-        from .sharing.people import has_people
+        from ...core.machine import local_machine
+        from ...sharing.identity import read_token
+        from ...sharing.people import has_people
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return None
@@ -391,8 +311,8 @@ class App:
 
     def _here(self) -> dict:
         """This computer, recorded in the machines table, which whose-session joins go through."""
-        from .ingestion.persistence import register_local
-        from .core.machine import local_machine
+        from ...core.machine import local_machine
+        from ...ingestion.persistence import register_local
 
         here = local_machine(self.cfg)
         if not self.conn.execute("SELECT 1 FROM machines WHERE id = ?", (here["id"],)).fetchone():
@@ -403,7 +323,7 @@ class App:
     def _whos(self) -> dict | None:
         """{computer id: (who, key)} for labelling rows on a hub with people, None elsewhere; the hub's own sessions,
         whose machine_id may be empty, under None."""
-        from .sharing.people import has_people
+        from ...sharing.people import has_people
 
         if not has_people(self.conn):
             return None
@@ -434,7 +354,7 @@ class App:
     def who_options(self) -> dict:
         """Who the Sessions and Knowledge pages can be narrowed to on a hub with people: each person and each computer
         no one joined, with the sessions this viewer can see (through the request's connection)."""
-        from .sharing.people import has_people
+        from ...sharing.people import has_people
 
         if not has_people(self.conn):
             return {"items": []}
@@ -450,11 +370,11 @@ class App:
         (access.py), and `scope` keeps the set-up projects to theirs as well. Who: the person whose computer ran the
         session, else that computer's name. People, computers and open invites: admins only. News: what other
         computers sent lately, and what `viewer` saw of it (news.py)."""
-        from .sharing import people
-        from .sharing.projects import machines
-        from .sharing.protocol import SHARED_AGENTS
-        from .projects.routing import declared_projects
-        from .core.paths import project_name_for
+        from ...core.paths import project_name_for
+        from ...projects.routing import declared_projects
+        from ...sharing import people
+        from ...sharing.projects import machines
+        from ...sharing.protocol import SHARED_AGENTS
 
         c = self.conn
         days = q.get("days") if q.get("days") in TEAM_DAYS else TEAM_DAYS[0]
@@ -528,7 +448,7 @@ class App:
     def news(self, viewer: dict | None, *, scope: list[str] | None, admin: bool, after: str | None = None) -> dict:
         """What other computers sent lately (news.py): the newest items, or with `after` those added to since; how
         many `viewer` hasn't seen; and `now`, which the page sends back once they saw it (mark_seen)."""
-        from .core.paths import project_name_for
+        from ...core.paths import project_name_for
 
         c = self.conn
         now = to_iso(utcnow())  # before reading: what is added meanwhile stays unseen
@@ -541,7 +461,7 @@ class App:
 
     # ---- the usage leaderboard (leaderboard.py): this computer's person against everyone who signed in
     def leaderboard(self, q: dict) -> dict:
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         by = q.get("by") if q.get("by") in lb.METRICS else "hours"
         days = int(q["days"]) if q.get("days") in {str(d) for d in lb.WINDOWS} else 30
@@ -565,7 +485,7 @@ class App:
 
     def action_leaderboard_signin(self, return_to: str, lang: str) -> dict:
         """Start a sign-in: the hosted page's address, carrying this dashboard's address and a one-time state."""
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         state = lb.new_state()
         self._lb_signin = {"state": state, "expires": time.time() + lb.SIGNIN_TTL}
@@ -573,7 +493,7 @@ class App:
 
     def action_leaderboard_finish(self, body: dict) -> dict:
         """The sign-in page came back: keep its session if it carries the state this dashboard made, then send."""
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         pending = self._lb_pending()
         if not lb.same_state(pending and pending["state"], body.get("state")):
@@ -587,19 +507,19 @@ class App:
         self._lb_signin = None
 
     def action_leaderboard_send(self) -> dict:
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         lb.send(self.cfg, self.conn, force=True)
         return lb.status(self.cfg)
 
     def action_leaderboard_name(self, body: dict) -> dict:
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         lb.rename(self.cfg, self.conn, body.get("name"))
         return lb.status(self.cfg)
 
     def action_leaderboard_leave(self) -> dict:
-        from .sharing import leaderboard as lb
+        from ...sharing import leaderboard as lb
 
         lb.leave(self.cfg)
         return lb.status(self.cfg)
@@ -610,8 +530,8 @@ class App:
 
     @staticmethod
     def _reason(k: dict) -> dict:
-        from .analysis.session import case_of
-        from .knowledge.learning import topics_for
+        from ...analysis.session import case_of
+        from ...knowledge.learning import topics_for
 
         raw_case = loads(k.pop("case_json", None), k.get("case"))  # lesson material: a case file, principle, diagram
         k["case"] = case_of({"kind": k.get("kind"), "case": raw_case}) if isinstance(raw_case, dict) else None
@@ -619,7 +539,7 @@ class App:
         if k.get("stage_reason"):
             k["stage_reason"] = reason_text(k["stage_reason"])
         if k.get("source") == "team":  # a teammate's lesson: the computers whose sessions stated it
-            from .sharing.pull import team_from
+            from ...sharing.pull import team_from
 
             k["team_from"] = team_from(k)
         return k
@@ -641,7 +561,7 @@ class App:
             where.append("project_path = ?")
             params.append(q["project"])
         elif str(q.get("group") or "").isdigit():  # every project in one of your groups (groups.py)
-            from .projects.groups import paths_in
+            from ...projects.groups import paths_in
 
             paths = paths_in(self.conn, int(q["group"]))
             where.append(f"project_path IN ({','.join('?' * len(paths))})" if paths else "0")
@@ -669,7 +589,7 @@ class App:
             where.append("screen_verdict = ? AND screen_sig = files_sig")
             params.append(q["screen"])
         elif q.get("screen") == "none":
-            from .analysis.screen import SOURCES
+            from ...analysis.screen import SOURCES
 
             where.append(f"source IN ({','.join('?' * len(SOURCES))}) AND analysis_status != 'done' "
                          "AND (screen_sig IS NULL OR screen_sig != files_sig)")
@@ -707,7 +627,7 @@ class App:
 
     def session_summary(self, sid: str) -> dict | None:
         """A session as someone limited to projects sees it (access.py): its summary and project lessons."""
-        from .sharing.access import session_page
+        from ...sharing.access import session_page
 
         real = self.conn.execute("SELECT id FROM sessions WHERE id = ?", (sid,)).fetchone()
         if not real:
@@ -723,12 +643,12 @@ class App:
         s = session_record(self.conn, real)
         s["knowledge"] = [self._reason(k) for k in s["knowledge"]]
         s["analysis_reason"] = analysis_reason_text(s.get("analysis_reason"))
-        from .analysis.queue import waiting_reason
+        from ...analysis.queue import waiting_reason
 
         row = self.conn.execute("SELECT * FROM sessions WHERE id = ?", (real,)).fetchone()
         why = waiting_reason(self.conn, self.cfg, row) if row else None
         s["waiting"] = {"code": why[0], "text": why[1]} if why else None
-        from .runtime.statusline import session_usage
+        from ...runtime.statusline import session_usage
 
         s["usage"] = session_usage(row["statusline_json"]) if row else None  # None: not recorded, never zero
         s["api_calls"] = [dict(r) for r in self.conn.execute(
@@ -787,10 +707,10 @@ class App:
     def projects(self, scope: list[str] | None = None) -> list[dict]:
         """Every project with sessions here, most recent first; on a hub, then the ones set up there that have none yet
         (only those in `scope`, for a person limited to some projects)."""
-        from .projects.groups import assign
-        from .sharing.projects import hub_project_of
-        from .projects.routing import declared_projects
-        from .core.paths import project_name_for
+        from ...core.paths import project_name_for
+        from ...projects.groups import assign
+        from ...projects.routing import declared_projects
+        from ...sharing.projects import hub_project_of
 
         labels = project_labels(self.conn)
         shared = set(declared_projects(self.conn))
@@ -844,7 +764,7 @@ class App:
         """The groups; home: a rule typed as ~/… shows as it'll be kept; hub: on a computer that sends to a hub, the
         hub's projects as of the last push (which a group can be shared as, and the Projects lists show this computer's
         projects under), with the team's sessions in each and the hub's address."""
-        from .projects.groups import groups
+        from ...projects.groups import groups
 
         return {"groups": groups(self.conn), "home": str(Path.home()),
                 "hub": self._hub_choices() if self.cfg.is_spoke else None}
@@ -852,13 +772,13 @@ class App:
     def _billed(self) -> bool:
         """Analysis goes to a model provider's API with your key, which bills each call (not a local Ollama, and not a
         coding agent's own login)."""
-        from .analysis.runners.factory import AGENTS
+        from ...analysis.runners.factory import AGENTS
 
         backend = self.cfg.analysis.backend
         return backend in BACKENDS and backend not in AGENTS and not make_runner(self.cfg).local()
 
     def _hub_choices(self) -> dict:
-        from .sharing.projects import last_folders
+        from ...sharing.projects import last_folders
 
         seen = last_folders(self.cfg) or {}
         return {"name": seen.get("hub"), "url": self.cfg.hub_url or None, "share": self.cfg.hub_share,
@@ -868,7 +788,7 @@ class App:
 
     def action_project_groups(self, verb: str, body: dict) -> tuple[dict, int]:
         """Make, change or remove a group of projects, or move projects into one (groups.py)."""
-        from .projects import groups
+        from ...projects import groups
 
         def gid(v):
             try:
@@ -923,14 +843,13 @@ class App:
             (path,)).fetchone()
         if not stats or not stats["sessions"]:
             return None
-        from .interfaces.exports.diagrams import for_kb
-        from .knowledge.glossary import glossary_entries
+        from ...knowledge.glossary import glossary_entries
+        from ..exports.diagrams import for_kb
         kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
         labels = project_labels(c)
-        from .projects.routing import declared_projects
-
-        from .projects.groups import group_of
-        from .sharing.projects import hub_project_of
+        from ...projects.groups import group_of
+        from ...projects.routing import declared_projects
+        from ...sharing.projects import hub_project_of
 
         return {
             "project_path": path,
@@ -1028,8 +947,8 @@ class App:
              "changed_ids": sorted(files[p]["changed"])} for p in paths[:limit]]}
 
     def _artifacts(self, **filters) -> tuple[list[dict], dict[str, int]]:
-        from .artifacts.queries import query
-        from .core.machine import local_machine_id
+        from ...artifacts.queries import query
+        from ...core.machine import local_machine_id
 
         return query(self.conn, local_machine=local_machine_id(self.cfg), **filters)
 
@@ -1053,20 +972,20 @@ class App:
         return {"total": len(items), "counts": counts, "items": items[offset:offset + limit], "projects": projects}
 
     def artifact_open(self, artifact_id: int) -> dict | None:
-        from .artifacts.files import open_file
-        from .core.machine import local_machine_id
+        from ...artifacts.files import open_file
+        from ...core.machine import local_machine_id
 
         return open_file(self.conn, artifact_id, local_machine_id(self.cfg))
 
     def artifact_reveal(self, artifact_id: int, how: str) -> str | None:
-        from .artifacts.files import reveal
-        from .core.machine import local_machine_id
+        from ...artifacts.files import reveal
+        from ...core.machine import local_machine_id
 
         return reveal(self.conn, artifact_id, how, local_machine_id(self.cfg))
 
     def artifact_file(self, artifact_id: int) -> tuple[bytes, str] | None:
-        from .artifacts.queries import preview_file
-        from .core.machine import local_machine_id
+        from ...artifacts.queries import preview_file
+        from ...core.machine import local_machine_id
 
         return preview_file(self.conn, artifact_id, local_machine_id(self.cfg), cache_dir=self.cfg.home / "thumbs")
 
@@ -1092,22 +1011,22 @@ class App:
             "SELECT kind, COUNT(*) n FROM knowledge WHERE status = 'active' GROUP BY kind")}
         sources = dict(self.conn.execute(
             "SELECT source, COUNT(*) FROM knowledge WHERE status = 'active' GROUP BY source").fetchall())
-        from .analysis.session import CASE_FILE_SQL
+        from ...analysis.session import CASE_FILE_SQL
 
         cases = self.conn.execute(
             "SELECT COUNT(*) FROM knowledge WHERE status = 'active' AND " + CASE_FILE_SQL).fetchone()[0]
         return {"items": [self._reason(r) for r in rows], "counts": counts, "sources": sources, "cases": cases}
 
     def learning_interests(self, viewer: dict | None, q: dict) -> dict:
-        from .core.machine import local_machine_id
-        from .knowledge.learning import interest_profile
+        from ...core.machine import local_machine_id
+        from ...knowledge.learning import interest_profile
 
         return interest_profile(self.conn, viewer_id=(viewer or {}).get("id"), machine_id=local_machine_id(self.cfg),
                                 project=q.get("project") or "")
 
     def learning_glance(self, viewer: dict | None, q: dict) -> dict:
         """The Knowledge page's Learn band (learning.glance), without sending every lesson to the browser."""
-        from .knowledge.learning import glance
+        from ...knowledge.learning import glance
 
         rows = search_knowledge(self.conn, project=q.get("project") or None, lessons=True, limit=10000)
         return glance([self._reason(r) for r in rows], self.learning_interests(viewer, q)["interests"])
@@ -1122,7 +1041,7 @@ class App:
         return found
 
     def glossary(self, q: dict) -> dict:
-        from .knowledge.glossary import CATEGORIES, glossary_entries
+        from ...knowledge.glossary import CATEGORIES, glossary_entries
 
         items = glossary_entries(self.conn, query=q.get("q") or None, project=q.get("project") or None,
                                  category=q.get("category") or None)
@@ -1136,13 +1055,13 @@ class App:
                  "category": r["category"]} for r in self.conn.execute("SELECT term, aliases_json, definition, category FROM glossary")]
 
     def map(self) -> dict:
-        from .knowledge.glossary import map_data
+        from ...knowledge.glossary import map_data
 
         return map_data(self.conn)
 
     def systems(self) -> dict:
         """The Systems map's top level: groups, systems and the links between them (without each system's parts)."""
-        from .projects.systems import cached, landscape
+        from ...projects.systems import cached, landscape
 
         data = landscape(cached(self.conn, self.cfg))
         labels = project_labels(self.conn)
@@ -1152,7 +1071,7 @@ class App:
 
     def system(self, key: str) -> dict | None:
         """One system's parts, connections and links, with the evidence for each."""
-        from .projects.systems import CHAT_SOURCES, cached, system
+        from ...projects.systems import CHAT_SOURCES, cached, system
 
         out = system(cached(self.conn, self.cfg), key)
         if out:
@@ -1164,7 +1083,7 @@ class App:
         return out
 
     def action_themes(self, force: bool) -> bool:
-        from .knowledge.glossary import build_themes
+        from ...knowledge.glossary import build_themes
 
         def job(progress):
             results = build_themes(self.cfg, force=force, concurrency=self.cfg.analysis.concurrency + 1, progress=progress)
@@ -1175,7 +1094,7 @@ class App:
         return self.jobs.start("themes", job)
 
     def action_glossary(self, path: str | None) -> bool:
-        from .knowledge.glossary import build_glossaries
+        from ...knowledge.glossary import build_glossaries
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -1191,15 +1110,15 @@ class App:
         return self.jobs.start(f"glossary:{path or 'all'}", job)
 
     def connectors(self) -> list[dict]:
-        from .runtime.connectors import all_status
+        from ...runtime.connectors import all_status
 
         return all_status(self.cfg, self.conn)
 
     def mcp_info(self) -> dict:
         """What the MCP page shows: the command that starts the server, its tools, and config to paste."""
-        from .runtime.connectors import mcp_server_entry
-        from .runtime.install import MCP_NAME, executable
-        from .interfaces.mcp import INSTRUCTIONS, TOOLS
+        from ...runtime.connectors import mcp_server_entry
+        from ...runtime.install import MCP_NAME, executable
+        from ..mcp import INSTRUCTIONS, TOOLS
 
         entry = mcp_server_entry(executable())
         cmd, args = entry["command"], entry["args"]
@@ -1220,14 +1139,14 @@ class App:
         }
 
     def mcp_clients(self) -> list[dict]:
-        from .runtime.connectors import mcp_clients_status
+        from ...runtime.connectors import mcp_clients_status
 
         return mcp_clients_status()
 
     def action_connector(self, name: str, action: str) -> dict:
-        from .core.config import load_config
-        from .runtime.connectors import MCP_CLIENTS, connect, disconnect
-        from .runtime.install import executable
+        from ...core.config import load_config
+        from ...runtime.connectors import MCP_CLIENTS, connect, disconnect
+        from ...runtime.install import executable
 
         if name in MCP_CLIENTS:  # only another tool's MCP config changes: no config reload, nothing to sync
             return {"actions": connect(self.cfg, name, executable()) if action == "connect" else disconnect(self.cfg, name),
@@ -1244,7 +1163,7 @@ class App:
         return {"actions": actions, "sync_started": started}
 
     def reviews(self) -> dict:
-        from .knowledge.reviews import _stats, normalize_review, review_ready, week_bounds, week_glance
+        from ...knowledge.reviews import _stats, normalize_review, review_ready, week_bounds, week_glance
 
         items = [dict(r) for r in self.conn.execute(
             "SELECT period, start, end, created_at, model, n_sessions, markdown, review_json, stats_json FROM reviews "
@@ -1263,7 +1182,7 @@ class App:
 
     def knowledge_hub(self) -> dict:
         """The Knowledge section's landing page: a glance at each of its tools."""
-        from .knowledge.reviews import _stats, normalize_review, week_glance
+        from ...knowledge.reviews import _stats, normalize_review, week_glance
 
         counts = {r["kind"]: r["n"] for r in self.conn.execute(
             "SELECT kind, COUNT(*) n FROM knowledge WHERE status = 'active' GROUP BY kind")}
@@ -1288,7 +1207,7 @@ class App:
                       "tldr": data["tldr"],
                       "stats": _stats(self.conn, row["start"], row["end"]) if row["start"] else loads(row["stats_json"], {}) or {},
                       "daily": week_glance(self.conn, row["start"], row["end"])["daily"] if row["start"] else []}
-        from .analysis.session import CASE_FILE_SQL
+        from ...analysis.session import CASE_FILE_SQL
 
         cases = self.conn.execute(
             "SELECT COUNT(*) FROM knowledge WHERE status = 'active' AND " + CASE_FILE_SQL).fetchone()[0]
@@ -1299,7 +1218,7 @@ class App:
                 "review": review, "reviews": self.conn.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]}
 
     def action_review(self, week: str | None) -> bool:
-        from .knowledge.reviews import generate_review
+        from ...knowledge.reviews import generate_review
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -1314,8 +1233,8 @@ class App:
         return self.jobs.start(f"review:{week or 'last'}", job)
 
     def status_small(self, limited: bool = False) -> dict:
-        from .runtime.update import available, recall
-        from .analysis.queue import PAUSE_KEY, count_pending
+        from ...analysis.queue import PAUSE_KEY, count_pending
+        from ...runtime.update import available, recall
 
         if limited:  # the hub's own queue, jobs and updates are not theirs to see
             return {"pending": {"ready": 0, "queued": 0}, "analysis": {"auto": False, "max_per_run": 0, "label": ""}, "paused_until": None,
@@ -1342,12 +1261,11 @@ class App:
 
     def devices(self) -> dict:
         """This computer's role, the computers a hub hears from, and how the dashboard is reachable."""
-        from .sharing.push import last_push
-        from .sharing.projects import last_folders, machines
-        from .sharing.identity import read_token
-        from .core.machine import local_machine
-
-        from .sharing.pull import last_team
+        from ...core.machine import local_machine
+        from ...sharing.identity import read_token
+        from ...sharing.projects import last_folders, machines
+        from ...sharing.pull import last_team
+        from ...sharing.push import last_push
 
         role = "spoke" if self.cfg.is_spoke else "hub" if read_token(self.cfg) else "single"
         recorded = (last_folders(self.cfg) or {}) if role == "spoke" else {}
@@ -1378,7 +1296,7 @@ class App:
     def _my_hub_projects(self, folders: list[dict], recorded: dict) -> list[dict]:
         """The hub's projects this computer is in: through a folder added to one, a repository whose git remote the hub
         files there (as of the last push), a group shared as it, or one it left. Its name as the hub gives it."""
-        from .projects.groups import groups
+        from ...projects.groups import groups
 
         names = {p["path"]: p.get("name") for p in recorded.get("projects") or [] if isinstance(p, dict) and p.get("path")}
         out: dict[str, dict] = {}
@@ -1403,8 +1321,8 @@ class App:
     # ---- Devices › Projects on the hub (a computer that sends to one): join, leave and rejoin, take a folder back
     def hub_project_choices(self) -> dict:
         """For Join a project: the hub's projects (asked now) and this computer's folders that have sessions."""
-        from .sharing.client import handshake
-        from .sharing.protocol import SHARED_AGENTS, HubError
+        from ...sharing.client import handshake
+        from ...sharing.protocol import SHARED_AGENTS, HubError
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1424,8 +1342,8 @@ class App:
     def action_hub_project(self, verb: str, body: dict) -> tuple[dict, int]:
         """add: file a folder here under one of the hub's projects (joining it); remove: take a wrongly added folder
         back, and what it shared; leave and rejoin: stop or start sharing to a project, keeping what it has."""
-        from .sharing.client import add_folder, handshake, leave_project, rejoin_project, remove_folder
-        from .sharing.protocol import FolderError, HubError
+        from ...sharing.client import add_folder, handshake, leave_project, rejoin_project, remove_folder
+        from ...sharing.protocol import FolderError, HubError
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}, 400
@@ -1461,7 +1379,7 @@ class App:
 
     def action_leave_hub(self) -> dict:
         """Settings › Devices › Leave the hub (`interlatch hub leave`)."""
-        from .sharing.client import leave_hub
+        from ...sharing.client import leave_hub
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1474,8 +1392,8 @@ class App:
     def hub_settings(self) -> dict:
         """This hub's name and address, what it takes, and which of them a container's variables set (each start
         writes them again, so the dashboard can't change them)."""
-        from .sharing.identity import read_token
-        from .core.machine import local_machine
+        from ...core.machine import local_machine
+        from ...sharing.identity import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}
@@ -1489,9 +1407,9 @@ class App:
     def action_hub_settings(self, body: dict, by: dict | None) -> tuple[dict, int]:
         """Rename this hub, or change the address computers and browsers reach it at (invites and sign-in links
         use it). A new address's host name is added to [server] allowed_hosts, as `interlatch hub enable --url` does."""
-        from .sharing import people
-        from .core.config import load_config, set_config_value
-        from .sharing.identity import read_token
+        from ...core.config import load_config, set_config_value
+        from ...sharing import people
+        from ...sharing.identity import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}, 400
@@ -1533,7 +1451,7 @@ class App:
 
     # ---- Devices › Team store (team_store.py): the password goes in, never out
     def team_store_info(self) -> dict:
-        from .storage import team as team_store
+        from ...storage import team as team_store
 
         return {"enabled": self.cfg.hub_store == "postgres", "driver": team_store.driver_available(),
                 "settings": team_store.read_settings(self.cfg), "file": str(team_store.env_path(self.cfg)),
@@ -1541,7 +1459,7 @@ class App:
 
     def team_store_status(self) -> dict:
         """What the store holds; asked for after the page shows, since the database may be far away."""
-        from .storage import team as team_store
+        from ...storage import team as team_store
 
         if self.cfg.hub_store != "postgres" or self.cfg.is_spoke:
             return {"enabled": False}
@@ -1551,7 +1469,7 @@ class App:
             return {"enabled": True, "error": str(exc)}
 
     def _store_params(self, body: dict) -> dict:
-        from .storage import team as team_store
+        from ...storage import team as team_store
 
         try:
             saved = team_store.connection_params(self.cfg)
@@ -1560,7 +1478,7 @@ class App:
         return team_store.check_settings(body, saved)
 
     def action_team_store_test(self, body: dict) -> dict:
-        from .storage import team as team_store
+        from ...storage import team as team_store
 
         try:
             return {"ok": True, **team_store.probe(self._store_params(body))}
@@ -1570,8 +1488,8 @@ class App:
     def action_team_store_save(self, body: dict) -> dict:
         """Turn the team store on with these settings (tested first: nothing is saved if they don't work), or off.
         Off keeps the settings, so turning it on again needs no password."""
-        from .storage import team as team_store
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
+        from ...storage import team as team_store
 
         if self.cfg.is_spoke:
             return {"error": tr("this computer sends to a hub: the team store is set up on the hub")}
@@ -1595,8 +1513,9 @@ class App:
 
     # ---- Settings › Storage (mirror.py): a copy of this archive in Postgres; the password goes in, never out
     def mirror_info(self) -> dict:
-        from .storage import mirror, postgres as pg
-        from .core.config import MIRROR_INCLUDES
+        from ...core.config import MIRROR_INCLUDES
+        from ...storage import mirror
+        from ...storage import postgres as pg
 
         return {"enabled": mirror.enabled(self.cfg), "include": self.cfg.mirror_include, "schema": self.cfg.mirror_schema,
                 "includes": list(MIRROR_INCLUDES), "driver": pg.driver_available(), "install": mirror.INSTALL,
@@ -1606,7 +1525,7 @@ class App:
 
     def mirror_status(self) -> dict:
         """What the mirror holds; asked for after the page shows, since the database may be far away."""
-        from .storage import mirror
+        from ...storage import mirror
 
         if not mirror.enabled(self.cfg):
             return {"enabled": False}
@@ -1616,7 +1535,7 @@ class App:
             return {"enabled": True, "error": tr(str(exc))}
 
     def _mirror_params(self, body: dict) -> dict:
-        from .storage import mirror
+        from ...storage import mirror
 
         try:
             saved = mirror.connection_params(self.cfg)
@@ -1625,7 +1544,7 @@ class App:
         return mirror.check_settings(body, saved)
 
     def _mirror_schema(self, body: dict) -> str:
-        from .storage import mirror
+        from ...storage import mirror
 
         schema = str(body.get("schema") or self.cfg.mirror_schema).strip()
         if not (schema.isidentifier() and schema.isascii()):
@@ -1635,8 +1554,8 @@ class App:
     def _mirror_check(self, params: dict, schema: str) -> dict:
         """probe(), plus whether this computer may write there: a schema no other computer's mirror is in, and a user
         that can create its tables."""
-        from .storage import mirror
-        from .core.machine import local_machine
+        from ...core.machine import local_machine
+        from ...storage import mirror
 
         found = mirror.probe(params, schema)
         owner = found["owner"]
@@ -1649,7 +1568,7 @@ class App:
         return found
 
     def action_mirror_test(self, body: dict) -> dict:
-        from .storage import mirror
+        from ...storage import mirror
 
         try:
             return {"ok": True, **self._mirror_check(self._mirror_params(body), self._mirror_schema(body))}
@@ -1659,8 +1578,8 @@ class App:
     def action_mirror_save(self, body: dict) -> dict:
         """Turn the mirror on with these settings (tested first: nothing is saved if they don't work) and write it
         now, or off. Off keeps the settings, so turning it on again needs no password, and leaves the copy as it is."""
-        from .storage import mirror
-        from .core.config import MIRROR_INCLUDES, load_config, set_config_value
+        from ...core.config import MIRROR_INCLUDES, load_config, set_config_value
+        from ...storage import mirror
 
         if not body.get("enabled"):
             set_config_value(self.cfg, "mirror", "to", '""')
@@ -1683,7 +1602,7 @@ class App:
         return {"ok": True, "mirror": self.mirror_info(), "started": self.action_mirror_sync()}
 
     def action_mirror_sync(self) -> bool:
-        from .storage import mirror
+        from ...storage import mirror
 
         cfg = self.cfg
 
@@ -1697,9 +1616,8 @@ class App:
 
     # ---- Devices › People (people.py): who may send to this hub and open its dashboard; admins only
     def people_info(self) -> dict:
-        from .sharing import people
-
-        from .sharing.projects import hub_projects
+        from ...sharing import people
+        from ...sharing.projects import hub_projects
 
         return {"people": people.listing(self.conn), "shared_token": self.cfg.hub_shared_token,
                 "address": self.cfg.hub_address or None, "audit": people.audit_log(self.conn, 50),
@@ -1707,8 +1625,8 @@ class App:
 
     def _invite(self, person: dict, by: dict | None, address: str) -> dict:
         """A new invite for `person`, with the command and the link to pass on. The code is shown this once."""
-        from .sharing import people
-        from .sharing.protocol import invite_command, invite_link
+        from ...sharing import people
+        from ...sharing.protocol import invite_command, invite_link
 
         code = people.invite(self.conn, person["id"], by=by)
         expires = self.conn.execute("SELECT expires_at FROM people_codes WHERE person_id = ? AND kind = 'invite' "
@@ -1722,8 +1640,8 @@ class App:
 
     def _projects_body(self, body: dict) -> list[str] | None:
         """`projects` from the dashboard: "all" for every project, else a list of this hub's project paths."""
-        from .sharing import people
-        from .sharing.projects import hub_projects
+        from ...sharing import people
+        from ...sharing.projects import hub_projects
 
         raw = body.get("projects")
         if raw == "all":
@@ -1739,8 +1657,8 @@ class App:
     def action_people(self, verb: str, body: dict, by: dict | None, address: str) -> tuple[dict, int]:
         """add, invite, role, access, remove, revoke or shared-token, done by `by` (None: at the hub itself) for the
         audit."""
-        from .sharing import people
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
+        from ...sharing import people
 
         try:
             if verb == "add":
@@ -1784,9 +1702,9 @@ class App:
     def shared_projects(self) -> dict:
         """Settings › Devices › Shared projects: the projects set up on this hub (hub.add_project), and the ones that
         could be (this hub's projects that aren't, busiest first)."""
-        from .sharing.projects import hub_projects, shared_projects
-        from .sharing.identity import read_token
-        from .projects.routing import declared_projects, under
+        from ...projects.routing import declared_projects, under
+        from ...sharing.identity import read_token
+        from ...sharing.projects import hub_projects, shared_projects
 
         shared = shared_projects(self.conn)
         set_up = declared_projects(self.conn)
@@ -1800,9 +1718,9 @@ class App:
         it), or stop: hub.add_project / remove_project, recorded in the people audit log. At the hub computer itself
         (`here`), any folder of it. Elsewhere, only on a dedicated hub and only for an admin (`by`; the handler checks):
         a new project by its name, never a folder (hub.named_project_folder), or removing one that is set up."""
-        from .sharing import people
-        from .sharing.projects import add_project, named_project_folder, remove_project
-        from .sharing.protocol import PROJECT_NAME_RULE, HubError
+        from ...sharing import people
+        from ...sharing.projects import add_project, named_project_folder, remove_project
+        from ...sharing.protocol import PROJECT_NAME_RULE, HubError
 
         try:
             if verb == "add" and (not here or (self.cfg.hub_dedicated and "name" in body)):
@@ -1822,7 +1740,7 @@ class App:
 
     def action_share_mode(self, share: str) -> dict:
         """[hub] share on a computer that sends to a hub: its transcripts, or only what it learned."""
-        from .core.config import SHARE_MODES, load_config, set_config_value
+        from ...core.config import SHARE_MODES, load_config, set_config_value
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1835,7 +1753,7 @@ class App:
 
     def action_share_folders(self, all_folders) -> dict:
         """[hub] all_folders on a computer that shares knowledge: every folder's sessions, or only the hub's projects'."""
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1849,9 +1767,9 @@ class App:
     def action_accept(self, accept: str, by: dict | None) -> tuple[dict, int]:
         """[hub] accept on the hub: transcripts too, or knowledge only from every computer. `by` (None: at the hub
         itself) goes in the audit."""
-        from .sharing import people
-        from .core.config import SHARE_MODES, load_config, set_config_value
-        from .sharing.identity import read_token
+        from ...core.config import SHARE_MODES, load_config, set_config_value
+        from ...sharing import people
+        from ...sharing.identity import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}, 400
@@ -1866,12 +1784,12 @@ class App:
 
     def action_push(self) -> bool:
         """Send to the hub now; a computer that shares knowledge also gets its teammates' lessons back."""
-        from .sharing.push import push
+        from ...sharing.push import push
 
         return self.jobs.start("push", lambda progress: push(self.cfg, progress=progress).summary())
 
     def update_info(self, remote: bool) -> dict:
-        from .runtime.update import check, recall, remember
+        from ...runtime.update import check, recall, remember
 
         recall(self.conn)
         info = check(remote, detail=True)
@@ -1881,7 +1799,7 @@ class App:
 
     def _maybe_check_daily(self) -> None:
         """With [updates] check_daily on, ask PyPI once a day, in the background, while a dashboard polls."""
-        from .runtime.update import check_due, fetch_latest, remember
+        from ...runtime.update import check_due, fetch_latest, remember
 
         if not self.cfg.update_check_daily or not check_due() or not self._update_check.acquire(blocking=False):
             return
@@ -1903,7 +1821,7 @@ class App:
 
     def action_update_setting(self, key: str, on: bool) -> dict:
         """Status › Updates switches: check_daily (while the dashboard is open) and notify (from the background)."""
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
 
         set_config_value(self.cfg, "updates", key, "true" if on else "false")
         self.cfg = load_config(self.cfg.home)
@@ -1923,7 +1841,7 @@ class App:
                 "languages": [{"code": code, "label": label} for code, label in LANGUAGES.items()]}
 
     def action_backend(self, backend: str) -> dict:
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
 
         if backend not in BACKENDS:
             return {"error": tr("unknown analysis backend {backend!r}", backend=backend)}
@@ -1934,7 +1852,7 @@ class App:
 
     def action_agent(self, body: dict) -> dict:
         """Change a coding agent's model and effort (AGENT_SETTINGS). An empty Codex model means Codex's default."""
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
 
         name = str(body.get("agent") or "")
         allowed = AGENT_SETTINGS.get(name)
@@ -1963,8 +1881,8 @@ class App:
     def action_provider(self, body: dict) -> dict:
         """Save a model provider's settings ([providers.<name>]) and, when given, its API key ("" forgets it). For
         IBM Bob, only the key."""
-        from .core.config import load_config
-        from .analysis.runners.settings import KEY_ENVS, PROVIDERS, save_settings, set_key
+        from ...analysis.runners.settings import KEY_ENVS, PROVIDERS, save_settings, set_key
+        from ...core.config import load_config
 
         name = str(body.get("provider") or "")
         if name not in KEY_ENVS:
@@ -1982,7 +1900,7 @@ class App:
 
     def action_provider_test(self, name: str) -> dict:
         """One small call to a provider or agent, with its main model: do the endpoint, the key and the model work?"""
-        from .analysis.runners.base import LLMError
+        from ...analysis.runners.base import LLMError
 
         if name not in BACKENDS:
             return {"error": tr("unknown analysis backend {backend!r}", backend=name)}
@@ -1999,7 +1917,7 @@ class App:
                 "tokens": res.input_tokens + res.output_tokens}
 
     def provider_models(self, name: str) -> dict:
-        from .analysis.runners.settings import PROVIDERS
+        from ...analysis.runners.settings import PROVIDERS
 
         if name not in PROVIDERS:
             return {"models": []}
@@ -2007,7 +1925,7 @@ class App:
 
     def action_language(self, lang: str) -> dict:
         """[analysis] language: what summaries, knowledge and proposed lines are written in from now on."""
-        from .core.config import load_config, set_config_value
+        from ...core.config import load_config, set_config_value
 
         if lang not in LANGUAGES:
             return {"error": tr("unknown language {lang!r}", lang=lang)}
@@ -2017,12 +1935,12 @@ class App:
         return self.analysis_backends()
 
     def imports(self) -> dict:
-        from .ingestion.chat_import import import_status
+        from ...ingestion.chat_import import import_status
 
         return import_status(self.conn)
 
     def action_import(self, upload: Path, name: str | None = None) -> bool:
-        from .ingestion.chat_import import import_export, summary
+        from ...ingestion.chat_import import import_export, summary
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2036,7 +1954,7 @@ class App:
 
     def action_screen(self, source: str | None, redo: bool = False) -> bool:
         """Screen imported chats in the background: which are worth analyzing (screen.py)."""
-        from .analysis.screen import screen_chats
+        from ...analysis.screen import screen_chats
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2051,14 +1969,14 @@ class App:
         return self.jobs.start("screen", job)
 
     def action_screen_queue(self, source: str | None, maybe: bool = False) -> dict:
-        from .analysis.screen import queue
+        from ...analysis.screen import queue
 
         return {"queued": queue(self.conn, source=source, maybe=maybe), "per_run": self.cfg.analysis.max_per_run}
 
     def action_menu_bar(self, on: bool) -> dict:
         """Status › Recording's switch: the macOS menu-bar icon on or off, adding the `app` extra when it is missing."""
-        from .runtime.platforms import menubar
-        from .core.config import load_config
+        from ...core.config import load_config
+        from ...runtime.platforms import menubar
 
         info = menubar.setting_info(self.cfg)
         if not info["supported"]:
@@ -2079,7 +1997,7 @@ class App:
         return {"started": self.jobs.start("menu-bar", job), "restarts": restarts}
 
     def action_update(self) -> dict:
-        from .runtime.update import run_update
+        from ...runtime.update import run_update
 
         busy = [k for k, j in self.jobs.snapshot().items() if j["state"] == "running" and k != "update"]
         if busy:  # updating restarts the dashboard, which would cut the running job off
@@ -2087,8 +2005,8 @@ class App:
         return {"started": self.jobs.start("update", run_update)}
 
     def status(self) -> dict:
-        from .runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
-        from .runtime.statusline import plan_usage
+        from ...runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
+        from ...runtime.statusline import plan_usage
 
         c = self.conn
         st = self.status_small()
@@ -2100,7 +2018,7 @@ class App:
         st["ui_agent"] = launchd_status(UI_LABEL)
         st["mcp"] = mcp_registered()
         st["statusline"] = {"installed": statusline_installed(self.cfg), "plan": plan_usage(c)}
-        from .runtime.platforms.menubar import setting_info
+        from ...runtime.platforms.menubar import setting_info
 
         st["menu_bar"] = setting_info(self.cfg)
         st["db_size"] = self.cfg.db_path.stat().st_size if self.cfg.db_path.exists() else 0
@@ -2115,12 +2033,12 @@ class App:
 
     # ------------------------------------------------------------------ actions
     def action_sync(self) -> bool:
-        from .ingestion.service import sync
-        from .application.workflows import run_worker
-        from .interfaces.exports.vault import export_markdown
+        from ...application.workflows import run_worker
+        from ...ingestion.service import sync
+        from ..exports.vault import export_markdown
 
         if self.cfg.sends_files:
-            from .sharing.push import push
+            from ...sharing.push import push
 
             return self.jobs.start("sync", lambda progress: push(self.cfg, progress=progress).summary())
 
@@ -2136,7 +2054,7 @@ class App:
             work = run_worker(self.cfg, export=export_markdown, progress=progress)
             conn = connect(self.cfg.db_path)
             try:
-                from .sharing.leaderboard import send_safely
+                from ...sharing.leaderboard import send_safely
 
                 send_safely(self.cfg, conn)  # once signed in to the leaderboard
             finally:
@@ -2146,8 +2064,8 @@ class App:
         return self.jobs.start("sync", job)
 
     def action_analyze(self, sid: str) -> bool:
-        from .application.workflows import run_worker
-        from .interfaces.exports.vault import export_markdown
+        from ...application.workflows import run_worker
+        from ..exports.vault import export_markdown
 
         real = resolve_session_id(self.conn, sid)
         if not real:
@@ -2163,7 +2081,7 @@ class App:
         return self.jobs.start(f"analyze:{real}", job)
 
     def _export_ids(self, ids: str) -> list[str]:
-        from .interfaces.exports.sessions import MAX_SESSIONS, ExportError
+        from ..exports.sessions import MAX_SESSIONS, ExportError
 
         real = [r for r in (resolve_session_id(self.conn, x.strip()) for x in ids.split(",")[:MAX_SESSIONS] if x.strip()) if r]
         if not real:
@@ -2171,14 +2089,14 @@ class App:
         return list(dict.fromkeys(real))
 
     def export(self, ids: str, fmt: str) -> tuple[str, str, bytes]:
-        from .interfaces.exports.sessions import export_sessions
+        from ..exports.sessions import export_sessions
 
         return export_sessions(self.conn, self._export_ids(ids), fmt)
 
     def diagram_file(self, path: str) -> tuple[str, str, bytes] | None:
         """A project's architecture sketch as an .excalidraw file, to open and edit in Excalidraw."""
-        from .core.diagrams import normalize_diagram
-        from .interfaces.exports.diagrams import to_excalidraw
+        from ...core.diagrams import normalize_diagram
+        from ..exports.diagrams import to_excalidraw
 
         kb = self.conn.execute("SELECT project_name, kb_json FROM project_kb WHERE project_path = ?", (path,)).fetchone()
         d = normalize_diagram((loads(kb["kb_json"], {}) or {}).get("diagram")) if kb and path != GLOBAL else None
@@ -2190,7 +2108,7 @@ class App:
         return f"{slug}-architecture.excalidraw", "application/vnd.excalidraw+json", json.dumps(scene, ensure_ascii=False, indent=1).encode()
 
     def export_check(self, ids: str, fmt: str) -> dict:
-        from .interfaces.exports.sessions import FORMATS, ExportError, has_original
+        from ..exports.sessions import FORMATS, ExportError, has_original
 
         if fmt not in FORMATS:
             raise ExportError(tr("unknown format {fmt!r}", fmt=fmt))
@@ -2203,8 +2121,8 @@ class App:
 
     def action_analyze_many(self, refs: list) -> dict:
         """Analyze the sessions picked in the list, in one background job (history-only ones have nothing to send)."""
-        from .application.workflows import run_worker
-        from .interfaces.exports.vault import export_markdown
+        from ...application.workflows import run_worker
+        from ..exports.vault import export_markdown
 
         ids = []
         for ref in refs[:MAX_SELECTION]:
@@ -2231,9 +2149,9 @@ class App:
         """The Queue's Analyze now: the sessions ready now, or ("active") the ones that may still be going, analyzed
         at once instead of on the background run. It runs with automatic analysis off and through a usage-limit
         pause (the limit may be over by now); a run that gets through lifts the pause for the background run too."""
-        from .application.workflows import run_worker
-        from .interfaces.exports.vault import export_markdown
-        from .analysis.queue import PAUSE_KEY, queued_ids
+        from ...analysis.queue import PAUSE_KEY, queued_ids
+        from ...application.workflows import run_worker
+        from ..exports.vault import export_markdown
 
         if which not in ("ready", "active"):
             return {"started": False, "error": tr("unknown queue")}
@@ -2263,7 +2181,7 @@ class App:
                 **({} if started else {"error": tr("The queue is already being analyzed")})}
 
     def action_synthesize(self, path: str) -> bool:
-        from .knowledge.synthesize import synthesize_project
+        from ...knowledge.synthesize import synthesize_project
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2297,7 +2215,7 @@ class App:
 
     # ------------------------------------------------------------------ suggestions / what goes wrong
     def suggestions(self, q: dict) -> dict:
-        from .knowledge import suggest
+        from ...knowledge import suggest
 
         status = q.get("status") if q.get("status") in suggest.STATUSES else None
         rows = suggest.list_suggestions(self.conn, status=status, project=q.get("project") or None)
@@ -2306,7 +2224,7 @@ class App:
                 "counts": suggest.counts(self.conn)}
 
     def suggestion_preview(self, sid: int, q: dict) -> tuple[dict, int]:
-        from .knowledge import suggest
+        from ...knowledge import suggest
 
         if suggest.get(self.conn, sid) is None:
             return {"ok": False, "error": tr("no such suggestion")}, 404
@@ -2314,7 +2232,7 @@ class App:
 
     def action_suggestion(self, sid: int, verb: str, body: dict) -> tuple[dict, int]:
         """apply / unapply / dismiss / done / edit / move. A refusal is a 400 carrying the reason; an unknown id a 404."""
-        from .knowledge import suggest
+        from ...knowledge import suggest
 
         if suggest.get(self.conn, sid) is None:
             return {"ok": False, "error": tr("no such suggestion")}, 404
@@ -2335,876 +2253,9 @@ class App:
         return got, (200 if got.get("ok") else 400)
 
     def friction(self, q: dict) -> dict:
-        from .knowledge.friction import display, report
+        from ...knowledge.friction import display, report
 
         days = q.get("days")
         days = int(days) if days and days.isdigit() and int(days) > 0 else None
         got = report(self.conn, days=days, project=q.get("project") or None, noise=q.get("noise") in ("1", "true"))
         return {**got, "causes": [display(c) for c in got["causes"]]}
-
-
-def make_handler(app: App, port: int):
-    local_hosts = {f"{h}:{port}" for h in LOOPBACK}
-
-    class Handler(BaseHTTPRequestHandler):
-        server_version = f"interlatch/{__version__}"
-        viewer: dict | None = None  # who is viewing (_viewer), None meaning an admin
-        limited = False  # the viewer sees only some projects (access.py): set per request in _get
-
-        def log_message(self, fmt, *args):  # quiet
-            log.debug("%s - %s", self.address_string(), fmt % args)
-
-        def send_header(self, keyword, value):
-            """http.server writes a header as given: one with a line break in it would start headers (or a body) of
-            its own. Header values come from transcripts too (a file's name), so none may hold one: a break becomes
-            a space rather than an error, which, raised after send_response, would leave two status lines queued."""
-            super().send_header(re.sub(r"[\r\n\0]", " ", str(keyword)), re.sub(r"[\r\n\0]", " ", str(value)))
-
-        def _host(self) -> str:
-            return (self.headers.get("Host") or "").strip().lower()
-
-        def _host_ok(self) -> bool:
-            """The Host header names this dashboard (a DNS-rebinding guard): localhost, or an allowed name."""
-            host = self._host()
-            if host in local_hosts:
-                return True
-            name = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
-            return any(host == a or name == a for a in app.cfg.server_allowed_hosts)
-
-        def _user_ok(self) -> bool:
-            """With [server] allowed_users set, a request that came through Tailscale Serve needs one of those logins.
-
-            Serve connects from localhost and always sets X-Forwarded-For and Tailscale-User-Login itself (a client's
-            own values are replaced), but it passes the client's Host header through as sent: whether a request came
-            through Serve is told by X-Forwarded-For, never by the Host name, or a tailnet device could claim
-            `Host: 127.0.0.1` and skip the check."""
-            users = app.cfg.server_allowed_users
-            if not users:
-                return True
-            if self.client_address[0] not in ("127.0.0.1", "::1"):
-                return False  # only Serve on this computer may vouch for a login
-            proxied = self.headers.get("X-Forwarded-For") is not None or self.headers.get("Tailscale-User-Login") is not None
-            if not proxied and self._host() in local_hosts:
-                return True  # this computer itself
-            return (self.headers.get("Tailscale-User-Login") or "") in users
-
-        def _from_here(self) -> bool:
-            """The request comes from this computer itself: not through Tailscale Serve, not from another device.
-            Gates the settings that hold a password or change what leaves the computer (Devices).
-
-            With `[server] behind_proxy`, never: a reverse proxy on this computer may send neither X-Forwarded-For nor
-            its visitors' Host (nginx's default), so every visitor would look like someone at the hub itself."""
-            if app.cfg.server_behind_proxy:
-                return False
-            proxied = any(self.headers.get(h) is not None for h in PROXY_HEADERS)
-            return not proxied and self.client_address[0] in ("127.0.0.1", "::1") and self._host() in local_hosts
-
-        def _people_mode(self) -> bool:
-            from .sharing import people
-
-            return people.has_people(app.conn)
-
-        def _local(self) -> str | None:
-            """"mac", "linux" or "windows" when the request comes from this computer itself and Interlatch can open
-            files here; None otherwise. Gates "Open on this Mac"."""
-            import sys
-
-            if not self._from_here():
-                return None
-            return ("mac" if sys.platform == "darwin" else "linux" if sys.platform.startswith("linux")
-                    else "windows" if sys.platform == "win32" else None)
-
-        # ---- who is viewing (people.py): set per request in _get/_post, None meaning an admin
-        def _client(self) -> str:
-            """The address a request came from. Through a proxy in [server] trusted_proxies, the visitor that proxy
-            names: the last X-Forwarded-For entry, the one it added itself. Anyone else's X-Forwarded-For is not
-            believed."""
-            addr = self.client_address[0]
-            if addr in app.cfg.server_trusted_proxies:
-                forwarded = (self.headers.get("X-Forwarded-For") or "").split(",")[-1].strip()
-                if forwarded:
-                    return forwarded
-            return addr
-
-        def _proxied_https(self) -> bool:
-            """The request reached a proxy in [server] trusted_proxies over https. X-Forwarded-Proto from anyone else
-            is not believed."""
-            return (self.client_address[0] in app.cfg.server_trusted_proxies
-                    and (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https")
-
-        def _session(self) -> str:
-            from http.cookies import CookieError, SimpleCookie
-
-            try:
-                jar = SimpleCookie(self.headers.get("Cookie") or "")
-            except CookieError:
-                return ""
-            morsel = jar.get(SESSION_COOKIE) or jar.get(LEGACY_SESSION_COOKIE)
-            return morsel.value if morsel else ""
-
-        def _session_cookie(self, value: str, max_age: int) -> str:
-            secure = "; Secure" if self._proxied_https() else ""
-            return f"{SESSION_COOKIE}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}{secure}"
-
-        def _viewer(self) -> tuple[dict | None, tuple[dict, int] | None]:
-            """(person, None) for who is viewing, person None being an admin: someone at the hub computer itself, or,
-            while the hub has no people, a Tailscale login that Serve on this computer vouched for ([server]
-            allowed_users already checked it). (None, (error, status)) when no one is signed in.
-
-            A hub without people has no sign-in, so anything else is refused: a request from another device
-            (server.host 0.0.0.0), through a reverse proxy, or through Tailscale Funnel would be an admin of
-            everything."""
-            from .sharing import people
-
-            if self._from_here():
-                return None, None
-            if not self._people_mode():
-                if (not app.cfg.server_behind_proxy and self.client_address[0] in ("127.0.0.1", "::1")
-                        and self.headers.get("Tailscale-User-Login")):
-                    return None, None
-                return None, ({"error": tr("this dashboard has no people yet, so only this computer may open it. At "
-                                           "the hub, run `interlatch hub invite <your name> --email <email> --role admin` "
-                                           "and open the invite link it prints"), "nobody": True}, 403)
-            header = app.cfg.server_auth_header
-            if header and self.client_address[0] in app.cfg.server_trusted_proxies and self.headers.get(header):
-                person = people.by_email(app.conn, self.headers.get(header))  # a company sign-in in front of the hub
-                if not person:
-                    return None, ({"error": tr("you're not on this hub; ask an admin to add you")}, 403)
-                return person, None
-            person = people.browser_person(app.conn, self._session())
-            if person:
-                return person, None
-            return None, ({"error": tr("sign in to this hub"), "signin": True}, 401)
-
-        def _can_admin(self) -> bool:
-            """May change the hub's own settings (people, team store): at the hub itself, or an admin person. A hub
-            without people keeps these to the computer itself, as before."""
-            return self._from_here() or (self.viewer is not None and self.viewer["role"] == "admin")
-
-        def _me(self) -> dict:
-            from .sharing import people
-
-            return {"viewer": {**people.public(self.viewer), "here": self._from_here()},
-                    "people_mode": people.has_people(app.conn), "can_admin": self._can_admin(), "hub": app.hub_info()}
-
-        def _address(self) -> str:
-            """The hub's address as others reach it: [hub] address, or a guess from how this page was opened."""
-            if app.cfg.hub_address:
-                return app.cfg.hub_address
-            return f"{'https' if self._proxied_https() else 'http'}://{self._host() or '127.0.0.1'}"
-
-        def _signin(self, code: str, page: str | None = None):
-            """An invite link, or a sign-in link a person's own Interlatch asked for: opens a browser session, on the page
-            the link's next names (people.landing) or Home. After a few unknown codes from one address, its next tries
-            wait their turn (people.CodeAttempts)."""
-            import html
-
-            from .sharing import people
-
-            accept = (self.headers.get("Accept-Language") or "").strip().lower()
-            i18n.lang.set("ja" if accept.startswith("ja") else "en")  # a link opened by hand sends no X-Interlatch-Lang
-            who = self._client()
-            wait = app.code_attempts.wait(who)
-            try:
-                if wait:
-                    raise people.PeopleError(TOO_MANY_CODES, seconds=wait)  # the code isn't looked at
-                _person, session = people.open_browser(app.conn, code, label=self.headers.get("User-Agent"))
-            except people.PeopleError as exc:
-                if isinstance(exc, people.UnknownCode):
-                    app.code_attempts.wrong(who)
-                title = html.escape(tr("Could not sign in"))
-                body = (f'<!doctype html><html lang="{i18n.lang.get()}"><meta charset="utf-8">'
-                        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-                        f'<meta name="color-scheme" content="light dark"><title>{title} · Interlatch</title>'
-                        '<body style="font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 12vh auto; '
-                        f'padding: 0 16px"><h1 style="font-size: 1.3rem">{title}</h1><p>{html.escape(exc.shown())}</p>'
-                        f"<p>{html.escape(tr(SIGNIN_HELP))}</p>"
-                        f'<p><a href="/">{html.escape(tr("Open the dashboard"))}</a></p></body></html>').encode()
-                self.send_response(429 if wait else 400)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                if wait:
-                    self.send_header("Retry-After", str(wait))
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header("Referrer-Policy", "no-referrer")
-                self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            self.send_response(302)
-            self.send_header("Location", people.landing(page))
-            self.send_header("Set-Cookie", self._session_cookie(session, people.BROWSER_DAYS * 86400))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Referrer-Policy", "no-referrer")  # the code is in this page's address
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-
-        def _open_file(self, f: dict):
-            from urllib.parse import quote
-
-            # the name came from a transcript: no control characters (a line break would end the header)
-            ascii_name = re.sub(r"[\x00-\x1f\x7f]", "_", f["name"].encode("ascii", "replace").decode())
-            ascii_name = ascii_name.replace("?", "_").replace('"', "'").replace("\\", "_")
-            self.send_response(200)
-            self.send_header("Content-Type", f["ctype"])
-            self.send_header("Content-Disposition", f"{'inline' if f['inline'] else 'attachment'}; filename=\"{ascii_name}\"; "
-                                                    f"filename*=UTF-8''{quote(f['name'])}")
-            self.send_header("Content-Length", str(len(f["body"])))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Referrer-Policy", "no-referrer")
-            if f["policy"]:
-                self.send_header("Content-Security-Policy", f["policy"])
-            self.send_header("X-Interlatch-Source", f["source"])  # "disk", or "archive": as the agent wrote it, now gone
-            self.end_headers()
-            self.wfile.write(f["body"])
-
-        def _hub_api(self, p: str):
-            """Another computer sending its sessions (hub.py). Authenticated by the hub's shared token or a person's
-            computer token (hub.authorize), not a browser header; joining with an invite needs neither."""
-            from .sharing.identity import authorize
-            from .sharing.protocol import HubError, UnknownInvite
-            from .sharing.receiver import (_drain, check_machine, hello, join_with_code, receive_analyses, receive_file,
-                                           receive_sessions, signin_code_for, team_lessons, transcripts_refused,
-                                           withdraw)
-
-            q = {k: v[-1] for k, v in parse_qs(urlparse(self.path).query).items()}
-            length = int(self.headers.get("Content-Length") or 0)
-            if p == "/api/hub/join":  # the invite code is the credential
-                if length > 65536:
-                    return self._json({"error": "too large"}, 413)
-                who = self._client()
-                try:
-                    body = json.loads(self.rfile.read(length) or b"{}") if length else {}
-                    if not isinstance(body, dict):
-                        return self._json({"error": "bad json"}, 400)
-                    if wait := app.code_attempts.wait(who):  # after a few unknown codes from here: not looked at
-                        return self._json({"error": tr(TOO_MANY_CODES, seconds=wait)}, 429, headers={"Retry-After": str(wait)})
-                    return self._json(join_with_code(app.cfg, app.conn, body))
-                except UnknownInvite as exc:
-                    app.code_attempts.wrong(who)
-                    return self._json({"error": str(exc)}, 400)
-                except (HubError, ValueError) as exc:
-                    return self._json({"error": str(exc)}, 400)
-            auth = self.headers.get("Authorization")
-            ok, person = authorize(app.cfg, app.conn, auth, q.get("machine"))  # before reading what was sent
-            if not ok:
-                return self._json({"error": "unauthorized"}, 401)
-            if person and person["role"] == "readonly" and p in HUB_PUSH:
-                return self._json({"error": "read-only people can't send to the hub"}, 403)
-            if p in ("/api/hub/file", "/api/hub/analyses") and (refused := transcripts_refused(app.cfg, person)):
-                _drain(self.rfile, length)  # transcripts this hub doesn't take: never kept
-                return self._json({"error": str(refused)}, 403)
-            try:
-                if p == "/api/hub/file":
-                    return self._json(receive_file(app.cfg, app.conn, q, self.rfile, length))
-                if p == "/api/hub/analyses":
-                    return self._json(receive_analyses(app.cfg, app.conn, q, self.rfile, length))
-                if p == "/api/hub/sessions":
-                    return self._json(receive_sessions(app.cfg, app.conn, q, self.rfile, length, person))
-                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
-                if not isinstance(body, dict):
-                    return self._json({"error": "bad json"}, 400)
-                if body.get("machine"):  # a person's token works only from the computer it was issued to, and the
-                    # shared token not as a computer that joined as a person: the body names the computer acting
-                    ok, person = authorize(app.cfg, app.conn, auth, str(body["machine"]))
-                    if not ok:
-                        return self._json({"error": "unauthorized"}, 401)
-                if p == "/api/hub/signin":
-                    return self._json(signin_code_for(app.cfg, app.conn, person))
-                if p == "/api/hub/hello":
-                    return self._json(hello(app.cfg, app.conn, body, person))
-                if p == "/api/hub/lessons":
-                    return self._json(team_lessons(app.cfg, body, person, app.conn))
-                if p == "/api/hub/withdraw":  # the computer named in the body, which a person's token is bound to
-                    if not body.get("machine"):
-                        return self._json({"error": "bad machine id"}, 400)
-                    return self._json(withdraw(app.cfg, app.conn, body, person))
-                if p == "/api/hub/done":
-                    check_machine(app.cfg, str(body.get("machine") or ""))
-                    app.ingest.request()
-                    return self._json({"ok": True})
-            except (HubError, ValueError) as exc:
-                return self._json({"error": str(exc)}, 400)
-            return self._json({"error": "not found"}, 404)
-
-        def _json(self, data, status=200, cookie: str | None = None, headers: dict | None = None):
-            body = json.dumps(data, ensure_ascii=False, default=str).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            if cookie:
-                self.send_header("Set-Cookie", cookie)
-            for name, value in (headers or {}).items():
-                self.send_header(name, value)
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _download(self, name: str, ctype: str, body: bytes):
-            from urllib.parse import quote
-
-            ascii_name = name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "'")
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Disposition", f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _image(self, body: bytes, ctype: str):
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "private, max-age=300")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            # an SVG is a document that can carry script: opened on its own, it renders in a sandbox that allows nothing
-            self.send_header("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox")
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _static(self, rel: str):
-            name = rel.lstrip("/") or "index.html"
-            if name not in WEB_FILES:
-                name = "index.html"
-            body = WEB_FILES[name]
-            ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
-            if ctype.startswith("text/") or ctype in ("application/javascript",):
-                ctype += "; charset=utf-8"
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            if name == "index.html":
-                app_window = parse_qs(urlparse(self.path).query).get("app") == ["mac"] and self._from_here()
-                self.send_header("Content-Security-Policy", PAGE_CSP.format(eval=" 'unsafe-eval'" if app_window else ""))
-            elif name == "panel.html":  # the menu-bar panel (menubar.py): the same rules, no eval
-                self.send_header("Content-Security-Policy", PAGE_CSP.format(eval=""))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _asked_lang(self) -> str | None:
-            """The X-Interlatch-Lang header, or X-Chronicle-Lang from a tab opened before the rename."""
-            return self.headers.get("X-Interlatch-Lang") or self.headers.get("X-Chronicle-Lang")
-
-        def do_GET(self):
-            token = i18n.lang.set(i18n.pick(self._asked_lang()))  # the dashboard's language, per browser
-            try:
-                app.refresh_config()
-                return self._get()
-            finally:
-                i18n.lang.reset(token)
-                app.release()
-
-        def do_POST(self):
-            token = i18n.lang.set(i18n.pick(self._asked_lang()))
-            try:
-                app.refresh_config()
-                return self._post()
-            finally:
-                i18n.lang.reset(token)
-                app.release()
-
-        def _get(self):
-            if not self._host_ok():
-                return self._json({"error": tr("forbidden host")}, 403)
-            if not self._user_ok() and not self._people_mode():  # with people, _viewer says who may see what
-                return self._json({"error": tr("this Tailscale login is not allowed ([server] allowed_users)")}, 403)
-            url = urlparse(self.path)
-            q = {k: v[-1] for k, v in parse_qs(url.query).items()}
-            p = url.path
-            try:
-                if p == "/signin":
-                    return self._signin(q.get("code", ""), q.get("next"))
-                if p.startswith("/api/"):  # the page itself stays public, so it can show how to sign in
-                    self.viewer, refused = self._viewer()
-                    if refused:
-                        return self._json(*refused)
-                    from .sharing import access, people
-
-                    scope = people.projects_of(self.viewer)
-                    if scope is not None:  # someone limited to projects: a few pages, of their projects only
-                        if not access.allowed(p):
-                            return self._json({"error": tr("you see only some projects on this hub"), "limited": True}, 403)
-                        access.limit(app.conn, scope)
-                        self.limited = True
-                if p == "/api/me":
-                    return self._json(self._me())
-                if p == "/api/people":
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(app.people_info())
-                if p == "/api/overview":
-                    return self._json(app.overview(q, limited=self.limited))
-                if p == "/api/leaderboard" or p.startswith("/api/leaderboard/"):  # a person's own computer only
-                    if not self._from_here():
-                        return self._json({"error": tr("the leaderboard is on the dashboard of your own computer")}, 403)
-                    if p == "/api/leaderboard":
-                        return self._json(app.leaderboard(q))
-                    m = re.fullmatch(r"/api/leaderboard/avatar/([\w-]+)", p)
-                    if m:
-                        from .sharing.leaderboard import avatar
-
-                        got = avatar(m.group(1), app.cfg)
-                        return self._image(*got) if got else self._json({"error": "no avatar"}, 404)
-                if p == "/api/team/who":
-                    return self._json(app.who_options())
-                if p == "/api/team":
-                    return self._json(app.team(q, scope=people.projects_of(self.viewer), admin=self._can_admin(),
-                                               viewer=self.viewer))
-                if p == "/api/team/news":
-                    after = q.get("after") if news.ISO_RE.fullmatch(q.get("after") or "") else None
-                    return self._json(app.news(self.viewer, scope=people.projects_of(self.viewer),
-                                               admin=self._can_admin(), after=after))
-                if p == "/api/sessions":
-                    return self._json(app.sessions(q, limited=self.limited))
-                if p == "/api/export":  # a download: one session's file, or a .zip of several
-                    from .interfaces.exports.sessions import ExportError
-
-                    try:
-                        if q.get("check"):  # asked first, so a refusal shows as a message, not a downloaded error
-                            return self._json(app.export_check(q.get("ids", ""), q.get("format", "md")))
-                        return self._download(*app.export(q.get("ids", ""), q.get("format", "md")))
-                    except ExportError as exc:
-                        return self._json({"error": str(exc)}, 400)
-                m = re.fullmatch(r"/api/sessions/([\w-]+)", p)
-                if m:
-                    if self.limited:
-                        s = app.session_summary(m.group(1))
-                        return self._json(s) if s else self._json({"error": tr("not found")}, 404)
-                    s = app.session(m.group(1))
-                    return self._json({**s, "local": self._local()}) if s else self._json({"error": tr("not found")}, 404)
-                m = re.fullmatch(r"/api/sessions/([\w-]+)/events", p)
-                if m:
-                    return self._json(app.events(m.group(1), q))
-                m = re.fullmatch(r"/api/sessions/([\w-]+)/matches", p)
-                if m:
-                    return self._json(app.matches(m.group(1), q))
-                if p == "/api/projects":
-                    return self._json(app.projects(scope=people.projects_of(self.viewer)))
-                if p == "/api/project-groups":  # can_share: what leaves this computer changes only from here
-                    return self._json({**app.project_groups(), "can_share": app.cfg.is_spoke and self._from_here()})
-                if p == "/api/artifacts":
-                    return self._json({**app.artifacts(q), "local": self._local()})
-                m = re.fullmatch(r"/api/artifacts/(\d+)/open", p)
-                if m:  # the file itself, in a new tab: from disk, or as the agent wrote it once it is gone
-                    f = app.artifact_open(int(m.group(1)))
-                    return self._open_file(f) if f else self._json({"error": tr("this file can no longer be opened")}, 404)
-                m = re.fullmatch(r"/api/artifacts/(\d+)/file", p)
-                if m:  # an image or diagram an agent made, still on disk: shown as a thumbnail
-                    f = app.artifact_file(int(m.group(1)))
-                    return self._image(*f) if f else self._json({"error": tr("not available")}, 404)
-                if p == "/api/project":
-                    proj = app.project(unquote(q.get("path", "")))
-                    return self._json({**proj, "local": self._local()}) if proj else self._json({"error": tr("not found")}, 404)
-                if p == "/api/diagram":  # a download: the project's architecture sketch as an .excalidraw file
-                    f = app.diagram_file(q.get("path", ""))
-                    return self._download(*f) if f else self._json({"error": tr("no architecture sketch for this project")}, 404)
-                if p == "/api/file":  # parse_qs has decoded the path already: a second unquote would mangle a literal %
-                    return self._json(app.file_sessions(q.get("path", ""), min(int(q.get("limit") or 50), 500)))
-                if p == "/api/files":
-                    return self._json(app.folder_files(q.get("root", ""), min(int(q.get("limit") or 200), 2000),
-                                                       existing=q.get("existing") == "1",
-                                                       ignored=q.get("ignored") != "0"))
-                if p == "/api/knowledge":
-                    return self._json(app.knowledge(q))
-                if p == "/api/learning/interests":
-                    return self._json(app.learning_interests(self.viewer, q))
-                if p == "/api/learning/glance":
-                    return self._json(app.learning_glance(self.viewer, q))
-                if p == "/api/knowledge/hub":
-                    return self._json(app.knowledge_hub())
-                if p == "/api/search":
-                    return self._json(app.search(q))
-                if p == "/api/status":
-                    return self._json(app.status())
-                if p == "/api/reviews":
-                    return self._json(app.reviews())
-                if p == "/api/glossary":
-                    return self._json(app.glossary(q))
-                if p == "/api/connectors":
-                    return self._json(app.connectors())
-                if p == "/api/mcp":
-                    return self._json(app.mcp_info())
-                if p == "/api/mcp-clients":
-                    return self._json(app.mcp_clients())
-                if p == "/api/glossary/terms":
-                    return self._json(app.glossary_terms())
-                if p == "/api/map":
-                    return self._json(app.map())
-                if p == "/api/systems":
-                    return self._json(app.systems())
-                if p == "/api/system":
-                    found = app.system(q.get("id", ""))
-                    return self._json(found) if found else self._json({"error": tr("not found")}, 404)
-                if p == "/api/jobs":
-                    return self._json(app.status_small(limited=self.limited))
-                if p == "/api/update":
-                    return self._json(app.update_info(remote=False))
-                if p == "/api/imports":
-                    return self._json(app.imports())
-                if p == "/api/devices":
-                    dv = app.devices()
-                    if self.viewer is not None and not self._can_admin():  # computers, keys and the team store: admins'
-                        dv = {**dv, "this": {"name": dv["this"]["name"]}, "machines": [], "store": None,
-                              "allowed_hosts": [], "allowed_users": [], "path_map": {}, "folders": [], "projects": [],
-                              "team": None, "last_push": None}
-                    return self._json({**dv, "here": self._from_here(), **self._me()})
-                if p == "/api/team-store":
-                    if self.viewer is not None and not self._can_admin():  # its database, host and counts: admins'
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(app.team_store_status())
-                if p in ("/api/mirror", "/api/mirror/status"):
-                    if not self._can_admin():  # its address and user: at the computer itself, or an admin of a hub
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    return self._json(app.mirror_info() if p == "/api/mirror" else app.mirror_status())
-                if p == "/api/team/settings":
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(app.hub_settings())
-                if p == "/api/projects/shared":
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json({**app.shared_projects(), "here": self._from_here()})
-                if p == "/api/suggestions":
-                    return self._json(app.suggestions(q))
-                if p == "/api/suggestions/unseen":
-                    from .knowledge.suggest import count_unseen
-
-                    return self._json({"unseen": count_unseen(app.conn)})
-                m = re.fullmatch(r"/api/suggestions/(\d+)/preview", p)
-                if m:
-                    return self._json(*app.suggestion_preview(int(m.group(1)), q))
-                if p == "/api/friction":
-                    return self._json(app.friction(q))
-                if p.startswith("/api/"):
-                    return self._json({"error": tr("not found")}, 404)
-                return self._static(p)
-            except BrokenPipeError:
-                pass
-            except Exception as exc:
-                log.exception("GET %s failed", p)
-                return self._json({"error": str(exc)}, 500)
-
-        def _import_upload(self):
-            """A claude.ai or ChatGPT export .zip, streamed to disk (it can be hundreds of MB), then imported in the background."""
-            length = int(self.headers.get("Content-Length") or 0)
-            if not length:
-                return self._json({"error": tr("empty upload")}, 400)
-            dest = app.cfg.home / "imports" / f"chat-export-{int(time.time())}.zip"
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            left = length
-            with open(dest, "wb") as f:
-                while left:
-                    chunk = self.rfile.read(min(left, 1 << 20))
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    left -= len(chunk)
-            if left:
-                dest.unlink(missing_ok=True)
-                return self._json({"error": tr("upload cut off")}, 400)
-            name = Path(unquote(self.headers.get("X-Filename") or "")).name or None  # the file's own name, for messages
-            started = app.action_import(dest, name)
-            if not started:
-                dest.unlink(missing_ok=True)
-            return self._json({"started": started})
-
-        def _post(self):
-            if not self._host_ok():
-                return self._json({"error": tr("forbidden")}, 403)
-            if urlparse(self.path).path.startswith("/api/hub/"):
-                return self._hub_api(urlparse(self.path).path)
-            if "1" not in (self.headers.get("X-Interlatch"), self.headers.get("X-Chronicle")) or not (self._user_ok() or self._people_mode()):
-                return self._json({"error": tr("forbidden")}, 403)
-            if urlparse(self.path).path == "/api/signout":
-                from .sharing import people
-
-                if self._session():
-                    people.sign_out(app.conn, self._session())
-                return self._json({"ok": True}, cookie=self._session_cookie("", 0))
-            self.viewer, refused = self._viewer()
-            if refused:
-                return self._json(*refused)
-            if urlparse(self.path).path == "/api/team/news/seen":  # anyone who sees the Team page: their own news only
-                length = int(self.headers.get("Content-Length") or 0)
-                try:
-                    if length > 4096:
-                        raise ValueError
-                    body = json.loads(self.rfile.read(length) or b"{}") if length else {}
-                except ValueError:
-                    return self._json({"error": tr("bad json")}, 400)
-                news.mark_seen(app.conn, self.viewer, body.get("at") if isinstance(body, dict) else None)
-                return self._json({"ok": True})
-            if self.viewer is not None and self.viewer["role"] != "admin":  # members and read-only people look
-                return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-            if urlparse(self.path).path == "/api/import":
-                return self._import_upload()
-            length = int(self.headers.get("Content-Length") or 0)
-            body = {}
-            if length:
-                try:
-                    body = json.loads(self.rfile.read(length) or b"{}")
-                except ValueError:
-                    return self._json({"error": tr("bad json")}, 400)
-            p = urlparse(self.path).path
-            try:
-                if p == "/api/sync":
-                    return self._json({"started": app.action_sync()})
-                m = re.fullmatch(r"/api/leaderboard/(signin|finish|cancel|send|name|leave)", p)
-                if m:  # signing in keeps a credential on this computer: only from here
-                    from .sharing.leaderboard import LeaderboardError
-
-                    if not self._from_here():
-                        return self._json({"error": tr("the leaderboard is on the dashboard of your own computer")}, 403)
-                    body = body if isinstance(body, dict) else {}
-                    try:
-                        if m.group(1) == "signin":  # the hosted page comes back to this dashboard, as it was opened
-                            return self._json(app.action_leaderboard_signin(f"http://{self._host()}/", i18n.lang.get()))
-                        if m.group(1) == "finish":
-                            return self._json(app.action_leaderboard_finish(body))
-                        if m.group(1) == "cancel":
-                            app.action_leaderboard_cancel()
-                            return self._json({"ok": True})
-                        if m.group(1) == "name":
-                            return self._json(app.action_leaderboard_name(body))
-                        return self._json(app.action_leaderboard_send() if m.group(1) == "send" else app.action_leaderboard_leave())
-                    except LeaderboardError as e:
-                        return self._json({"error": str(e)}, 502)
-                m = re.fullmatch(r"/api/artifacts/(\d+)/reveal", p)
-                if m:  # open the file in its own app, or show it in Finder: only from this computer
-                    if not self._local():
-                        return self._json({"error": tr("files open only on the computer Interlatch runs on")}, 403)
-                    err = app.artifact_reveal(int(m.group(1)), "reveal" if body.get("how") == "reveal" else "open")
-                    return self._json({"error": err}, 400) if err else self._json({"ok": True})
-                if p in ("/api/team-store/test", "/api/team-store/save"):
-                    if not self._can_admin():  # a password: at the hub itself, or an admin of a hub with people
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    if p == "/api/team-store/test":
-                        return self._json(app.action_team_store_test(body))
-                    return self._json(app.action_team_store_save(body))
-                if p in ("/api/mirror/test", "/api/mirror/save", "/api/mirror/sync"):
-                    if not self._can_admin():  # a password, and where this archive goes: as for the team store
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    if p == "/api/mirror/test":
-                        return self._json(app.action_mirror_test(body))
-                    if p == "/api/mirror/sync":
-                        return self._json({"started": app.action_mirror_sync()})
-                    return self._json(app.action_mirror_save(body))
-                if p in ("/api/devices/share", "/api/devices/hub-signin"):
-                    if not self._from_here():  # what leaves this computer, or its own sign-in: only from here
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    if p == "/api/devices/hub-signin":
-                        from .sharing.client import dashboard_signin
-                        from .sharing.protocol import HubError
-
-                        try:
-                            return self._json({"url": dashboard_signin(app.cfg, page=body.get("next"))})
-                        except HubError as exc:
-                            return self._json({"error": tr(str(exc))}, 400)
-                    if "all_folders" in body:
-                        return self._json(app.action_share_folders(body.get("all_folders")))
-                    return self._json(app.action_share_mode(str(body.get("share") or "")))
-                m = re.fullmatch(r"/api/devices/projects/(choices|add|remove|leave|rejoin)", p)
-                if m or p == "/api/devices/leave-hub":  # what leaves this computer, and for which projects: only from here
-                    if not self._from_here():
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    if p == "/api/devices/leave-hub":
-                        return self._json(app.action_leave_hub())
-                    if m.group(1) == "choices":
-                        return self._json(app.hub_project_choices())
-                    return self._json(*app.action_hub_project(m.group(1), body if isinstance(body, dict) else {}))
-                if p == "/api/team/settings":
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(*app.action_hub_settings(body if isinstance(body, dict) else {}, self.viewer))
-                m = re.fullmatch(r"/api/projects/shared/(add|remove)", p)
-                if m:  # what leaves this computer (its sessions go to the team store): only from here. A dedicated hub
-                    # has no sessions of its own, so there its admins may make (by name) and remove projects too.
-                    here = self._from_here()
-                    if not here and not (app.cfg.hub_dedicated and self._can_admin()):
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    return self._json(*app.action_shared_project(m.group(1), body if isinstance(body, dict) else {},
-                                                                 by=self.viewer, here=here))
-                m = re.fullmatch(r"/api/project-groups/(save|delete|move|share)", p)
-                if m:
-                    if m.group(1) == "share" and not self._from_here():  # what leaves this computer: only from here
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    return self._json(*app.action_project_groups(m.group(1), body if isinstance(body, dict) else {}))
-                m = re.fullmatch(r"/api/people/(add|invite|role|access|remove|revoke|shared-token)", p)
-                if m:
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(*app.action_people(m.group(1), body if isinstance(body, dict) else {},
-                                                         self.viewer, self._address()))
-                if p == "/api/team/accept":  # what this hub takes from the computers that send to it
-                    if not self._can_admin():
-                        return self._json({"error": tr("only an admin of this hub can do this")}, 403)
-                    return self._json(*app.action_accept(str(body.get("accept") or ""), self.viewer))
-                if p == "/api/devices/push":
-                    return self._json({"started": app.action_push()})
-                if p == "/api/update/check":  # a POST: with the daily check off, the dashboard's only call to PyPI
-                    return self._json(app.update_info(remote=True))
-                if p == "/api/analysis/backend":
-                    return self._json(app.action_backend(str(body.get("backend") or "")))
-                if p == "/api/analysis/agent":
-                    return self._json(app.action_agent(body if isinstance(body, dict) else {}))
-                if p in ("/api/analysis/provider", "/api/analysis/provider/test", "/api/analysis/provider/models"):
-                    if not self._can_admin():  # an API key, and where transcripts are sent
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    if p == "/api/analysis/provider/test":
-                        return self._json(app.action_provider_test(str(body.get("provider") or "")))
-                    if p == "/api/analysis/provider/models":
-                        return self._json(app.provider_models(str(body.get("provider") or "")))
-                    return self._json(app.action_provider(body if isinstance(body, dict) else {}))
-                if p == "/api/analysis/language":
-                    return self._json(app.action_language(str(body.get("language") or "")))
-                if p == "/api/update/daily":
-                    return self._json(app.action_update_setting("check_daily", bool(body.get("on"))))
-                if p == "/api/update/notify":
-                    return self._json(app.action_update_setting("notify", bool(body.get("on"))))
-                if p == "/api/update":
-                    return self._json(app.action_update())
-                if p == "/api/menu-bar":  # installs software and restarts the dashboard: only from this computer
-                    if not self._from_here():
-                        return self._json({"error": tr("change this on the computer itself, not from another device")}, 403)
-                    return self._json(app.action_menu_bar(bool(body.get("on"))))
-                if p == "/api/analysis/run":  # the Queue's Analyze now
-                    return self._json(app.action_analyze_queue(str(body.get("which") or "ready")))
-                if p == "/api/sessions/analyze":
-                    return self._json(app.action_analyze_many(list(body.get("ids") or [])))
-                if p == "/api/screen":
-                    return self._json({"started": app.action_screen(body.get("source") or None, bool(body.get("redo")))})
-                if p == "/api/screen/queue":
-                    return self._json(app.action_screen_queue(body.get("source") or None, bool(body.get("maybe"))))
-                m = re.fullmatch(r"/api/sessions/([\w-]+)/analyze", p)
-                if m:
-                    return self._json({"started": app.action_analyze(m.group(1))})
-                m = re.fullmatch(r"/api/connectors/([\w-]+)/(connect|disconnect)", p)
-                if m:
-                    try:
-                        return self._json(app.action_connector(m.group(1), m.group(2)))
-                    except KeyError:
-                        return self._json({"error": tr("unknown connector")}, 404)
-                if p == "/api/map/themes":
-                    return self._json({"started": app.action_themes(bool(body.get("force")))})
-                if p == "/api/glossary/rebuild":
-                    return self._json({"started": app.action_glossary(body.get("path") or None)})
-                if p == "/api/review":
-                    return self._json({"started": app.action_review(body.get("week"))})
-                if p == "/api/synthesize":
-                    return self._json({"started": app.action_synthesize(body.get("path") or GLOBAL)})
-                m = re.fullmatch(r"/api/knowledge/(\d+)", p)
-                if m:
-                    return self._json({"ok": app.action_knowledge(int(m.group(1)), body)})
-                if p == "/api/suggestions/seen":
-                    from .knowledge.suggest import mark_seen
-
-                    mark_seen(app.conn)
-                    return self._json({"ok": True})
-                if p == "/api/suggestions/refresh":
-                    from .knowledge.suggest import refresh
-
-                    return self._json(refresh(app.conn, app.cfg))
-                m = re.fullmatch(r"/api/suggestions/(\d+)/(apply|unapply|dismiss|done|edit|move)", p)
-                if m:
-                    return self._json(*app.action_suggestion(int(m.group(1)), m.group(2), body if isinstance(body, dict) else {}))
-                return self._json({"error": tr("not found")}, 404)
-            except Exception as exc:
-                log.exception("POST %s failed", p)
-                return self._json({"error": str(exc)}, 500)
-
-    return Handler
-
-
-def make_server(cfg: Config, host: str | None = None, port: int | None = None, *,
-                any_port: bool = False) -> ThreadingHTTPServer:
-    """Bind the dashboard. With any_port, fall back to a free port when the configured one is taken."""
-    host = host or cfg.server_host
-    port = cfg.server_port if port is None else port
-    app = App(cfg)
-    try:
-        httpd = ThreadingHTTPServer((host, port), BaseHTTPRequestHandler)
-    except OSError:
-        if not any_port:
-            raise
-        httpd = ThreadingHTTPServer((host, 0), BaseHTTPRequestHandler)
-    # the handler checks Host against the bound port, so it is built once the port is known
-    httpd.RequestHandlerClass = make_handler(app, httpd.server_address[1])
-    httpd.app = app  # the menu-bar item reads the same status (menubar.py)
-    return httpd
-
-
-def _already_running(cfg: Config, port: int, open_browser: bool) -> None:
-    """The port is taken: say by what (usually Interlatch's own launchd agent) and how to get the new code served."""
-    import os
-    import sys
-    from urllib.request import urlopen
-
-    from .runtime.install import UI_LABEL, active_label, launchd_status
-
-    url = f"http://127.0.0.1:{port}/"
-    try:
-        with urlopen(url + "api/jobs", timeout=3) as r:
-            running = json.load(r).get("version")
-    except Exception:
-        running = None
-    if not running:
-        print(f"Port {port} is in use by another program. Use --port to pick another one.", file=sys.stderr)
-        raise SystemExit(1)
-    if open_browser:
-        webbrowser.open(url)
-    agent = launchd_status(UI_LABEL).get("loaded")
-    print(f"Interlatch {running} is already running at {url}" + (" (the background agent from `interlatch install`)." if agent else "."),
-          file=sys.stderr)
-    if running != __version__ or agent:
-        if agent and sys.platform == "win32":
-            restart = r"schtasks /End /TN \Interlatch\Dashboard, then schtasks /Run /TN \Interlatch\Dashboard"
-        elif agent:
-            restart = f"launchctl kickstart -k gui/{os.getuid()}/{active_label(UI_LABEL)}"
-        else:
-            restart = "stop that one (Ctrl+C where it runs)"
-        print(f"If it still runs older code (after an update), restart it to load this install ({__version__}): {restart}",
-              file=sys.stderr)
-    print("Or run a second dashboard with --port <n>.", file=sys.stderr)
-    raise SystemExit(0 if open_browser else 1)
-
-
-def serve(cfg: Config, host: str | None = None, port: int | None = None, open_browser: bool = False, *,
-          banner: str | None = None, menu_bar: bool | None = None) -> None:
-    """`banner`: the line printed once the dashboard listens, instead of its 127.0.0.1 address (container.py prints
-    the hub's own: an editor connected to the server forwards any 127.0.0.1 address it sees in a terminal).
-    `menu_bar`: the macOS menu-bar item too; None shows it when this is the login item (menubar.wants_menu_bar)."""
-    from .runtime import update
-
-    if sys.platform == "win32" and os.environ.get("INTERLATCH_WINDOWS_TASK"):
-        from .runtime.platforms.windows import QUIT_TEXT, logon_id, quit_stands
-
-        if quit_stands(cfg.home, logon_id()):  # quit from its notification-area icon: not back before the next sign-in
-            print(f"Quit from the notification-area icon. {QUIT_TEXT}", flush=True)
-            return
-    update.RESTARTABLE = True  # this process is only the dashboard, so an update can re-exec it
-    try:
-        httpd = make_server(cfg, host, port)
-    except OSError as exc:
-        if exc.errno != errno.EADDRINUSE:
-            raise
-        _already_running(cfg, port or cfg.server_port, open_browser)
-    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
-    print(banner or f"Interlatch dashboard: {url}  (Ctrl+C to stop)", flush=True)
-    if open_browser:
-        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
-    from .runtime.platforms.menubar import run_with_server, wants_menu_bar
-
-    if (wants_menu_bar(cfg) if menu_bar is None else menu_bar) and run_with_server(cfg, httpd, url):
-        return
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        httpd.server_close()

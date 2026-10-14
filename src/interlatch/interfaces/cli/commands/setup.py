@@ -468,7 +468,7 @@ def cmd_uninstall(args) -> int:
 def cmd_serve(args) -> int:
     from ....core.util import setup_logging
     from ....runtime.migrate import migrate_if_due
-    from ....server import serve
+    from ...web.server import serve
 
     migrate_if_due(quiet=False)  # the dashboard at login: Chronicle's folder becomes Interlatch's
     cfg = load_cfg()

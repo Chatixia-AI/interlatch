@@ -35,7 +35,8 @@ SPOKE_CWD = "/home/test/code/demo-app"
 
 
 def _serve(cfg):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     app = App(cfg)
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)

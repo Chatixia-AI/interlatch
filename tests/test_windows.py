@@ -282,7 +282,7 @@ def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeyp
     """A Claude Code session on Windows records C:\\work\\app; the VS Code extension asks with c:\\ (fsPath) or C:/."""
     from interlatch.storage.sqlite import connect
     from interlatch.ingestion.service import sync
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     for name in ("COPILOT_HOME", "BOB_HOME", "ANTIGRAVITY_HOME"):
         monkeypatch.setenv(name, str(tmp_path / "none"))
@@ -365,7 +365,7 @@ def test_quit_from_the_icon_lasts_until_the_next_sign_in(tmp_path, monkeypatch):
 
 
 def test_the_dashboard_task_does_not_start_again_after_quit(tmp_path, monkeypatch):
-    from interlatch import server
+    from interlatch.interfaces.web import server
     from interlatch.runtime import update
 
     cfg = load_config(tmp_path / "home")

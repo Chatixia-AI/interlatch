@@ -16,7 +16,7 @@ from interlatch.sharing.push import push
 from interlatch.sharing.receiver import team_lessons
 from interlatch.interfaces.cli.main import main
 from interlatch.core.config import load_config, set_config_value, toml_table
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 from interlatch.core.machine import local_machine
 
 from conftest import CWD

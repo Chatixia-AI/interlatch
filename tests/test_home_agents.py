@@ -4,7 +4,7 @@ agent's sessions carry at all, so a chat export shows a dash for tokens rather t
 
 from datetime import timedelta
 
-from interlatch.server import App
+from interlatch.interfaces.web.app import App
 from interlatch.core.util import to_iso, utcnow
 
 CHAT = "c1a7c1a7-0000-4000-8000-000000000001"

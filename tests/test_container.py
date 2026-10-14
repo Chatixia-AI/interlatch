@@ -29,7 +29,7 @@ def served(env, monkeypatch):
         got.setdefault("cfg", cfg)
         got.setdefault("kw", kw)
 
-    monkeypatch.setattr("interlatch.server.serve", serve)
+    monkeypatch.setattr("interlatch.interfaces.web.server.serve", serve)
     before = signal.getsignal(signal.SIGTERM)
     yield env, got
     signal.signal(signal.SIGTERM, before)
@@ -168,7 +168,7 @@ def test_a_container_install_does_not_update_itself(monkeypatch):
 def test_the_banner_replaces_the_local_address(env, monkeypatch, capsys):
     """An editor connected to the hub's server (VS Code Remote-SSH) forwards any 127.0.0.1 address printed in its
     terminal to the same port on the viewer's own computer, hiding their own dashboard there."""
-    from interlatch import server
+    from interlatch.interfaces.web import server
 
     class Httpd:
         server_address = ("127.0.0.1", 11524)

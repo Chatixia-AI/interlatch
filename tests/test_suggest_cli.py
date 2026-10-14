@@ -106,7 +106,8 @@ def test_cli_friction(queued, capsys):
 
 
 def _serve(cfg):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
     httpd.RequestHandlerClass = make_handler(App(cfg), httpd.server_address[1])

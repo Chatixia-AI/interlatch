@@ -122,7 +122,7 @@ def test_themes_group_a_category_and_rerun_only_when_it_changes(synced):
 def test_dashboard_themes_job_groups_due_categories(synced):
     import time
 
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn, cfg, _ = _build(synced)
     for name in [f"tool{i}" for i in range(30)]:  # a category big enough to be due

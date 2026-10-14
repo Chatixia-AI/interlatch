@@ -63,7 +63,8 @@ def test_mcp_server_protocol(synced):
 
 
 def test_http_api(synced):
-    from interlatch.server import App, make_handler
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
 
     app = App(synced["cfg"])
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
@@ -125,7 +126,7 @@ def test_http_api(synced):
 
 
 def test_file_sessions_matches_relative_paths(synced):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn = synced["conn"]
     conn.execute("INSERT INTO sessions(id, agent, project_path, started_at) VALUES ('codex-1', 'codex', ?, '2026-09-21T09:00:00Z')",
@@ -145,7 +146,7 @@ def test_file_sessions_matches_relative_paths(synced):
 
 
 def test_folder_files_lists_touched_files(synced, tmp_path):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn = synced["conn"]
     proj = tmp_path / "proj"
@@ -248,7 +249,7 @@ def test_session_start_context(synced):
 
 def test_dashboard_picks_up_config_changes(synced):
     from interlatch.core.config import set_config_value
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     app = App(synced["cfg"])
     assert app.cfg.codex_dirs == []
@@ -262,7 +263,7 @@ def test_dashboard_picks_up_config_changes(synced):
 
 def test_analyze_selected_sessions(synced):
     """The Sessions list's "Analyze N": picked sessions, skipped ones included, analyzed in one background job."""
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn = synced["conn"]
     conn.execute("UPDATE sessions SET analysis_status = 'skipped', analysis_reason = 'imported'")
@@ -289,7 +290,7 @@ def test_analyze_selected_sessions(synced):
 
 def test_job_progress_counts():
     """The Activity panel draws a bar from "N of M" / "N/M" in a job's message."""
-    from interlatch.server import Jobs
+    from interlatch.interfaces.web.jobs import Jobs
 
     jobs = Jobs()
     gate = threading.Event()
@@ -317,7 +318,7 @@ def test_export_sessions(synced):
     import io
     import zipfile
 
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
     from interlatch.interfaces.exports.sessions import ExportError
 
     conn = synced["conn"]
@@ -390,7 +391,7 @@ def test_mcp_page_info(env):
     import tomllib
 
     from interlatch.interfaces.mcp import TOOLS
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     info = App(env["cfg"]).mcp_info()
     assert info["args"][-1] == "mcp" and info["command"]

@@ -76,7 +76,7 @@ def test_a_stopped_queue_says_why(synced, monkeypatch):
 
 
 def test_session_api_carries_the_reason(synced):
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("UPDATE sessions SET analysis_status = 'pending', n_prompts = 0 WHERE id = ?", (SID,))
@@ -108,7 +108,7 @@ def test_analyze_the_queue_now(synced):
     import time
 
     from interlatch.storage.kv import kv_get
-    from interlatch.server import App
+    from interlatch.interfaces.web.app import App
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("UPDATE sessions SET analysis_status = 'pending', analysis_attempts = 0, ended_flag = 1")

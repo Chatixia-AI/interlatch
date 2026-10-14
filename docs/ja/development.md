@@ -144,9 +144,11 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `interfaces/cli/`：コマンドライン。`parser.py` がコマンドをまとめ、`commands/` の各モジュールがコマンドの
   グループ（記録、アーカイブ、ナレッジ、セットアップ、共有、運用）を持ち、各コマンドのオプションはその処理の隣に
   あります。最上位の `cli.py` は `interlatch` コマンドが実行する入り口です
-- `server.py` ＋ `web/`（ダッシュボード）。`packaging/macos/` がアプリをビルドします
+- `interfaces/web/`：ダッシュボード。`server.py` が起動し、`handler.py` が誰からかを確かめて各リクエストを振り分け、
+  `app.py` がアーカイブから答え、`jobs.py` が時間のかかる操作を走らせ、`assets.py` が `web/` のページを返します。
+  `packaging/macos/` がアプリをビルドします
 
-ダッシュボードのページは Content-Security-Policy（`server.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
+ダッシュボードのページは Content-Security-Policy（`interfaces/web/assets.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは
 文字列ではなくオブジェクト（`style: { "--h": "40px" }`）にします。文字列は style 属性になり、ポリシーが拒否します。
 どちらも `tests/test_security.py` が確かめます。
