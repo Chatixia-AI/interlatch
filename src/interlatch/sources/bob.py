@@ -17,10 +17,10 @@ import re
 import sqlite3
 from pathlib import Path
 
-from .copilot_parser import _Builder, _args, estimate_cost, finish_session, ms_to_iso, uri_path
-from .core.sessions import ApiCall, FileStat, ParsedSession, Subagent
-from .core.pricing import normalize_model
-from .core.util import one_line, safe_text
+from .builder import SessionBuilder, tool_args, estimate_cost, finish_session, ms_to_iso, uri_path
+from ..core.sessions import ApiCall, FileStat, ParsedSession, Subagent
+from ..core.pricing import normalize_model
+from ..core.util import one_line, safe_text
 
 log = logging.getLogger("interlatch.bob")
 
@@ -84,10 +84,10 @@ def _calls(d: dict) -> list[tuple[str | None, str, dict]]:
     for tc in d.get("tool_calls") or []:
         fn = tc.get("function") if isinstance(tc, dict) else None
         if isinstance(fn, dict):
-            out.append((tc.get("id"), fn.get("name") or "tool", _args(fn.get("arguments"))))
+            out.append((tc.get("id"), fn.get("name") or "tool", tool_args(fn.get("arguments"))))
     for tc in d.get("toolCalls") or []:
         if isinstance(tc, dict):
-            out.append((tc.get("id"), tc.get("name") or "tool", _args(tc.get("arguments"))))
+            out.append((tc.get("id"), tc.get("name") or "tool", tool_args(tc.get("arguments"))))
     return out
 
 
@@ -142,7 +142,7 @@ def _count_changes(ps: ParsedSession, changes: dict, counted: str | None) -> Non
             fs.lines_removed += removed
 
 
-def _feed(b: _Builder, msgs: list[tuple[str | None, dict]], cwd: str | None) -> None:
+def _feed(b: SessionBuilder, msgs: list[tuple[str | None, dict]], cwd: str | None) -> None:
     """Replay one thread's messages (the task's, or a subagent's) into `b`."""
     ps = b.ps
     results: dict[str, dict] = {}
@@ -204,13 +204,13 @@ def _thread(rows: list[tuple[int | None, object]]) -> list[tuple[str | None, dic
     return out
 
 
-def _subagent(parent: _Builder, aid: str, meta: dict, args: dict, call_id, msgs: list, cwd: str | None) -> None:
+def _subagent(parent: SessionBuilder, aid: str, meta: dict, args: dict, call_id, msgs: list, cwd: str | None) -> None:
     ps = parent.ps
     sub = ps.subagents.setdefault(aid, Subagent(aid))
     sub.agent_type = meta.get("agentType") or args.get("name") or None
     sub.description = one_line(safe_text(str(args.get("description") or "")), 120) or None
     sub.tool_use_id = call_id
-    b = _Builder(ps, agent_id=aid)
+    b = SessionBuilder(ps, agent_id=aid)
     _feed(b, _thread([(None, m) for m in msgs]), cwd)
     parent.stamps.extend(b.stamps)
     stamps = sorted(s for s in b.stamps if s)
@@ -234,7 +234,7 @@ def parse_bob_task(task: dict) -> ParsedSession | None:
     ps.cc_version = task.get("version") or None
     ps.entrypoint = f"bob:{task.get('task_type') or 'normal'}"
     ps.custom_title = task.get("title") or None
-    b = _Builder(ps)
+    b = SessionBuilder(ps)
     for ms in (task.get("created_at"), task.get("updated_at")):
         if ms_to_iso(ms):
             b.stamps.append(ms_to_iso(ms))

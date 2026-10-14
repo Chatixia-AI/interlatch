@@ -21,18 +21,20 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import artifacts, news
+from . import news
+from .core import artifact_records
 from .core.config import Config
 from .storage.kv import kv_get, kv_set
 from .ladder import MEMORY_STAGE_REASON
-from .codex_parser import (CODEX_PARSER_VERSION, load_imports, load_titles, parent_thread_id, parse_codex_session,
-                           read_meta, rollout_files, rollout_id)
-from .antigravity_parser import (ANTIGRAVITY_PARSER_VERSION, LOGS, conversation_dirs, load_db_meta, load_title,
-                                 parse_antigravity_conversation, transcript_files)
-from .bob_parser import BOB_PARSER_VERSION, bob_db, load_tasks, parse_bob_task, task_folder, task_signature
-from .copilot_parser import (COPILOT_PARSER_VERSION, agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
-                             parse_vscode_chat, workspace_folder)
-from .parser import PARSER_VERSION, parse_history, parse_session, session_dir_for
+from .sources.codex.parser import (CODEX_PARSER_VERSION, load_imports, load_titles, parent_thread_id,
+                                   parse_codex_session, read_meta, rollout_files, rollout_id)
+from .sources.antigravity import (ANTIGRAVITY_PARSER_VERSION, LOGS, conversation_dirs, load_db_meta, load_title,
+                                  parse_antigravity_conversation, transcript_files)
+from .sources.bob import BOB_PARSER_VERSION, bob_db, load_tasks, parse_bob_task, task_folder, task_signature
+from .sources.copilot import (COPILOT_PARSER_VERSION, agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
+                              parse_vscode_chat, workspace_folder)
+from .sources.claude.parser import PARSER_VERSION, parse_history, parse_session
+from .sources.claude.files import session_dir_for
 from .core.sessions import ParsedSession
 from .core.util import dumps, file_lock, one_line, parse_ts, safe_text, to_iso, utcnow_iso
 
@@ -270,7 +272,7 @@ def store_parsed(
         return "foreign"
     for table in ("events", "tool_calls", "session_files", "subagents", "api_calls", "artifacts"):
         conn.execute(f"DELETE FROM {table} WHERE session_id = ?", (sid,))
-    artifacts.finish(ps)
+    artifact_records.finish(ps)
 
     conn.executemany(
         "INSERT INTO events(session_id, agent_id, seq, ts, role, kind, tool_name, tool_use_id, is_error, searchable, text, meta_json) "
@@ -322,7 +324,7 @@ def store_parsed(
         [
             (sid, o.get("agent_id") or "", o.get("tool_use_id"), seqs.get((o.get("agent_id") or "", o.get("tool_use_id"))),
              o.get("ts"), o["key"], o["kind"], o.get("action"), o.get("title"), o.get("path"), o.get("url"), o.get("size"),
-             o.get("sha256"), o.get("versions") or 1, artifacts.meta_json(o))
+             o.get("sha256"), o.get("versions") or 1, artifact_records.meta_json(o))
             for o in ps.outputs
         ],
     )
@@ -904,8 +906,8 @@ def _cloud_project(conn, label: str | None) -> str | None:
 
 def _sync_codex_cloud(cfg: Config, conn, report: SyncReport, skip: set[str], *, force=False):
     """Codex Cloud tasks through `codex cloud list/diff`; each new or changed task is archived with its diff."""
-    from .codex_cloud import CloudError, list_tasks, parse_cloud_task, save_status, task_diff
-    from .codex_cloud import task_signature as cloud_signature
+    from .sources.codex.cloud import CloudError, list_tasks, parse_cloud_task, save_status, task_diff
+    from .sources.codex.cloud import task_signature as cloud_signature
 
     binary = cfg.codex_bin()
     if not binary:

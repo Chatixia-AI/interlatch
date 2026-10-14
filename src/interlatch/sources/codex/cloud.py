@@ -14,12 +14,12 @@ import re
 import subprocess
 import time
 
-from .copilot_parser import _Builder, finish_session
-from .core.process import internal_env
-from .core.sessions import FileStat, ParsedSession
-from .core.util import safe_text
+from ..builder import SessionBuilder, finish_session
+from ...core.process import internal_env
+from ...core.sessions import FileStat, ParsedSession
+from ...core.util import safe_text
 
-log = logging.getLogger("interlatch.codex_cloud")
+log = logging.getLogger("interlatch.sources.codex.cloud")
 
 CLOUD_PARSER_VERSION = 1
 STATUS_KEY = "codex-cloud:status"  # kv: the last listing's outcome, for the Sources page
@@ -103,7 +103,7 @@ def parse_cloud_task(task: dict, diff: str | None, project_path: str | None) -> 
     ps.custom_title = safe_text(task.get("title") or "") or None
     ps.artifacts.append({"title": "Open in Codex Cloud", "url": task.get("url"), "ts": task.get("updated_at")})
     ts = _ms(task.get("updated_at"))
-    b = _Builder(ps)
+    b = SessionBuilder(ps)
     env = task.get("environment_label") or task.get("environment_id") or "no environment"
     s = task.get("summary") or {}
     head = f"Codex Cloud task · {env} · {task.get('status') or 'unknown'}"
@@ -124,13 +124,13 @@ def parse_cloud_task(task: dict, diff: str | None, project_path: str | None) -> 
 
 
 def save_status(conn, **status) -> None:
-    from .storage.kv import kv_set
+    from ...storage.kv import kv_set
 
     kv_set(conn, STATUS_KEY, json.dumps({**status, "checked_at": time.time()}))
 
 
 def load_status(conn) -> dict:
-    from .storage.kv import kv_get
+    from ...storage.kv import kv_get
 
     try:
         return json.loads(kv_get(conn, STATUS_KEY) or "{}")

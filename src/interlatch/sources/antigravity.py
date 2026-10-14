@@ -25,10 +25,10 @@ import sqlite3
 from collections import Counter, deque
 from pathlib import Path
 
-from .copilot_parser import _Builder, estimate_cost, finish_session, uri_path
-from .core.sessions import ApiCall, ParsedSession
-from .core.pricing import normalize_model
-from .core.util import one_line, parse_ts
+from .builder import SessionBuilder, estimate_cost, finish_session, uri_path
+from ..core.sessions import ApiCall, ParsedSession
+from ..core.pricing import normalize_model
+from ..core.util import one_line, parse_ts
 
 log = logging.getLogger("interlatch.antigravity")
 
@@ -246,7 +246,7 @@ def parse_antigravity_conversation(conv: Path, *, title: str | None = None, db_m
     ps.git_branch = meta.get("branch")
     ps.git_remote = meta.get("remote")
     ps.parse_errors = bad
-    b = _Builder(ps)
+    b = SessionBuilder(ps)
     model = meta.get("model")  # the database's model id; a model picked in the conversation takes over from there
     pending: deque = deque()  # tool calls waiting for their result steps
     cwds: Counter = Counter()

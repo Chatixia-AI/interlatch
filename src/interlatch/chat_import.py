@@ -23,7 +23,8 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import chatgpt_export, claude_export
+from .sources import chatgpt as chatgpt_export
+from .sources.claude import export as claude_export
 from .core.util import utcnow_iso
 from .views import NOT_ANALYZED_CHAT
 

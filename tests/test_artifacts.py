@@ -5,12 +5,13 @@ import os
 
 import pytest
 
-from interlatch import artifacts
-from interlatch.artifacts import commit_message, kind_for_path
-from interlatch.claude_export import parse_conversation
-from interlatch.codex_parser import parse_codex_session
-from interlatch.copilot_parser import tool_summary
-from interlatch.parser import parse_session
+from interlatch.artifacts import queries as artifacts
+from interlatch.core import artifact_records
+from interlatch.core.artifact_records import commit_message, kind_for_path
+from interlatch.sources.claude.export import parse_conversation
+from interlatch.sources.codex.parser import parse_codex_session
+from interlatch.sources.builder import tool_summary
+from interlatch.sources.claude.parser import parse_session
 
 from conftest import CWD, SID, _line
 
@@ -53,7 +54,7 @@ def _claude(tmp_path, lines):
     p.write_text("\n".join([_line(type="user", uuid="u0", timestamp="2026-09-20T10:00:00.000Z",
                                   message={"role": "user", "content": "make the report"}), *lines]) + "\n")
     ps = parse_session(p)
-    artifacts.finish(ps)
+    artifact_records.finish(ps)
     return ps
 
 
@@ -81,7 +82,7 @@ def test_claude_code_session(tmp_path):
     by = {o["key"]: o for o in ps.outputs}
     page = by["file:/tmp/scratchpad/report.html"]
     assert (page["kind"], page["action"], page["versions"]) == ("page", "created", 2)  # written, then rewritten
-    assert page["sha256"] == artifacts._digest(html + "!")[1] and page["tool_use_id"] == "t2"
+    assert page["sha256"] == artifact_records.digest(html + "!")[1] and page["tool_use_id"] == "t2"
     assert f"file:{CWD}/README.md" not in by and f"file:{CWD}/notes.md" not in by  # an edit; a failed write
     pub = by["url:https://claude.ai/code/artifact/abc-123"]
     assert (pub["kind"], pub["title"], pub["meta"]["version"]) == ("published", "Weekly report", "v2")
@@ -117,14 +118,14 @@ def test_codex_session(tmp_path):
                               "output": "Script completed\n/Users/x/.codex/generated_images/abc/exec-1.png"}),
     ]) + "\n")
     ps = parse_codex_session(p)
-    artifacts.finish(ps)
+    artifact_records.finish(ps)
     by = {o["key"]: o for o in ps.outputs}
     assert by[f"file:{CWD}/docs/guide.md"]["kind"] == "doc" and f"file:{CWD}/app.py" not in by
     assert by["url:https://github.com/o/r/pull/3"]["kind"] == "pr"
     image = by["file:/Users/x/.codex/generated_images/abc/exec-1.png"]
     assert (image["action"], image["title"], image["meta"]["prompt"]) == ("generated", "a cat", "a cat")
-    assert artifacts.prompt_title("Use case: logo\nAsset type: square brand icon, flat\nPrimary request: x") == "square brand icon, flat"
-    assert artifacts.prompt_title("Create a cover. Wide, 3:2.") == "Create a cover"
+    assert artifact_records.prompt_title("Use case: logo\nAsset type: square brand icon, flat\nPrimary request: x") == "square brand icon, flat"
+    assert artifact_records.prompt_title("Create a cover. Wide, 3:2.") == "Create a cover"
 
 
 def test_claude_ai_chat():
@@ -310,7 +311,7 @@ def test_decks_and_pdfs_a_script_saved(tmp_path, monkeypatch):
     import time
 
     # pytest's temporary folder is in macOS's per-user temp area, which is otherwise ignored as app scratch space
-    monkeypatch.setattr(artifacts, "_NOT_MADE_HERE", (os.path.expanduser("~/Library/"),))
+    monkeypatch.setattr(artifact_records, "_NOT_MADE_HERE", (os.path.expanduser("~/Library/"),))
     from datetime import datetime, timedelta, timezone
 
     def iso(dt):
@@ -344,13 +345,13 @@ def test_decks_and_pdfs_a_script_saved(tmp_path, monkeypatch):
     p.write_text("\n".join(lines) + "\n")
     ps = parse_session(p)
     ps.project_path = str(out)  # "summary.pdf" is relative to where the session ran
-    artifacts.finish(ps)
+    artifact_records.finish(ps)
     by = {o["key"]: o for o in ps.outputs}
     assert by[f"file:{deck}"]["kind"] == "deck" and by[f"file:{deck}"]["action"] == "saved"
     assert by[f"file:{report}"]["kind"] == "doc" and by[f"file:{deck}"]["tool_use_id"] == "t1"
     assert f"file:{given}" not in by  # read, not made
     assert not any(o["path"] and o["path"].endswith(".key") for o in ps.outputs)  # a private key is never a "deck"
-    assert artifacts.kind_for_path("/x/server.key") is None
+    assert artifact_records.kind_for_path("/x/server.key") is None
     assert not {f"file:{lock}", f"file:{cached}", *(f"file:{b}" for b in batch)} & set(by)  # lock file, cache, batch
 
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from interlatch.parser import classify_user_text, parse_session, patch_stats, summarize_tool_use
+from interlatch.sources.claude.parser import classify_user_text, parse_session, patch_stats, summarize_tool_use
 from interlatch.core.pricing import normalize_model, usage_cost
 
 from conftest import CWD, SID, SUB

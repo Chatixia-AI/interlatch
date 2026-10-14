@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from interlatch.codex_cloud import diff_files, load_status, parse_cloud_task
+from interlatch.sources.codex.cloud import diff_files, load_status, parse_cloud_task
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect as db_connect
 from interlatch.ingest import sync

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from interlatch.storage.sqlite import connect
 from interlatch.ingest import sync
-from interlatch.parser import PARSER_VERSION, parse_session
+from interlatch.sources.claude.parser import PARSER_VERSION, parse_session
 
 from conftest import CWD, SID, _line, main_transcript
 

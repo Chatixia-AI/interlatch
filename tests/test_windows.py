@@ -324,7 +324,7 @@ def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeyp
 
 
 def test_copilot_s_file_uris_give_windows_paths():
-    from interlatch.copilot_parser import uri_path
+    from interlatch.sources.builder import uri_path
 
     assert uri_path("file:///c%3A/Users/ada/app") == "c:/Users/ada/app"
     assert uri_path({"path": "/c:/Users/ada/app"}) == "c:/Users/ada/app"

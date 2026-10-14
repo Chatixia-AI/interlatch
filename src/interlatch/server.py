@@ -1022,7 +1022,7 @@ class App:
              "changed_ids": sorted(files[p]["changed"])} for p in paths[:limit]]}
 
     def _artifacts(self, **filters) -> tuple[list[dict], dict[str, int]]:
-        from .artifacts import query
+        from .artifacts.queries import query
         from .ingest import local_machine_id
 
         return query(self.conn, local_machine=local_machine_id(self.cfg), **filters)
@@ -1047,19 +1047,19 @@ class App:
         return {"total": len(items), "counts": counts, "items": items[offset:offset + limit], "projects": projects}
 
     def artifact_open(self, artifact_id: int) -> dict | None:
-        from .artifacts import open_file
+        from .artifacts.files import open_file
         from .ingest import local_machine_id
 
         return open_file(self.conn, artifact_id, local_machine_id(self.cfg))
 
     def artifact_reveal(self, artifact_id: int, how: str) -> str | None:
-        from .artifacts import reveal
+        from .artifacts.files import reveal
         from .ingest import local_machine_id
 
         return reveal(self.conn, artifact_id, how, local_machine_id(self.cfg))
 
     def artifact_file(self, artifact_id: int) -> tuple[bytes, str] | None:
-        from .artifacts import preview_file
+        from .artifacts.queries import preview_file
         from .ingest import local_machine_id
 
         return preview_file(self.conn, artifact_id, local_machine_id(self.cfg), cache_dir=self.cfg.home / "thumbs")

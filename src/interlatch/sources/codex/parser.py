@@ -18,11 +18,11 @@ import re
 from pathlib import Path
 from typing import Sequence
 
-from .parser import _TAG_RE, clean_prompt, parse_command
-from .core.sessions import IDLE_GAP_CAP_S, TEXT_LIMITS, ApiCall, Event, FileStat, ParsedSession, Subagent, ToolCall
-from . import artifacts
-from .core.pricing import normalize_model, openai_cost
-from .core.util import iter_jsonl, one_line, parse_ts, safe_text, truncate
+from ..prompts import TAG_RE, clean_prompt, parse_command
+from ...core.sessions import IDLE_GAP_CAP_S, TEXT_LIMITS, ApiCall, Event, FileStat, ParsedSession, Subagent, ToolCall
+from ...core import artifact_records
+from ...core.pricing import normalize_model, openai_cost
+from ...core.util import iter_jsonl, one_line, parse_ts, safe_text, truncate
 
 log = logging.getLogger("interlatch.codex")
 
@@ -125,7 +125,7 @@ def classify_codex_user(text: str) -> tuple[str, str]:
     if t.startswith(("<command-name>", "<command-message")):
         return "command", t
     if t.startswith(("<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat")):
-        return "command_output", _TAG_RE.sub("", t).strip()
+        return "command_output", TAG_RE.sub("", t).strip()
     if t.startswith("[Request interrupted by user"):
         return "interrupt", t
     if t.startswith("This session is being continued from a previous conversation"):
@@ -592,7 +592,7 @@ class _CodexThread:
             if is_error:
                 self._fail(owner)
             elif not cell:
-                artifacts.from_tool(self.ps, owner.name, owner.input, text, ts=ts, agent_id=self.agent_id,
+                artifact_records.from_tool(self.ps, owner.name, owner.input, text, ts=ts, agent_id=self.agent_id,
                                     tool_use_id=owner.tool_use_id, command=owner.command)
         self._event(ts, "user", "tool_result", text, limit_key="tool_error" if is_error else "tool_result",
                     tool_name=call.name if call else None, tool_use_id=call_id, is_error=is_error)
@@ -679,9 +679,9 @@ class _CodexThread:
         ps = self.ps
         for path, op, added, removed, *how in self.change_ops or self.patch_ops:
             if op == "add" and len(how) == 2:  # a FileChange: applied, with the new file's content
-                artifacts.file_written(ps, path, content=how[1], ts=how[0], agent_id=self.agent_id)
+                artifact_records.file_written(ps, path, content=how[1], ts=how[0], agent_id=self.agent_id)
             elif op == "add" and not how[0].is_error:
-                artifacts.file_written(ps, path, ts=how[0].ts, agent_id=self.agent_id, tool_use_id=how[0].tool_use_id)
+                artifact_records.file_written(ps, path, ts=how[0].ts, agent_id=self.agent_id, tool_use_id=how[0].tool_use_id)
             fs = ps.files.setdefault(path, FileStat())
             if op == "add":
                 fs.writes += 1
