@@ -403,9 +403,10 @@ class ApiRunner(Runner):
         served = data.get("model") or model
         cost = u.get("cost")
         if not isinstance(cost, (int, float)):
-            from ...core.pricing import is_openai_model, openai_cost
+            from ...core.pricing import gemini_cost, is_gemini_model, is_openai_model, openai_cost
 
-            cost = openai_cost(served, inp - cached, cached, out) if is_openai_model(served) else 0.0
+            cost = (openai_cost(served, inp - cached, cached, out) if is_openai_model(served)
+                    else gemini_cost(served, inp - cached, cached, out) if is_gemini_model(served) else 0.0)
         return str(text), LLMResult(data={}, cost_usd=float(cost), duration_ms=0, model=served,
                                     input_tokens=inp, output_tokens=out)
 

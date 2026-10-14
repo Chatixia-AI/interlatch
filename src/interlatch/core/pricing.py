@@ -166,3 +166,54 @@ def openai_cost(model: str | None, uncached_input: int, cached_input: int, outpu
         return 0.0
     p_in, p_out, p_cached = prices
     return (uncached_input * p_in + cached_input * p_cached + output * p_out) / 1_000_000
+
+
+# ------------------------------------------------------------------ Google Gemini (Antigravity, Copilot)
+# model -> (input, output, cached input) USD per million tokens: the Gemini API's Standard paid tier
+# (ai.google.dev/gemini-api/docs/pricing, October 2026), thinking tokens billed as output. Pro models cost more for
+# prompts over 200k tokens; these are the rates up to 200k. Cache storage per hour is left out. Gemini 3.6 and 3.8
+# Flash double from 2027-01-01 ($1.50, $7.50, $0.15).
+GEMINI_PRICES: dict[str, tuple[float, float, float]] = {
+    "gemini-3.8-flash": (0.75, 3.75, 0.075),
+    "gemini-3.6-flash": (0.75, 3.75, 0.075),
+    "gemini-3.5-flash-lite": (0.30, 2.50, 0.03),
+    "gemini-3.1-pro": (2.0, 12.0, 0.20),
+    "gemini-3.1-flash-lite": (0.25, 1.50, 0.025),
+    "gemini-3-flash": (0.50, 3.00, 0.05),
+    "gemini-2.5-pro": (1.25, 10.0, 0.125),
+    "gemini-2.5-flash": (0.30, 2.50, 0.03),
+    "gemini-2.5-flash-lite": (0.10, 0.40, 0.01),
+}
+
+
+def _gemini_id(model: str | None) -> str:
+    """'google/gemini-2.5-flash' (OpenRouter), 'models/gemini-3-flash-preview' (the Gemini API) -> the bare id."""
+    return (normalize_model(model) or "").rsplit("/", 1)[-1]
+
+
+def is_gemini_model(model: str | None) -> bool:
+    return _gemini_id(model).startswith("gemini-")
+
+
+def gemini_price_for(model: str | None) -> tuple[tuple[float, float, float] | None, bool]:
+    """((input, output, cached), exact). A Gemini model not listed (an older or newer one) is estimated at the rates
+    of the listed model of its kind: Flash-Lite, Pro, or else Flash."""
+    m = _gemini_id(model)
+    if not m.startswith("gemini-"):
+        return None, True
+    for known in sorted(GEMINI_PRICES, key=len, reverse=True):  # a preview or dated id: gemini-3-flash-preview
+        if m == known or m.startswith(known + "-"):
+            return GEMINI_PRICES[known], True
+    if "flash-lite" in m:
+        return GEMINI_PRICES["gemini-3.5-flash-lite"], False
+    if "pro" in m:
+        return GEMINI_PRICES["gemini-3.1-pro"], False
+    return GEMINI_PRICES["gemini-3.8-flash"], False
+
+
+def gemini_cost(model: str | None, uncached_input: int, cached_input: int, output: int) -> float:
+    prices, _ = gemini_price_for(model)
+    if not prices:
+        return 0.0
+    p_in, p_out, p_cached = prices
+    return (uncached_input * p_in + cached_input * p_cached + output * p_out) / 1_000_000

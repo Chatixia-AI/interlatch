@@ -198,7 +198,8 @@ interlatch config set analysis.backend openai
   `max_output_tokens`. Anthropic and Bedrock calls send `effort` and allow 32,000 output tokens by default.
 
 Cost: with a provider, the cost is what the API reports (OpenRouter) or an estimate from the token counts at
-Anthropic's or OpenAI's list prices (Anthropic, Bedrock, OpenAI); Azure, Ollama and other servers show tokens only. Otherwise,
+Anthropic's, OpenAI's or Google's list prices (Anthropic, Bedrock, OpenAI, and Gemini models on an OpenAI-compatible
+server); Azure, Ollama and other models show tokens only. Otherwise,
 analysis runs through your own Claude Code or Codex login, or your Bob API key (Bob reports what each analysis cost).
 With Claude, the reported cost is the API
 list-price equivalent: sessions averaged about $0.38 each with Sonnet (digests average ~150k characters), and

@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from interlatch.sources.claude.parser import classify_user_text, parse_session, patch_stats, summarize_tool_use
-from interlatch.core.pricing import normalize_model, usage_cost
+from interlatch.core.pricing import gemini_price_for, is_gemini_model, normalize_model, usage_cost
+from interlatch.sources.builder import estimate_cost
 
 from conftest import CWD, SID, SUB
 
@@ -120,6 +121,22 @@ def test_pricing():
     assert abs(usage_cost("claude-opus-5-5", usage) - (4 + 20 + 0.2 + 5 + 8)) < 1e-9
     assert abs(usage_cost("claude-opus-5-5", usage, speed="fast") - 2 * 37.2) < 1e-9
     assert usage_cost("claude-future-opus-9", {"output_tokens": 1_000_000}) == 25.0  # family fallback
+
+
+def test_gemini_pricing():
+    """Antigravity and Copilot on Gemini models: Google's list prices (they were $0, there being none)."""
+    M = 1_000_000
+    # gemini-3.8-flash, as Antigravity reports it: $0.75 uncached input, $0.075 cached, $3.75 output per 1M tokens
+    assert abs(estimate_cost("gemini-3.8-flash", M, M, 0, M) - (0.75 + 0.075 + 3.75)) < 1e-9
+    assert gemini_price_for("gemini-3-flash-preview") == ((0.50, 3.00, 0.05), True)  # a preview id: its model's price
+    assert gemini_price_for("models/gemini-2.5-flash-lite") == ((0.10, 0.40, 0.01), True)  # not gemini-2.5-flash's
+    assert gemini_price_for("google/gemini-2.5-pro")[0] == (1.25, 10.0, 0.125) and is_gemini_model("google/gemini-2.5-pro")
+    # not listed: estimated at the listed model of its kind
+    assert gemini_price_for("gemini-3.5-flash") == ((0.75, 3.75, 0.075), False)
+    assert gemini_price_for("gemini-9-pro") == ((2.0, 12.0, 0.20), False)
+    assert gemini_price_for("gemini-9-flash-lite")[0] == (0.30, 2.50, 0.03)
+    assert gemini_price_for("gpt-5") == (None, True) and not is_gemini_model("claude-opus-5-5")
+    assert estimate_cost("gpt-5", M, 0, 0, 0) == 1.25 and estimate_cost("claude-opus-5-5", M, 0, 0, 0) == 4.0  # unchanged
 
 
 def test_gzip_archive_parses_identically(env, tmp_path):

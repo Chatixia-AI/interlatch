@@ -60,7 +60,9 @@ thinking, tool calls with their results and durations, background-task notices a
 newer version's conversation database, opened read-only, it adds the workspace folder, git branch and remote, and the
 model; the title comes from `annotations/<id>.pbtxt`. The log and the task, plan and walkthrough Markdown files are
 archived, generated images are not. A conversation kept only in the encrypted store cannot be read; the Sources card
-counts those. Antigravity records no prices, so sessions on Gemini models show tokens but no cost. Connecting
+counts those. Antigravity records no prices, so the cost of a session on a Gemini model is estimated at Google's
+Gemini API list prices (a Gemini model without a published price at those of its kind: Flash, Flash-Lite or Pro),
+as are GitHub Copilot sessions on Gemini models. Connecting
 registers the MCP server in `~/.gemini/config/mcp_config.json`, Antigravity's global MCP config.
 
 **Chats on claude.ai and ChatGPT** are not stored on your Mac, so they come in from a data export: on claude.ai,
