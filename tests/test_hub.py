@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from interlatch import hub
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect, kv_set
 
 from conftest import CWD, PROJECT_DIR, SID, fake_log, write_fake_claude_tree
@@ -243,8 +243,8 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     assert spoke.hub_folders == {str(folder.resolve()): CWD}
 
     # the session ran in SPOKE_CWD, which exists only on the simulated other computer: add it in its config directly
-    from interlatch.config import toml_table
-    from interlatch.config import set_config_value
+    from interlatch.core.config import toml_table
+    from interlatch.core.config import set_config_value
 
     set_config_value(spoke, "hub", "folders", toml_table({**spoke.hub_folders, SPOKE_CWD: CWD}))
     spoke = load_config(spoke.home)
@@ -277,7 +277,7 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
 
 def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, capsys):
     from interlatch.cli import main
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
 
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"https://hub.example"')
@@ -420,7 +420,7 @@ def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     """A knowledge-only computer keeps its own Chronicle running: the hook ingests here instead of pushing files,
     and the worker runs, then tries to share (an unreachable hub is just noted)."""
     from interlatch import hooks
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
     from interlatch.worker import run_worker
 
     cfg = load_config(env["home"])

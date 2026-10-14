@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from .redact import redact
+from .core.redact import redact
 from .learning import topic_ids
 
 LESSON_KINDS = ("fix", "gotcha", "decision", "learning", "pattern")

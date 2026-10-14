@@ -10,7 +10,7 @@ from . import __version__
 
 
 def _cfg():
-    from .config import load_config
+    from .core.config import load_config
 
     cfg = load_config()
     cfg.ensure_dirs()
@@ -34,7 +34,7 @@ def _since(value: str | None) -> str | None:
     import re
     from datetime import timedelta
 
-    from .util import parse_ts, to_iso, utcnow
+    from .core.util import parse_ts, to_iso, utcnow
 
     if not value:
         return None
@@ -59,7 +59,7 @@ def cmd_ingest_session(args) -> int:
     from pathlib import Path
 
     from .ingest import sync
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -83,7 +83,7 @@ def cmd_sync(args) -> int:
     from .ingest import sync
     from .migrate import migrate_if_due
     from .notify import release_check_safely
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     migrate_if_due(quiet=args.quiet)  # the background sync: Chronicle's folder becomes Interlatch's
     cfg = _cfg()
@@ -113,7 +113,7 @@ def cmd_sync(args) -> int:
 
 
 def cmd_work(args) -> int:
-    from .util import setup_logging
+    from .core.util import setup_logging
     from .worker import run_worker
 
     cfg = _cfg()
@@ -131,7 +131,7 @@ def cmd_work(args) -> int:
 
 
 def cmd_analyze(args) -> int:
-    from .util import human_cost, setup_logging
+    from .core.util import human_cost, setup_logging
     from .views import resolve_session_id
     from .worker import pending_sessions, run_worker
 
@@ -184,7 +184,7 @@ def cmd_analyze(args) -> int:
 
 def cmd_synthesize(args) -> int:
     from .synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -215,7 +215,7 @@ def cmd_synthesize(args) -> int:
 def cmd_sessions(args) -> int:
     from rich.table import Table
 
-    from .util import human_cost, human_count, human_duration, local_str
+    from .core.util import human_cost, human_count, human_duration, local_str
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -267,7 +267,7 @@ def cmd_show(args) -> int:
         print(json.dumps(s, ensure_ascii=False, indent=1, default=str))
         return 0
     if args.transcript:
-        from .util import local_str
+        from .core.util import local_str
 
         for r in conn.execute("SELECT ts, kind, tool_name, is_error, text FROM events WHERE session_id = ? AND agent_id = '' "
                               "AND kind IN ('prompt','text','tool_use','command','interrupt','compact') ORDER BY seq", (sid,)):
@@ -289,7 +289,7 @@ def cmd_search(args) -> int:
     from rich.markup import escape
 
     from .search import search_knowledge, search_sessions
-    from .util import local_str
+    from .core.util import local_str
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -338,7 +338,7 @@ def cmd_knowledge(args) -> int:
 def cmd_projects(args) -> int:
     from rich.table import Table
 
-    from .util import human_cost, human_duration, local_str
+    from .core.util import human_cost, human_duration, local_str
     from .views import project_labels
 
     cfg = _cfg()
@@ -361,7 +361,7 @@ def cmd_projects(args) -> int:
 def cmd_stats(args) -> int:
     from rich.table import Table
 
-    from .util import human_cost, human_count, human_duration
+    from .core.util import human_cost, human_count, human_duration
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -401,7 +401,7 @@ def cmd_status(args) -> int:
     from .install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
     from .statusline import WINDOW_LABEL, plan_usage
     from .llm import make_runner
-    from .util import human_cost, local_str
+    from .core.util import human_cost, local_str
     from .worker import PAUSE_KEY, QUEUE_REASON_LABEL, count_pending
 
     cfg = _cfg()
@@ -616,7 +616,7 @@ class _StageProgress:
 
     def _update(self, message: str) -> None:
         from .synthesize import GLOBAL
-        from .util import PROGRESS_RE
+        from .core.util import PROGRESS_RE
 
         stage = next((s for s in self.STAGES if message.startswith(s)), None)
         if (stage is None and self.task is None) or message.startswith("stopping"):
@@ -673,7 +673,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
     for target, err in report.failed[:3]:
         console.print(f"  [red]![/] {target[:40]}: {err[:200]}", highlight=False)
     if report.paused_until:
-        from .util import local_str
+        from .core.util import local_str
 
         console.print(f"  [yellow]{_analyzer(cfg)} usage limit reached[/]: analysis resumes after "
                       f"{local_str(report.paused_until)}.", highlight=False)
@@ -726,7 +726,7 @@ def cmd_install(args) -> int:
     from .install import (LAUNCHD_LABEL, UI_LABEL, agent_path, background_supported, executable, install_hooks,
                           install_launchd, install_mcp, install_statusline, install_ui_agent, launchd_status,
                           statusline_installed, uninstall_launchd)
-    from .util import utcnow_iso
+    from .core.util import utcnow_iso
 
     if not args.dry_run:
         from .migrate import migrate_if_due
@@ -806,7 +806,7 @@ def cmd_install(args) -> int:
     for a in actions:
         console.print(f"• {a}", highlight=False, soft_wrap=True)
 
-    from .config import load_config
+    from .core.config import load_config
 
     cfg = load_config(cfg.home)  # pick up the sources just connected
     if picked and not args.no_sync:
@@ -907,7 +907,7 @@ def _choose_analyzer(cfg, console, *, ask, dry_run: bool):
 
 
 def _set_config_value(cfg, section: str, key: str, value: str) -> None:
-    from .config import set_config_value
+    from .core.config import set_config_value
 
     set_config_value(cfg, section, key, value)
 
@@ -936,7 +936,7 @@ def cmd_uninstall(args) -> int:
 def cmd_serve(args) -> int:
     from .migrate import migrate_if_due
     from .server import serve
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     migrate_if_due(quiet=False)  # the dashboard at login: Chronicle's folder becomes Interlatch's
     cfg = _cfg()
@@ -1045,7 +1045,7 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
     """`interlatch config set section.key value`: the value is TOML, or a bare word taken as a string."""
     import tomllib
 
-    from .config import LANGUAGES, load_config, set_config_value
+    from .core.config import LANGUAGES, load_config, set_config_value
     from .llm import BACKENDS
 
     if not key or value is None or "." not in key:
@@ -1136,7 +1136,7 @@ def cmd_forget(args) -> int:
 def cmd_glossary(args) -> int:
     from .glossary import build_glossaries, glossary_entries, lookup
     from .synthesize import GLOBAL
-    from .util import local_str, setup_logging
+    from .core.util import local_str, setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -1276,7 +1276,7 @@ def cmd_review(args) -> int:
     from rich.markdown import Markdown
 
     from .reviews import generate_review, week_bounds
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -1358,7 +1358,7 @@ def _show_suggestion(console, s: dict, pv: dict) -> None:
 
 def cmd_suggest(args) -> int:
     from . import suggest
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -1520,7 +1520,7 @@ def cmd_friction(args) -> int:
 
 def cmd_sources(args) -> int:
     from .connectors import all_status, mcp_clients_status
-    from .util import local_str
+    from .core.util import local_str
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -1566,7 +1566,7 @@ def cmd_import(args) -> int:
 
 def _screen_run(cfg, conn, *, source, redo, limit, sample) -> int:
     from .screen import SOURCES, screen_chats, screen_status
-    from .util import human_cost
+    from .core.util import human_cost
 
     report = screen_chats(cfg, conn, source=source, redo=redo, limit=limit, sample=sample,
                           progress=lambda m: print(m, file=sys.stderr))
@@ -1644,7 +1644,7 @@ def cmd_connect(args) -> int:
     for a in actions:
         print(f"• {a}")
     if not args.disconnect and not args.no_sync and args.name not in MCP_CLIENTS:
-        from .config import load_config
+        from .core.config import load_config
         from .ingest import sync
 
         cfg = load_config(cfg.home)
@@ -1686,7 +1686,7 @@ def cmd_container(args) -> int:
 
 
 def cmd_push(args) -> int:
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -1804,7 +1804,7 @@ def cmd_hub(args) -> int:
         if args.share:
             _set_config_value(cfg, "hub", "share", json.dumps(args.share))
         _set_config_value(cfg, "hub", "all_folders", "true" if args.all_folders else "false")
-        from .config import load_config
+        from .core.config import load_config
 
         cfg = load_config(cfg.home)
         if cfg.shares_knowledge:
@@ -1913,7 +1913,7 @@ def cmd_hub(args) -> int:
     if hub.read_token(cfg) and cfg.hub_accept == "knowledge":
         console.print("  takes knowledge only: computers that send transcripts are turned away "
                       "(`interlatch config set hub.accept everything` takes them again)", highlight=False)
-    from .util import local_str
+    from .core.util import local_str
 
     for m in rows:
         seen = "this computer" if m["this"] else f"last sent {local_str(m['last_push']) if m['last_push'] else 'nothing yet'}"
@@ -2104,7 +2104,7 @@ def _hub_people(cfg, console, args) -> int:
     It runs at the hub itself, so it acts as an admin (people.py: whoever is at the hub computer always is one).
     """
     from . import hub, people
-    from .util import local_str
+    from .core.util import local_str
 
     if cfg.is_spoke:
         console.print(f"People belong to the hub; this computer sends to the hub at {cfg.hub_url}.", highlight=False)
@@ -2364,7 +2364,7 @@ def _hub_leave_project(cfg, console, args) -> int:
     from pathlib import Path
 
     from . import hub
-    from .util import normalize_project_path
+    from .core.util import normalize_project_path
 
     if not cfg.is_spoke:
         console.print("This computer has not joined a hub.")
@@ -2568,7 +2568,7 @@ def cmd_leaderboard(args) -> int:
 def cmd_mirror(args) -> int:
     """`interlatch mirror`: the copy of this archive in Postgres ([mirror] to = "postgres"): what it holds, or write it now."""
     from . import mirror
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     cfg = _cfg()
     console = _console()
@@ -3044,7 +3044,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:
-        from .config import interlatch_home
+        from .core.config import interlatch_home
 
         parser.print_help()
         if not (interlatch_home() / "config.toml").exists():

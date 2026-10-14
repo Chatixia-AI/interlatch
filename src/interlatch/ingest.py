@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import artifacts, news
-from .config import Config
+from .core.config import Config
 from .db import kv_get, kv_set
 from .ladder import MEMORY_STAGE_REASON
 from .codex_parser import (CODEX_PARSER_VERSION, load_imports, load_titles, parent_thread_id, parse_codex_session,
@@ -32,8 +32,9 @@ from .antigravity_parser import (ANTIGRAVITY_PARSER_VERSION, LOGS, conversation_
 from .bob_parser import BOB_PARSER_VERSION, bob_db, load_tasks, parse_bob_task, task_folder, task_signature
 from .copilot_parser import (COPILOT_PARSER_VERSION, agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
                              parse_vscode_chat, workspace_folder)
-from .parser import PARSER_VERSION, ParsedSession, parse_history, parse_session, session_dir_for
-from .util import dumps, file_lock, one_line, parse_ts, safe_text, to_iso, utcnow_iso
+from .parser import PARSER_VERSION, parse_history, parse_session, session_dir_for
+from .core.sessions import ParsedSession
+from .core.util import dumps, file_lock, one_line, parse_ts, safe_text, to_iso, utcnow_iso
 
 log = logging.getLogger("interlatch.ingest")
 

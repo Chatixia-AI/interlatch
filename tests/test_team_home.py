@@ -5,8 +5,8 @@ limited to projects gets their projects only."""
 from datetime import timedelta
 
 from interlatch import hub, people
-from interlatch.config import load_config, set_config_value
-from interlatch.util import to_iso, utcnow
+from interlatch.core.config import load_config, set_config_value
+from interlatch.core.util import to_iso, utcnow
 
 from test_hub_projects import OTHER, PROJECTS, limited  # noqa: F401  (the fixture)
 from test_people_web import MACHINE, _as, _call

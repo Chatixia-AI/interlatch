@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import chatgpt_export, claude_export
-from .util import utcnow_iso
+from .core.util import utcnow_iso
 from .views import NOT_ANALYZED_CHAT
 
 log = logging.getLogger("interlatch.chat_import")
@@ -204,7 +204,7 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
     """Import (or re-import) an export. `name` is the file's name when `path` is an upload's temporary copy."""
     from .db import kv_set
     from .ingest import _unchanged, forgotten_ids, store_parsed
-    from .util import file_lock
+    from .core.util import file_lock
 
     name = name or Path(path).name
     export = read_export(Path(path), name)

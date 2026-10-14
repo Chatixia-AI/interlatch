@@ -18,7 +18,7 @@ import sqlite3
 from datetime import timedelta
 
 from .db import kv_get, kv_set
-from .util import to_iso, utcnow
+from .core.util import to_iso, utcnow
 
 FOLD_MINUTES = 30
 KEEP_DAYS = 90

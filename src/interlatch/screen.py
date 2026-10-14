@@ -25,10 +25,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from .chat_import import FORMATS
-from .config import Config
+from .core.config import Config
 from .llm import LLMError, Runner, UsageLimitError, make_runner, written_in
-from .redact import redact
-from .util import one_line, utcnow_iso
+from .core.redact import redact
+from .core.util import one_line, utcnow_iso
 
 log = logging.getLogger("interlatch.screen")
 

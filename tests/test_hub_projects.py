@@ -9,7 +9,7 @@ import pytest
 
 from interlatch import hub, people
 from interlatch.cli import main
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 
 from conftest import CWD, SID
@@ -262,7 +262,7 @@ def test_a_limited_computer_hears_of_and_sends_only_its_projects(limited):
 
 def test_a_limited_computer_shares_only_its_projects(tmp_path, monkeypatch):
     """The computer's side: with a scope from the hub, only sessions it files under those projects leave it."""
-    from interlatch.config import load_config as lc
+    from interlatch.core.config import load_config as lc
 
     home = tmp_path / "member"
     home.mkdir()
@@ -289,7 +289,7 @@ def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
     """With a team store, the hub owner's analyzed sessions in a project set up there go to the store as well, so a
     member's computer gets those lessons back; another project's never do."""
     from interlatch import team_store
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
 
     from test_team import FakeStore
 

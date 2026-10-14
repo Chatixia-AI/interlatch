@@ -15,7 +15,7 @@ import pytest
 from interlatch import hub
 from interlatch import leaderboard as lb
 from interlatch.db import connect
-from interlatch.util import to_iso, utcnow
+from interlatch.core.util import to_iso, utcnow
 
 from test_people_web import TAILNET, hubweb  # noqa: F401  (the fixture)
 from test_people_web import _call as _http

@@ -350,7 +350,7 @@ def test_the_launcher_runs_only_an_app_in_applications(tmp_path, monkeypatch):
 
 
 def test_interlatch_home_is_private(tmp_path):
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     home = tmp_path / "home"
     home.mkdir(mode=0o755)

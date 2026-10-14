@@ -8,7 +8,7 @@ import urllib.request
 
 from interlatch import hub, people
 from interlatch.cli import main
-from interlatch.config import load_config, set_config_value, toml_table
+from interlatch.core.config import load_config, set_config_value, toml_table
 from interlatch.server import App
 
 from conftest import CWD

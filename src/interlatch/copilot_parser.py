@@ -20,9 +20,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from . import artifacts
-from .parser import IDLE_GAP_CAP_S, TEXT_LIMITS, ApiCall, Event, FileStat, ParsedSession, ToolCall, clean_prompt
-from .pricing import is_openai_model, normalize_model, openai_cost, usage_cost
-from .util import one_line, parse_ts, safe_text, truncate
+from .parser import clean_prompt
+from .core.sessions import IDLE_GAP_CAP_S, TEXT_LIMITS, ApiCall, Event, FileStat, ParsedSession, ToolCall
+from .core.pricing import is_openai_model, normalize_model, openai_cost, usage_cost
+from .core.util import one_line, parse_ts, safe_text, truncate
 
 log = logging.getLogger("interlatch.copilot")
 

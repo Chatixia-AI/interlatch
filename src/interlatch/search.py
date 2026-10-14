@@ -7,7 +7,7 @@ import sqlite3
 
 from .db import fts_query, short_terms
 from .ladder import STAGE_ORDER_SQL, confirmations
-from .util import loads
+from .core.util import loads
 
 
 def query_terms(query: str) -> list[str]:

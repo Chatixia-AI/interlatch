@@ -32,9 +32,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import pg
-from .config import Config
+from .core.config import Config
 from .db import connect, kv_get, kv_set
-from .util import file_lock, one_line, utcnow_iso
+from .core.util import file_lock, one_line, utcnow_iso
 
 log = logging.getLogger("interlatch.mirror")
 
@@ -145,7 +145,7 @@ def _value(value, typ: str, redact: bool):
         value = value.decode("utf-8", "replace")
     if isinstance(value, str):
         if redact:
-            from .redact import redact as scrub
+            from .core.redact import redact as scrub
 
             value = scrub(value)
         value = _clean(value)

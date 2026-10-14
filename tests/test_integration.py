@@ -247,7 +247,7 @@ def test_session_start_context(synced):
 
 
 def test_dashboard_picks_up_config_changes(synced):
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
     from interlatch.server import App
 
     app = App(synced["cfg"])

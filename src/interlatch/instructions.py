@@ -28,9 +28,9 @@ from pathlib import Path
 
 from collections.abc import Callable
 
-from .config import Config
-from .i18n import tr
-from .util import dumps, loads, one_line, parse_ts, utcnow
+from .core.config import Config
+from .core.i18n import tr
+from .core.util import dumps, loads, one_line, parse_ts, utcnow
 
 BEGIN = "<!-- BEGIN interlatch -->"
 END = "<!-- END interlatch -->"
@@ -206,7 +206,7 @@ def write_atomic(path: Path, text: str, *, cfg: Config | None = None, mkdir: boo
     from .install import _backup
 
     if cfg is None:
-        from .config import load_config
+        from .core.config import load_config
 
         cfg = load_config(create=False)
     path = Path(os.path.realpath(path))
@@ -355,7 +355,7 @@ def sensitive(text: str | None) -> list[str]:
         if host.count(".") == 1 and host.endswith(".sh") and "://" not in text[max(0, m.start() - 3):m.start()]:
             continue  # a shell script (build.sh), not a host
         hits.append(f"host: {host}")
-    from .redact import _PATTERNS
+    from .core.redact import _PATTERNS
 
     for rx, _repl in _PATTERNS:
         m = rx.search(text)

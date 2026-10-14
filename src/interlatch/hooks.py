@@ -8,13 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-INTERNAL_ENV = "INTERLATCH_INTERNAL"  # on the agents Interlatch runs itself (analyses), so their hooks record nothing
-INTERNAL_ENVS = (INTERNAL_ENV, "CHRONICLE_INTERNAL")  # and its name before the rename
-
-
-def internal_env() -> dict[str, str]:
-    """The environment for an agent Interlatch runs itself."""
-    return {**os.environ, INTERNAL_ENV: "1"}
+from .core.process import INTERNAL_ENVS, self_command
 
 
 def _read_payload() -> dict:
@@ -23,11 +17,6 @@ def _read_payload() -> dict:
         return json.loads(data) if data.strip() else {}
     except (ValueError, OSError):
         return {}
-
-
-def self_command() -> list[str]:
-    """argv that re-runs this program: the bundled executable inside Interlatch.app, else `python -m interlatch`."""
-    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "interlatch"]
 
 
 def spawn_detached(args: list[str], log_path: Path) -> None:
@@ -63,7 +52,7 @@ def hook_main(event: str) -> int:
 
 
 def _on_session_end(payload: dict, *, ended: bool) -> int:
-    from .config import interlatch_home, load_config
+    from .core.config import interlatch_home, load_config
 
     transcript = payload.get("transcript_path")
     home = interlatch_home()
@@ -81,7 +70,7 @@ def _on_session_end(payload: dict, *, ended: bool) -> int:
 
 
 def _on_session_start(payload: dict) -> int:
-    from .config import load_config
+    from .core.config import load_config
 
     cfg = load_config(create=False)
     if not cfg.inject_session_start or not cfg.db_path.exists():
@@ -115,7 +104,7 @@ def build_session_context(cfg, cwd: str) -> str | None:
     def trust_tag(i: dict) -> str:
         return i["stage"] + (f" ×{i['sessions']}" if (i.get("sessions") or 0) > 1 else "")
     from .synthesize import kb_for_path, kb_sections
-    from .util import local_str, one_line
+    from .core.util import local_str, one_line
 
     conn = connect(cfg.db_path, readonly=True)
     try:

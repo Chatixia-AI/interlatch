@@ -15,8 +15,8 @@ import uuid
 import pytest
 
 from interlatch import mirror
-from interlatch.config import load_config, set_config_value
-from interlatch.util import one_line
+from interlatch.core.config import load_config, set_config_value
+from interlatch.core.util import one_line
 
 from conftest import CWD, SECRET, SID
 from test_hub import _serve

@@ -18,7 +18,8 @@ from interlatch.bob_parser import load_tasks, parse_bob_task
 from interlatch.codex_parser import parse_codex_session
 from interlatch.copilot_parser import (agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
                                       parse_vscode_chat, workspace_folder)
-from interlatch.parser import ParsedSession, parse_session
+from interlatch.parser import parse_session
+from interlatch.core.sessions import ParsedSession
 
 from antigravity_fixture import NEW_ID as AGY_ID, write_antigravity_home
 from codex_fixture import CODE_ID, CODEX_ID, code_mode_rollout, write_codex_home

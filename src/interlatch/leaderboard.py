@@ -34,8 +34,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
-from .config import Config
-from .util import parse_ts, to_iso, utcnow, utcnow_iso
+from .core.config import Config
+from .core.util import parse_ts, to_iso, utcnow, utcnow_iso
 
 PROJECT = "interlatch"
 # The project's web config (its Firebase web key among it), as Firebase Hosting serves it: read once per process,

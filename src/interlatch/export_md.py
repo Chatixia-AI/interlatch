@@ -8,11 +8,11 @@ import re
 import sqlite3
 from pathlib import Path
 
-from .config import Config
+from .core.config import Config
 from .db import kv_get, kv_set
-from .redact import redact
+from .core.redact import redact
 from .synthesize import GLOBAL, render_kb_markdown
-from .util import human_cost, human_count, human_duration, local_str, loads, one_line
+from .core.util import human_cost, human_count, human_duration, local_str, loads, one_line
 from .views import KIND_ICON, OUTCOME_ICON, project_labels, session_markdown, session_record
 
 log = logging.getLogger("interlatch.export")

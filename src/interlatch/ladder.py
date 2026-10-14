@@ -19,8 +19,8 @@ import re
 import sqlite3
 from datetime import datetime
 
-from .i18n import lang, tr
-from .util import dumps, loads, utcnow_iso
+from .core.i18n import lang, tr
+from .core.util import dumps, loads, utcnow_iso
 
 STAGES = ("wip", "provisional", "established", "canonical")
 STAGE_RANK = {s: i for i, s in enumerate(STAGES)}

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 
-from .i18n_ja import JA
+from .ja import JA
 
 LANGS = ("en", "ja")
 lang: ContextVar[str] = ContextVar("lang", default="en")  # set per request by the server; a new thread starts at "en"

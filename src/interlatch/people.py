@@ -39,7 +39,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from .util import is_abs_path, normalize_project_path, utcnow_iso
+from .core.util import is_abs_path, normalize_project_path, utcnow_iso
 
 ROLES = ("admin", "member", "readonly")
 ROLE_RANK = {"readonly": 0, "member": 1, "admin": 2}
@@ -59,7 +59,7 @@ class PeopleError(Exception):
         self.template, self.values = template, values
 
     def shown(self) -> str:
-        from .i18n import tr
+        from .core.i18n import tr
 
         return tr(self.template, **self.values)
 

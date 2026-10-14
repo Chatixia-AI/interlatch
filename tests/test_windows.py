@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from interlatch import install, windows
-from interlatch.config import load_config
-from interlatch.util import file_lock
+from interlatch.core.config import load_config
+from interlatch.core.util import file_lock
 
 on_windows = pytest.mark.skipif(sys.platform != "win32", reason="needs Windows")
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
@@ -172,7 +172,7 @@ def test_the_file_lock_keeps_a_second_holder_out(tmp_path):
 
 # ------------------------------------------------------------------ Windows paths (on any system)
 def test_windows_paths_are_told_apart_and_spelled_one_way():
-    from interlatch.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
+    from interlatch.core.util import clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 
     for p in ("C:\\Users\\ada\\project", "c:/work/app", "\\\\server\\share\\repo", "//server/share", "/Users/ada", "/c:/x"):
         assert is_abs_path(p), p
@@ -199,7 +199,7 @@ def test_windows_paths_are_told_apart_and_spelled_one_way():
 def test_the_sql_filter_keeps_absolute_paths_of_either_kind():
     import sqlite3
 
-    from interlatch.util import abs_path_sql
+    from interlatch.core.util import abs_path_sql
 
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE t (p TEXT)")

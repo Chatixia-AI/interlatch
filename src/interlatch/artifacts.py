@@ -11,7 +11,7 @@ import json
 import os
 import re
 
-from .util import one_line, safe_text
+from .core.util import one_line, safe_text
 
 KINDS = ("doc", "page", "diagram", "deck", "sheet", "image", "published", "pr", "commit")
 _EXT_KIND = {
@@ -265,7 +265,7 @@ def claude_ai_presented(ps, content, *, ts=None, tool_use_id: str | None = None)
 def _saved_files(ps) -> None:
     """Decks, documents, spreadsheets and PDFs a script saved: a path the session's tool calls named, whose file was
     created while the session ran (macOS keeps a file's creation time; elsewhere its last change stands in)."""
-    from .util import parse_ts
+    from .core.util import parse_ts
 
     start, end = parse_ts(ps.started_at), parse_ts(ps.ended_at)
     if not start or not end or not getattr(ps, "_mentions", None):
@@ -527,7 +527,7 @@ def written_content(a: dict) -> str | None:
     """The text a session wrote to a file, read back from the archived transcript (for a file no longer on disk)."""
     from pathlib import Path
 
-    from .util import iter_jsonl
+    from .core.util import iter_jsonl
 
     archive, path, tid = a.get("archive_path"), a["path"], a.get("tool_use_id")
     if not archive or not os.path.exists(archive):
@@ -601,7 +601,7 @@ def reveal(conn, artifact_id: int, how: str, local_machine: str | None = None) -
     import subprocess
     import sys
 
-    from .i18n import tr
+    from .core.i18n import tr
 
     a = artifact_by_id(conn, artifact_id, local_machine)
     if a is None or a["status"] not in ("present", "changed"):

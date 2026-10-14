@@ -9,14 +9,14 @@ from datetime import timedelta
 
 from . import ladder, news
 from .cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
-from .config import Config
+from .core.config import Config
 from .digest import build_digest
 from .ingest import best_title
 from .learning import TOPICS, normalize_interests, store_interests
 from .llm import (BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError, make_runner,
                   written_in)
-from .redact import redact
-from .util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
+from .core.redact import redact
+from .core.util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
 
 log = logging.getLogger("interlatch.analyze")
 

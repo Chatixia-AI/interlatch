@@ -32,7 +32,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from . import llm
-from .config import Config
+from .core.config import Config
 from .llm import LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
 
 KEYS_FILE = "provider-keys.json"
@@ -380,7 +380,7 @@ class ApiRunner(Runner):
         return "" if self.spec.needs_key else "none"
 
     def unavailable_reason(self) -> str:
-        from .i18n import tr
+        from .core.i18n import tr
 
         if not self.base_url:
             return tr("{label}: set its endpoint (providers.{name}.base_url)", label=self.label, name=self.name)
@@ -451,7 +451,7 @@ class ApiRunner(Runner):
             raise self._cut_off()
         text = "".join(b.get("text") or "" for b in data.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
         u = data.get("usage") or {}
-        from .pricing import usage_cost
+        from .core.pricing import usage_cost
 
         served = data.get("model") or model
         return text, LLMResult(
@@ -493,7 +493,7 @@ class ApiRunner(Runner):
         served = data.get("model") or model
         cost = u.get("cost")
         if not isinstance(cost, (int, float)):
-            from .pricing import is_openai_model, openai_cost
+            from .core.pricing import is_openai_model, openai_cost
 
             cost = openai_cost(served, inp - cached, cached, out) if is_openai_model(served) else 0.0
         return str(text), LLMResult(data={}, cost_usd=float(cost), duration_ms=0, model=served,
@@ -565,7 +565,7 @@ class ApiRunner(Runner):
 def save_settings(cfg: Config, provider: str, values: dict) -> list[str]:
     """Write the given [providers.<provider>] settings to config.toml; an empty string or 0 removes one. Returns the
     keys that were refused (unknown, or of the wrong type)."""
-    from .config import remove_config_value, set_config_value
+    from .core.config import remove_config_value, set_config_value
 
     refused = []
     for k, v in values.items():

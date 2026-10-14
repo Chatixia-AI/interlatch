@@ -30,7 +30,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 from . import __version__
-from .i18n import tr
+from .core.i18n import tr
 
 log = logging.getLogger("interlatch.update")
 
@@ -77,7 +77,7 @@ def install_method() -> dict:
 
 
 def _install_method() -> dict:
-    from .config import env
+    from .core.config import env
 
     if getattr(sys, "frozen", False):
         return {"kind": "app", "label": "Interlatch.app", "command": None}

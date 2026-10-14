@@ -8,11 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from .config import Config
+from .core.config import Config
 from .db import connect, kv_get, kv_set
-from .i18n import tr
+from .core.i18n import tr
 from .llm import BudgetExceededError, LLMError, Runner, UsageLimitError, make_runner
-from .util import file_lock, local_str, one_line, to_iso, utcnow
+from .core.util import file_lock, local_str, one_line, to_iso, utcnow
 
 log = logging.getLogger("interlatch.worker")
 

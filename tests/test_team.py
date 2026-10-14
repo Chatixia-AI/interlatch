@@ -13,9 +13,9 @@ import uuid
 import pytest
 
 from interlatch import hub, team_store
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 from interlatch.db import connect
-from interlatch.util import fingerprint
+from interlatch.core.util import fingerprint
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
 

@@ -53,7 +53,7 @@ def test_frozen_hooks_point_at_the_shim(env, frozen):
 
 
 def test_self_command(monkeypatch):
-    from interlatch.hooks import self_command
+    from interlatch.core.process import self_command
 
     assert self_command() == [sys.executable, "-m", "interlatch"]
     monkeypatch.setattr(sys, "frozen", True, raising=False)

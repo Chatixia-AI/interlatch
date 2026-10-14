@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 from interlatch.llm import ClaudeRunner, CodexRunner, LLMError, UsageLimitError, make_runner
 from interlatch.worker import run_worker
 

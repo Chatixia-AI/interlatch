@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from .config import Config
-from .util import parse_ts, to_iso, utcnow
+from .core.config import Config
+from .core.util import parse_ts, to_iso, utcnow
 
 log = logging.getLogger("interlatch.menubar")
 
@@ -286,8 +286,8 @@ def apply_setting(cfg: Config, on: bool, progress) -> str:
     """Turn the icon on or off ([server] menu_bar), adding the `app` extra first when it is missing, then restart the
     dashboard so it shows or goes. A job (Status › Recording); its result is the line the UI shows."""
     from . import update
-    from .config import set_config_value
-    from .i18n import tr
+    from .core.config import set_config_value
+    from .core.i18n import tr
 
     info = setting_info(cfg)
     if on and not info.get("app_extra"):

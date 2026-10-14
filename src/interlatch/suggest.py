@@ -21,9 +21,9 @@ import sqlite3
 from pathlib import Path
 
 from . import friction, instructions
-from .config import Config
-from .i18n import lang, tr, trn
-from .util import dumps, loads, one_line, utcnow_iso
+from .core.config import Config
+from .core.i18n import lang, tr, trn
+from .core.util import dumps, loads, one_line, utcnow_iso
 
 log = logging.getLogger("interlatch.suggest")
 

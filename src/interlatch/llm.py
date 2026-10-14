@@ -22,11 +22,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import Config
+from .core.config import Config
+from .core.process import internal_env
 
 log = logging.getLogger("interlatch.llm")
-
-INTERNAL_ENV = "INTERLATCH_INTERNAL"  # hooks.py: the sessions of the agents this runs are not recorded
 
 
 class LLMError(RuntimeError):
@@ -115,7 +114,7 @@ class Runner:
 
     def unavailable_reason(self) -> str:
         """Why it cannot run now ("" when it can), as a sentence for the dashboard and the CLI."""
-        from .i18n import tr
+        from .core.i18n import tr
 
         return "" if self.available() else tr("{label} (`{cli}`) was not found", label=self.label, cli=self.cli.split()[0])
 
@@ -224,7 +223,7 @@ class ClaudeRunner(Runner):
         ]
         if effort or a.effort:
             cmd += ["--effort", effort or a.effort]
-        env = {**os.environ, INTERNAL_ENV: "1"}
+        env = internal_env()  # the sessions of the agents this runs are not recorded
         workdir = self.cfg.home / "workdir"
         workdir.mkdir(parents=True, exist_ok=True)
         t0 = time.monotonic()
@@ -335,7 +334,7 @@ class CodexRunner(Runner):
         if effort:
             cmd += ["-c", f'model_reasoning_effort="{_CODEX_EFFORT.get(effort, effort)}"']
         cmd.append("-")  # the prompt comes on stdin
-        env = {**os.environ, INTERNAL_ENV: "1"}
+        env = internal_env()  # the sessions of the agents this runs are not recorded
         t0 = time.monotonic()
         try:
             stdout, stderr, returncode = _run_sleep_aware(cmd, prompt, cwd=workdir, env=env,
@@ -411,7 +410,7 @@ class BobRunner(Runner):
         return bool(self.bin) and bool(self._key()[0])
 
     def unavailable_reason(self) -> str:
-        from .i18n import tr
+        from .core.i18n import tr
 
         if self.bin and not self._key()[0]:
             return tr("{label}: add a Bob API key (BOB_API_KEY); headless runs don't use the app's sign-in", label=self.label)
@@ -443,7 +442,7 @@ class BobRunner(Runner):
                    "--max-turns", "1", "--disable-mcp", "--disable-subagents",
                    "--disable-tool-groups", ",".join(BOB_TOOL_GROUPS), "--log-level", "error",
                    "--max-cost", f"{max_budget_usd or a.max_budget_usd:.2f}"]
-            env = {**os.environ, INTERNAL_ENV: "1", "BOB_API_KEY": key}
+            env = {**internal_env(), "BOB_API_KEY": key}
             t0 = time.monotonic()
             stdout, stderr, returncode = _run_sleep_aware(cmd, prompt, cwd=ws, env=env,
                                                           timeout=timeout or a.timeout_seconds, name=self.cli)

@@ -3,7 +3,7 @@ admins make projects there by name from any browser. On any other hub, projects 
 
 import pytest
 
-from interlatch.config import set_config_value
+from interlatch.core.config import set_config_value
 
 from test_people_web import REMOTE, _as, _call, hubweb, team  # noqa: F401  (the fixtures)
 

@@ -211,7 +211,7 @@ def test_mcp_batch_requests(synced):
 
 def test_dashboard_port_default_and_existing_installs(tmp_path):
     """New installs serve the dashboard on 11524; a config.toml written before keeps the 8765 it names."""
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     fresh = load_config(tmp_path / "new")
     assert fresh.server_port == 11524 and "port = 11524" in fresh.config_path.read_text()

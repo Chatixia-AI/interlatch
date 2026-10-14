@@ -24,8 +24,8 @@ import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from .redact import redact
-from .util import one_line
+from .core.redact import redact
+from .core.util import one_line
 
 CHAT_SOURCES = ("chatgpt-export", "claude-ai-export")
 NOT_PROJECTS = ("", "Desktop", "Downloads", "Documents")  # folders under home that hold sessions but are no project

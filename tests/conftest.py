@@ -314,7 +314,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("BOB_HOME", str(tmp_path / "no-bob"))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(tmp_path / "no-antigravity"))
     monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [])
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     cfg = load_config(home)
     cfg.ensure_dirs()

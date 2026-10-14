@@ -25,9 +25,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from . import pg
-from .config import Config
+from .core.config import Config
 from .pg import PG_KEYS, SETTINGS, SSLMODES, driver_available  # noqa: F401 (this module's names, as before)
-from .util import fingerprint
+from .core.util import fingerprint
 
 log = logging.getLogger("interlatch.team_store")
 
