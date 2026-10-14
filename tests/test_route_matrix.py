@@ -121,7 +121,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/update"): SIGNED_IN,
     ("GET", "/api/imports"): SIGNED_IN,
     ("GET", "/api/devices"): SIGNED_IN,  # non-admins get it trimmed: test_devices_is_trimmed_for_non_admins
-    ("GET", "/api/team-store"): ADMIN,  # suspected fail-open: see FAIL_OPEN
+    ("GET", "/api/team-store"): ADMIN,  # admin-only since #156; the matrix found it open
     ("GET", "/api/suggestions"): SIGNED_IN,
     ("GET", "/api/suggestions/unseen"): SIGNED_IN,
     ("GET", "/api/suggestions/{n}/preview"): SIGNED_IN.ok(404),
@@ -223,11 +223,7 @@ ROUTES: dict[tuple[str, str], Access] = {
 
 # Routes whose access today looks wrong (fails open): ROUTES holds the secure expectation, and test_suspected_fail_open
 # runs them as strict xfails, so a fix turns them into passes that must move back into the main matrix.
-FAIL_OPEN = {
-    ("GET", "/api/team-store"): "members and read-only people get the team store's status: its database and host "
-                                "('<dbname> on <host>'), server version and row counts, or the connection error. Its "
-                                "twin /api/mirror/status is admin-only, and #156 hid the store from them in /api/devices",
-}
+FAIL_OPEN: dict[tuple[str, str], str] = {}  # none today: GET /api/team-store was one, fixed in #156
 
 # the representative request: a query string for a GET, a body for a POST (default {}), and path parameters
 QUERY = {
