@@ -2887,6 +2887,8 @@ function projectPulse(last) { // worked on in the last week, the last month, or 
   const days = last ? (Date.now() - new Date(last).getTime()) / 86400000 : Infinity;
   return days <= 7 ? ["good", tc("project", "Active")] : days <= 30 ? ["warning", t("Quiet")] : ["", t("Dormant")];
 }
+// whose a session is, on a team hub only: elsewhere every session is yours, even where people were once set up
+function sessionWho(x) { return ME?.hub?.team && x.who ? x.who : null; }
 function outcomeMark(x) { // a session's outcome as its icon alone, named on hover
   const o = OUTCOME[x.outcome];
   return h("span", { class: `o-mark s-${o ? o[0] || "neutral" : "none"}`, title: o ? o[1] : STATUS_LABEL[x.analysis_status] || "" },
@@ -2895,20 +2897,20 @@ function outcomeMark(x) { // a session's outcome as its icon alone, named on hov
 function leftOffCard(recent) { // the last sessions as each one ended: the newest in full, the ones before it folded
   if (!recent || !recent.length) return null;
   const [last, ...before] = recent;
-  const team = recent.some((x) => x.who); // a hub with people: the sessions are the team's, each with its person
+  const team = !!ME?.hub?.team; // a team hub: the sessions are the team's, each with its person
   const title = (x) => x.title || t("(untitled session)");
   const goal = (x) => (x.goal ? h("p", { class: "lo-goal" }, h("b", null, t("Goal")), t(": "), x.goal) : null);
   const open = (x) => (x.open_threads.length ? h("ul", { class: "checklist" }, x.open_threads.map((o) => h("li", null, o))) : null);
   const lastEl = h("div", { class: "lo-last" },
-    h("div", { class: "lo-when" }, agentIcon(last.agent), last.who ? h("b", null, last.who) : null,
-      h("span", null, `${last.who ? "· " : ""}${fmtDT(last.started_at)} · ${ago(last.started_at)}`),
+    h("div", { class: "lo-when" }, agentIcon(last.agent), sessionWho(last) ? h("b", null, sessionWho(last)) : null,
+      h("span", null, `${sessionWho(last) ? "· " : ""}${fmtDT(last.started_at)} · ${ago(last.started_at)}`),
       last.active_s ? h("span", null, ` · ${t("{dur} active", { dur: fmtDur(last.active_s) })}`) : null),
     h("div", { class: "lo-title" }, h("a", { href: `#/session/${last.id}` }, title(last)), outcomeBadge(last.outcome, last.analysis_status, last.source)),
     goal(last), last.outcome_note ? h("p", { class: "lo-note" }, last.outcome_note) : null,
     last.open_threads.length ? [h("div", { class: "subhead" }, t("Left open")), open(last)] : null);
   const rows = before.map((x) => h("details", { class: "lo-row" },
     h("summary", null, outcomeMark(x), h("span", { class: "lo-date" }, fmtDate(x.started_at)), h("span", { class: "lo-name" }, title(x)),
-      x.who ? h("span", { class: "lo-who" }, x.who) : null,
+      sessionWho(x) ? h("span", { class: "lo-who" }, sessionWho(x)) : null,
       x.open_threads.length ? h("span", { class: "lo-open" }, tn(x.open_threads.length, "{n} left open", "{n} left open")) : null),
     h("div", { class: "lo-body" }, goal(x), open(x), h("a", { class: "link-arrow", href: `#/session/${x.id}` }, t("Open session"), icon("arrow")))));
   return h("section", { class: "card leftoff" }, cardHead(team ? t("Where the team left off") : t("Where you left off"), { iconName: "history" }), lastEl,
@@ -2945,7 +2947,7 @@ function timelineCard(tl) { // the work week by week, newest first (progress.tim
     return [ul, more];
   };
   const session = (x) => h("li", null, outcomeMark(x), h("a", { href: `#/session/${x.id}` }, x.title || t("(untitled session)")),
-    x.who ? h("span", { class: "tl-who" }, x.who) : null);
+    sessionWho(x) ? h("span", { class: "tl-who" }, sessionWho(x)) : null);
   const pr = (x) => h("li", null, safeUrl(x.url) ? h("a", { href: safeUrl(x.url), target: "_blank", rel: "noopener" }, x.title || x.url) : x.title || x.url);
   const week = (w, newer) => {
     const quiet = newer ? Math.round((new Date(monday(newer.start)) - new Date(monday(w.start))) / (7 * 86400000)) - 1 : 0;
