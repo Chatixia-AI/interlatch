@@ -164,6 +164,8 @@ ICONS.doc = ICONS.file;
 ICONS.person = ICONS.preference;
 ICONS.team = ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", ["circle", { cx: 9, cy: 7, r: 4 }], "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"];
 ICONS.other = ICONS.dot;
+ICONS.check = ["M20 6 9 17l-5-5"];
+ICONS.chevron = ["m6 9 6 6 6-6"];
 ICONS.shield = ["M12 3 3 6v6c0 5 9 9 9 9s9-4 9-9V6z", "m8 12 3 3 5-6"];
 ICONS.leaderboard = ["M6 9H4.5a2.5 2.5 0 0 1 0-5H6", "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", "M4 22h16", "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22",
   "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", "M18 2H6v7a6 6 0 0 0 12 0V2Z"]; // a trophy
@@ -288,10 +290,46 @@ function agentName(a) { return AGENTS[a] || "Claude Code"; }
 // the agent that analyzes sessions (Status › Analysis): full name, and the short one for "… is writing"
 function analyzer() { return lastStatus?.analysis?.label || "Claude Code"; }
 function analyzerShort() { return analyzer() === "Claude Code" ? "Claude" : analyzer(); }
-function agentCell(x) { // the Agent column: the Sources page's colour dot and the short name
+// an agent's own mark (web/agent-*.svg; codex-cloud is Codex's); the one-colour marks (Copilot, ChatGPT) are CSS masks
+// so they take the text colour in both themes. An agent without a mark keeps the colour dot.
+const AGENT_MONO = new Set(["copilot", "chatgpt"]);
+function agentIcon(a) {
+  a = a === "codex-cloud" ? "codex" : a || "claude";
+  if (!AGENTS[a]) return h("span", { class: `src-dot a-${a}`, "aria-hidden": "true" });
+  return AGENT_MONO.has(a) ? h("span", { class: `agent-icon mono a-${a}`, "aria-hidden": "true" })
+    : h("img", { class: "agent-icon", src: `agent-${a}.svg`, alt: "", "aria-hidden": "true", draggable: "false" });
+}
+// The agent filter: a select's look with each agent's mark, which a native <select> can't show. A menu of radio
+// items; the arrow keys move, Escape closes.
+function agentPicker(value, onpick) {
+  const name = (v) => (v ? agentName(v) : t("All agents"));
+  const face = h("span", { class: "ap-face" });
+  const show = () => face.replaceChildren(...(value ? [agentIcon(value)] : []), h("span", null, name(value)));
+  const items = ["", ...Object.keys(AGENTS)].map((v) => h("button", { type: "button", role: "menuitemradio", "aria-checked": String(v === value), "data-v": v,
+    onclick: () => {
+      menu.open = false; summary.focus();
+      if (v === value) return;
+      value = v; show();
+      items.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === v)));
+      onpick(v);
+    } }, icon("check", "ap-check"), v ? agentIcon(v) : h("span", { class: "agent-icon" }), h("span", null, name(v))));
+  const summary = h("summary", { class: "ap-summary", "aria-label": t("Agent"), "aria-haspopup": "menu" }, face, icon("chevron"));
+  const menu = h("details", { class: "menu agent-pick" }, summary, h("div", { class: "menu-list", role: "menu" }, items));
+  menu.addEventListener("toggle", () => { if (menu.open) (items.find((b) => b.dataset.v === value) || items[0]).focus(); });
+  menu.addEventListener("keydown", (e) => {
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "Escape" && menu.open) { e.preventDefault(); menu.open = false; summary.focus(); }
+    else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && i >= 0) {
+      e.preventDefault(); items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    }
+  });
+  show();
+  return menu;
+}
+function agentCell(x) { // the Agent column: the agent's mark and the short name
   const cloud = x.source === "codex-cloud";
   return h("td", { class: "nowrap", title: cloud ? t("Codex Cloud task") : agentName(x.agent) }, h("span", { class: "agent-cell" },
-    h("span", { class: `src-dot a-${cloud ? "codex-cloud" : x.agent || "claude"}`, "aria-hidden": "true" }), agentShort(x.agent)),
+    agentIcon(x.agent), agentShort(x.agent)),
     cloud ? h("div", { class: "muted small agent-sub" }, "Cloud") : null);
 }
 function agentTag(a, title) { return a && a !== "claude" ? h("span", { class: `agent-tag a-${a}`, title: title || t("{agent} session", { agent: agentName(a) }) }, agentShort(a)) : null; }
@@ -1735,7 +1773,7 @@ route(/^\/sessions$/, async (params) => {
       } }, await projectOptions(state.group ? `group:${state.group}` : state.project, { groups: true })),
       sel("outcome", [["", t("Any outcome")], ...Object.entries(OUTCOME).map(([k, [, l]]) => [k, l]), ["none", t("Not analyzed")]]),
       sel("status", [["", t("Any status")], ["done", t("Analyzed")], ["pending", t("Queued")], ["stale", t("Needs re-analysis")], ["error", t("Failed")], ["skipped", t("Skipped")]]),
-      sel("agent", [["", t("All agents")], ...Object.entries(AGENTS)]),
+      agentPicker(state.agent, (v) => { state.agent = v; refresh(); }),
       await whoFilter(state.who, (v) => { state.who = v; refresh(); }),
       state.screen || ["chatgpt", "claude-ai"].includes(state.agent) // imported chats: as screening sorted them
         ? sel("screen", [["", t("Any screening")], ...Object.entries(SCREEN).map(([k, [, l]]) => [k, l]), ["none", t("Not screened")]]) : null,
@@ -4557,7 +4595,7 @@ route(/^\/sources$/, async () => {
         } }, t("Disconnect"))
       : h("button", { class: "btn small primary", type: "button", disabled: !c.detected, onclick: connect }, t("Connect {agent}", { agent: c.label }));
     const summary = [
-      h("span", { class: `src-dot a-${c.name}`, "aria-hidden": "true" }),
+      agentIcon(c.name),
       h("span", { class: "src-title" }, h("b", null, c.label), h("small", null, [c.vendor, c.version].filter(Boolean).join(" · "))),
       h("span", { class: "src-sum" }, c.connected || c.recorded.sessions
         ? [stat(c.recorded.sessions, t("recorded")), h("span", null, tx("last {when}", { when: h("b", null, c.recorded.last_session ? ago(c.recorded.last_session) : t("never")) }))]
@@ -4599,7 +4637,7 @@ route(/^\/sources$/, async () => {
       render();
     } }, t("Queue {n} worth analyzing", { n: fmtNum(sc.to_queue) }));
     const summary = [
-      h("span", { class: `src-dot a-${f.agent}`, "aria-hidden": "true" }),
+      agentIcon(f.agent),
       h("span", { class: "src-title" }, h("b", null, f.label), h("small", null, t("from a data export"))),
       h("span", { class: "src-sum" }, f.sessions ? [stat(f.sessions, t("chats")), screened ? stat(sc.analyze, t("worth analyzing")) : null,
         h("span", null, tx("imported {when}", { when: h("b", null, last ? ago(last.at) : t("never")) }))] : h("span", null, t("nothing imported yet"))),
@@ -4659,7 +4697,7 @@ route(/^\/mcp$/, async () => {
     const on = ks.filter((k) => k.ok).length;
     const state = on === ks.length ? ["good", t("Added")] : on ? ["warning", t("{a} of {b}", { a: on, b: ks.length })] : ["", c.detected ? t("Not added") : t("Not installed")];
     return h("div", { class: "src-row flat" }, h("div", { class: "src-line" },
-      h("span", { class: "chev", "aria-hidden": "true" }), h("span", { class: `src-dot a-${c.name}`, "aria-hidden": "true" }),
+      h("span", { class: "chev", "aria-hidden": "true" }), agentIcon(c.name),
       h("span", { class: "src-title" }, h("b", null, c.label), h("small", null, ks.length > 1 ? ks.map((k) => k.label.replace(/^MCP server in /, "").replace(/ の MCP サーバー$/, "")).join(" · ") : c.vendor)),
       stateBadge(state[0], state[1]),
       on === ks.length ? null : h("a", { class: "btn small", href: "#/sources" }, c.connected ? t("Fix in Sources") : t("Connect"))));

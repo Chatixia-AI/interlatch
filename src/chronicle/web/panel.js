@@ -35,7 +35,9 @@
   const icon = (name) => { const s = h("span", { class: "ic" }); s.innerHTML = ICONS[name]; return s; };
 
   const AGENTS = { claude: ["C", "Claude Code"], codex: ["X", "Codex"], copilot: ["G", "GitHub Copilot"], bob: ["B", "IBM Bob"],
-                   antigravity: ["A", "Google Antigravity"] };
+                   antigravity: ["A", "Google Antigravity"], "claude-ai": ["C", "Claude.ai"], chatgpt: ["G", "ChatGPT"] };
+  // each agent's own mark (agent-*.svg, as on the dashboard); the one-colour ones are masks in the text colour
+  const MONO = new Set(["copilot", "chatgpt"]);
   const OUTCOMES = { completed: "Completed", partial: "Partial", blocked: "Blocked", abandoned: "Abandoned",
                      exploratory: "Exploratory", unclear: "Unclear" };
 
@@ -49,7 +51,10 @@
       || { running: "Analyzing…", error: "Analysis failed", pending: "Not analyzed", stale: "Not analyzed" }[s.analysis_status]
       || (s.analysis_status === "done" ? "Analyzed" : "Not analyzed");
     return h("button", { class: "row", type: "button", title: s.title || "", onclick: () => post({ type: "open", page: `#/session/${s.id}` }) },
-      h("span", { class: `agent a-${s.agent || "other"}`, title: name, "aria-label": name }, letter),
+      AGENTS[s.agent]
+        ? h("span", { class: "agent mark", title: name, "aria-label": name }, MONO.has(s.agent)
+          ? h("span", { class: `glyph mono a-${s.agent}` }) : h("img", { class: "glyph", src: `agent-${s.agent}.svg`, alt: "", draggable: "false" }))
+        : h("span", { class: `agent a-${s.agent || "other"}`, title: name, "aria-label": name }, letter),
       h("span", { class: "row-main" },
         h("span", { class: "row-title" }, s.title || "(untitled session)"),
         h("span", { class: "row-meta" },
