@@ -1,0 +1,557 @@
+{
+ "11111111-2222-3333-4444-555555555555": {
+  "_cc_costs": {
+   "1": 0.5
+  },
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-09-20T10:00:00.000Z",
+   "2026-09-20T10:00:05.000Z",
+   "2026-09-20T10:00:06.000Z",
+   "2026-09-20T10:00:07.000Z",
+   "2026-09-20T10:00:20.000Z",
+   "2026-09-20T10:01:00.000Z",
+   "2026-09-20T10:01:02.000Z",
+   "2026-09-20T10:01:10.000Z",
+   "2026-09-20T10:01:11.000Z",
+   "2026-09-20T10:01:30.000Z",
+   "2026-09-20T10:02:00.000Z",
+   "2026-09-20T10:03:00.000Z",
+   "2026-09-20T10:04:00.000Z",
+   "2026-09-20T10:05:00.000Z",
+   "2026-09-20T10:05:30.000Z",
+   "2026-09-20T10:05:31.000Z",
+   "2026-09-20T10:06:00.000Z",
+   "2026-09-20T10:07:00.000Z",
+   "2026-09-20T10:02:05.000Z",
+   "2026-09-20T10:02:10.000Z",
+   "2026-09-20T10:02:12.000Z"
+  ],
+  "active_s": 420.0,
+  "ai_title": "Fix login token expiry",
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1000,
+    "cache_write_tokens": 500,
+    "cost_usd": 0.00354,
+    "input_tokens": 10,
+    "model": "claude-opus-5-5",
+    "msg_id": "msg_1",
+    "output_tokens": 40,
+    "speed": null,
+    "ts": "2026-09-20T10:00:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1600,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00094,
+    "input_tokens": 5,
+    "model": "claude-opus-5-5",
+    "msg_id": "msg_2",
+    "output_tokens": 30,
+    "speed": null,
+    "ts": "2026-09-20T10:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1700,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00056,
+    "input_tokens": 5,
+    "model": "claude-opus-5-5",
+    "msg_id": "msg_3",
+    "output_tokens": 10,
+    "speed": null,
+    "ts": "2026-09-20T10:01:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1800,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00088,
+    "input_tokens": 5,
+    "model": "claude-opus-5-5",
+    "msg_id": "msg_4",
+    "output_tokens": 25,
+    "speed": null,
+    "ts": "2026-09-20T10:02:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 2000,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00142,
+    "input_tokens": 5,
+    "model": "claude-opus-5-5",
+    "msg_id": "msg_6",
+    "output_tokens": 50,
+    "speed": null,
+    "ts": "2026-09-20T10:07:00.000Z"
+   },
+   {
+    "agent_id": "a0123456789abcdef",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0002,
+    "input_tokens": 100,
+    "model": "claude-haiku-4-5",
+    "msg_id": "msg_s1",
+    "output_tokens": 20,
+    "speed": null,
+    "ts": "2026-09-20T10:02:10.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {
+   "main": 18
+  },
+  "cc_cost_usd": 0.5,
+  "cc_version": "2.1.282",
+  "commands": {
+   "/compact": 1
+  },
+  "custom_title": null,
+  "derived": {
+   "lines_added": 2,
+   "lines_removed": 1,
+   "n_api_calls": 5,
+   "n_tool_errors": 1,
+   "peak_context": 2005,
+   "primary_model": "claude-opus-5-5",
+   "totals": {
+    "cache_read_tokens": 8100,
+    "cache_write_tokens": 500,
+    "cost": 0.00754,
+    "input_tokens": 130,
+    "output_tokens": 175,
+    "sub_cost": 0.0002,
+    "sub_tokens": 120
+   }
+  },
+  "duration_s": 420.0,
+  "ended_at": "2026-09-20T10:07:00.000Z",
+  "entrypoint": "cli",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "Fix the failing login test. My key is sk-ant-api03-SECRETSECRETSECRETSECRETSECRET",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:00:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "claude-opus-5-5"
+    },
+    "role": "assistant",
+    "seq": 1,
+    "text": "I'll run the tests first.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:00:06.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"command\": \"pytest tests/test_login.py -x\", \"description\": \"Run tests\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "Bash: pytest tests/test_login.py -x",
+    "tool_name": "Bash",
+    "tool_use_id": "toolu_1",
+    "ts": "2026-09-20T10:00:07.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "1 failed: AssertionError token expired",
+    "tool_name": "Bash",
+    "tool_use_id": "toolu_1",
+    "ts": "2026-09-20T10:00:20.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"file_path\": \"/Users/test/Projects/demo-app/auth.py\", \"old_string\": \"a\", \"new_string\": \"b\"}"
+    },
+    "role": "assistant",
+    "seq": 4,
+    "text": "Edit: auth.py",
+    "tool_name": "Edit",
+    "tool_use_id": "toolu_2",
+    "ts": "2026-09-20T10:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "The file was updated",
+    "tool_name": "Edit",
+    "tool_use_id": "toolu_2",
+    "ts": "2026-09-20T10:01:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"file_path\": \"/Users/test/Projects/demo-app/missing.py\"}"
+    },
+    "role": "assistant",
+    "seq": 6,
+    "text": "Read: missing.py",
+    "tool_name": "Read",
+    "tool_use_id": "toolu_3",
+    "ts": "2026-09-20T10:01:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 7,
+    "text": "File does not exist.",
+    "tool_name": "Read",
+    "tool_use_id": "toolu_3",
+    "ts": "2026-09-20T10:01:11.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": {
+     "queued": true
+    },
+    "role": "user",
+    "seq": 8,
+    "text": "also check the logout flow",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:01:30.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"subagent_type\": \"Explore\", \"description\": \"Find logout code\", \"prompt\": \"find it\"}"
+    },
+    "role": "assistant",
+    "seq": 9,
+    "text": "Agent: Explore: Find logout code",
+    "tool_name": "Agent",
+    "tool_use_id": "toolu_4",
+    "ts": "2026-09-20T10:02:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 10,
+    "text": "Logout lives in session.py",
+    "tool_name": "Agent",
+    "tool_use_id": "toolu_4",
+    "ts": "2026-09-20T10:03:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "interrupt",
+    "meta": null,
+    "role": "user",
+    "seq": 11,
+    "text": "[Request interrupted by user]",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:04:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "command",
+    "meta": null,
+    "role": "user",
+    "seq": 12,
+    "text": "/compact",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:05:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "compact",
+    "meta": {
+     "pre_tokens": 150000,
+     "trigger": "manual"
+    },
+    "role": "system",
+    "seq": 13,
+    "text": "Context compacted (manual, 150000 tokens before)",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:05:30.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "compact_summary",
+    "meta": null,
+    "role": "user",
+    "seq": 14,
+    "text": "This session is being continued from a previous conversation that ran out of context.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:05:31.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "notice",
+    "meta": null,
+    "role": "assistant",
+    "seq": 15,
+    "text": "No response requested.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:06:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "claude-opus-5-5"
+    },
+    "role": "assistant",
+    "seq": 16,
+    "text": "Fixed: the token TTL was compared in seconds vs ms. Tests pass.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:07:00.000Z"
+   },
+   {
+    "agent_id": "a0123456789abcdef",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": {
+     "subagent": true
+    },
+    "role": "user",
+    "seq": 0,
+    "text": "find it",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T10:02:05.000Z"
+   },
+   {
+    "agent_id": "a0123456789abcdef",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"pattern\": \"logout\"}"
+    },
+    "role": "assistant",
+    "seq": 1,
+    "text": "Grep: /logout/",
+    "tool_name": "Grep",
+    "tool_use_id": "toolu_s1",
+    "ts": "2026-09-20T10:02:10.000Z"
+   },
+   {
+    "agent_id": "a0123456789abcdef",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 2,
+    "text": "session.py:10",
+    "tool_name": "Grep",
+    "tool_use_id": "toolu_s1",
+    "ts": "2026-09-20T10:02:12.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/demo-app/auth.py": {
+    "edits": 1,
+    "lines_added": 2,
+    "lines_removed": 1,
+    "reads": 0,
+    "writes": 0
+   }
+  },
+  "first_prompt": "Fix the failing login test. My key is sk-ant-api03-SECRETSECRETSECRETSECRETSECRET",
+  "git_branch": "main",
+  "git_remote": null,
+  "hooks": {},
+  "id": "11111111-2222-3333-4444-555555555555",
+  "last_prompt": "also check the logout flow",
+  "mcp_servers": {},
+  "models": {
+   "claude-haiku-4-5": 20,
+   "claude-opus-5-5": 155
+  },
+  "n_api_errors": 0,
+  "n_compactions": 1,
+  "n_images": 0,
+  "n_interrupts": 1,
+  "n_prompts": 2,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": "auto",
+  "project_path": "/Users/test/Projects/demo-app",
+  "prs": [
+   {
+    "number": 7,
+    "repo": "x/y",
+    "ts": "2026-09-20T10:08:00.000Z",
+    "url": "https://github.com/x/y/pull/7"
+   }
+  ],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-20T10:00:00.000Z",
+  "subagents": {
+   "a0123456789abcdef": {
+    "agent_id": "a0123456789abcdef",
+    "agent_type": "Explore",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "description": "Find logout code",
+    "ended_at": "2026-09-20T10:02:12.000Z",
+    "est_cost_usd": 0.0002,
+    "input_tokens": 100,
+    "model": "claude-opus-5-5",
+    "n_tool_calls": 1,
+    "n_tool_errors": 0,
+    "output_tokens": 20,
+    "phase": null,
+    "started_at": "2026-09-20T10:02:05.000Z",
+    "tool_use_id": "toolu_4",
+    "workflow_id": null
+   }
+  },
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "pytest tests/test_login.py -x",
+    "duration_ms": 13000,
+    "file_path": null,
+    "input": {
+     "command": "pytest tests/test_login.py -x",
+     "description": "Run tests"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "Bash",
+    "result_chars": 38,
+    "summary": "pytest tests/test_login.py -x",
+    "tool_use_id": "toolu_1",
+    "ts": "2026-09-20T10:00:07.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 2000,
+    "file_path": "/Users/test/Projects/demo-app/auth.py",
+    "input": {
+     "file_path": "/Users/test/Projects/demo-app/auth.py",
+     "new_string": "b",
+     "old_string": "a"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "Edit",
+    "result_chars": 20,
+    "summary": "auth.py",
+    "tool_use_id": "toolu_2",
+    "ts": "2026-09-20T10:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/demo-app/missing.py",
+    "input": {
+     "file_path": "/Users/test/Projects/demo-app/missing.py"
+    },
+    "is_error": true,
+    "mcp_server": null,
+    "name": "Read",
+    "result_chars": 20,
+    "summary": "missing.py",
+    "tool_use_id": "toolu_3",
+    "ts": "2026-09-20T10:01:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 60000,
+    "file_path": null,
+    "input": {
+     "description": "Find logout code",
+     "prompt": "find it",
+     "subagent_type": "Explore"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "Agent",
+    "result_chars": 26,
+    "summary": "Explore: Find logout code",
+    "tool_use_id": "toolu_4",
+    "ts": "2026-09-20T10:02:00.000Z"
+   },
+   {
+    "agent_id": "a0123456789abcdef",
+    "command": null,
+    "duration_ms": 2000,
+    "file_path": null,
+    "input": {
+     "pattern": "logout"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "Grep",
+    "result_chars": 13,
+    "summary": "/logout/",
+    "tool_use_id": "toolu_s1",
+    "ts": "2026-09-20T10:02:10.000Z"
+   }
+  ],
+  "tools": {
+   "Agent": 1,
+   "Bash": 1,
+   "Edit": 1,
+   "Grep": 1,
+   "Read": 1
+  },
+  "workflows": []
+ }
+}

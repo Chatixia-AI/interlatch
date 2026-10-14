@@ -1,6 +1,8 @@
-"""Safety-net test suite: Pin every CLI command, alias, argument, choice, and default.
+"""Safety net: every CLI command, alias, option, default and handler, snapshotted to tests/goldens/cli.json.
 
-Guarantees that moving, refactoring, or splitting cli.py cannot silently drop or mutate CLI flags.
+Moving or splitting cli.py must leave this snapshot unchanged: a dropped flag, a changed default, a renamed dest or a
+command routed to another function fails here. For a deliberate change, rerun with UPDATE_GOLDENS=1 and review the
+diff of tests/goldens/cli.json.
 """
 
 from __future__ import annotations
@@ -9,6 +11,8 @@ import argparse
 from typing import Any
 
 from chronicle.cli import build_parser
+
+from golden import assert_golden
 
 EXPECTED_COMMANDS = {
     "install": ["setup"],
@@ -53,131 +57,91 @@ EXPECTED_COMMANDS = {
 }
 
 
-def _get_subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            return dict(action.choices)
-    return {}
+def _name(value) -> str:
+    """A function or type by name (its address changes every run)."""
+    return getattr(value, "__qualname__", None) or getattr(value, "__name__", None) or type(value).__name__
 
 
-def _extract_options(subparser: argparse.ArgumentParser) -> dict[str, dict[str, Any]]:
-    opts = {}
-    for action in subparser._actions:
-        if isinstance(action, argparse._HelpAction):
-            continue
-        key = "/".join(action.option_strings) if action.option_strings else action.dest
-        opts[key] = {
-            "dest": action.dest,
-            "required": action.required,
-            "default": action.default,
-            "choices": list(action.choices) if action.choices else None,
-            "nargs": action.nargs,
-            "type": getattr(action.type, "__name__", str(action.type)) if action.type else None,
-        }
-    return opts
+def _value(value) -> Any:
+    if value is argparse.SUPPRESS:
+        return "==SUPPRESS=="
+    if isinstance(value, type):
+        return f"<type {value.__name__}>"
+    if callable(value):
+        return f"<fn {_name(value)}>"
+    if isinstance(value, (list, tuple)):
+        return [_value(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _value(v) for k, v in value.items()}
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return repr(value)
+
+
+def _subparsers(parser: argparse.ArgumentParser) -> argparse._SubParsersAction | None:
+    return next((a for a in parser._actions if isinstance(a, argparse._SubParsersAction)), None)
+
+
+def _action(action: argparse.Action, groups: dict[int, int]) -> dict[str, Any]:
+    return {
+        "action": type(action).__name__,
+        "option_strings": list(action.option_strings),
+        "dest": action.dest,
+        "default": _value(action.default),
+        "const": _value(action.const),
+        "choices": None if action.choices is None else [_value(c) for c in action.choices],
+        "nargs": action.nargs,
+        "type": None if action.type is None else _name(action.type),
+        "required": action.required,
+        "metavar": _value(action.metavar),
+        "help_suppressed": action.help is argparse.SUPPRESS,
+        "exclusive_group": groups.get(id(action)),
+    }
+
+
+def _snapshot(parser: argparse.ArgumentParser) -> dict[str, Any]:
+    """One parser: its options in order, its defaults (set_defaults: the handler), and its subcommands, nested."""
+    groups = {id(a): i for i, g in enumerate(parser._mutually_exclusive_groups) for a in g._group_actions}
+    snap: dict[str, Any] = {
+        "options": [_action(a, groups) for a in parser._actions
+                    if not isinstance(a, (argparse._HelpAction, argparse._SubParsersAction))],
+        "defaults": _value(dict(parser._defaults)),
+    }
+    sub = _subparsers(parser)
+    if sub is not None:
+        hidden = {c.dest for c in sub._choices_actions if c.help is argparse.SUPPRESS}
+        listed = {c.dest for c in sub._choices_actions}
+        commands: dict[str, Any] = {}
+        for name, child in sub.choices.items():
+            canonical = next(n for n, c in sub.choices.items() if c is child)  # an alias maps to the first name
+            if canonical != name:
+                commands[canonical]["aliases"].append(name)
+                continue
+            commands[name] = {"aliases": [], "hidden": name in hidden or name not in listed, **_snapshot(child)}
+        snap["subcommands"] = {"dest": sub.dest, "required": sub.required, "commands": commands}
+    return snap
+
+
+def test_every_command_option_and_default_matches_the_golden():
+    snap = _snapshot(build_parser())
+    for opt in snap["options"]:
+        if opt["dest"] == "version":
+            opt["default"] = opt["const"] = None  # the version string changes every release
+    assert_golden("cli.json", snap)
 
 
 def test_cli_commands_and_aliases_pinned():
     parser = build_parser()
-    subparsers = _get_subparsers(parser)
-
-    # Every expected command exists in subparsers
-    for cmd, aliases in EXPECTED_COMMANDS.items():
-        assert cmd in subparsers, f"Missing command: {cmd}"
-        for alias in aliases:
-            assert alias in subparsers, f"Missing alias: {alias} for {cmd}"
-
-    # No unexpected commands exist
-    all_expected = set(EXPECTED_COMMANDS.keys()) | {a for aliases in EXPECTED_COMMANDS.values() for a in aliases}
-    assert set(subparsers.keys()) == all_expected
+    commands = _snapshot(parser)["subcommands"]["commands"]
+    assert {name: c["aliases"] for name, c in commands.items()} == EXPECTED_COMMANDS
+    assert set(_subparsers(parser).choices) == set(EXPECTED_COMMANDS) | {a for v in EXPECTED_COMMANDS.values() for a in v}
+    assert {name for name, c in commands.items() if c["hidden"]} == {"hook", "ingest-session"}
 
 
-def test_cli_key_options_pinned():
-    parser = build_parser()
-    subparsers = _get_subparsers(parser)
-
-    # install options
-    install_opts = _extract_options(subparsers["install"])
-    assert "-y/--yes" in install_opts
-    assert "--no-sync" in install_opts
-    assert "--no-hooks" in install_opts
-    assert "--no-launchd" in install_opts
-    assert "--no-mcp" in install_opts
-    assert "--no-ui" in install_opts
-    assert "--inject-context" in install_opts
-    assert "--statusline" in install_opts
-    assert "--interval" in install_opts
-    assert install_opts["--interval"]["default"] == 15
-    assert "--exe" in install_opts
-    assert "--analyze" in install_opts
-    assert "--notify-updates/--no-notify-updates" in install_opts
-    assert "--menu-bar/--no-menu-bar" in install_opts
-    assert "--dry-run" in install_opts
-
-    # sync options
-    sync_opts = _extract_options(subparsers["sync"])
-    assert "--work" in sync_opts
-    assert "--force" in sync_opts
-    assert "--quiet" in sync_opts
-    assert "-v/--verbose" in sync_opts
-
-    # analyze options
-    analyze_opts = _extract_options(subparsers["analyze"])
-    assert "sessions" in analyze_opts
-    assert "--pending" in analyze_opts
-    assert "--all" in analyze_opts
-    assert "--limit" in analyze_opts
-    assert "--model" in analyze_opts
-    assert "--force" in analyze_opts
-    assert "--no-synthesize" in analyze_opts
-    assert "--backend" in analyze_opts
-    assert "--dry-run" in analyze_opts
-    assert "--concurrency" in analyze_opts
-
-    # hub actions
-    hub_opts = _extract_options(subparsers["hub"])
-    assert "action" in hub_opts
-    expected_hub_actions = [
-        "status", "enable", "join", "leave", "disable", "folders", "add-folder",
-        "remove-folder", "store", "people", "invite", "role", "access",
-        "remove", "shared-token", "signin", "project", "purge", "rejoin",
-    ]
-    assert hub_opts["action"]["choices"] == expected_hub_actions
-    assert "--token" in hub_opts
-    assert "--code" in hub_opts
-    assert "--share" in hub_opts
-    assert hub_opts["--share"]["choices"] == ["everything", "knowledge"]
-    assert "--role" in hub_opts
-    assert hub_opts["--role"]["choices"] == ["admin", "member", "readonly"]
-
-    # leaderboard actions
-    lb_opts = _extract_options(subparsers["leaderboard"])
-    assert lb_opts["action"]["choices"] == ["status", "join", "send", "leave"]
-
-    # mirror actions
-    mirror_opts = _extract_options(subparsers["mirror"])
-    assert mirror_opts["action"]["choices"] == ["status", "sync"]
-    assert "--full" in mirror_opts
-
-    # tailnet actions
-    tailnet_opts = _extract_options(subparsers["tailnet"])
-    assert tailnet_opts["action"]["choices"] == ["on", "off", "status"]
-    assert "--anyone" in tailnet_opts
-
-    # config actions
-    config_opts = _extract_options(subparsers["config"])
-    assert config_opts["action"]["choices"] == ["show", "path", "edit", "set", "set-key", "forget-key"]
-
-    # export options
-    export_opts = _extract_options(subparsers["export"])
-    assert export_opts["--format"]["choices"] == ["md", "json", "raw"]
-    assert export_opts["--format"]["default"] == "md"
-
-    # connect / disconnect choices
-    connect_opts = _extract_options(subparsers["connect"])
-    expected_agents = ["claude", "codex", "codex-cloud", "copilot", "bob", "antigravity",
-                       "claude-desktop", "cursor", "windsurf", "gemini"]
-    assert connect_opts["name"]["choices"] == expected_agents
+def test_every_command_has_a_handler():
+    commands = _snapshot(build_parser())["subcommands"]["commands"]
+    for name, c in commands.items():
+        assert str(c["defaults"].get("fn", "")).startswith("<fn cmd_"), f"{name} routes to {c['defaults']}"
 
 
 def test_cli_parse_args_smoke():

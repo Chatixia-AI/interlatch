@@ -1,0 +1,1400 @@
+{
+ "rollout-2026-08-01T08-00-00-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0004.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-08-01T08:00:00.000Z",
+   "2026-08-01T08:00:00.000Z",
+   "2026-08-01T08:00:01.000Z",
+   "2026-08-01T08:00:02.000Z",
+   "2026-08-01T08:00:30.000Z"
+  ],
+  "active_s": 30.0,
+  "ai_title": null,
+  "api_calls": [],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {
+   "/init": 1
+  },
+  "custom_title": null,
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 0,
+   "n_tool_errors": 0,
+   "peak_context": 0,
+   "primary_model": null,
+   "totals": {}
+  },
+  "duration_s": 30.0,
+  "ended_at": "2026-08-01T08:00:30.000Z",
+  "entrypoint": "codex:Codex Desktop",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "command",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "/init",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 1,
+    "text": "set up the repo",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 2,
+    "text": "Done.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:30.000Z"
+   }
+  ],
+  "files": {},
+  "first_prompt": "set up the repo",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0004",
+  "last_prompt": "set up the repo",
+  "mcp_servers": {},
+  "models": {},
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-08-01T08:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [],
+  "tools": {},
+  "workflows": []
+ },
+ "rollout-2026-08-01T08-00-00-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0005.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-08-01T08:00:00.000Z",
+   "2026-08-01T08:00:00.000Z",
+   "2026-08-01T08:00:01.000Z",
+   "2026-08-01T08:00:02.000Z",
+   "2026-08-01T08:00:30.000Z"
+  ],
+  "active_s": 30.0,
+  "ai_title": null,
+  "api_calls": [],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {
+   "/init": 1
+  },
+  "custom_title": null,
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 0,
+   "n_tool_errors": 0,
+   "peak_context": 0,
+   "primary_model": null,
+   "totals": {}
+  },
+  "duration_s": 30.0,
+  "ended_at": "2026-08-01T08:00:30.000Z",
+  "entrypoint": "codex:Codex Desktop",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "command",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "/init",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 1,
+    "text": "set up the repo",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 2,
+    "text": "Done.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-08-01T08:00:30.000Z"
+   }
+  ],
+  "files": {},
+  "first_prompt": "set up the repo",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0005",
+  "last_prompt": "set up the repo",
+  "mcp_servers": {},
+  "models": {},
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-08-01T08:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [],
+  "tools": {},
+  "workflows": []
+ },
+ "rollout-2026-09-20T09-00-00-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0002.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-09-20T09:00:00.000Z",
+   "2026-09-20T09:00:00.000Z",
+   "2026-09-20T09:00:00.100Z",
+   "2026-09-20T09:00:01.000Z",
+   "2026-09-20T09:00:05.000Z",
+   "2026-09-20T09:00:05.000Z",
+   "2026-09-20T09:00:05.000Z",
+   "2026-09-20T09:00:09.000Z"
+  ],
+  "active_s": 9.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.000225,
+    "input_tokens": 100,
+    "model": "gpt-5.4",
+    "msg_id": "tc#1",
+    "output_tokens": 10,
+    "speed": null,
+    "ts": "2026-09-20T09:00:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0002875,
+    "input_tokens": 150,
+    "model": "gpt-5.4",
+    "msg_id": "tc#2",
+    "output_tokens": 10,
+    "speed": null,
+    "ts": "2026-09-20T09:00:05.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 2,
+   "n_tool_errors": 0,
+   "peak_context": 150,
+   "primary_model": "gpt-5.4",
+   "totals": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost": 0.0005125,
+    "input_tokens": 250,
+    "output_tokens": 20
+   }
+  },
+  "duration_s": 9.0,
+  "ended_at": "2026-09-20T09:00:09.000Z",
+  "entrypoint": "codex:codex_vscode",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "explain the build",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T09:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.4",
+     "phase": null
+    },
+    "role": "assistant",
+    "seq": 1,
+    "text": "It uses make.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-20T09:00:09.000Z"
+   }
+  ],
+  "files": {},
+  "first_prompt": "explain the build",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0002",
+  "last_prompt": "explain the build",
+  "mcp_servers": {},
+  "models": {
+   "gpt-5.4": 20
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-20T09:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [],
+  "tools": {},
+  "workflows": []
+ },
+ "rollout-2026-09-21T10-00-00-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0001.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-09-21T10:00:00.000Z",
+   "2026-09-21T10:00:00.000Z",
+   "2026-09-21T10:00:00.100Z",
+   "2026-09-21T10:00:00.200Z",
+   "2026-09-21T10:00:00.300Z",
+   "2026-09-21T10:00:01.000Z",
+   "2026-09-21T10:00:02.000Z",
+   "2026-09-21T10:00:03.000Z",
+   "2026-09-21T10:00:04.000Z",
+   "2026-09-21T10:00:09.000Z",
+   "2026-09-21T10:00:10.000Z",
+   "2026-09-21T10:00:11.000Z",
+   "2026-09-21T10:00:12.000Z",
+   "2026-09-21T10:00:13.000Z",
+   "2026-09-21T10:00:14.000Z",
+   "2026-09-21T10:00:14.100Z",
+   "2026-09-21T10:00:15.000Z",
+   "2026-09-21T10:01:00.000Z",
+   "2026-09-21T10:02:00.000Z",
+   "2026-09-21T10:02:05.000Z",
+   "2026-09-21T10:02:06.000Z",
+   "2026-09-21T10:03:00.000Z"
+  ],
+  "active_s": 180.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 800,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00085,
+    "input_tokens": 200,
+    "model": "gpt-5.5",
+    "msg_id": "resp_1",
+    "output_tokens": 50,
+    "speed": null,
+    "ts": "2026-09-21T10:00:14.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 3,
+   "lines_removed": 1,
+   "n_api_calls": 1,
+   "n_tool_errors": 1,
+   "peak_context": 1000,
+   "primary_model": "gpt-5.5",
+   "totals": {
+    "cache_read_tokens": 800,
+    "cache_write_tokens": 0,
+    "cost": 0.00085,
+    "input_tokens": 200,
+    "output_tokens": 50
+   }
+  },
+  "duration_s": 180.0,
+  "ended_at": "2026-09-21T10:03:00.000Z",
+  "entrypoint": "codex:codex_vscode",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "meta",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "<environment_context> <cwd>/x</cwd> </environment_context>",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:00.300Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 1,
+    "text": "Fix the flaky test in tests/test_app.py",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "thinking",
+    "meta": null,
+    "role": "assistant",
+    "seq": 2,
+    "text": "Looking at the test",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.5",
+     "phase": "commentary"
+    },
+    "role": "assistant",
+    "seq": 3,
+    "text": "I'll run the tests first.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": null,
+    "role": "assistant",
+    "seq": 4,
+    "text": "exec: pytest tests/test_app.py -x",
+    "tool_name": "exec",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "Exit code: 1\nWall time: 5s\nOutput:\nFAILED tests/test_app.py::test_x",
+    "tool_name": "exec",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:09.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": null,
+    "role": "assistant",
+    "seq": 6,
+    "text": "apply_patch: app.py (+2/-1), notes.md (+1/-0)",
+    "tool_name": "apply_patch",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 7,
+    "text": "Success. Updated the following files:\nM app.py\nA notes.md",
+    "tool_name": "apply_patch",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:11.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"cmd\": \"git status\", \"workdir\": \"/Users/test/Projects/codex-app\"}"
+    },
+    "role": "assistant",
+    "seq": 8,
+    "text": "exec_command: git status",
+    "tool_name": "exec_command",
+    "tool_use_id": "c3",
+    "ts": "2026-09-21T10:00:12.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 9,
+    "text": "Process exited with code 0\nOutput:\nclean",
+    "tool_name": "exec_command",
+    "tool_use_id": "c3",
+    "ts": "2026-09-21T10:00:13.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "interrupt",
+    "meta": null,
+    "role": "user",
+    "seq": 10,
+    "text": "[Turn aborted: interrupted]",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:15.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "compact",
+    "meta": {
+     "trigger": "auto",
+     "window": 2
+    },
+    "role": "system",
+    "seq": 11,
+    "text": "Context compacted (window 2)",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 12,
+    "text": "now make it deterministic",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:02:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"message\": \"check the docs\"}"
+    },
+    "role": "assistant",
+    "seq": 13,
+    "text": "collaboration.spawn_agent: check the docs",
+    "tool_name": "collaboration.spawn_agent",
+    "tool_use_id": "c4",
+    "ts": "2026-09-21T10:02:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 14,
+    "text": "{\"agent_id\": \"a1\"}",
+    "tool_name": "collaboration.spawn_agent",
+    "tool_use_id": "c4",
+    "ts": "2026-09-21T10:02:06.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.5",
+     "phase": "final_answer"
+    },
+    "role": "assistant",
+    "seq": 15,
+    "text": "Fixed the flaky test with a fixed seed.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:03:00.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/codex-app/app.py": {
+    "edits": 1,
+    "lines_added": 2,
+    "lines_removed": 1,
+    "reads": 0,
+    "writes": 0
+   },
+   "/Users/test/Projects/codex-app/notes.md": {
+    "edits": 0,
+    "lines_added": 1,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 1
+   }
+  },
+  "first_prompt": "Fix the flaky test in tests/test_app.py",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0001",
+  "last_prompt": "now make it deterministic",
+  "mcp_servers": {},
+  "models": {
+   "gpt-5.5": 50
+  },
+  "n_api_errors": 0,
+  "n_compactions": 1,
+  "n_images": 0,
+  "n_interrupts": 1,
+  "n_prompts": 2,
+  "n_result_images": 0,
+  "outputs": [
+   {
+    "action": "created",
+    "agent_id": "",
+    "key": "file:/Users/test/Projects/codex-app/notes.md",
+    "kind": "doc",
+    "meta": {},
+    "path": "/Users/test/Projects/codex-app/notes.md",
+    "sha256": null,
+    "size": null,
+    "title": "notes.md",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:10.000Z",
+    "url": null,
+    "versions": 1
+   }
+  ],
+  "parse_errors": 0,
+  "permission_mode": "on-request",
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T10:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "pytest tests/test_app.py -x",
+    "duration_ms": 5000,
+    "file_path": null,
+    "input": null,
+    "is_error": true,
+    "mcp_server": null,
+    "name": "exec",
+    "result_chars": 67,
+    "summary": "pytest tests/test_app.py -x",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/codex-app/app.py",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "apply_patch",
+    "result_chars": 57,
+    "summary": "app.py (+2/-1), notes.md (+1/-0)",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": "git status",
+    "duration_ms": 1000,
+    "file_path": null,
+    "input": {
+     "cmd": "git status",
+     "workdir": "/Users/test/Projects/codex-app"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "exec_command",
+    "result_chars": 40,
+    "summary": "git status",
+    "tool_use_id": "c3",
+    "ts": "2026-09-21T10:00:12.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": null,
+    "input": {
+     "message": "check the docs"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "collaboration.spawn_agent",
+    "result_chars": 18,
+    "summary": "check the docs",
+    "tool_use_id": "c4",
+    "ts": "2026-09-21T10:02:05.000Z"
+   }
+  ],
+  "tools": {
+   "apply_patch": 1,
+   "collaboration.spawn_agent": 1,
+   "exec": 1,
+   "exec_command": 1
+  },
+  "workflows": []
+ },
+ "rollout-2026-09-21T10-02-05-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0003.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-09-21T10:02:05.500Z",
+   "2026-09-21T10:02:05.500Z",
+   "2026-09-21T10:02:05.600Z",
+   "2026-09-21T10:02:06.000Z",
+   "2026-09-21T10:02:10.000Z",
+   "2026-09-21T10:02:12.000Z",
+   "2026-09-21T10:02:12.100Z",
+   "2026-09-21T10:02:20.000Z",
+   "2026-09-21T10:02:30.000Z",
+   "2026-09-21T10:02:31.000Z"
+  ],
+  "active_s": 25.5,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.00055,
+    "input_tokens": 200,
+    "model": "gpt-5.5",
+    "msg_id": "sub_1",
+    "output_tokens": 30,
+    "speed": null,
+    "ts": "2026-09-21T10:02:31.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 3,
+   "lines_removed": 1,
+   "n_api_calls": 1,
+   "n_tool_errors": 1,
+   "peak_context": 200,
+   "primary_model": "gpt-5.5",
+   "totals": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost": 0.00055,
+    "input_tokens": 200,
+    "output_tokens": 30
+   }
+  },
+  "duration_s": 25.5,
+  "ended_at": "2026-09-21T10:02:31.000Z",
+  "entrypoint": "codex:codex_vscode",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "check the docs",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:02:06.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"cmd\": \"npm test\"}"
+    },
+    "role": "assistant",
+    "seq": 1,
+    "text": "exec_command: npm test",
+    "tool_name": "exec_command",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T10:02:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 2,
+    "text": "done",
+    "tool_name": "exec_command",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T10:02:12.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.5",
+     "phase": null
+    },
+    "role": "assistant",
+    "seq": 3,
+    "text": "The docs say to seed the RNG.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:02:30.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/codex-app/docs/guide.md": {
+    "edits": 0,
+    "lines_added": 2,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 1
+   },
+   "/abs/app.py": {
+    "edits": 1,
+    "lines_added": 1,
+    "lines_removed": 1,
+    "reads": 0,
+    "writes": 0
+   }
+  },
+  "first_prompt": "check the docs",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0003",
+  "last_prompt": "check the docs",
+  "mcp_servers": {},
+  "models": {
+   "gpt-5.5": 30
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [
+   {
+    "action": "created",
+    "agent_id": "",
+    "key": "file:/Users/test/Projects/codex-app/docs/guide.md",
+    "kind": "doc",
+    "meta": {},
+    "path": "/Users/test/Projects/codex-app/docs/guide.md",
+    "sha256": "09834d488008f5f1ef589a2d7cedc52425bee9dd23b2212e4c1d673c5cbb54e4",
+    "size": 4,
+    "title": "guide.md",
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:02:20.000Z",
+    "url": null,
+    "versions": 1
+   }
+  ],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T10:02:05.500Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "npm test",
+    "duration_ms": 2000,
+    "file_path": null,
+    "input": {
+     "cmd": "npm test"
+    },
+    "is_error": true,
+    "mcp_server": null,
+    "name": "exec_command",
+    "result_chars": 4,
+    "summary": "npm test",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T10:02:10.000Z"
+   }
+  ],
+  "tools": {
+   "exec_command": 1
+  },
+  "workflows": []
+ },
+ "rollout-2026-09-22T09-00-00-0199aaaa-bbbb-7ccc-8ddd-eeeeffff0006.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [
+   "2026-09-22T09:00:00.000Z",
+   "2026-09-22T09:00:00.000Z",
+   "2026-09-22T09:00:00.100Z",
+   "2026-09-22T09:00:01.000Z",
+   "2026-09-22T09:00:02.000Z",
+   "2026-09-22T09:00:03.000Z",
+   "2026-09-22T09:00:04.000Z",
+   "2026-09-22T09:00:05.000Z",
+   "2026-09-22T09:00:06.000Z",
+   "2026-09-22T09:00:07.000Z",
+   "2026-09-22T09:00:08.000Z",
+   "2026-09-22T09:00:09.000Z",
+   "2026-09-22T09:01:00.000Z",
+   "2026-09-22T09:01:10.000Z",
+   "2026-09-22T09:01:11.000Z",
+   "2026-09-22T09:01:41.000Z",
+   "2026-09-22T09:01:42.000Z",
+   "2026-09-22T09:02:00.000Z",
+   "2026-09-22T09:03:00.000Z",
+   "2026-09-22T09:03:05.000Z",
+   "2026-09-22T09:03:10.000Z"
+  ],
+  "active_s": 190.0,
+  "ai_title": null,
+  "api_calls": [],
+  "artifacts": [],
+  "branches": {
+   "feat/flaky": 1
+  },
+  "cc_cost_usd": null,
+  "cc_version": "0.147.0",
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 1,
+   "lines_removed": 1,
+   "n_api_calls": 0,
+   "n_tool_errors": 3,
+   "peak_context": 0,
+   "primary_model": null,
+   "totals": {}
+  },
+  "duration_s": 190.0,
+  "ended_at": "2026-09-22T09:03:10.000Z",
+  "entrypoint": "codex:codex_vscode",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "find the lint problem and fix it",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-22T09:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"const r = await tools.exec_command({cmd:\\\"rg -n \\\\\\\"await tools.nope(\\\\\\\" src\\\",workdir:\\\"/x\\\"}); text(r);\"}"
+    },
+    "role": "assistant",
+    "seq": 1,
+    "text": "exec_command: rg -n \"await tools.nope(\" src",
+    "tool_name": "exec_command",
+    "tool_use_id": "e1",
+    "ts": "2026-09-22T09:00:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 2,
+    "text": "Script completed\nWall time 0.1 seconds\nOutput:\n\nExit code: 2\nrg: regex parse error",
+    "tool_name": "exec_command",
+    "tool_use_id": "e1",
+    "ts": "2026-09-22T09:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"text(await tools.apply_patch(\\\"*** Begin Patch\\\\n*** Update File: lib.py\\\\n@@\\\\n-a = 1\\\\n+a = \\\\\\\"é\\\\\\\"\\\\n*** End Patch\\\"))\"}"
+    },
+    "role": "assistant",
+    "seq": 3,
+    "text": "apply_patch: lib.py (+1/-1)",
+    "tool_name": "apply_patch",
+    "tool_use_id": "e2",
+    "ts": "2026-09-22T09:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 4,
+    "text": "Script completed\nWall time 0.1 seconds\nOutput:\n\nSuccess. Updated the following files:\nM lib.py",
+    "tool_name": "apply_patch",
+    "tool_use_id": "e2",
+    "ts": "2026-09-22T09:00:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"// tools.fake_tool( is only a comment\\nconst [a, b] = await Promise.all([tools.exec_command({\\\"cmd\\\":\\\"git status\\\"}), tools.view_image({path:\\\"/tmp/shot.png\\\"})]); text(a);\"}"
+    },
+    "role": "assistant",
+    "seq": 5,
+    "text": "exec: exec_command, view_image: git status",
+    "tool_name": "exec",
+    "tool_use_id": "e3",
+    "ts": "2026-09-22T09:00:06.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 6,
+    "text": "Script completed\nWall time 0.1 seconds\nOutput:\n\nExit code: 0\nclean",
+    "tool_name": "exec",
+    "tool_use_id": "e3",
+    "ts": "2026-09-22T09:00:07.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"await tools.mcp__playwright__browser_navigate({url: \\\"http://localhost:3000\\\"})\"}"
+    },
+    "role": "assistant",
+    "seq": 7,
+    "text": "mcp__playwright__browser_navigate: http://localhost:3000",
+    "tool_name": "mcp__playwright__browser_navigate",
+    "tool_use_id": "e4",
+    "ts": "2026-09-22T09:00:08.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 8,
+    "text": "Script completed\nWall time 0.1 seconds\nOutput:\n",
+    "tool_name": "mcp__playwright__browser_navigate",
+    "tool_use_id": "e4",
+    "ts": "2026-09-22T09:00:09.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"const r = await tools.exec_command({cmd:\\\"npm run build\\\"}); text(r.output);\"}"
+    },
+    "role": "assistant",
+    "seq": 9,
+    "text": "exec_command: npm run build",
+    "tool_name": "exec_command",
+    "tool_use_id": "e5",
+    "ts": "2026-09-22T09:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 10,
+    "text": "Script running with cell ID 7\nWall time 10.0 seconds\nOutput:\n",
+    "tool_name": "exec_command",
+    "tool_use_id": "e5",
+    "ts": "2026-09-22T09:01:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"cell_id\": \"7\", \"yield_time_ms\": 30000}"
+    },
+    "role": "assistant",
+    "seq": 11,
+    "text": "wait: cell 7",
+    "tool_name": "wait",
+    "tool_use_id": "w1",
+    "ts": "2026-09-22T09:01:11.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 12,
+    "text": "Script running with cell ID 7\nWall time 30.0 seconds\nOutput:\n",
+    "tool_name": "wait",
+    "tool_use_id": "w1",
+    "ts": "2026-09-22T09:01:41.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"cell_id\": \"7\", \"yield_time_ms\": 30000}"
+    },
+    "role": "assistant",
+    "seq": 13,
+    "text": "wait: cell 7",
+    "tool_name": "wait",
+    "tool_use_id": "w2",
+    "ts": "2026-09-22T09:01:42.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 14,
+    "text": "Script failed\nWall time 3.0 seconds\nOutput:\n\nScript error:\nbuild exploded",
+    "tool_name": "wait",
+    "tool_use_id": "w2",
+    "ts": "2026-09-22T09:02:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"script\": \"const r = await tools.exec_command({cmd:\\\"sleep 100\\\"}); text(r.output);\"}"
+    },
+    "role": "assistant",
+    "seq": 15,
+    "text": "exec_command: sleep 100",
+    "tool_name": "exec_command",
+    "tool_use_id": "e6",
+    "ts": "2026-09-22T09:03:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 16,
+    "text": "aborted by user after 5.0s",
+    "tool_name": "exec_command",
+    "tool_use_id": "e6",
+    "ts": "2026-09-22T09:03:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.5",
+     "phase": "final_answer"
+    },
+    "role": "assistant",
+    "seq": 17,
+    "text": "Fixed the lint error.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-22T09:03:10.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/codex-app/lib.py": {
+    "edits": 1,
+    "lines_added": 1,
+    "lines_removed": 1,
+    "reads": 0,
+    "writes": 0
+   },
+   "/tmp/shot.png": {
+    "edits": 0,
+    "lines_added": 0,
+    "lines_removed": 0,
+    "reads": 1,
+    "writes": 0
+   }
+  },
+  "first_prompt": "find the lint problem and fix it",
+  "git_branch": "feat/flaky",
+  "git_remote": null,
+  "hooks": {},
+  "id": "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0006",
+  "last_prompt": "find the lint problem and fix it",
+  "mcp_servers": {
+   "playwright": 1
+  },
+  "models": {},
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/codex-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-22T09:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "rg -n \"await tools.nope(\" src",
+    "duration_ms": 1000,
+    "file_path": null,
+    "input": {
+     "script": "const r = await tools.exec_command({cmd:\"rg -n \\\"await tools.nope(\\\" src\",workdir:\"/x\"}); text(r);"
+    },
+    "is_error": true,
+    "mcp_server": null,
+    "name": "exec_command",
+    "result_chars": 82,
+    "summary": "rg -n \"await tools.nope(\" src",
+    "tool_use_id": "e1",
+    "ts": "2026-09-22T09:00:02.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/codex-app/lib.py",
+    "input": {
+     "script": "text(await tools.apply_patch(\"*** Begin Patch\\n*** Update File: lib.py\\n@@\\n-a = 1\\n+a = \\\"é\\\"\\n*** End Patch\"))"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "apply_patch",
+    "result_chars": 94,
+    "summary": "lib.py (+1/-1)",
+    "tool_use_id": "e2",
+    "ts": "2026-09-22T09:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": "git status",
+    "duration_ms": 1000,
+    "file_path": "/tmp/shot.png",
+    "input": {
+     "script": "// tools.fake_tool( is only a comment\nconst [a, b] = await Promise.all([tools.exec_command({\"cmd\":\"git status\"}), tools.view_image({path:\"/tmp/shot.png\"})]); text(a);"
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "exec",
+    "result_chars": 66,
+    "summary": "exec_command, view_image: git status",
+    "tool_use_id": "e3",
+    "ts": "2026-09-22T09:00:06.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": null,
+    "input": {
+     "script": "await tools.mcp__playwright__browser_navigate({url: \"http://localhost:3000\"})"
+    },
+    "is_error": false,
+    "mcp_server": "playwright",
+    "name": "mcp__playwright__browser_navigate",
+    "result_chars": 47,
+    "summary": "http://localhost:3000",
+    "tool_use_id": "e4",
+    "ts": "2026-09-22T09:00:08.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": "npm run build",
+    "duration_ms": 60000,
+    "file_path": null,
+    "input": {
+     "script": "const r = await tools.exec_command({cmd:\"npm run build\"}); text(r.output);"
+    },
+    "is_error": true,
+    "mcp_server": null,
+    "name": "exec_command",
+    "result_chars": 61,
+    "summary": "npm run build",
+    "tool_use_id": "e5",
+    "ts": "2026-09-22T09:01:00.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 30000,
+    "file_path": null,
+    "input": {
+     "cell_id": "7",
+     "yield_time_ms": 30000
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "wait",
+    "result_chars": 61,
+    "summary": "cell 7",
+    "tool_use_id": "w1",
+    "ts": "2026-09-22T09:01:11.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 18000,
+    "file_path": null,
+    "input": {
+     "cell_id": "7",
+     "yield_time_ms": 30000
+    },
+    "is_error": false,
+    "mcp_server": null,
+    "name": "wait",
+    "result_chars": 73,
+    "summary": "cell 7",
+    "tool_use_id": "w2",
+    "ts": "2026-09-22T09:01:42.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": "sleep 100",
+    "duration_ms": 5000,
+    "file_path": null,
+    "input": {
+     "script": "const r = await tools.exec_command({cmd:\"sleep 100\"}); text(r.output);"
+    },
+    "is_error": true,
+    "mcp_server": null,
+    "name": "exec_command",
+    "result_chars": 26,
+    "summary": "sleep 100",
+    "tool_use_id": "e6",
+    "ts": "2026-09-22T09:03:00.000Z"
+   }
+  ],
+  "tools": {
+   "apply_patch": 1,
+   "exec": 1,
+   "exec_command": 3,
+   "mcp__playwright__browser_navigate": 1,
+   "wait": 2
+  },
+  "workflows": []
+ }
+}
