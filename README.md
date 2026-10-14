@@ -166,7 +166,8 @@ team's hub also runs [in Docker](docs/docker.md).
 **How do I remove it?** `interlatch uninstall` removes the hooks, background agents and MCP registrations and keeps
 your data; add `--purge` to delete the data too.
 
-Something not working? See [Troubleshooting](docs/troubleshooting.md).
+More questions, on privacy, cost, teams and updating, are answered in the [FAQ](docs/faq.md). Something not
+working? See [Troubleshooting](docs/troubleshooting.md).
 
 ## Documentation
 
@@ -176,7 +177,7 @@ Something not working? See [Troubleshooting](docs/troubleshooting.md).
 [Joining your team's hub](docs/join-a-hub.md) · [A copy in Postgres](docs/postgres.md) ·
 [What gets recorded and how analysis works](docs/analysis.md) ·
 [Configuration](docs/configuration.md) · [Data and privacy](docs/privacy.md) ·
-[Troubleshooting](docs/troubleshooting.md) · [Moving from Chronicle](docs/moving-from-chronicle.md) ·
+[FAQ](docs/faq.md) · [Troubleshooting](docs/troubleshooting.md) · [Moving from Chronicle](docs/moving-from-chronicle.md) ·
 [Development](docs/development.md)
 
 ## Contributing

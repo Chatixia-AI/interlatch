@@ -18,6 +18,7 @@
 | [What gets recorded and how analysis works](analysis.md) | Session data, knowledge kinds, the analysis pipeline and its cost |
 | [Configuration](configuration.md) | Every `config.toml` setting |
 | [Data and privacy](privacy.md) | What is stored where, and what leaves your machine |
+| [FAQ](faq.md) | Short answers to the questions people ask most: privacy, cost, agents, teams, updating |
 | [Troubleshooting](troubleshooting.md) | Known issues and common problems |
 | [Moving from Chronicle](moving-from-chronicle.md) | Interlatch was called Chronicle: what moves by itself when you update, and what keeps working |
 | [Development](development.md) | Tests, building the app, releasing, demo data, code layout |

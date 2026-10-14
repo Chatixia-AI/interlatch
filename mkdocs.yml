@@ -79,6 +79,7 @@ nav:
       - What gets recorded and how analysis works: analysis.md
       - Configuration: configuration.md
       - Data and privacy: privacy.md
+      - FAQ: faq.md
       - Troubleshooting: troubleshooting.md
       - Moving from Chronicle: moving-from-chronicle.md
       - Development: development.md
@@ -98,6 +99,7 @@ nav:
       - 記録される内容と分析の仕組み: ja/analysis.md
       - 設定: ja/configuration.md
       - データとプライバシー: ja/privacy.md
+      - よくある質問: ja/faq.md
       - トラブルシューティング: ja/troubleshooting.md
       - Chronicle からの移行: ja/moving-from-chronicle.md
       - 開発: ja/development.md
