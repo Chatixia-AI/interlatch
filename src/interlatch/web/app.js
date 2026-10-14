@@ -1407,9 +1407,7 @@ async function activityView(params, own = false) {
   const toolCard = h("section", { class: "card" }, cardHead(t("Tools"), { iconName: "zap", hint: legendKey([["accent", t("calls")], ["critical", t("failed")]]) }),
     hbars(groupMcp(data.tools).slice(0, 12), { label: (x) => x.name, value: (x) => x.n, fmt: fmtCompact, part: (x) => x.errors || 0, sub: (x) => (x.errors ? `(${fmtCompact(x.errors)})` : "") }));
   const modelCard = h("section", { class: "card" }, cardHead(t("Models"), { iconName: "system", hint: t("est. API cost · tokens") }),
-    hbars(data.models, { label: (x) => x.model, value: (x) => x.cost || 0, fmt: fmtCost, sub: (x) => `· ${fmtCompact(x.tokens)}` }),
-    data.agents && data.agents.length > 1 && !agent ? [h("div", { class: "subhead" }, t("Agents")),
-      hbars(data.agents, { label: (x) => agentName(x.agent), value: (x) => x.active_s || 0, fmt: fmtDur, href: (x) => `#/?agent=${x.agent}`, sub: (x) => `· ${tn(x.sessions, "{n} session", "{n} sessions")}` })] : null);
+    hbars(data.models, { label: (x) => x.model, value: (x) => x.cost || 0, fmt: fmtCost, sub: (x) => `· ${fmtCompact(x.tokens)}` }));
   const recent = h("section", { class: "card" }, cardHead(t("Recent sessions"), { iconName: "sessions", tools: h("a", { href: "#/sessions", class: "hint link-arrow" }, t("All sessions"), icon("arrow")) }),
     sessionList(data.recent));
   const know = h("section", { class: "card" }, cardHead(t("Latest knowledge"), { iconName: "knowledge", tools: h("a", { href: "#/knowledge/all", class: "hint link-arrow" }, t("Browse"), icon("arrow")) }),
@@ -1422,15 +1420,93 @@ async function activityView(params, own = false) {
       h("div", { class: "sub" }, tot.first_at ? t("{sessions} sessions across {projects} projects since {date}", counts) : t("{sessions} sessions across {projects} projects", counts))),
       h("div", { class: "head-actions" },
         segControl([["7", t("7d")], ["30", t("30d")], ["90", t("90d")], ["180", t("180d")], ["all", t("All")]], days, (v) => update({ days: v })),
-        segControl([["", t("All agents")], ...Object.keys(AGENTS).filter((a) => a === agent || (data.agents || []).some((x) => x.agent === a))
+        segControl([["", t("All agents")], ...Object.keys(AGENTS).filter((a) => a === agent || data.agents.some((x) => x.agent === a && x.sessions))
           .map((a) => [a, agentName(a)])], agent, (v) => update({ agent: v })),
         h("select", { "aria-label": t("Project"), onchange: (e) => update({ project: e.target.value }) }, await projectOptions(project)))),
     tiles,
     sgBox,
+    data.agents.length ? h("div", { class: "section-gap" }, agentsCard(data.agents, { agent, project, period: days === "all" ? t("All time") : t("Last {n} days", { n: days }), pick: (a) => update({ agent: a }) })) : null,
     h("div", { class: "grid cols-main section-gap" }, dailyCard, outcomesCard),
     h("div", { class: "grid cols-2 section-gap" }, cal, hours),
     h("div", { class: "grid cols-3 section-gap" }, projCard, toolCard, modelCard),
     h("div", { class: "grid cols-2 section-gap" }, recent, know));
+}
+
+// A coding agent's badge, on Sources and on Home's Agents card: [class, text]
+function connectorState(c) {
+  const issues = c.checks.filter((k) => k.ok === false && !k.optional);
+  return c.connected ? (issues.length ? ["warning", tn(issues.length, "{n} issue", "{n} issues")] : ["good", t("Connected")])
+    : c.detected ? ["warning", t("Not connected")] : ["", t("Not installed")];
+}
+// Home's Agents card: each agent's status and the period's numbers, whichever agent Home shows. A dash where the
+// agent records no such thing at all (a chat export has no tokens); a click on a row filters Home to that agent.
+// The status comes from Sources' checks, which are slower than the numbers, so it fills in after the page.
+function agentsCard(rows, { agent, project, period, pick }) {
+  const status = !limited(), cols = status ? 9 : 8;
+  const dash = (x) => h("span", { class: "muted", title: t("{agent} sessions don't record this", { agent: agentName(x.agent) }) }, "—");
+  const zero = (v, f) => (v ? f(v) : h("span", { class: "muted" }, "0"));
+  const has = (x, k) => x.records.includes(k);
+  // an inline bar under each number: its share of the column's largest; failed tool calls in the status colour, as on
+  // the Tools card. The number above it is its label, so the bar is decoration to a screen reader.
+  const top = Object.fromEntries(["sessions", "active_s", "prompts", "tool_calls", "lines_added", "tokens", "cost", "knowledge"]
+    .map((k) => [k, Math.max(0, ...rows.map((x) => x[k] || 0))]));
+  const bar = (x, k, part = 0) => {
+    const v = x[k] || 0, pct = (n) => (n / top[k]) * 100;
+    if (pct(part) < 0.5) part = 0; // too thin to measure: drawn at the 2 px minimum it would look as big as the rest
+    return v ? h("div", { class: "cell-bar", "aria-hidden": "true" }, h("i", { style: { width: `${Math.max(1, pct(v - part))}%` } }),
+      part ? h("i", { class: "part", style: { width: `${pct(part)}%` } }) : null) : null;
+  };
+  const cell = (x, k, f) => h("td", { class: "num" }, zero(x[k], f), bar(x, k));
+  const badgeCell = {};
+  const row = (x) => {
+    const tr = h("tr", { class: `row-link${x.agent === agent ? " on" : ""}`, tabindex: "0",
+      title: x.agent === agent ? t("Show every agent") : t("Only {agent}", { agent: agentName(x.agent) }) },
+      h("td", null, h("span", { class: "agent-cell" }, agentIcon(x.agent), h("b", null, agentName(x.agent))),
+        h("div", { class: "muted small agent-sub", title: x.last ? fmtDT(x.last) : "" }, x.last ? t("last {when}", { when: ago(x.last) }) : t("no sessions yet"))),
+      status ? (badgeCell[x.agent] = h("td", { class: "nowrap" })) : null,
+      cell(x, "sessions", fmtNum),
+      h("td", { class: "num", title: x.active_s ? fmtDur(x.active_s) : "" }, zero(x.active_s, fmtHours), bar(x, "active_s")),
+      cell(x, "prompts", fmtNum),
+      h("td", { class: "num" }, has(x, "tool_calls") ? [zero(x.tool_calls, fmtCompact), bar(x, "tool_calls", Math.min(x.tool_errors, x.tool_calls)),
+        x.tool_calls ? h("div", { class: "muted small", title: t("{n} failed · {pct}", { n: fmtNum(x.tool_errors), pct: pctText(x.tool_errors, x.tool_calls) }) },
+          t("{pct} failed", { pct: pctText(x.tool_errors, x.tool_calls) })) : null] : dash(x)),
+      h("td", { class: "num" }, has(x, "lines") ? [x.lines_added ? `+${fmtCompact(x.lines_added)}` : zero(0), bar(x, "lines_added"),
+        x.lines_removed ? h("div", { class: "muted small" }, `−${fmtCompact(x.lines_removed)}`) : null] : dash(x)),
+      has(x, "tokens") ? cell(x, "tokens", fmtCompact) : h("td", { class: "num" }, dash(x)),
+      has(x, "cost") ? cell(x, "cost", fmtCost) : h("td", { class: "num" }, dash(x)),
+      cell(x, "knowledge", fmtNum));
+    const go = () => pick(x.agent === agent ? "" : x.agent);
+    tr.addEventListener("click", (e) => { if (!e.target.closest("a")) go(); });
+    tr.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === tr) { e.preventDefault(); go(); } });
+    return tr;
+  };
+  const tbody = h("tbody", null, rows.map(row));
+  const th = (label, title) => h("th", { class: "num", title }, label);
+  const card = h("section", { class: "card agents-card" },
+    cardHead(t("Agents"), { iconName: "sources", hint: t("{period} · click a row to see only that agent", { period }),
+      tools: status ? h("a", { href: "#/sources", class: "hint link-arrow" }, t("Sources"), icon("arrow")) : null }),
+    h("div", { class: "table-wrap" }, h("table", { class: "data agents-table" },
+      h("thead", null, h("tr", null, h("th", null, t("Agent")), status ? h("th", null, t("Status")) : null,
+        th(t("Sessions")), th(t("Active")), th(t("Prompts")), th(t("Tool calls")), th(t("Lines")),
+        th(t("Tokens"), t("Input + output + cache read + cache write")), th(t("Est. cost"), t("API list-price equivalent; subscriptions are billed differently. Newer GPT models are estimated at GPT-5 rates.")),
+        th(t("Knowledge")))),
+      tbody)));
+  if (!status) return card;
+  const badge = (a, [cls, text]) => h("a", { href: `#/sources?open=${encodeURIComponent(a)}`, class: "badge-link", title: t("Open in Sources") }, stateBadge(cls, text));
+  Promise.all([api("/api/connectors"), api("/api/imports")]).then(([sources, imports]) => {
+    for (const c of sources) {
+      if (c.name in badgeCell) badgeCell[c.name].replaceChildren(badge(c.name, connectorState(c)));
+      else if (AGENTS[c.name] && !project && (c.connected || c.detected)) { // on this computer, nothing recorded yet
+        badgeCell[c.name] = h("td", { class: "nowrap" }, badge(c.name, connectorState(c)));
+        tbody.append(h("tr", null, h("td", null, h("span", { class: "agent-cell" }, agentIcon(c.name), h("b", null, agentName(c.name))),
+          h("div", { class: "muted small agent-sub" }, t("no sessions yet"))), badgeCell[c.name], h("td", { colspan: cols - 2 })));
+      }
+    }
+    for (const f of Object.values(imports)) {
+      if (f.agent in badgeCell) badgeCell[f.agent].replaceChildren(badge(f.agent, f.sessions ? ["good", t("Imported")] : ["", t("Not imported")]));
+    }
+  }).catch(() => {});
+  return card;
 }
 
 function groupMcp(tools) {
@@ -4530,7 +4606,7 @@ async function systemView(params) {
 const srcOpen = new Set(); // rows the user opened; kept across re-renders (connect, disconnect, import)
 let srcTouched = false;
 function srcRow(key, summary, body, { open = false } = {}) { // one expandable row of a Sources list
-  const d = h("details", { class: "src-row", open: srcTouched ? srcOpen.has(key) : open },
+  const d = h("details", { class: "src-row", "data-key": key, open: srcOpen.has(key) || (!srcTouched && open) },
     h("summary", null, h("span", { class: "chev", "aria-hidden": "true" }, "›"), summary), h("div", { class: "src-body" }, body));
   if (!srcTouched && open) srcOpen.add(key);
   d.addEventListener("toggle", () => { srcTouched = true; if (d.open) srcOpen.add(key); else srcOpen.delete(key); });
@@ -4554,9 +4630,15 @@ function mcpClientRow(c) { // another MCP client (Claude Desktop, Cursor, …): 
     h("span", { class: "src-title" }, h("b", null, c.label), h("small", null, `${c.vendor} · ${shortPath(c.config)}`)),
     stateBadge(state[0], state[1]), btn));
 }
-route(/^\/sources$/, async () => {
+route(/^\/sources$/, async (params) => {
   const [sources, imports] = await Promise.all([api("/api/connectors"), api("/api/imports")]);
   const formats = Object.entries(imports).map(([key, f]) => ({ key, ...f }));
+  if (params.open) { // an agent's badge on Home: open its row and bring it into view
+    const chat = formats.find((f) => f.agent === params.open);
+    const key = chat ? `chat:${chat.key}` : `agent:${params.open}`;
+    srcOpen.add(key);
+    requestAnimationFrame(() => document.querySelector(`.src-row[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "nearest" }));
+  }
   const lastOf = (f) => f.last_import;
   const picker = h("input", { type: "file", accept: ".zip,.json,application/zip", hidden: true, onchange: async () => {
     const file = picker.files[0];
@@ -4576,8 +4658,7 @@ route(/^\/sources$/, async () => {
   // ---- coding agents
   const agentRow = (c) => {
     const issues = c.checks.filter((k) => k.ok === false && !k.optional);
-    const state = c.connected ? (issues.length ? ["warning", tn(issues.length, "{n} issue", "{n} issues")] : ["good", t("Connected")])
-      : c.detected ? ["warning", t("Not connected")] : ["", t("Not installed")];
+    const state = connectorState(c);
     const connect = async (e) => {
       e.target.disabled = true; e.target.textContent = t("Connecting…");
       const r = await post(`/api/connectors/${c.name}/connect`);

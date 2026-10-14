@@ -58,6 +58,11 @@ SESSION_COOKIE = "interlatch_session"  # a person's dashboard session on a hub (
 LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the rename: still honoured until it expires
 TEAM_DAYS = ("7", "30", "90")  # the team Home's periods, first the default
 TEAM_MAX_PROJECTS = 500
+# Home's Agents card: the metrics a session may carry. An agent none of whose sessions ever had one does not record it
+# (a chat export has no tokens), so the card shows a dash there rather than a 0 that reads as "none"
+AGENT_METRICS = {"tool_calls": "n_tool_calls > 0", "lines": "lines_added + lines_removed > 0",
+                 "tokens": "input_tokens + output_tokens + cache_read_tokens + cache_write_tokens > 0", "cost": "est_cost_usd > 0"}
+AGENT_TOTALS = ("sessions", "active_s", "prompts", "tool_calls", "tool_errors", "lines_added", "lines_removed", "tokens", "cost")
 # headers a proxy adds: a request with any of them came through one, so it is not from someone at this computer
 PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
 HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub/done", "/api/hub/hello",
@@ -326,10 +331,7 @@ class App:
         for (wt,) in c.execute(f"SELECT work_types_json FROM sessions WHERE {sw} AND work_types_json IS NOT NULL", sp):
             for w in loads(wt, []) or []:
                 work_types[w] = work_types.get(w, 0) + 1
-        gw, gp = self._filters({"project": project, "since": since})  # every agent, whichever one is selected
-        agents = [dict(r) for r in c.execute(
-            f"SELECT agent, COUNT(*) sessions, COALESCE(SUM(active_s),0) active_s, COALESCE(SUM(est_cost_usd),0) cost, "
-            f"COALESCE(SUM(n_prompts),0) prompts FROM sessions WHERE {gw} GROUP BY agent ORDER BY sessions DESC", gp)]
+        agents = self._agent_rows(project, since)  # every agent, whichever one is selected
         recent = self._session_rows(f"{sw}", sp, "started_at DESC", 8)
         kq = "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id WHERE k.status = 'active' AND k.source = 'analysis'"
         kqp = []
@@ -343,6 +345,30 @@ class App:
             "outcomes": outcomes, "work_types": sorted(work_types.items(), key=lambda x: -x[1]),
             "recent": recent, "knowledge": knowledge, "status": self.status_small(limited=limited),
         }
+
+    def _agent_rows(self, project: str | None, since: str | None) -> list[dict]:
+        """Home's Agents card: each agent used in this project scope, its totals for the period (0 when it was idle),
+        when it was last used, and `records`: the metrics of AGENT_METRICS its sessions carry at all, in any project."""
+        c = self.conn
+        gw, gp = self._filters({"project": project, "since": since})
+        totals = {r["agent"]: dict(r) for r in c.execute(
+            f"SELECT agent, COUNT(*) sessions, COALESCE(SUM(active_s),0) active_s, COALESCE(SUM(n_prompts),0) prompts, "
+            f"COALESCE(SUM(n_tool_calls),0) tool_calls, COALESCE(SUM(n_tool_errors),0) tool_errors, "
+            f"COALESCE(SUM(lines_added),0) lines_added, COALESCE(SUM(lines_removed),0) lines_removed, "
+            f"COALESCE(SUM(input_tokens+output_tokens+cache_read_tokens+cache_write_tokens),0) tokens, "
+            f"COALESCE(SUM(est_cost_usd),0) cost FROM sessions WHERE {gw} GROUP BY agent", gp)}
+        kw = "k.status = 'active'" + (" AND k.project_path = ?" if project else "") + (" AND k.created_at >= ?" if since else "")
+        knowledge = dict(c.execute(f"SELECT s.agent, COUNT(*) FROM knowledge k JOIN sessions s ON s.id = k.session_id "
+                                   f"WHERE {kw} GROUP BY s.agent", [x for x in (project, since) if x]).fetchall())
+        flags = ", ".join(f"MAX({expr}) {k}" for k, expr in AGENT_METRICS.items())
+        rows = []
+        for r in c.execute(f"SELECT agent, MAX(CASE WHEN {'project_path = ?' if project else '1'} THEN started_at END) last, "
+                           f"{flags} FROM sessions GROUP BY agent", [project] if project else []):
+            if r["agent"] in totals or r["last"]:
+                rows.append({"agent": r["agent"], **dict.fromkeys(AGENT_TOTALS, 0), **totals.get(r["agent"], {}),
+                             "knowledge": knowledge.get(r["agent"], 0), "last": r["last"],
+                             "records": [k for k in AGENT_METRICS if r[k]]})
+        return sorted(rows, key=lambda x: (x["active_s"], x["sessions"], x["last"] or ""), reverse=True)  # busiest first
 
     # ---- a hub's team Home: what the team did lately, by project and by person
     def hub_info(self) -> dict | None:

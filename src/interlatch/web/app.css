@@ -850,6 +850,23 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .agent-icon.a-copilot { --mark: url(agent-copilot.svg); }
 .agent-icon.a-chatgpt { --mark: url(agent-chatgpt.svg); }
 table.data.sessions :is(th, td) { padding-left: 8px; padding-right: 8px; } /* eleven columns: fit a 1440 px window */
+/* Home's Agents card: the agent Home is filtered to is marked; the badge links to the agent's row in Sources */
+table.agents-table .agent-cell b { font-weight: 500; white-space: nowrap; }
+table.agents-table .agent-sub { white-space: nowrap; }
+table.agents-table tr.on td { background: var(--accent-wash); }
+table.agents-table tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+table.agents-table tr.row-link:focus-visible { outline: none; }
+table.agents-table tr.row-link:focus-visible td { background: var(--accent-wash); }
+table.agents-table td.num { min-width: 76px; }
+/* the inline bar under a number: the column's largest fills the cell. It grows leftward from the cell's right edge,
+   where the numbers align, so a short bar sits under its number; square at that edge, rounded at the value */
+.cell-bar { display: flex; flex-direction: row-reverse; gap: 2px; height: 6px; margin: 4px 0 2px; }
+.cell-bar i { display: block; height: 100%; min-width: 2px; background: var(--chart); border-radius: 3px 0 0 3px; }
+.cell-bar i:not(:last-child) { border-radius: 0; }
+.cell-bar i.part { background: var(--critical); }
+tr:hover .cell-bar i:not(.part) { background: var(--chart-strong); }
+.badge-link { color: inherit; text-decoration: none; }
+.badge-link:hover .badge { border-color: var(--border-strong); }
 .src-dot.a-claude { --c: var(--series-4); }
 .src-dot.a-codex, .src-dot.a-codex-cloud { --c: var(--series-3); }
 .src-dot.a-copilot { --c: var(--series-7); }
