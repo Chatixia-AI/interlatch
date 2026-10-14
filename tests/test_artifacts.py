@@ -5,12 +5,12 @@ import os
 
 import pytest
 
-from chronicle import artifacts
-from chronicle.artifacts import commit_message, kind_for_path
-from chronicle.claude_export import parse_conversation
-from chronicle.codex_parser import parse_codex_session
-from chronicle.copilot_parser import tool_summary
-from chronicle.parser import parse_session
+from interlatch import artifacts
+from interlatch.artifacts import commit_message, kind_for_path
+from interlatch.claude_export import parse_conversation
+from interlatch.codex_parser import parse_codex_session
+from interlatch.copilot_parser import tool_summary
+from interlatch.parser import parse_session
 
 from conftest import CWD, SID, _line
 
@@ -154,14 +154,14 @@ def test_claude_ai_chat():
 
 
 def test_stored_with_the_session(synced):
-    from chronicle.ingest import forget_session
+    from interlatch.ingest import forget_session
 
     conn = synced["conn"]
     rows = [dict(r) for r in conn.execute("SELECT * FROM artifacts WHERE session_id = ?", (SID,))]
     pr = next(r for r in rows if r["kind"] == "pr")  # the transcript's pr-link record
     assert pr["url"] == "https://github.com/x/y/pull/7" and pr["title"] == "x/y#7"
-    from chronicle.mcp_server import TOOLS, Tools
-    from chronicle.server import App
+    from interlatch.mcp_server import TOOLS, Tools
+    from interlatch.server import App
 
     assert any(t["name"] == "find_artifacts" and t["annotations"]["readOnlyHint"] for t in TOOLS)
     out = Tools(synced["cfg"]).find_artifacts(kind="pr")
@@ -197,7 +197,7 @@ def test_images_are_served_only_as_recorded_artifacts(synced, tmp_path):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     conn = synced["conn"]
     svg = tmp_path / "flow.svg"
@@ -244,8 +244,8 @@ def test_open_a_file_even_after_it_is_gone(synced, monkeypatch):
     import urllib.request
     from http.server import ThreadingHTTPServer
 
-    from chronicle.ingest import sync
-    from chronicle.server import App, make_handler
+    from interlatch.ingest import sync
+    from interlatch.server import App, make_handler
 
     from conftest import PROJECT_DIR
 

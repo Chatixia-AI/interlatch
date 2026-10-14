@@ -91,7 +91,7 @@ the internet the connection uses TLS (SSL mode `require`) unless you turn it off
 
 ## What redaction catches
 
-Redaction replaces what matches a list of patterns (`src/chronicle/redact.py`) with `[REDACTED]`. It runs on the
+Redaction replaces what matches a list of patterns (`src/interlatch/redact.py`) with `[REDACTED]`. It runs on the
 digest sent for analysis and on what analysis writes back (titles, summaries, lessons), and on exports, the Markdown
 vault and what the MCP tools answer. It never changes the raw archive, which the dashboard's transcript view shows as
 it is on your computer, an **Original transcript** download, or the session files a computer sends a hub with

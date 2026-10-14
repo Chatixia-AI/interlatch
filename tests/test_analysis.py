@@ -2,13 +2,13 @@ import json
 
 import pytest
 
-from chronicle.analyze import analyze_session, normalize_analysis
-from chronicle.db import kv_get
-from chronicle.digest import build_digest
-from chronicle.llm import UsageLimitError, parse_json_object
-from chronicle.redact import redact
-from chronicle.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
-from chronicle.worker import PAUSE_KEY, pending_sessions, run_worker
+from interlatch.analyze import analyze_session, normalize_analysis
+from interlatch.db import kv_get
+from interlatch.digest import build_digest
+from interlatch.llm import UsageLimitError, parse_json_object
+from interlatch.redact import redact
+from interlatch.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
+from interlatch.worker import PAUSE_KEY, pending_sessions, run_worker
 
 from conftest import CWD, SECRET, SID, fake_log
 
@@ -187,7 +187,7 @@ def test_redaction_of_prefixed_names():
 
 
 def test_weekly_review(synced):
-    from chronicle.reviews import generate_review, review_ready, week_bounds
+    from interlatch.reviews import generate_review, review_ready, week_bounds
 
     conn, cfg = synced["conn"], synced["cfg"]
     key = week_bounds("2026-W38")[0]
@@ -197,12 +197,12 @@ def test_weekly_review(synced):
     row = conn.execute("SELECT * FROM reviews WHERE period=?", (key,)).fetchone()
     assert row["n_sessions"] == 1 and "## Suggestions" in row["markdown"] and "- [ ] logout" in row["markdown"]
     assert "- Login fixed" in row["markdown"]
-    from chronicle.reviews import week_glance
+    from interlatch.reviews import week_glance
 
     glance = week_glance(conn, row["start"], row["end"])
     assert len(glance["daily"]) == 7 and sum(glance["daily"]) > 0 and glance["projects"][0]["sessions"] == 1
     assert review_ready(conn, key) == (False, "exists")
-    from chronicle.export_md import export_markdown
+    from interlatch.export_md import export_markdown
 
     export_markdown(conn, cfg)
     assert (cfg.notes_dir / "Reviews" / f"{key}.md").exists()
@@ -216,7 +216,7 @@ def test_parse_json_object_local_repairs():
 def test_hung_call_hits_wall_clock_deadline(synced, monkeypatch):
     import time
 
-    import chronicle.llm as llm
+    import interlatch.llm as llm
 
     monkeypatch.setattr(llm, "POLL_S", 0.2)
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "hang")
@@ -229,7 +229,7 @@ def test_hung_call_hits_wall_clock_deadline(synced, monkeypatch):
 
 
 def test_sleep_interrupted_call_is_requeued_without_penalty(synced, monkeypatch):
-    import chronicle.llm as llm
+    import interlatch.llm as llm
 
     monkeypatch.setattr(llm, "POLL_S", 0.2)
     monkeypatch.setattr(llm, "SLEEP_GRACE_S", -1)  # simulate: wall clock ran ahead of the monotonic clock
@@ -254,8 +254,8 @@ def test_ctrl_c_drops_the_queued_sessions(synced, monkeypatch):
         raise KeyboardInterrupt
         yield
 
-    monkeypatch.setattr("chronicle.analyze.analyze_session", slow)
-    monkeypatch.setattr("chronicle.worker.as_completed", interrupted)
+    monkeypatch.setattr("interlatch.analyze.analyze_session", slow)
+    monkeypatch.setattr("interlatch.worker.as_completed", interrupted)
     synced["cfg"].analysis.concurrency = 1
     with pytest.raises(KeyboardInterrupt):
         run_worker(synced["cfg"], session_ids=[SID] * 5, progress=messages.append)
@@ -275,7 +275,7 @@ def test_synthesis_waits_for_queued_sessions(synced):
 
 
 def test_kb_titles_and_tldr_survive_normalizing_and_rendering():
-    from chronicle.synthesize import normalize_kb, render_kb_markdown
+    from interlatch.synthesize import normalize_kb, render_kb_markdown
 
     data = normalize_kb({"tldr": ["Branch first", " ", "Verify in a browser", "Keep tests green", "dropped"],
                          "overview": "o", "superseded_ids": [],

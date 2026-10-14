@@ -5,11 +5,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from chronicle import access
-from chronicle.analyze import normalize_analysis, store_analysis
-from chronicle.db import connect, kv_get
-from chronicle.learning import SIGNAL_PREFIX, interest_profile, normalize_interests, prompt_signals, store_interests, topics_for
-from chronicle.search import search_knowledge
+from interlatch import access
+from interlatch.analyze import normalize_analysis, store_analysis
+from interlatch.db import connect, kv_get
+from interlatch.learning import SIGNAL_PREFIX, interest_profile, normalize_interests, prompt_signals, store_interests, topics_for
+from interlatch.search import search_knowledge
 
 from conftest import SECRET, SID
 

@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from chronicle import hub
-from chronicle.config import load_config
-from chronicle.db import connect, kv_set
+from interlatch import hub
+from interlatch.config import load_config
+from interlatch.db import connect, kv_set
 
 from conftest import CWD, PROJECT_DIR, SID, fake_log, write_fake_claude_tree
 
@@ -26,7 +26,7 @@ SPOKE_CWD = "/home/test/code/demo-app"
 
 
 def _serve(cfg):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     app = App(cfg)
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
@@ -78,7 +78,7 @@ def hubenv(synced, monkeypatch):
 
 
 def test_push_then_ingest_tags_the_computer(hubenv):
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     cfg, spoke = hubenv["cfg"], hubenv["spoke"]
     spoke_id = hub.local_machine(spoke)["id"]
@@ -144,7 +144,7 @@ def test_damaged_upload_is_rejected(hubenv):
 
 
 def test_forgotten_session_is_not_taken_back(hubenv):
-    from chronicle.ingest import forget_session, sync
+    from interlatch.ingest import forget_session, sync
 
     hub.push(hubenv["spoke"])
     sync(hubenv["cfg"], hubenv["conn"])
@@ -164,7 +164,7 @@ def test_excluded_projects_never_leave_the_spoke(hubenv):
 
 
 def test_projects_matched_across_computers(hubenv, monkeypatch):
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     cfg, conn = hubenv["cfg"], hubenv["conn"]
     cfg.hub_path_map = {"/home/test/code": "/Users/test/Projects"}
@@ -217,8 +217,8 @@ def test_added_folders_and_what_wins(hubenv):
 def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     """`chronicle hub add-folder` on the spoke: its sessions there move to the hub's project, knowledge and all, and
     `remove-folder` moves them back."""
-    from chronicle.cli import main
-    from chronicle.ingest import sync
+    from interlatch.cli import main
+    from interlatch.ingest import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     hub.push(spoke)
@@ -243,8 +243,8 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     assert spoke.hub_folders == {str(folder.resolve()): CWD}
 
     # the session ran in SPOKE_CWD, which exists only on the simulated other computer: add it in its config directly
-    from chronicle.config import toml_table
-    from chronicle.config import set_config_value
+    from interlatch.config import toml_table
+    from interlatch.config import set_config_value
 
     set_config_value(spoke, "hub", "folders", toml_table({**spoke.hub_folders, SPOKE_CWD: CWD}))
     spoke = load_config(spoke.home)
@@ -276,8 +276,8 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
 
 
 def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, capsys):
-    from chronicle.cli import main
-    from chronicle.config import set_config_value
+    from interlatch.cli import main
+    from interlatch.config import set_config_value
 
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"https://hub.example"')
@@ -309,7 +309,7 @@ def test_hub_add_folder_refuses_another_projects_repository(env, monkeypatch, ca
 
 def _analyzed_on_spoke(spoke, *, title: str, at: str, lessons: list[tuple[str, str, str]]):
     """Record the spoke's own session there and give it an analysis, as its own Claude Code would."""
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     sconn = connect(spoke.db_path)
     sync(spoke, sconn)
@@ -329,9 +329,9 @@ def _analyzed_on_spoke(spoke, *, title: str, at: str, lessons: list[tuple[str, s
 def test_knowledge_only_sharing(hubenv):
     """[hub] share = "knowledge": the spoke analyzes its own sessions and sends the hub only details, the analysis
     and project lessons; no transcript arrives, the hub never re-analyzes it, and folders still decide the project."""
-    from chronicle.analyze import AnalysisSkipped, analyze_session
-    from chronicle.ingest import mark_missing_sources, sync
-    from chronicle.worker import count_pending, pending_sessions
+    from interlatch.analyze import AnalysisSkipped, analyze_session
+    from interlatch.ingest import mark_missing_sources, sync
+    from interlatch.worker import count_pending, pending_sessions
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     spoke.hub_share = "knowledge"
@@ -393,7 +393,7 @@ def test_knowledge_only_sharing(hubenv):
 def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
     """A session whose transcript the hub already has (sent before the spoke switched to knowledge only) keeps the
     hub's record; bad records are ignored."""
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     hub.push(spoke)  # everything: the transcript arrives
@@ -419,9 +419,9 @@ def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
 def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     """A knowledge-only computer keeps its own Chronicle running: the hook ingests here instead of pushing files,
     and the worker runs, then tries to share (an unreachable hub is just noted)."""
-    from chronicle import hooks
-    from chronicle.config import set_config_value
-    from chronicle.worker import run_worker
+    from interlatch import hooks
+    from interlatch.config import set_config_value
+    from interlatch.worker import run_worker
 
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"http://127.0.0.1:9"')
@@ -455,8 +455,8 @@ def test_normalize_remote():
 
 def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
     """A spoke that already analyzed its sessions sends the results once; the hub doesn't pay for them again."""
-    from chronicle.ingest import sync
-    from chronicle.worker import run_worker
+    from interlatch.ingest import sync
+    from interlatch.worker import run_worker
 
     monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
     cfg = synced["cfg"]
@@ -496,8 +496,8 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
 
 
 def test_spoke_sends_instead_of_recording(env, monkeypatch):
-    from chronicle import hooks
-    from chronicle.worker import run_worker
+    from interlatch import hooks
+    from interlatch.worker import run_worker
 
     cfg = env["cfg"]
     with open(cfg.config_path, "a") as fh:
@@ -563,7 +563,7 @@ elif args[:2] == ["serve", "status"]:
 
 
 def test_tailnet_on_and_hub_enable(env, monkeypatch, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     bin_dir = env["tmp"] / "tsbin"
     bin_dir.mkdir()
@@ -593,12 +593,12 @@ def test_tailnet_on_and_hub_enable(env, monkeypatch, capsys):
 
 
 def test_systemd_units_quote_commands(env):
-    from chronicle.install import systemd_units
+    from interlatch.install import systemd_units
 
-    units = systemd_units(env["cfg"], "/usr/bin/python3 -m chronicle", interval=600)
-    assert "ExecStart=/usr/bin/python3 -m chronicle sync --work --quiet" in units["interlatch-sync.service"]
+    units = systemd_units(env["cfg"], "/usr/bin/python3 -m interlatch", interval=600)
+    assert "ExecStart=/usr/bin/python3 -m interlatch sync --work --quiet" in units["interlatch-sync.service"]
     assert "OnUnitActiveSec=600s" in units["interlatch-sync.timer"]
-    assert "ExecStart=/usr/bin/python3 -m chronicle ui" in units["interlatch-ui.service"]
+    assert "ExecStart=/usr/bin/python3 -m interlatch ui" in units["interlatch-ui.service"]
     assert "Restart=always" in units["interlatch-ui.service"]
     spaced = systemd_units(env["cfg"], "'/opt/my apps/chronicle'")["interlatch-ui.service"]
     assert 'ExecStart="/opt/my apps/chronicle" ui' in spaced

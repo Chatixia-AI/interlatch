@@ -36,7 +36,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from .config import Config, chronicle_home, default_home, home_override, legacy_home, load_config
+from .config import Config, interlatch_home, default_home, home_override, legacy_home, load_config
 
 try:
     import fcntl
@@ -127,7 +127,7 @@ def migrate(*, dry_run: bool = False, auto: bool = False) -> list[str]:
         if auto and not due():  # another process did it while this one waited
             return []
         lines = _move_home(dry_run)
-        home = chronicle_home()
+        home = interlatch_home()
         cfg = load_config(home, create=False)
         exe = migration_exe(cfg)
         for step in (_hooks, _statusline, _claude_mcp, _codex_mcp, _json_mcp, _permissions, _instruction_markers):

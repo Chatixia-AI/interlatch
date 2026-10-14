@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from chronicle import hub, people
-from chronicle.cli import main
-from chronicle.config import load_config
-from chronicle.db import connect
+from interlatch import hub, people
+from interlatch.cli import main
+from interlatch.config import load_config
+from interlatch.db import connect
 
 from conftest import CWD, SID
 from test_hub import _serve
@@ -86,7 +86,7 @@ def test_projects_of():
 def test_a_project_set_up_ahead_of_time(synced):
     """A folder on the hub becomes one project: its sessions and session-less notes are filed under it, new ones too,
     another computer can add a folder to it before anything was sent, and removing it files them back."""
-    from chronicle.hub import resolver
+    from interlatch.hub import resolver
 
     cfg, conn = synced["cfg"], synced["conn"]
     assert conn.execute("SELECT project_path FROM sessions WHERE id = ?", (SID,)).fetchone()[0] == CWD
@@ -111,7 +111,7 @@ def test_a_project_set_up_ahead_of_time(synced):
     conn.execute("DELETE FROM files_state")
     conn.commit()
     assert [p["path"] for p in hub.hub_projects(conn)] == [PROJECTS]
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     sync(cfg, conn)  # recorded again: filed under the project from the start
     row = conn.execute("SELECT project_path, machine_path FROM sessions WHERE id = ?", (SID,)).fetchone()
@@ -262,7 +262,7 @@ def test_a_limited_computer_hears_of_and_sends_only_its_projects(limited):
 
 def test_a_limited_computer_shares_only_its_projects(tmp_path, monkeypatch):
     """The computer's side: with a scope from the hub, only sessions it files under those projects leave it."""
-    from chronicle.config import load_config as lc
+    from interlatch.config import load_config as lc
 
     home = tmp_path / "member"
     home.mkdir()
@@ -288,8 +288,8 @@ def test_a_limited_computer_shares_only_its_projects(tmp_path, monkeypatch):
 def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
     """With a team store, the hub owner's analyzed sessions in a project set up there go to the store as well, so a
     member's computer gets those lessons back; another project's never do."""
-    from chronicle import team_store
-    from chronicle.config import set_config_value
+    from interlatch import team_store
+    from interlatch.config import set_config_value
 
     from test_team import FakeStore
 
@@ -310,7 +310,7 @@ def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
 
 def test_a_limited_connection_hides_columns_and_tables(synced):
     """access.limit on its own: other projects' rows, prompts, paths and transcripts are gone from the connection."""
-    from chronicle import access
+    from interlatch import access
 
     cfg, conn = synced["cfg"], synced["conn"]
     _project_setup(conn, cfg)
@@ -335,7 +335,7 @@ def test_a_limited_connection_hides_columns_and_tables(synced):
 
 def test_notes_inside_a_project_set_up_here(synced):
     """A session started in a folder inside a project set up on this hub gets that project's notes."""
-    from chronicle.hooks import build_session_context
+    from interlatch.hooks import build_session_context
 
     cfg, conn = synced["cfg"], synced["conn"]
     _project_setup(conn, cfg)

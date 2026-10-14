@@ -8,8 +8,8 @@ import urllib.request
 
 import pytest
 
-from chronicle import hub, people
-from chronicle.config import load_config, set_config_value
+from interlatch import hub, people
+from interlatch.config import load_config, set_config_value
 
 from test_hub import hubenv  # noqa: F401  (fixture)
 from test_people_web import MACHINE, _as, _call, _raw, hubweb, team  # noqa: F401  (fixtures)

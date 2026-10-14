@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from chronicle import install, migrate
-from chronicle.cli import main
-from chronicle.config import chronicle_home, default_home, env, legacy_home
-from chronicle.db import connect
+from interlatch import install, migrate
+from interlatch.cli import main
+from interlatch.config import interlatch_home, default_home, env, legacy_home
+from interlatch.db import connect
 
 EXE = "/opt/bin/interlatch"
 
@@ -39,23 +39,23 @@ def test_interlatch_variables_win_and_chronicle_ones_still_count(monkeypatch):
 
 def test_the_home_folder(tmp_path, monkeypatch):
     home = Path(os.environ["HOME"])
-    assert chronicle_home() == default_home() == home / ".interlatch"  # a new install
+    assert interlatch_home() == default_home() == home / ".interlatch"  # a new install
     legacy_home().mkdir()
-    assert chronicle_home() == home / ".claude-chronicle"  # not moved yet: the archive is still there
+    assert interlatch_home() == home / ".claude-chronicle"  # not moved yet: the archive is still there
     monkeypatch.setenv("CHRONICLE_HOME", str(tmp_path / "custom"))
-    assert chronicle_home() == tmp_path / "custom"
+    assert interlatch_home() == tmp_path / "custom"
     monkeypatch.setenv("INTERLATCH_HOME", str(tmp_path / "newer"))
-    assert chronicle_home() == tmp_path / "newer"
+    assert interlatch_home() == tmp_path / "newer"
     # what every launchd agent written before the rename sets: the default folder, wherever it is now
     monkeypatch.delenv("INTERLATCH_HOME")
     monkeypatch.setenv("CHRONICLE_HOME", str(legacy_home()) + "/")
-    assert chronicle_home() == legacy_home()
+    assert interlatch_home() == legacy_home()
     default_home().mkdir()
-    assert chronicle_home() == default_home()
+    assert interlatch_home() == default_home()
 
 
 def test_internal_runs_are_not_recorded_under_either_name(env, monkeypatch):
-    from chronicle import hooks
+    from interlatch import hooks
 
     monkeypatch.setattr(hooks, "spawn_detached", lambda *a, **k: pytest.fail("recorded an internal run"))
     for name in ("INTERLATCH_INTERNAL", "CHRONICLE_INTERNAL"):
@@ -173,7 +173,7 @@ def legacy(tmp_path, monkeypatch):
     monkeypatch.setenv("BOB_HOME", str(bob))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(agy))
     vscode = user / "Library" / "Application Support" / "Code" / "User"
-    monkeypatch.setattr("chronicle.connectors.vscode_user_dirs", lambda: [vscode])
+    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [vscode])
     entry = {"command": shim, "args": ["mcp"]}
     configs = {
         "vscode": (vscode / "mcp.json", "servers", {"first": {}, "chronicle": {"type": "stdio", **entry}, "last": {}}),
@@ -192,7 +192,7 @@ def legacy(tmp_path, monkeypatch):
             plistlib.dump({"Label": label, "ProgramArguments": [shim, "ui"], "StartInterval": 600,
                            "EnvironmentVariables": {"CHRONICLE_HOME": str(old)}}, fh)
     monkeypatch.setattr(install, "executable", lambda: EXE)
-    monkeypatch.setattr("chronicle.install.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("interlatch.install.platform.system", lambda: "Darwin")
     monkeypatch.setattr(install, "uses_systemd", lambda: False)
     monkeypatch.setattr(migrate, "APP_DIRS", (tmp_path / "Applications",))
     launchctl = []
@@ -343,7 +343,7 @@ def test_chronicles_own_launchd_agent_naming_the_default_folder_moves_it(legacy,
     monkeypatch.setenv("XPC_SERVICE_NAME", "com.claude-chronicle.ui")  # and this process is the dashboard agent
     assert migrate.due()
     lines = migrate.migrate_if_due()
-    assert legacy["new"].is_dir() and chronicle_home() == legacy["new"]
+    assert legacy["new"].is_dir() and interlatch_home() == legacy["new"]
     # its own agent goes last, detached (stopping it stops this process), after the move is recorded as done
     uid = os.getuid()
     assert legacy["launchctl"][-1] == ("detached", "bootout", f"gui/{uid}/com.claude-chronicle.ui")
@@ -364,7 +364,7 @@ def test_a_move_that_did_not_finish_is_taken_up_again(legacy, monkeypatch):
     monkeypatch.setenv("HOME", str(legacy["user"]))
     monkeypatch.setattr(install, "executable", lambda: EXE)
     monkeypatch.setattr(install, "uses_systemd", lambda: False)
-    monkeypatch.setattr("chronicle.install.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("interlatch.install.platform.system", lambda: "Darwin")
     monkeypatch.setenv("CODEX_HOME", str(legacy["codex"]))
     migrate.migrate_if_due()
     assert not migrate.due()
@@ -373,8 +373,8 @@ def test_a_move_that_did_not_finish_is_taken_up_again(legacy, monkeypatch):
 
 def test_the_commands_that_start_the_dashboard_or_a_sync_migrate_first(env, monkeypatch):
     calls = []
-    monkeypatch.setattr("chronicle.migrate.migrate_if_due", lambda quiet=True: calls.append(quiet) or [])
-    monkeypatch.setattr("chronicle.server.serve", lambda *a, **k: None)
+    monkeypatch.setattr("interlatch.migrate.migrate_if_due", lambda quiet=True: calls.append(quiet) or [])
+    monkeypatch.setattr("interlatch.server.serve", lambda *a, **k: None)
     assert main(["sync", "--quiet"]) == 0 and main(["ui"]) == 0
     assert calls == [True, False]
 
@@ -428,7 +428,7 @@ def test_permission_rules_are_renamed_and_nothing_else():
 
 
 def test_the_block_from_before_the_rename_is_read_and_rewritten():
-    from chronicle import instructions as ins
+    from interlatch import instructions as ins
 
     old = "# A\n\n<!-- BEGIN chronicle -->\n- Rule. <!-- chronicle:friction:k -->\n- mine\n<!-- END chronicle -->\n"
     assert ins.parse_block(old) == ([("friction:k", "Rule.")], ["- mine"])
@@ -475,7 +475,7 @@ def test_chronicle_apps_shim_runs_the_new_app_too(tmp_path):
 
 
 def test_the_command_name(monkeypatch):
-    from chronicle.cli import prog_name
+    from interlatch.cli import prog_name
 
     for argv0, name in (("/u/.local/bin/interlatch", "interlatch"), ("/u/.local/bin/chronicle", "chronicle"),
                         ("/x/chronicle/__main__.py", "interlatch")):

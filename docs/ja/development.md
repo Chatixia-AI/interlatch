@@ -150,7 +150,7 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 
 ```bash
 uv run python docs/demo/make_demo.py /tmp/interlatch-demo
-INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m chronicle ui --port 8898 --open
+INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 ```
 
 README の GIF とツアー動画もこのデータから作ります。そのダッシュボードを動かしたまま `docs/demo/record_demo.py` を実行すると、

@@ -6,9 +6,9 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from chronicle.db import connect
-from chronicle.ingest import sync
-from chronicle.parser import PARSER_VERSION, parse_session
+from interlatch.db import connect
+from interlatch.ingest import sync
+from interlatch.parser import PARSER_VERSION, parse_session
 
 from conftest import CWD, SID, _line, main_transcript
 

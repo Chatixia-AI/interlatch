@@ -116,7 +116,8 @@ Excalidraw VS Code extension (`pomdtr.excalidraw-editor`) or on excalidraw.com; 
 
 ## Code layout
 
-`parser.py` (Claude transcript format), `codex_parser.py` (Codex rollouts), `copilot_parser.py` (Copilot agent
+The code is the `interlatch` package in `src/interlatch/` (`src/chronicle/` only forwards `python -m chronicle`,
+which installs from before the rename still run): `parser.py` (Claude transcript format), `codex_parser.py` (Codex rollouts), `copilot_parser.py` (Copilot agent
 sessions + VS Code chat logs), `bob_parser.py` (Bob tasks), `antigravity_parser.py` (Antigravity step logs), `agents.py` (agent names), `connectors.py` (Sources),
 `ingest.py` (archive + store), `digest.py` / `analyze.py` /
 `llm.py` (analysis), `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and
@@ -128,7 +129,7 @@ from its own files only. Add no inline `<script>` or `on…=` attribute to `inde
 object (`style: { "--h": "40px" }`), never a string: a string becomes a style attribute the policy refuses.
 `tests/test_security.py` checks both.
 
-`ee/` is Interlatch Enterprise: its own package (`chronicle_ee`) under the [Interlatch Enterprise License](../ee/LICENSE),
+`ee/` is Interlatch Enterprise: its own package (`interlatch_ee`) under the [Interlatch Enterprise License](../ee/LICENSE),
 left out of the MIT wheel and sdist. The core never imports it; [ee/README.md](../ee/README.md) says what belongs there.
 
 ## Trying a change
@@ -155,7 +156,7 @@ come from it.
 
 ```bash
 uv run python docs/demo/make_demo.py /tmp/interlatch-demo
-INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m chronicle ui --port 8898 --open
+INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 ```
 
 The README's GIF and tour video come from it too. With that dashboard running, `docs/demo/record_demo.py` drives

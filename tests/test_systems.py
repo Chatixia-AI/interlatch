@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from chronicle import systems
-from chronicle.db import connect
+from interlatch import systems
+from interlatch.db import connect
 
 
 def write(path: Path, text: str) -> None:
@@ -172,7 +172,7 @@ def test_commands_split_outside_quotes():
 
 
 def test_api(world):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     systems._CACHE.update(sig=None, data=None)
     app = App(world["cfg"])

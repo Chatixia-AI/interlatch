@@ -1,7 +1,7 @@
 """Build a demo Interlatch home from made-up sessions, for screenshots and trying the dashboard without your own data.
 
     uv run python docs/demo/make_demo.py /tmp/interlatch-demo
-    INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m chronicle ui --port 8898 --open
+    INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 
 It writes synthetic Claude Code transcripts for a fictional developer (five projects, about six weeks), then runs the
 real pipeline over them: sync, analysis, knowledge bases, glossary and weekly reviews. The only stand-in is `claude`:
@@ -529,7 +529,7 @@ def main() -> None:
     for w in range(1, WEEKS_REVIEWED + 1):
         week = (now - timedelta(weeks=w)).strftime("%G-W%V")
         chronicle("review", week)
-    print(f"\nDemo ready. Open it with:\n  INTERLATCH_HOME={home} uv run python -m chronicle ui --port 8898 --open")
+    print(f"\nDemo ready. Open it with:\n  INTERLATCH_HOME={home} uv run python -m interlatch ui --port 8898 --open")
 
 
 if __name__ == "__main__":

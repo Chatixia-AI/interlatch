@@ -8,7 +8,7 @@ it in production needs a subscription. Everything outside `ee/` stays [MIT](../L
 
 The line follows who asks for the feature.
 
-- **MIT, in `src/chronicle/`:** anything one developer or a small team wants. Recording, analysis through a coding
+- **MIT, in `src/interlatch/`:** anything one developer or a small team wants. Recording, analysis through a coding
   agent or any model provider's API (Anthropic, Bedrock, OpenAI, Azure OpenAI, OpenRouter, Ollama), the dashboard,
   the MCP server, and the hub, with its computers, people and roles, invites, shared projects, team store and
   team Home. Everything released before `ee/` existed stays MIT too.
@@ -25,7 +25,7 @@ The MIT core never imports from `ee/` and works on its own. When an enterprise f
 
 ## How it ships
 
-`ee/` builds its own package, `interlatch-enterprise` (import name `chronicle_ee`), which depends on
+`ee/` builds its own package, `interlatch-enterprise` (import name `interlatch_ee`), which depends on
 `interlatch`. The `interlatch` wheel and source distribution on PyPI don't contain `ee/`, so they remain
 MIT only.
 

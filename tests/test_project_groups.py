@@ -3,8 +3,8 @@ and what the Projects page and a limited person see."""
 
 import pytest
 
-from chronicle import access, groups
-from chronicle.server import App
+from interlatch import access, groups
+from interlatch.server import App
 
 AKTIO = "/Users/me/Work/AI-BPO/Aktio"
 VM = "aktio-vm:/root/Aktio"
@@ -98,7 +98,7 @@ def test_a_person_limited_to_projects_sees_no_groups(projects):
 
 
 def test_an_existing_archive_gains_the_group_tables(synced):
-    from chronicle.db import connect
+    from interlatch.db import connect
 
     conn = synced["conn"]
     conn.execute("DROP TABLE project_groups")

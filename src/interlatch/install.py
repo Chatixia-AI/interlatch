@@ -32,9 +32,9 @@ WINDOWS_TASKS = {LAUNCHD_LABEL: "Sync", UI_LABEL: "Dashboard"}  # in Task Schedu
 
 
 def shim_path() -> Path:
-    from .config import chronicle_home
+    from .config import interlatch_home
 
-    return chronicle_home() / "bin" / "interlatch"
+    return interlatch_home() / "bin" / "interlatch"
 
 
 def write_shim(target: str) -> Path:
@@ -70,7 +70,7 @@ def write_shim(target: str) -> Path:
 
 
 def executable() -> str:
-    """Absolute path of the installed `interlatch` command, or `chronicle` (its alias), else python -m chronicle.
+    """Absolute path of the installed `interlatch` command, or `chronicle` (its alias), else python -m interlatch.
 
     A PATH entry outside this environment (~/.local/bin/interlatch) wins: it survives `uv tool install --force`, and
     the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle."""
@@ -83,12 +83,12 @@ def executable() -> str:
     argv0 = Path(sys.argv[0])
     if argv0.name in COMMANDS and argv0.exists():
         return str(argv0.resolve())
-    return f"{shlex.quote(sys.executable)} -m chronicle"
+    return f"{shlex.quote(sys.executable)} -m interlatch"
 
 
 def exe_argv(exe: str) -> list[str]:
     """`exe` (executable(), or install's --exe) as argv: a program's path, which may have spaces in it, or a command
-    line (python -m chronicle). On Windows a backslash is a path's, not an escape."""
+    line (python -m interlatch). On Windows a backslash is a path's, not an escape."""
     if Path(exe).is_file():
         return [exe]
     return shlex.split(exe.replace("\\", "/") if on_windows() else exe)
@@ -359,10 +359,11 @@ def _systemd_status(label: str) -> dict:
 
 # ------------------------------------------------------------------ Task Scheduler (Windows)
 def _task_python(exe: str) -> Path:
-    """The python that a task runs `-m chronicle` with: the one in `exe` when that is `python -m chronicle`, else this
-    process's (the uv tool's environment, which `interlatch install` runs in)."""
+    """The python that a task runs `-m interlatch` with: the one in `exe` when that is `python -m interlatch` (or
+    `-m chronicle`, as written before the rename), else this process's (the uv tool's environment, which
+    `interlatch install` runs in)."""
     argv = exe_argv(exe)
-    return Path(argv[0]) if argv[1:3] == ["-m", "chronicle"] else Path(sys.executable)
+    return Path(argv[0]) if argv[1:2] == ["-m"] and argv[2:3] in (["interlatch"], ["chronicle"]) else Path(sys.executable)
 
 
 def _windows_install(cfg: Config, exe: str, label: str, args: list[str], *, every_minutes: int, keep_alive: bool,

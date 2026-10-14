@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from chronicle import ladder
-from chronicle.analyze import analyze_session
-from chronicle.db import connect, init_schema
-from chronicle.reviews import generate_review
-from chronicle.search import search_knowledge
-from chronicle.synthesize import normalize_kb, render_kb_markdown, synthesize_project
+from interlatch import ladder
+from interlatch.analyze import analyze_session
+from interlatch.db import connect, init_schema
+from interlatch.reviews import generate_review
+from interlatch.search import search_knowledge
+from interlatch.synthesize import normalize_kb, render_kb_markdown, synthesize_project
 
 from conftest import CWD, SID
 

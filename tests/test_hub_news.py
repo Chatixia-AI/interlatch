@@ -4,8 +4,8 @@ that keeps sending adds to its row; who sees what follows the Team page; each pe
 
 from datetime import timedelta
 
-from chronicle import hub, news, people
-from chronicle.util import to_iso, utcnow
+from interlatch import hub, news, people
+from interlatch.util import to_iso, utcnow
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, hubenv  # noqa: F401  (the fixture)
@@ -34,8 +34,8 @@ def test_shared_knowledge_is_news_once(teamenv):  # noqa: F811
 
 
 def test_transcripts_and_the_hubs_own_analysis_of_them(hubenv):  # noqa: F811
-    from chronicle.analyze import store_analysis
-    from chronicle.ingest import sync
+    from interlatch.analyze import store_analysis
+    from interlatch.ingest import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     me = hub.local_machine(spoke)["id"]
@@ -124,7 +124,7 @@ def test_a_computer_joining_is_news(team, monkeypatch):  # noqa: F811
 
 
 def _parse(ts):
-    from chronicle.util import parse_ts
+    from interlatch.util import parse_ts
 
     return parse_ts(ts)
 
@@ -133,7 +133,7 @@ def test_an_archive_at_the_case_files_schema_gains_the_news_table(tmp_path):
     """Case files (#101) took schema 17 first: an archive already there must still get hub_news."""
     import sqlite3
 
-    from chronicle.db import SCHEMA_VERSION, connect
+    from interlatch.db import SCHEMA_VERSION, connect
 
     db = tmp_path / "chronicle.db"
     connect(db).close()

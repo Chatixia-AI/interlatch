@@ -4,9 +4,9 @@ folders it heard. One push or folder change at a time. And each folder of a proj
 
 import pytest
 
-from chronicle import hub
-from chronicle.config import load_config, set_config_value, toml_table
-from chronicle.util import file_lock
+from interlatch import hub
+from interlatch.config import load_config, set_config_value, toml_table
+from interlatch.util import file_lock
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke
@@ -48,7 +48,7 @@ def test_one_share_or_folder_change_at_a_time(teamenv, monkeypatch):  # noqa: F8
 
 
 def test_a_callers_own_changes_hold_until_the_file_changes(teamenv):  # noqa: F811
-    from chronicle.config import current
+    from interlatch.config import current
 
     spoke = load_config(teamenv["spoke"].home)
     assert current(spoke) is spoke  # unchanged since read

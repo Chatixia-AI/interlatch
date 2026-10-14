@@ -3021,7 +3021,7 @@ def _rerun_in_utf8_mode(argv: list[str]) -> int:
     import os
     import subprocess
 
-    proc = subprocess.Popen([sys.executable, "-X", "utf8", "-m", "chronicle", *argv], env={**os.environ, "PYTHONUTF8": "1"})
+    proc = subprocess.Popen([sys.executable, "-X", "utf8", "-m", "interlatch", *argv], env={**os.environ, "PYTHONUTF8": "1"})
     while True:
         try:
             return proc.wait()
@@ -3044,10 +3044,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:
-        from .config import chronicle_home
+        from .config import interlatch_home
 
         parser.print_help()
-        if not (chronicle_home() / "config.toml").exists():
+        if not (interlatch_home() / "config.toml").exists():
             print("\nNew here? Run `interlatch install` to pick which coding agents to record and start the dashboard.")
         return 0
     try:

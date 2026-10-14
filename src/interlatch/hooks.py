@@ -26,8 +26,8 @@ def _read_payload() -> dict:
 
 
 def self_command() -> list[str]:
-    """argv that re-runs this program: the bundled executable inside Interlatch.app, else `python -m chronicle`."""
-    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "chronicle"]
+    """argv that re-runs this program: the bundled executable inside Interlatch.app, else `python -m interlatch`."""
+    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "interlatch"]
 
 
 def spawn_detached(args: list[str], log_path: Path) -> None:
@@ -63,10 +63,10 @@ def hook_main(event: str) -> int:
 
 
 def _on_session_end(payload: dict, *, ended: bool) -> int:
-    from .config import chronicle_home, load_config
+    from .config import interlatch_home, load_config
 
     transcript = payload.get("transcript_path")
-    home = chronicle_home()
+    home = interlatch_home()
     if load_config(home, create=False).sends_files:  # this computer sends its sessions to a hub, which records them
         spawn_detached([*self_command(), "push", "--quiet"], home / "logs" / "hooks.log")
         return 0

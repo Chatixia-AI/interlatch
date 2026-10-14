@@ -8,9 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from chronicle import hub, people
-from chronicle.config import load_config
-from chronicle.db import connect
+from interlatch import hub, people
+from interlatch.config import load_config
+from interlatch.db import connect
 
 MACHINE = "11111111-2222-4333-8444-555555555555"
 OTHER = "99999999-2222-4333-8444-555555555555"
@@ -142,7 +142,7 @@ def _out(capsys) -> str:
 
 
 def test_join_with_an_invite_then_sign_in(hubcfg, monkeypatch, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     cfg, conn = hubcfg["cfg"], hubcfg["conn"]
     bob = people.add(conn, "Bob", "bob@example.com", "member")
@@ -178,7 +178,7 @@ def test_join_with_an_invite_then_sign_in(hubcfg, monkeypatch, capsys):
 
 
 def test_join_with_a_token_still_works(env, monkeypatch, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     home = _spoke_home(env["tmp"])
     monkeypatch.setenv("INTERLATCH_HOME", str(home))
@@ -202,7 +202,7 @@ def test_redeem_at_a_hub_without_invites(env, monkeypatch):
 
 
 def test_people_from_the_command_line(hubcfg, monkeypatch, capsys):
-    import chronicle.cli as cli
+    import interlatch.cli as cli
 
     conn, home = hubcfg["conn"], hubcfg["home"]
     monkeypatch.setattr(cli, "_wait_for_port", lambda *a, **kw: True)
@@ -261,8 +261,8 @@ def test_people_from_the_command_line(hubcfg, monkeypatch, capsys):
 
 
 def test_people_commands_belong_to_the_hub(env, monkeypatch, capsys):
-    from chronicle.cli import main
-    from chronicle.config import set_config_value
+    from interlatch.cli import main
+    from interlatch.config import set_config_value
 
     set_config_value(env["cfg"], "hub", "url", '"https://hub.example"')
     assert main(["hub", "invite", "Ada"]) == 1

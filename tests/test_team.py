@@ -12,10 +12,10 @@ import uuid
 
 import pytest
 
-from chronicle import hub, team_store
-from chronicle.config import load_config, set_config_value
-from chronicle.db import connect
-from chronicle.util import fingerprint
+from interlatch import hub, team_store
+from interlatch.config import load_config, set_config_value
+from interlatch.db import connect
+from interlatch.util import fingerprint
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _make_spoke, _serve
 
@@ -138,8 +138,8 @@ def _team_rows(spoke):
 
 
 def test_teammates_lessons_come_back_read_only(teamenv):
-    from chronicle.hooks import build_session_context
-    from chronicle.mcp_server import Tools
+    from interlatch.hooks import build_session_context
+    from interlatch.mcp_server import Tools
 
     fake, spoke, conn = teamenv["fake"], teamenv["spoke"], teamenv["conn"]
     assert spoke.shares_knowledge
@@ -410,7 +410,7 @@ def test_team_store_settings_from_the_dashboard(teamenv, monkeypatch):
 
 
 def test_what_a_member_sends_from_the_dashboard(teamenv):
-    from chronicle.server import App
+    from interlatch.server import App
 
     spoke = teamenv["spoke"]
     app = App(spoke)

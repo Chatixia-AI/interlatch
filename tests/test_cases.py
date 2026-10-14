@@ -3,12 +3,12 @@
 import json
 import sqlite3
 
-from chronicle import access
-from chronicle.analyze import case_of, normalize_analysis, store_analysis
-from chronicle.cases import visual_of
-from chronicle.db import connect
-from chronicle.search import search_knowledge
-from chronicle.server import App
+from interlatch import access
+from interlatch.analyze import case_of, normalize_analysis, store_analysis
+from interlatch.cases import visual_of
+from interlatch.db import connect
+from interlatch.search import search_knowledge
+from interlatch.server import App
 
 from conftest import CWD, SECRET, SID
 

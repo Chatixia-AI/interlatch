@@ -7,9 +7,9 @@ import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from chronicle.analyze import analyze_session
-from chronicle.diagram import MAX_NODES, Metrics, layout, normalize_diagram, to_excalidraw, to_mermaid
-from chronicle.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
+from interlatch.analyze import analyze_session
+from interlatch.diagram import MAX_NODES, Metrics, layout, normalize_diagram, to_excalidraw, to_mermaid
+from interlatch.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
 
 from conftest import CWD, SID
 
@@ -118,7 +118,7 @@ def test_only_project_knowledge_bases_draw_a_sketch():
 
 
 def test_synthesis_stores_the_sketch_and_serves_it(synced, monkeypatch):
-    from chronicle.server import App, make_handler
+    from interlatch.server import App, make_handler
 
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "diagram")
     cfg, conn = synced["cfg"], synced["conn"]

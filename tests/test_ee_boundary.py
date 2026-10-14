@@ -1,9 +1,9 @@
-"""The MIT core must work without ee/ (Interlatch Enterprise License): no module in src/chronicle may import it."""
+"""The MIT core must work without ee/ (Interlatch Enterprise License): no module in src/interlatch may import it."""
 
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parent.parent / "src" / "chronicle"
+SRC = Path(__file__).resolve().parent.parent / "src" / "interlatch"
 
 
 def test_core_never_imports_ee():
@@ -16,5 +16,5 @@ def test_core_never_imports_ee():
                 names = [node.module or ""]
             else:
                 continue
-            offenders += [f"{path.relative_to(SRC)}: {n}" for n in names if n.split(".")[0] == "chronicle_ee"]
+            offenders += [f"{path.relative_to(SRC)}: {n}" for n in names if n.split(".")[0] == "interlatch_ee"]
     assert not offenders, offenders

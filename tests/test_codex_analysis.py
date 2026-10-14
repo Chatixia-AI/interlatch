@@ -6,9 +6,9 @@ import sys
 
 import pytest
 
-from chronicle.config import load_config, set_config_value
-from chronicle.llm import ClaudeRunner, CodexRunner, LLMError, UsageLimitError, make_runner
-from chronicle.worker import run_worker
+from interlatch.config import load_config, set_config_value
+from interlatch.llm import ClaudeRunner, CodexRunner, LLMError, UsageLimitError, make_runner
+from interlatch.worker import run_worker
 
 from conftest import CWD, SID
 
@@ -148,7 +148,7 @@ def test_worker_end_to_end_with_codex(codex_env):
 
 
 def test_config_set_backend(env, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     assert main(["config", "set", "analysis.backend", "codex"]) == 0
     assert load_config(env["cfg"].home).analysis.backend == "codex"
@@ -162,7 +162,7 @@ def test_config_set_backend(env, capsys):
 def test_setup_offers_codex_when_claude_is_missing(env, monkeypatch):
     from rich.console import Console
 
-    from chronicle.cli import _choose_analyzer
+    from interlatch.cli import _choose_analyzer
 
     cfg = env["cfg"]
     monkeypatch.setattr(type(cfg), "claude_bin", lambda self: None)
@@ -174,7 +174,7 @@ def test_setup_offers_codex_when_claude_is_missing(env, monkeypatch):
 
 
 def test_dashboard_switches_the_backend(env, monkeypatch):
-    from chronicle.server import App
+    from interlatch.server import App
 
     monkeypatch.setattr(type(env["cfg"]), "codex_bin", lambda self: "/opt/bin/codex")
     app = App(env["cfg"])

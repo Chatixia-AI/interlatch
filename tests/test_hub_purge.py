@@ -3,10 +3,10 @@ purge`): someone given every project shared sessions from folders they never mea
 
 import pytest
 
-from chronicle import hub, people
-from chronicle.cli import main
-from chronicle.config import load_config
-from chronicle.db import connect
+from interlatch import hub, people
+from interlatch.cli import main
+from interlatch.config import load_config
+from interlatch.db import connect
 
 from conftest import CWD, SID
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke

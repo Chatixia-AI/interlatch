@@ -6,10 +6,10 @@ import json
 import urllib.error
 import urllib.request
 
-from chronicle import hub, people
-from chronicle.cli import main
-from chronicle.config import load_config, set_config_value, toml_table
-from chronicle.server import App
+from interlatch import hub, people
+from interlatch.cli import main
+from interlatch.config import load_config, set_config_value, toml_table
+from interlatch.server import App
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _serve

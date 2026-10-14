@@ -10,10 +10,10 @@ import sys
 def run() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("-psn_")]  # Finder adds -psn_… on old macOS
     if args:
-        from chronicle.cli import main
+        from interlatch.cli import main
 
         return main(args)
-    from chronicle.desktop import main
+    from interlatch.desktop import main
 
     return main()
 

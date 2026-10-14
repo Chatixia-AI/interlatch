@@ -4,8 +4,8 @@ each of its projects is in (hub.hub_project_of); on the hub, the projects set up
 import json
 from dataclasses import replace
 
-from chronicle import hub
-from chronicle.server import App
+from interlatch import hub
+from interlatch.server import App
 
 from conftest import CWD
 

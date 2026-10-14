@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from chronicle.codex_cloud import diff_files, load_status, parse_cloud_task
-from chronicle.config import load_config
-from chronicle.db import connect as db_connect
-from chronicle.ingest import sync
+from interlatch.codex_cloud import diff_files, load_status, parse_cloud_task
+from interlatch.config import load_config
+from interlatch.db import connect as db_connect
+from interlatch.ingest import sync
 
 from conftest import CWD
 
@@ -106,7 +106,7 @@ def test_codex_cloud_is_opt_in(cloud):
 
 
 def test_sync_records_tasks_and_skips_unchanged(cloud):
-    from chronicle.connectors import all_status, connect, disconnect
+    from interlatch.connectors import all_status, connect, disconnect
 
     cfg = cloud["cfg"]
     assert connect(cfg, "codex-cloud", "/opt/bin/chronicle") == ["recording Codex Cloud tasks"]
@@ -139,7 +139,7 @@ def test_sync_records_tasks_and_skips_unchanged(cloud):
 
 
 def test_listing_failure_is_reported_not_raised(cloud):
-    from chronicle.connectors import connect
+    from interlatch.connectors import connect
 
     connect(cloud["cfg"], "codex-cloud", "/opt/bin/chronicle")
     cfg = load_config(cloud["cfg"].home)

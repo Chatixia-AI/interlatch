@@ -3,12 +3,12 @@
 import json
 import sqlite3
 
-from chronicle.analyze import analyze_session, store_analysis
-from chronicle.db import connect, kv_set
-from chronicle.ingest import sync
-from chronicle.reviews import review_ready, week_bounds
-from chronicle.synthesize import GLOBAL, synthesize_project
-from chronicle.worker import pending_sessions
+from interlatch.analyze import analyze_session, store_analysis
+from interlatch.db import connect, kv_set
+from interlatch.ingest import sync
+from interlatch.reviews import review_ready, week_bounds
+from interlatch.synthesize import GLOBAL, synthesize_project
+from interlatch.worker import pending_sessions
 
 from conftest import CWD, PROJECT_DIR, SID, _line
 
@@ -114,7 +114,7 @@ def test_malformed_kb_reply_is_normalized_and_leaves_no_lock(synced, monkeypatch
 
 
 def test_forget_wins_over_a_racing_sync(synced, monkeypatch):
-    import chronicle.ingest as ingest
+    import interlatch.ingest as ingest
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("DELETE FROM sessions WHERE id=?", (SID,))
@@ -203,7 +203,7 @@ def test_mcp_batch_requests(synced):
 
     batch = [{"jsonrpc": "2.0", "id": 1, "method": "ping"}, {"jsonrpc": "2.0", "method": "notifications/initialized"},
              {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}]
-    out = subprocess.run([sys.executable, "-m", "chronicle", "mcp"], input=json.dumps(batch) + "\n", capture_output=True,
+    out = subprocess.run([sys.executable, "-m", "interlatch", "mcp"], input=json.dumps(batch) + "\n", capture_output=True,
                          text=True, timeout=60, env={**os.environ})
     replies = json.loads(out.stdout.strip())
     assert [r["id"] for r in replies] == [1, 2] and replies[1]["result"]["tools"]
@@ -211,7 +211,7 @@ def test_mcp_batch_requests(synced):
 
 def test_dashboard_port_default_and_existing_installs(tmp_path):
     """New installs serve the dashboard on 11524; a config.toml written before keeps the 8765 it names."""
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     fresh = load_config(tmp_path / "new")
     assert fresh.server_port == 11524 and "port = 11524" in fresh.config_path.read_text()

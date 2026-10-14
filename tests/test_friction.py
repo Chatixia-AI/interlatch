@@ -2,7 +2,7 @@
 
 import pytest
 
-from chronicle import friction
+from interlatch import friction
 
 from friction_fixture import ERRORS, ago, make_archive
 

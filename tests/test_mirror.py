@@ -14,9 +14,9 @@ import uuid
 
 import pytest
 
-from chronicle import mirror
-from chronicle.config import load_config, set_config_value
-from chronicle.util import one_line
+from interlatch import mirror
+from interlatch.config import load_config, set_config_value
+from interlatch.util import one_line
 
 from conftest import CWD, SECRET, SID
 from test_hub import _serve
@@ -73,7 +73,7 @@ def test_a_row_as_it_goes(synced):
 
 
 def test_the_background_run_writes_it(env, monkeypatch):
-    from chronicle.worker import run_worker
+    from interlatch.worker import run_worker
 
     calls = []
     monkeypatch.setattr(mirror, "sync", lambda cfg, **kw: calls.append(cfg.mirror_include) or mirror.Result(sessions=2, removed=0))
@@ -89,7 +89,7 @@ def test_the_background_run_writes_it(env, monkeypatch):
 def test_settings_from_the_dashboard(env, monkeypatch):
     """Settings › Storage: tested before it is saved, the password goes in and never comes out, a schema another
     computer mirrors into is refused, and only a request from the computer itself may see or change it."""
-    from chronicle.hub import local_machine
+    from interlatch.hub import local_machine
 
     cfg, home = env["cfg"], env["home"]
     me = local_machine(cfg)["id"]

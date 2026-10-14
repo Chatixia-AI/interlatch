@@ -6,9 +6,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-from chronicle import statusline
-from chronicle.install import install_statusline, settings_path, statusline_installed, uninstall_statusline
-from chronicle.server import App
+from interlatch import statusline
+from interlatch.install import install_statusline, settings_path, statusline_installed, uninstall_statusline
+from interlatch.server import App
 
 from conftest import SID
 
@@ -89,7 +89,7 @@ def test_uninstall_without_an_original_removes_it(env):
 
 
 def test_sync_imports_records_and_the_dashboard_shows_them(synced):
-    from chronicle.ingest import sync
+    from interlatch.ingest import sync
 
     conn, cfg = synced["conn"], synced["cfg"]
     s = statusline.merge({}, _payload(ctx=30, five=20, seven=40, reset=4102444800), T0)  # resets in 2100
@@ -111,7 +111,7 @@ def test_sync_imports_records_and_the_dashboard_shows_them(synced):
 
 
 def test_expired_windows_are_not_reported(synced):
-    from chronicle.db import kv_set
+    from interlatch.db import kv_set
 
     conn = synced["conn"]
     kv_set(conn, "plan_usage_latest", json.dumps({"as_of": "2026-01-01T00:00:00Z", "limits": {
@@ -123,7 +123,7 @@ def test_expired_windows_are_not_reported(synced):
 def test_the_command_is_fast_and_never_fails(env, tmp_path):
     payload = json.dumps(_payload(five=5)).encode()
     for data in (payload, b"not json", b""):
-        done = subprocess.run([sys.executable, "-m", "chronicle", "statusline"], input=data, capture_output=True, timeout=20,
+        done = subprocess.run([sys.executable, "-m", "interlatch", "statusline"], input=data, capture_output=True, timeout=20,
                               check=False)
         assert done.returncode == 0, done.stderr
     assert b"argparse" not in done.stderr

@@ -259,7 +259,7 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
     and schtasks are never run (a test that wants to see those calls patches subprocess.run itself, over this)."""
     import subprocess
 
-    from chronicle import install
+    from interlatch import install
 
     agents = tmp_path_factory.mktemp("agents")
     monkeypatch.setattr(install, "plist_path", lambda label=install.LAUNCHD_LABEL: agents / f"{label}.plist")
@@ -313,8 +313,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / "no-copilot"))
     monkeypatch.setenv("BOB_HOME", str(tmp_path / "no-bob"))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(tmp_path / "no-antigravity"))
-    monkeypatch.setattr("chronicle.connectors.vscode_user_dirs", lambda: [])
-    from chronicle.config import load_config
+    monkeypatch.setattr("interlatch.connectors.vscode_user_dirs", lambda: [])
+    from interlatch.config import load_config
 
     cfg = load_config(home)
     cfg.ensure_dirs()
@@ -323,8 +323,8 @@ def env(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def synced(env):
-    from chronicle.db import connect
-    from chronicle.ingest import sync
+    from interlatch.db import connect
+    from interlatch.ingest import sync
 
     conn = connect(env["cfg"].db_path)
     report = sync(env["cfg"], conn)

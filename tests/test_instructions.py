@@ -4,8 +4,8 @@ import subprocess
 
 import pytest
 
-from chronicle import instructions as ins
-from chronicle.instructions import BEGIN, END
+from interlatch import instructions as ins
+from interlatch.instructions import BEGIN, END
 
 from friction_fixture import ago, make_archive
 
@@ -71,7 +71,7 @@ def test_keys_with_double_dashes_and_markup_in_text_survive():
 
 
 def test_write_lines_creates_backs_up_and_replaces_atomically(tmp_path):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     cfg = load_config(tmp_path / "chronicle")
     target = tmp_path / "proj" / "CLAUDE.md"
@@ -149,7 +149,7 @@ def test_changelog_titles_are_not_rules():
 
 
 def test_repo_visibility_without_a_remote(tmp_path, monkeypatch):
-    monkeypatch.setattr("chronicle.instructions._VISIBILITY", {})
+    monkeypatch.setattr("interlatch.instructions._VISIBILITY", {})
     plain = tmp_path / "plain"
     plain.mkdir()
     assert ins.repo_visibility(str(plain)) == "unknown"
@@ -236,7 +236,7 @@ def test_cross_project_lessons_become_one_user_level_line_per_agent(archive):
     f"{BEGIN}\n- x <!-- interlatch:k -->\n{END}\n\n# Mine\n\n{BEGIN}\n- y <!-- interlatch:j -->\n{END}\n",  # two blocks
 ])
 def test_a_damaged_block_is_refused_not_guessed(tmp_path, damaged):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     with pytest.raises(ins.MalformedBlock):
         ins.merge(damaged, [("k1", "Rule.")])
@@ -259,7 +259,7 @@ def test_keys_with_spaces_round_trip():
 
 
 def test_writing_through_a_symlink_keeps_the_link(tmp_path):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     real = tmp_path / "dotfiles" / "CLAUDE.md"
     real.parent.mkdir()
@@ -273,7 +273,7 @@ def test_writing_through_a_symlink_keeps_the_link(tmp_path):
 
 
 def test_write_atomic_never_recreates_a_missing_directory(tmp_path):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     with pytest.raises(FileNotFoundError):
         ins.write_atomic(tmp_path / "gone" / "CLAUDE.md", "x\n", cfg=load_config(tmp_path / "chronicle"), mkdir=False)
@@ -281,7 +281,7 @@ def test_write_atomic_never_recreates_a_missing_directory(tmp_path):
 
 
 def test_user_level_routing_follows_chronicle_settings_over_the_shell(tmp_path, monkeypatch):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "from-shell"))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-shell"))
@@ -308,7 +308,7 @@ def test_a_relearned_lesson_keeps_its_key(archive):
 
 
 def test_crlf_files_keep_their_line_endings(tmp_path):
-    from chronicle.config import load_config
+    from interlatch.config import load_config
 
     cfg = load_config(tmp_path / "chronicle")
     target = tmp_path / "proj" / "AGENTS.md"

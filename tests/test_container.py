@@ -7,9 +7,9 @@ import urllib.request
 
 import pytest
 
-from chronicle import container, hub, people, update
-from chronicle.config import load_config, set_config_value
-from chronicle.db import connect
+from interlatch import container, hub, people, update
+from interlatch.config import load_config, set_config_value
+from interlatch.db import connect
 
 from test_hub import _serve
 
@@ -26,7 +26,7 @@ def served(env, monkeypatch):
         got.setdefault("cfg", cfg)
         got.setdefault("kw", kw)
 
-    monkeypatch.setattr("chronicle.server.serve", serve)
+    monkeypatch.setattr("interlatch.server.serve", serve)
     before = signal.getsignal(signal.SIGTERM)
     yield env, got
     signal.signal(signal.SIGTERM, before)
@@ -165,7 +165,7 @@ def test_a_container_install_does_not_update_itself(monkeypatch):
 def test_the_banner_replaces_the_local_address(env, monkeypatch, capsys):
     """An editor connected to the hub's server (VS Code Remote-SSH) forwards any 127.0.0.1 address printed in its
     terminal to the same port on the viewer's own computer, hiding their own dashboard there."""
-    from chronicle import server
+    from interlatch import server
 
     class Httpd:
         server_address = ("127.0.0.1", 11524)

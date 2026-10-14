@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from chronicle import __version__, update
+from interlatch import __version__, update
 
 
 @pytest.fixture
@@ -103,20 +103,20 @@ def test_failed_retry_keeps_the_answer(method, monkeypatch):
 
 def test_checkout_install_compares_file_times(method, tmp_path):
     (tmp_path / "pyproject.toml").write_text(f'[project]\nname = "interlatch"\nversion = "{__version__}"\n')
-    (tmp_path / "src" / "chronicle").mkdir(parents=True)
-    (tmp_path / "src" / "chronicle" / "server.py").write_text("")
+    (tmp_path / "src" / "interlatch").mkdir(parents=True)
+    (tmp_path / "src" / "interlatch" / "server.py").write_text("")
     installed = time.time() + 60
     method(kind="uv", source=str(tmp_path), local=True, installed_at=installed, command=["uv", "tool", "upgrade", "--reinstall", "x"])
     info = update.check()
     assert not info["available"] and info["latest"] == __version__
 
-    os.utime(tmp_path / "src" / "chronicle" / "server.py", (installed + 5, installed + 5))
+    os.utime(tmp_path / "src" / "interlatch" / "server.py", (installed + 5, installed + 5))
     info = update.check()
     assert info["available"] and info["can_update"]
     assert update.available_version() == "build"  # same version number, newer files
     assert "changes" not in info  # the status bar's poll does not list them
     info = update.check(detail=True)
-    assert info["changes"]["files"] == ["src/chronicle/server.py"] and info["changes"]["commits"] == []
+    assert info["changes"]["files"] == ["src/interlatch/server.py"] and info["changes"]["commits"] == []
 
 
 def test_checkout_notification_key_follows_commits(method, tmp_path):
@@ -172,7 +172,7 @@ def test_app_and_source_installs_do_not_run_commands(method, monkeypatch):
 
 def test_pypi_check_is_kept_in_the_database(method, env, monkeypatch):
     """The last answer outlives a restart (the in-memory copy is gone; the database still has it)."""
-    from chronicle.db import connect
+    from interlatch.db import connect
 
     method(kind="uv", command=["uv", "tool", "upgrade", "interlatch"])
     monkeypatch.setattr(update, "urlopen", lambda req, timeout: io.BytesIO(b'{"info": {"version": "99.0.0"}}'))
@@ -186,7 +186,7 @@ def test_pypi_check_is_kept_in_the_database(method, env, monkeypatch):
 
 
 def test_daily_check_is_opt_in_and_runs_once_a_day(method, env, monkeypatch):
-    from chronicle.server import App
+    from interlatch.server import App
 
     method(kind="uv", command=["uv", "tool", "upgrade", "interlatch"])
     calls = []

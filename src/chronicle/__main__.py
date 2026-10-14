@@ -1,3 +1,3 @@
-from chronicle.cli import main
+from interlatch.cli import main
 
 raise SystemExit(main())

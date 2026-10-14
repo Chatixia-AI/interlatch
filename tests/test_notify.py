@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from chronicle import notify, update
-from chronicle.cli import main
-from chronicle.config import load_config
-from chronicle.db import connect
+from interlatch import notify, update
+from interlatch.cli import main
+from interlatch.config import load_config
+from interlatch.db import connect
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def test_a_notification_that_could_not_be_shown_is_tried_again(pypi, env):
 
 
 def test_nothing_when_up_to_date_or_not_from_pypi(pypi, env, monkeypatch):
-    from chronicle import __version__
+    from interlatch import __version__
 
     pypi["latest"] = __version__
     assert notify.release_check(env["cfg"], pypi["conn"]) is None and pypi["requests"] == update.PYPI_TRIES  # an up-to-date answer is asked again (CDN)
@@ -77,7 +77,7 @@ def test_nothing_when_up_to_date_or_not_from_pypi(pypi, env, monkeypatch):
 
 
 def test_sync_runs_the_check(pypi, env, monkeypatch):
-    from chronicle.config import set_config_value
+    from interlatch.config import set_config_value
 
     set_config_value(env["cfg"], "updates", "notify", "true")
     assert main(["sync", "--quiet"]) == 0
@@ -135,12 +135,12 @@ def test_how_to_update_matches_the_install(env):
 @pytest.fixture
 def setup(env, monkeypatch):
     """`chronicle install` with the background sync running and a PyPI install."""
-    monkeypatch.setattr("chronicle.update.compares_online", lambda: True)
+    monkeypatch.setattr("interlatch.update.compares_online", lambda: True)
     monkeypatch.setattr("platform.system", lambda: "Darwin")
-    monkeypatch.setattr("chronicle.install.launchd_status", lambda label="": {"loaded": True})
-    monkeypatch.setattr("chronicle.install.install_launchd", lambda *a, **k: [])
-    monkeypatch.setattr("chronicle.install.install_ui_agent", lambda *a, **k: [])
-    monkeypatch.setattr("chronicle.install.install_mcp", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.launchd_status", lambda label="": {"loaded": True})
+    monkeypatch.setattr("interlatch.install.install_launchd", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.install_ui_agent", lambda *a, **k: [])
+    monkeypatch.setattr("interlatch.install.install_mcp", lambda *a, **k: [])
     return env
 
 

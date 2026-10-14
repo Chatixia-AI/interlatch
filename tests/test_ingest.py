@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from chronicle.db import connect
-from chronicle.ingest import decode_project_dir, parse_frontmatter, sync
+from interlatch.db import connect
+from interlatch.ingest import decode_project_dir, parse_frontmatter, sync
 
 from conftest import CWD, PROJECT_DIR, SID
 
@@ -77,7 +77,7 @@ def test_single_session_ingest_marks_ended(env):
 
 
 def test_fts_search(synced):
-    from chronicle.search import search_events, search_knowledge, search_sessions
+    from interlatch.search import search_events, search_knowledge, search_sessions
 
     hits = search_events(synced["conn"], "logout flow")
     assert hits and hits[0]["session_id"] == SID and "«logout»" in hits[0]["snippet"]
@@ -87,7 +87,7 @@ def test_fts_search(synced):
 
 
 def test_search_all_sessions(synced):
-    from chronicle.search import search_all
+    from interlatch.search import search_all
 
     found = search_all(synced["conn"], "logout", per_session=1)
     top = found["sessions"][0]
@@ -107,7 +107,7 @@ def test_helpers():
 
 
 def test_forget_session(synced):
-    from chronicle.ingest import forget_session
+    from interlatch.ingest import forget_session
 
     conn, cfg = synced["conn"], synced["cfg"]
     archive = Path(conn.execute("SELECT archive_path FROM sessions WHERE id=?", (SID,)).fetchone()[0])
@@ -123,7 +123,7 @@ def test_forget_session(synced):
 def test_forget_keeps_files_other_sessions_share(env, tmp_path):
     """A Bob task's transcript is Bob's whole database, and its archive the snapshot every Bob task shares (as with a
     chat export): forgetting one task removes neither while another session uses it."""
-    from chronicle.ingest import forget_session
+    from interlatch.ingest import forget_session
 
     from copilot_fixture import BOB_TASK, BOB_TOOLS, write_bob_home
 
@@ -152,7 +152,7 @@ def test_excluded_projects_are_not_archived(env):
 
 
 def test_cli_search_prints_snippet_labels_as_styling(synced, capsys):
-    from chronicle.cli import main
+    from interlatch.cli import main
 
     assert main(["search", "logout", "--sessions-only"]) == 0
     out = capsys.readouterr().out
