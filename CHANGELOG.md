@@ -3,6 +3,20 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.23.2 (2026-10-14)
+
+- **Hub computers stay with admins:** on a hub with people, a member or read-only person no longer receives the hub's
+  computers, its team store's database, host and status, or its allowed sign-ins; only admins (and the hub computer
+  itself) do.
+- **Agent logos:** the Sessions list and its agent filter, Sources, MCP and the menu-bar panel mark each session and
+  source with its agent's own logo (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, claude.ai,
+  ChatGPT) instead of a colour dot.
+- **Windows polish:** The dashboard can show an Interlatch icon in the notification area (turn on the menu-bar icon
+  under **Status › Recording**, or run `interlatch ui --menu-bar`): click it to open the dashboard, right-click for Sync
+  Now and Quit, which stops the dashboard until you next sign in. Release notifications show as Windows toasts. The VS
+  Code extension's file history and folder list, hub folders and projects, and a person's projects now match Windows
+  paths however they're spelled (`C:\work\app`, `c:/work/app`).
+
 ## 0.23.1 (2026-10-13)
 
 - **`agents-chronicle` is retired:** Interlatch is published only as `interlatch` now, and `agents-chronicle` is no
