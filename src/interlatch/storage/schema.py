@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS knowledge (
     superseded_by INTEGER,                         -- the item that replaced this one, when there is one
     superseded_reason TEXT,                        -- duplicate | outdated | contradicted
     superseded_at TEXT,
-    case_json TEXT                                 -- lesson material (analyze.case_of): a fix, gotcha or decision's case file, and principle, checks, topics, diagram
+    case_json TEXT                                 -- lesson material (analysis.session.case_of): a fix, gotcha or decision's case file, and principle, checks, topics, diagram
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_session ON knowledge(session_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_path);
@@ -464,14 +464,14 @@ CREATE TABLE IF NOT EXISTS project_groups (      -- your own groups of projects 
     name TEXT NOT NULL,
     folders_json TEXT NOT NULL DEFAULT '[]',      -- folder rules: a project under one joins, the longest rule winning
     created_at TEXT,
-    hub_project TEXT                              -- shared as this project on the hub this computer sends to (hub.py)
+    hub_project TEXT                              -- shared as this project on the hub this computer sends to (sharing/)
 );
 CREATE TABLE IF NOT EXISTS project_group_picks (  -- a project put in a group by hand, over its folder rules
     project_path TEXT PRIMARY KEY,
     group_id INTEGER                              -- NULL: kept out of every group
 );
 CREATE TABLE IF NOT EXISTS group_shares (         -- every folder a group shared with the hub: still filed there when it
-    path TEXT PRIMARY KEY,                        -- left the group, so what it sent stays in place (hub.group_routes)
+    path TEXT PRIMARY KEY,                        -- left the group, so what it sent stays in place (sharing.projects.group_routes)
     hub_project TEXT NOT NULL,
     group_id INTEGER,
     shared_at TEXT

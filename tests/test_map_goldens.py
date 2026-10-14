@@ -1,7 +1,7 @@
-"""Safety net: the exact output of systems.build (the Systems map) and diagram.layout (the architecture sketch, with its
+"""Safety net: the exact output of systems.build (the Systems map) and the architecture sketch's layout, with its
 Excalidraw and Mermaid exports) on fixed fixtures, compared to tests/goldens/systems.json and tests/goldens/diagram.json.
 
-Splitting or tidying systems.py or diagram.py must leave both unchanged. For a deliberate change, rerun with
+Splitting or tidying systems.py or the diagram modules must leave both unchanged. For a deliberate change, rerun with
 UPDATE_GOLDENS=1 and review the diff.
 """
 

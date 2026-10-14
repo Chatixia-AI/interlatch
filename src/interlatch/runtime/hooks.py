@@ -134,7 +134,7 @@ def build_session_context(cfg, cwd: str) -> str | None:
                 lines.append("Interlatch notes from past coding-agent sessions in this project:")
                 lines += [f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "") + f"] {one_line(r['title'], 200)}"
                           for r in rows]
-        team = conn.execute(  # teammates' lessons the team hub sent (hub.apply_team_lessons)
+        team = conn.execute(  # teammates' lessons the team hub sent (sharing.pull.apply_team_lessons)
             "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json, k.source_ref FROM knowledge k "
             f"WHERE k.status = 'active' AND k.source = 'team' AND k.project_path = ? "
             f"ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, k.updated_at DESC LIMIT 6", (cwd,),

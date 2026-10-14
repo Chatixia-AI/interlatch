@@ -69,7 +69,7 @@ work with, and any recurring vocabulary of their own.
 Leave out generic programming words. Ground every definition in the material given; put abbreviations, \
 expansions and alternative spellings in aliases; cite the ids of the knowledge items that mention each term. \
 Aim for 15-50 terms."""
-# with [analysis] language = "ja", besides llm.JAPANESE
+# with [analysis] language = "ja", besides analysis.language.JAPANESE
 TERMS_JA = ("Write definitions and context in Japanese. A term stays spelled as the developer writes it; translations go "
             "in aliases.")
 

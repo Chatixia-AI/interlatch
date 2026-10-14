@@ -1,5 +1,5 @@
-"""Analysis through a model provider's API (providers.py): a fake server speaks each request shape (Anthropic Messages,
-Chat Completions, Ollama's /api/chat) and answers with the fake claude's reply for the same system prompt."""
+"""Analysis through a model provider's API (analysis/runners/api.py): a fake server speaks each request shape (Anthropic
+Messages, Chat Completions, Ollama's /api/chat) and answers with the fake claude's reply for the same system prompt."""
 
 import datetime as dt
 import json

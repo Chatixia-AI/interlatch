@@ -1,5 +1,6 @@
-"""A group shared as one project on the hub (groups.share, hub.group_routes): every project in it goes there, whichever
-joins it later; one kept out of it, or that left it, stays here, and what it sent stays filed on the hub."""
+"""A group shared as one project on the hub (groups.share, sharing.projects.group_routes): every project in it goes
+there, whichever joins it later; one kept out of it, or that left it, stays here, and what it sent stays filed on the
+hub."""
 
 import json
 

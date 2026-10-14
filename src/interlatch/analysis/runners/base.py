@@ -1,5 +1,5 @@
-"""Run a headless coding agent with structured output: Claude Code (`claude -p`) or Codex (`codex exec`); or, through
-providers.py, a model provider's API.
+"""Run a headless coding agent with structured output: Claude Code (`claude -p`), Codex (`codex exec`) or IBM Bob;
+or, through api.py, a model provider's API.
 
 Agent runs use the developer's own install and login of the chosen agent (`analysis.backend`).
 Each call is isolated: no session is persisted (so analyses never show up as sessions), user hooks,
@@ -104,7 +104,7 @@ class Runner:
                 "settings": self.agent_settings()}
 
     def agent_settings(self) -> dict:
-        """The settings the dashboard lets you change for this agent (server.AGENT_SETTINGS), with their values."""
+        """The settings the dashboard lets you change for this agent, with their values (its AGENT_SETTINGS)."""
         return {}
 
     def model_label(self, model: str | None = None) -> str:

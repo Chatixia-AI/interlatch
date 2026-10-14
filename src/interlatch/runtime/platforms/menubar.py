@@ -122,7 +122,7 @@ def summarize(st: dict, *, now: datetime | None = None, analyzing: int = 0, sync
     """The icon's state and what the panel's header says, from the dashboard's status (App.status_small()).
 
     `analyzing`: sessions being analyzed by any process; `sync_running`/`sync_error`: the sync that runs outside the
-    dashboard (the app's own loop, or the launchd agent); `push`: a spoke's last push (hub.last_push()),
+    dashboard (the app's own loop, or the launchd agent); `push`: a spoke's last push (sharing.push.last_push()),
     `hub_name` what the hub calls itself, `sends_files` whether the hub analyzes this computer's sessions
     (Config.sends_files) or only gets the knowledge learned here."""
     now = now or utcnow()

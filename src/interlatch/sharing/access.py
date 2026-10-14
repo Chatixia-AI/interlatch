@@ -5,7 +5,7 @@ Two layers, so one forgotten filter can't show another project:
 1. Endpoints: only those in LIMITED_GET answer; everything else is refused before it runs (allowed()).
 2. Data: the request's database connection gets TEMP views named like the tables they shadow (SQLite looks in the
    temp schema first), so every query an allowed endpoint makes sees only the person's projects (limit()):
-   - sessions: theirs, analyzed, with only the columns a member's computer shares as knowledge (hub.SHARED_COLS,
+   - sessions: theirs, analyzed, with only the columns a member's computer shares as knowledge (protocol.SHARED_COLS,
      the analysis); prompts, paths, commands and prompt-made titles read as NULL
    - knowledge: project lessons from those sessions' analysis (never lessons about a person, never global ones)
    - project_kb: their projects' knowledge bases; api_calls: their sessions' token counts

@@ -70,7 +70,7 @@ def inventory(cfg: Config, machine_id: str) -> dict[str, dict[str, list]]:
 
 
 def _store(cfg: Config):
-    """The hub's team store (team_store.py) when `[hub] store` names one, else None; its errors as HubError."""
+    """The hub's team store (storage/team.py) when `[hub] store` names one, else None; its errors as HubError."""
     from ..storage.team import TeamStoreError, get
 
     try:
@@ -555,9 +555,9 @@ def purge(cfg: Config, conn, sessions: list[dict], *, by: str | None = None, per
           action: str = "purge", keep_out: bool = True, owner: str | None = None, **detail) -> dict:
     """Remove sessions other computers sent from this hub for good (purge_targets picks them): their rows, lessons,
     notes and received transcripts, the team store's copy, and the knowledge bases built from them. Each is forgotten
-    (ingest.forget_session), so the computer that sent it can't send it again, unless `keep_out` is off (withdraw).
-    `owner`: the only computer whose sessions may go (withdraw). `action` and `detail` go in the audit. Returns what
-    was removed."""
+    (ingestion.deletion.forget_session), so the computer that sent it can't send it again, unless `keep_out` is off
+    (withdraw). `owner`: the only computer whose sessions may go (withdraw). `action` and `detail` go in the audit.
+    Returns what was removed."""
     from ..ingestion.deletion import forget_session
     from .people import LOCAL, audit
 

@@ -123,8 +123,8 @@ sections (use only those with content): "Working preferences for Claude", "Tooli
 and those that are outdated or contradicted (by = the newer item, or null). Merely related items are not duplicates.
 Do not invent anything that the items do not support."""
 
-# with [analysis] language = "ja", besides llm.JAPANESE: section names the dashboard can recognize, and duplicates
-# across languages
+# with [analysis] language = "ja", besides analysis.language.JAPANESE: section names the dashboard can recognize, and
+# duplicates across languages
 DUPLICATES_ACROSS_LANGUAGES = "Items written in different languages that state the same lesson are duplicates."
 PROJECT_JA = ("Name the sections in Japanese; the suggested ones are 「アーキテクチャと主な事実」, 「実行・テスト・デプロイ」, "
               "「落とし穴と修正」, 「決定とその理由」, 「規約と好み」, 「便利なコマンド」 and 「未解決の事項」. Diagram node labels keep "

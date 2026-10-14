@@ -30,7 +30,7 @@ TEAMMATE = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 
 class FakeStore:
-    """team_store.TeamStore's behavior, in memory."""
+    """storage.team.TeamStore's behavior, in memory."""
 
     def __init__(self):
         self.names: dict[str, str | None] = {}

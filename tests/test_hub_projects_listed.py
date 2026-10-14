@@ -1,5 +1,6 @@
 """Projects on the hub as the Projects page and sidebar list them: on a computer that sends to a hub, the hub project
-each of its projects is in (hub.hub_project_of); on the hub, the projects set up there that have no sessions yet."""
+each of its projects is in (sharing.projects.hub_project_of); on the hub, the projects set up there that have no
+sessions yet."""
 
 import json
 from dataclasses import replace

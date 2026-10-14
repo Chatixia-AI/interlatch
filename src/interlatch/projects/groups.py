@@ -47,7 +47,7 @@ def groups(conn: sqlite3.Connection) -> list[dict]:
 
 def share(conn: sqlite3.Connection, group_id: int, hub_project: str | None) -> None:
     """Share a group as one project on the hub this computer sends to, or (None) stop: from the next push, the
-    group's projects go to that hub project, whichever join it later (hub.group_routes)."""
+    group's projects go to that hub project, whichever join it later (sharing.projects.group_routes)."""
     if not conn.execute("SELECT 1 FROM project_groups WHERE id = ?", (group_id,)).fetchone():
         raise GroupError("That group no longer exists.")
     conn.execute("UPDATE project_groups SET hub_project = ? WHERE id = ?", (hub_project or None, group_id))

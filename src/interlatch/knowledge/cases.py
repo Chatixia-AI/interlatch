@@ -1,5 +1,5 @@
-"""A lesson's teaching material beyond its case file (analyze.case_of): principle, checks, clues, topics and a diagram.
-Grounded in the session; personal learning history stays in the browser."""
+"""A lesson's teaching material beyond its case file (analysis.session.case_of): principle, checks, clues, topics and a
+diagram. Grounded in the session; personal learning history stays in the browser."""
 
 from __future__ import annotations
 

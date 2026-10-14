@@ -149,6 +149,26 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
   機能ごとに 1 モジュールです。`app.py` はダッシュボードが動く間保つもの、`assets.py` は `web/` のページを返します。
   `packaging/macos/` がアプリをビルドします
 
+各層は自分より下の層だけを import します。`core`、次に `storage` と `sources`、次に機能（`ingestion`、`analysis`、
+`knowledge`、`projects`、`artifacts`、`sharing`）、次に `application`、最後に `interfaces` です。`runtime` は
+ダッシュボードを組み立てるモジュールからだけダッシュボードを起動します。`tests/test_architecture.py` がすべての
+import をこれと照らし合わせます。
+
+追加する場所：
+
+- **ソース**（別のコーディングエージェントやチャットのエクスポート）：`ParsedSession`（`core/sessions.py`）を返す
+  読み取りを `sources/` に（Claude Code 以外のエージェントは `sources/builder.py` で組み立てます）、ファイルの場所を
+  `sources/discovery.py` に、同期を `ingestion/service.py` に、接続を `runtime/connectors.py` に
+- **分析のバックエンド**：`analysis/runners/` の `Runner`（`base.py` が約束事）、`factory.py` に名前を。モデル
+  プロバイダーの API は `analysis/runners/settings.py` の `Provider`
+- **ダッシュボードのエンドポイント**：`interfaces/web/api/` の該当機能のモジュールに `Context` を取る関数を、
+  `interfaces/web/handler.py` にルートと呼べる人を、`tests/test_route_matrix.py` の `ROUTES` に行を（行のない
+  ルートはテストが失敗します）
+- **コマンド**：`interfaces/cli/commands/` の合うグループに `add_<command>` と `cmd_<command>` を、
+  `interfaces/cli/parser.py` の `COMMANDS` にコマンドを（その順が `interlatch --help` の順です）。
+  `tests/goldens/cli.json` が固定します（`UPDATE_GOLDENS=1` で再実行）
+- **MCP ツール**：`interfaces/mcp.py` の `TOOLS`
+
 ダッシュボードのページは Content-Security-Policy（`interfaces/web/assets.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは
 文字列ではなくオブジェクト（`style: { "--h": "40px" }`）にします。文字列は style 属性になり、ポリシーが拒否します。

@@ -151,6 +151,25 @@ which installs from before the rename still run):
   jobs), one module per feature; `app.py` holds what lives as long as the dashboard; `assets.py` serves the page from
   `web/`; `packaging/macos/` builds the app
 
+Each layer imports only the ones below it: `core`, then `storage` and `sources`, then the features (`ingestion`,
+`analysis`, `knowledge`, `projects`, `artifacts`, `sharing`), then `application`, then `interfaces`; `runtime` starts
+the dashboard only from the modules that compose it. `tests/test_architecture.py` checks every import against this.
+
+Where to add:
+
+- **a source** (another coding agent or chat export): a reader in `sources/` that returns `ParsedSession`s
+  (`core/sessions.py`; `sources/builder.py` builds one for any agent that isn't Claude Code), where it keeps its files
+  in `sources/discovery.py`, its sync in `ingestion/service.py`, connecting it in `runtime/connectors.py`
+- **an analysis backend**: a `Runner` in `analysis/runners/` (`base.py` is the contract), named in `factory.py`; a
+  model provider's API is a `Provider` in `analysis/runners/settings.py`
+- **a dashboard endpoint**: a function of a `Context` in the feature's module in `interfaces/web/api/`, its route and
+  who may call it in `interfaces/web/handler.py`, and its row in `ROUTES` in `tests/test_route_matrix.py` (a route
+  without one fails the suite)
+- **a command**: `add_<command>` and `cmd_<command>` in the fitting group in `interfaces/cli/commands/`, and the
+  command in `COMMANDS` in `interfaces/cli/parser.py`, whose order is `interlatch --help`'s; `tests/goldens/cli.json`
+  pins it (rerun with `UPDATE_GOLDENS=1`)
+- **an MCP tool**: `TOOLS` in `interfaces/mcp.py`
+
 The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `interfaces/web/assets.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an
 object (`style: { "--h": "40px" }`), never a string: a string becomes a style attribute the policy refuses.
