@@ -8,13 +8,13 @@ import logging
 import sqlite3
 
 from . import ladder
-from .diagram import DIAGRAM_SCHEMA, normalize_diagram, to_mermaid
-from .core.config import Config
+from ..core.diagrams import DIAGRAM_SCHEMA, normalize_diagram, to_mermaid
+from ..core.config import Config
 from .ladder import STAGE_ORDER_SQL, SUPERSEDE_REASONS, TRUSTED
-from .analysis.runners.base import Runner
-from .analysis.runners.factory import make_runner
-from .analysis.language import written_in
-from .core.util import dumps, local_str, loads, one_line, truncate, utcnow_iso
+from ..analysis.runners.base import Runner
+from ..analysis.runners.factory import make_runner
+from ..analysis.language import written_in
+from ..core.util import dumps, local_str, loads, one_line, truncate, utcnow_iso
 
 log = logging.getLogger("interlatch.synthesize")
 

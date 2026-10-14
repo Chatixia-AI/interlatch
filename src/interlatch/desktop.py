@@ -144,6 +144,7 @@ class Background:
         from .ingestion.service import sync
         from .notify import release_check_safely
         from .application.workflows import run_worker
+        from .interfaces.exports.vault import export_markdown
 
         self.running = True
         self.on_change()
@@ -162,7 +163,7 @@ class Background:
                 report = sync(cfg, conn)
             finally:
                 conn.close()
-            work = run_worker(cfg)
+            work = run_worker(cfg, export=export_markdown)
             log.info("app sync: %s · work: %s", report.summary(), work.summary())
             self.error = None
         except Exception as exc:

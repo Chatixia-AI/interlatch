@@ -61,6 +61,6 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
 def _derive_maturity_stages(conn: sqlite3.Connection) -> None:
     """Schema 8 gave knowledge a maturity stage: derive it for the items an older archive has, from the evidence they
     already carry. The ladder's own rules do it, so this is the one place storage calls up into a feature."""
-    from ..ladder import refresh_all
+    from ..knowledge.ladder import refresh_all
 
     refresh_all(conn)

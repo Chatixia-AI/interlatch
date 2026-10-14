@@ -7,8 +7,8 @@ from interlatch.analysis.session import analyze_session, store_analysis
 from interlatch.storage.sqlite import connect
 from interlatch.storage.kv import kv_set
 from interlatch.ingestion.service import sync
-from interlatch.reviews import review_ready, week_bounds
-from interlatch.synthesize import GLOBAL, synthesize_project
+from interlatch.knowledge.reviews import review_ready, week_bounds
+from interlatch.knowledge.synthesize import GLOBAL, synthesize_project
 from interlatch.analysis.queue import pending_sessions
 
 from conftest import CWD, PROJECT_DIR, SID, _line

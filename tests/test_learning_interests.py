@@ -9,8 +9,9 @@ from interlatch import access
 from interlatch.analysis.session import normalize_analysis, store_analysis
 from interlatch.storage.sqlite import connect
 from interlatch.storage.kv import kv_get
-from interlatch.learning import SIGNAL_PREFIX, interest_profile, normalize_interests, prompt_signals, store_interests, topics_for
-from interlatch.search import search_knowledge
+from interlatch.knowledge.learning import (SIGNAL_PREFIX, interest_profile, normalize_interests, prompt_signals,
+                                           store_interests, topics_for)
+from interlatch.application.search import search_knowledge
 
 from conftest import SECRET, SID
 

@@ -129,11 +129,13 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
   取り込み、エージェントのメモリーと履歴、忘れること
 - `analysis/`：トランスクリプトの要約（`digest.py`）、モデルに教訓を尋ねること（`session.py`）、取り込んだチャットの
   選別、キューとワーカー。`analysis/runners/` がエージェントの CLI かプロバイダーの API でモデルに尋ねます
-- `application/`：ワーカーの 1 回の実行で起きること（`workflows.py`）
-- `connectors.py`（ソース）、`synthesize.py`（ナレッジベース）、
-  `diagram.py`（アーキテクチャ図）、`glossary.py`、`reviews.py`
-- `server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`export_md.py`、`hooks.py` / `install.py`、`desktop.py`
-  （macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします
+- `knowledge/`：プロジェクトごとのナレッジベース（`synthesize.py`）、成熟度のはしご、用語集、ケースファイル、学習の
+  トピック、フリクション、提案、指示ファイル、週ごとの振り返り
+- `projects/`：まとまるフォルダー、プロジェクト名、システムマップ
+- `application/`：ワーカーの 1 回の実行で起きること（`workflows.py`）、機能をまたぐセッションの記録と検索
+- `interfaces/exports/`：Markdown の保管庫、セッションのエクスポート、Excalidraw の図
+- `connectors.py`（ソース）、`server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`hooks.py` / `install.py`、
+  `desktop.py`（macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします
 
 ダッシュボードのページは Content-Security-Policy（`server.py` の `PAGE_CSP`）の下で動き、スクリプトとスタイルは自分のファイルの
 ものしか使えません。`index.html` にインラインの `<script>` や `on…=` 属性を加えないでください。また `h()` に渡すスタイルは

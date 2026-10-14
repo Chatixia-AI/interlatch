@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 
 from interlatch.analysis.session import normalize_analysis, store_analysis
-from interlatch.learning import glance
+from interlatch.knowledge.learning import glance
 from interlatch.server import App
 
 from conftest import SID

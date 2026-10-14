@@ -4,8 +4,8 @@ import subprocess
 
 import pytest
 
-from interlatch import instructions as ins
-from interlatch.instructions import BEGIN, END
+from interlatch.knowledge import instructions as ins
+from interlatch.knowledge.instructions import BEGIN, END
 
 from friction_fixture import ago, make_archive
 
@@ -149,7 +149,7 @@ def test_changelog_titles_are_not_rules():
 
 
 def test_repo_visibility_without_a_remote(tmp_path, monkeypatch):
-    monkeypatch.setattr("interlatch.instructions._VISIBILITY", {})
+    monkeypatch.setattr("interlatch.knowledge.instructions._VISIBILITY", {})
     plain = tmp_path / "plain"
     plain.mkdir()
     assert ins.repo_visibility(str(plain)) == "unknown"

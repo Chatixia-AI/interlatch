@@ -374,7 +374,7 @@ def matrix(synced, monkeypatch):
     a browser; Bob's and Vic's computers joined with their own tokens."""
     monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
     monkeypatch.setattr(hub, "dashboard_signin", lambda *a, **k: "http://127.0.0.1/stub")
-    monkeypatch.setattr("interlatch.suggest.refresh", lambda *a, **k: {"stub": True})
+    monkeypatch.setattr("interlatch.knowledge.suggest.refresh", lambda *a, **k: {"stub": True})
     monkeypatch.setattr("interlatch.leaderboard.avatar", lambda *a, **k: None)
     cfg, conn = synced["cfg"], synced["conn"]
     shared = hub.new_token(cfg)

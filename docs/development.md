@@ -130,11 +130,14 @@ which installs from before the rename still run):
 - `analysis/`: condensing a transcript (`digest.py`), asking a model for its lessons (`session.py`), screening
   imported chats, the queue and the worker; `analysis/runners/` asks the model, through an agent's CLI or a
   provider's API
-- `application/`: what a worker run does from start to finish (`workflows.py`)
-- `connectors.py` (Sources), `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and Mermaid export),
-  `glossary.py`, `reviews.py`
-- `server.py` + `web/` (dashboard), `mcp_server.py`, `export_md.py`, `hooks.py` / `install.py`, `desktop.py` (macOS
-  app), `cli.py`; `packaging/macos/` builds the app
+- `knowledge/`: per-project knowledge bases (`synthesize.py`), the maturity ladder, glossaries, case files, learning
+  topics, friction, suggestions, instruction files, the weekly review
+- `projects/`: folders that belong together, project names, the systems map
+- `application/`: what a worker run does from start to finish (`workflows.py`), session records and search, which
+  span the features
+- `interfaces/exports/`: the Markdown vault, session exports, Excalidraw diagrams
+- `connectors.py` (Sources), `server.py` + `web/` (dashboard), `mcp_server.py`, `hooks.py` / `install.py`, `desktop.py`
+  (macOS app), `cli.py`; `packaging/macos/` builds the app
 
 The dashboard page runs under a Content-Security-Policy (`PAGE_CSP` in `server.py`) that allows scripts and styles
 from its own files only. Add no inline `<script>` or `on…=` attribute to `index.html`, and give `h()` a style as an

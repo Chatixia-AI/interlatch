@@ -5,7 +5,8 @@ import json
 
 import pytest
 
-from interlatch import groups, hub
+from interlatch.projects import groups
+from interlatch import hub
 from interlatch.core.config import load_config
 from interlatch.storage.sqlite import connect
 from interlatch.server import App

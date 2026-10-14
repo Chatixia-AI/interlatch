@@ -8,12 +8,14 @@ import re
 import sqlite3
 from pathlib import Path
 
-from .core.config import Config
-from .storage.kv import kv_get, kv_set
-from .core.redact import redact
-from .synthesize import GLOBAL, render_kb_markdown
-from .core.util import human_cost, human_count, human_duration, local_str, loads, one_line
-from .views import KIND_ICON, OUTCOME_ICON, project_labels, session_markdown, session_record
+from ...core.config import Config
+from ...storage.kv import kv_get, kv_set
+from ...core.redact import redact
+from ...knowledge.synthesize import GLOBAL, render_kb_markdown
+from ...core.util import human_cost, human_count, human_duration, local_str, loads, one_line
+from ...application.records import session_record
+from .markdown import KIND_ICON, OUTCOME_ICON, session_markdown
+from ...projects.labels import project_labels
 
 log = logging.getLogger("interlatch.export")
 
@@ -143,7 +145,7 @@ def _export_knowledge(conn, root: Path, names: dict) -> int:
 
 
 def _export_glossary(conn, root: Path, labels: dict, names: dict) -> int:
-    from .glossary import glossary_entries
+    from ...knowledge.glossary import glossary_entries
 
     entries = glossary_entries(conn)
     if not entries:

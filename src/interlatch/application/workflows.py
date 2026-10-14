@@ -5,6 +5,8 @@ and bring the mirror up to date."""
 from __future__ import annotations
 
 import logging
+import sqlite3
+from collections.abc import Callable
 from datetime import timedelta
 
 from ..analysis.queue import PAUSE_KEY, pending_sessions
@@ -20,8 +22,11 @@ log = logging.getLogger("interlatch.worker")
 
 
 def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyses: int | None = None,
-               analyze: bool = True, synthesize: bool = True, export: bool = True, force: bool = False,
+               analyze: bool = True, synthesize: bool = True,
+               export: Callable[[sqlite3.Connection, Config], int] | None = None, force: bool = False,
                model: str | None = None, progress=None, wait: bool = False) -> WorkReport:
+    """`export` writes the Markdown vault when [export] markdown is on: the caller passes
+    interfaces.exports.vault.export_markdown, since workflows don't reach up into the interfaces."""
     report = WorkReport()
     if cfg.sends_files:  # its sessions go to the hub, which analyzes them; analyzing here would pay twice
         report.note = f"analysis runs on the hub ({cfg.hub_url})"
@@ -78,10 +83,8 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
         _themes(cfg, report, progress=progress)
         _weekly_review(cfg, conn, runner, report, progress=progress)
     if export and cfg.export_markdown:
-        from ..export_md import export_markdown
-
         try:
-            report.exported = export_markdown(conn, cfg)
+            report.exported = export(conn, cfg)
         except Exception:  # export problems must never block analysis
             conn.rollback()
             log.exception("markdown export failed")
@@ -91,7 +94,7 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
 
 def _suggestions(cfg: Config, conn, report: WorkReport) -> None:
     """Rebuild the suggestions queue (deterministic, no LLM) and notify about new ones when [suggestions] notify."""
-    from ..suggest import after_sync
+    from ..knowledge.suggest import after_sync
 
     got = after_sync(conn, cfg)  # never raises; None when [suggestions] enabled = false
     if got and got["new"]:
@@ -99,7 +102,7 @@ def _suggestions(cfg: Config, conn, report: WorkReport) -> None:
 
 
 def _synthesize(cfg: Config, conn, runner: Runner, report: WorkReport, *, force=False, progress=None):
-    from ..synthesize import GLOBAL, global_needs_synthesis, projects_needing_synthesis, synthesize_project
+    from ..knowledge.synthesize import GLOBAL, global_needs_synthesis, projects_needing_synthesis, synthesize_project
 
     targets = projects_needing_synthesis(conn, cfg, force=force)
     if global_needs_synthesis(conn, cfg) or (force and targets):
@@ -127,7 +130,7 @@ def _synthesize(cfg: Config, conn, runner: Runner, report: WorkReport, *, force=
 
 def _weekly_review(cfg: Config, conn, runner: Runner, report: WorkReport, *, progress=None):
     """Write the review of the last completed week once all its sessions are analyzed."""
-    from ..reviews import generate_review, review_ready
+    from ..knowledge.reviews import generate_review, review_ready
 
     ready, key = review_ready(conn)
     if not ready:
@@ -151,7 +154,7 @@ def _weekly_review(cfg: Config, conn, runner: Runner, report: WorkReport, *, pro
 
 def _themes(cfg: Config, report: WorkReport, *, progress=None):
     """Re-group the glossary categories whose terms changed in this run's glossary rebuilds (the Map's Theme level)."""
-    from ..glossary import build_themes
+    from ..knowledge.glossary import build_themes
 
     if not report.synthesized or report.paused_until:
         return
@@ -162,7 +165,7 @@ def _themes(cfg: Config, report: WorkReport, *, progress=None):
 
 def _glossaries(cfg: Config, conn, runner: Runner, report: WorkReport, *, progress=None):
     """Refresh the glossary of every project whose knowledge base was just re-synthesized."""
-    from ..glossary import build_glossaries
+    from ..knowledge.glossary import build_glossaries
 
     if not report.synthesized or report.paused_until:
         return

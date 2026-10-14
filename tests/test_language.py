@@ -13,12 +13,12 @@ from pathlib import Path
 import pytest
 from friction_fixture import ERRORS, ago, make_archive
 
-from interlatch import friction, ladder, suggest
+from interlatch.knowledge import friction, ladder, suggest
 from interlatch.core import i18n
 from interlatch.core.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, set_config_value
 from interlatch.core.i18n import tr, trn
 from interlatch.core.i18n.ja import JA
-from interlatch.instructions import BEGIN, END
+from interlatch.knowledge.instructions import BEGIN, END
 from interlatch.analysis.language import JAPANESE, written_in
 
 from conftest import CWD, SID, fake_log
@@ -64,7 +64,7 @@ def test_cli_config_set_checks_the_language(env, capsys):
 
 def test_english_prompts_are_left_exactly_as_they_were(env):
     from interlatch.analysis import session as analyze, screen
-    from interlatch import glossary, reviews, synthesize
+    from interlatch.knowledge import glossary, reviews, synthesize
 
     cfg = env["cfg"]
     assert analyze.system_prompt(cfg) is analyze.SYSTEM_PROMPT
@@ -86,11 +86,11 @@ def _systems(env) -> list[str]:
 
 def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
     from interlatch.analysis import session as analyze
-    from interlatch import reviews
+    from interlatch.knowledge import reviews
     from interlatch.analysis.session import analyze_session
-    from interlatch.glossary import build_glossaries, build_themes
-    from interlatch.reviews import generate_review
-    from interlatch.synthesize import GLOBAL, synthesize_project
+    from interlatch.knowledge.glossary import build_glossaries, build_themes
+    from interlatch.knowledge.reviews import generate_review
+    from interlatch.knowledge.synthesize import GLOBAL, synthesize_project
 
     conn = synced["conn"]
     cfg = _set_language(synced["cfg"], "ja")
@@ -138,7 +138,7 @@ def test_japanese_screening_prompt_and_rule_reasons(env):
 
 
 def test_overturned_lines_follow_the_review_language():
-    from interlatch.reviews import overturned_line
+    from interlatch.knowledge.reviews import overturned_line
 
     k = {"title": "Use uv sync", "project_name": "app", "stage": "established", "superseded_reason": "outdated",
          "successor_title": "Use uv sync --extra app"}
@@ -291,7 +291,8 @@ def test_a_line_outside_the_block_counts_in_either_language(archive):
 
 
 def test_japanese_knowledge_lines_compare_and_read_as_rules():
-    from interlatch.instructions import JACCARD_DUPLICATE, is_changelog, is_rule_like, jaccard, overlap, tokens
+    from interlatch.knowledge.instructions import (JACCARD_DUPLICATE, is_changelog, is_rule_like, jaccard, overlap,
+                                                   tokens)
 
     assert {"編集", "直前", "該当", "当行"} <= tokens("編集の直前に該当行を読み直す")
     assert tokens("Re-read the exact lines") == {"re-read", "exact", "lines"}  # English as before
@@ -322,7 +323,8 @@ def test_tr_and_trn_fall_back_to_english(ja):
 
 
 def test_every_translated_template_has_japanese_with_the_same_fields():
-    from interlatch import update, views
+    from interlatch import update
+    from interlatch.core import sessions
     from interlatch.analysis import queue
 
     need = set()
@@ -338,7 +340,7 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
         need.update(f["title"] for f in c["fixes"])
     need.update([friction.CONCURRENT_NOTE, update.PYPI_ERROR, update.MOVE_NOTE, "user level", *ladder.STAGES, "pinned by you", "added by you",
                  ladder.MEMORY_STAGE_REASON, "one session, low confidence", "one session", *queue.QUEUE_REASON_LABEL.values(),
-                 *views.ANALYSIS_REASONS, views.NOT_ANALYZED_CHAT])
+                 *sessions.ANALYSIS_REASONS, sessions.NOT_ANALYZED_CHAT])
     assert sorted(need - set(JA)) == []
     fields = lambda s: {f for _, f, _, _ in string.Formatter().parse(s) if f}
     for en, ja_text in JA.items():
@@ -348,11 +350,11 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
 def test_stored_english_templates_are_translated_when_read(ja):
     from interlatch.ingestion.chat_import import not_analyzed_reason
     from interlatch.sources.chats import CHATGPT
-    from interlatch.views import reason_text
+    from interlatch.core.sessions import analysis_reason_text
 
-    assert reason_text("session continued after analysis") == "分析のあとにセッションが続いた"
-    assert reason_text(not_analyzed_reason(CHATGPT)).startswith("取り込んだ ChatGPT のチャット：")
-    assert reason_text("claude -p exited 1: overloaded") == "claude -p exited 1: overloaded"  # the analyzer's own words
+    assert analysis_reason_text("session continued after analysis") == "分析のあとにセッションが続いた"
+    assert analysis_reason_text(not_analyzed_reason(CHATGPT)).startswith("取り込んだ ChatGPT のチャット：")
+    assert analysis_reason_text("claude -p exited 1: overloaded") == "claude -p exited 1: overloaded"  # the analyzer's own words
     assert ladder.reason_text("confirmed in 3 sessions over 19 days (2026-09-01 → 2026-09-20)") == \
         "19 日間の 3 セッションで確認（2026-09-01 → 2026-09-20）"
     assert ladder.reason_text("confirmed in 2 sessions") == "2 セッションで確認"

@@ -103,8 +103,8 @@ def make_archive(tmp_path, monkeypatch):
     monkeypatch.delenv("CODEX_HOME", raising=False)
     chome = tmp_path / "chronicle"
     monkeypatch.setenv("INTERLATCH_HOME", str(chome))
-    monkeypatch.setattr("interlatch.instructions._gh_bin", lambda: None)  # never ask GitHub from tests
-    monkeypatch.setattr("interlatch.instructions._VISIBILITY", {})
+    monkeypatch.setattr("interlatch.knowledge.instructions._gh_bin", lambda: None)  # never ask GitHub from tests
+    monkeypatch.setattr("interlatch.knowledge.instructions._VISIBILITY", {})
     cfg = load_config(chome)
     conn = connect(cfg.db_path)
     yield {"conn": conn, "cfg": cfg, "home": home, "a": Archive(conn, tmp_path), "tmp": tmp_path}

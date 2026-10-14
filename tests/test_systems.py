@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from interlatch import systems
+from interlatch.projects import systems
 from interlatch.storage.sqlite import connect
 
 

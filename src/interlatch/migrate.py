@@ -493,7 +493,7 @@ def _json_mcp(cfg: Config, exe: str, dry_run: bool) -> list[str]:
 # ---------------------------------------------------------------- CLAUDE.md / AGENTS.md
 def managed_instruction_files(cfg: Config) -> list[Path]:
     """The user-level CLAUDE.md and AGENTS.md, and every file a suggestion was written to or proposed for."""
-    from .instructions import claude_home, codex_home
+    from .knowledge.instructions import claude_home, codex_home
 
     paths = [claude_home(cfg) / "CLAUDE.md", codex_home(cfg) / "AGENTS.md"]
     if cfg.db_path.exists():
@@ -509,7 +509,7 @@ def managed_instruction_files(cfg: Config) -> list[Path]:
 
 
 def _instruction_markers(cfg: Config, exe: str, dry_run: bool) -> list[str]:
-    from .instructions import LEGACY_BEGIN, MalformedBlock, relabel, write_atomic
+    from .knowledge.instructions import LEGACY_BEGIN, MalformedBlock, relabel, write_atomic
 
     lines = []
     for path in managed_instruction_files(cfg):

@@ -4,9 +4,9 @@ import subprocess
 import sys
 
 from interlatch.analysis.session import analyze_session
-from interlatch.export_md import export_markdown
-from interlatch.glossary import build_glossary, glossary_entries, lookup
-from interlatch.synthesize import GLOBAL
+from interlatch.interfaces.exports.vault import export_markdown
+from interlatch.knowledge.glossary import build_glossary, glossary_entries, lookup
+from interlatch.knowledge.synthesize import GLOBAL
 
 from conftest import CWD, SID
 
@@ -66,7 +66,7 @@ def test_glossary_everywhere_else(synced):
 
 
 def test_parallel_glossary_builds(synced):
-    from interlatch.glossary import build_glossaries
+    from interlatch.knowledge.glossary import build_glossaries
 
     conn, cfg, _ = _build(synced)
     results = build_glossaries(cfg, [CWD, GLOBAL, "/no/knowledge/here"], concurrency=3)
@@ -75,7 +75,7 @@ def test_parallel_glossary_builds(synced):
 
 
 def test_map_data_links_terms_to_projects_and_knowledge(synced):
-    from interlatch.glossary import map_data
+    from interlatch.knowledge.glossary import map_data
 
     conn, cfg, _ = _build(synced)
     data = map_data(conn)
@@ -93,7 +93,7 @@ def test_map_data_links_terms_to_projects_and_knowledge(synced):
 
 
 def test_themes_group_a_category_and_rerun_only_when_it_changes(synced):
-    from interlatch.glossary import build_themes, map_data, themes_due
+    from interlatch.knowledge.glossary import build_themes, map_data, themes_due
 
     conn, cfg, _ = _build(synced)
     for name in ("ruff", "mypy"):  # two more tools the fake Claude leaves ungrouped

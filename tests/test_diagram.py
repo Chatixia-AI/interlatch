@@ -8,8 +8,9 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 from interlatch.analysis.session import analyze_session
-from interlatch.diagram import MAX_NODES, Metrics, layout, normalize_diagram, to_excalidraw, to_mermaid
-from interlatch.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
+from interlatch.core.diagrams import MAX_NODES, normalize_diagram, to_mermaid
+from interlatch.interfaces.exports.diagrams import Metrics, layout, to_excalidraw
+from interlatch.knowledge.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
 
 from conftest import CWD, SID
 

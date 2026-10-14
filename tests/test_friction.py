@@ -2,7 +2,7 @@
 
 import pytest
 
-from interlatch import friction
+from interlatch.knowledge import friction
 
 from friction_fixture import ERRORS, ago, make_archive
 

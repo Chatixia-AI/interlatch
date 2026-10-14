@@ -5,10 +5,10 @@ import sqlite3
 
 import pytest
 
-from interlatch import instructions, suggest
+from interlatch.knowledge import instructions, suggest
 from interlatch.storage.sqlite import connect
 from interlatch.storage.schema import SCHEMA_VERSION
-from interlatch.instructions import BEGIN
+from interlatch.knowledge.instructions import BEGIN
 
 from friction_fixture import ago, make_archive
 

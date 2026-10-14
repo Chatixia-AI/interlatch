@@ -136,6 +136,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
     from .storage.sqlite import connect
     from .ingestion.service import sync
     from .application.workflows import run_worker
+    from .interfaces.exports.vault import export_markdown
 
     while not stop.wait(minutes * 60):
         try:
@@ -146,7 +147,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
             finally:
                 conn.rollback()
                 conn.close()
-            work = run_worker(cfg)
+            work = run_worker(cfg, export=export_markdown)
             log.info("container: sync %s | work %s", report.summary(), work.summary())
         except Exception:  # the next round tries again; the dashboard keeps serving
             log.exception("background sync and work failed")

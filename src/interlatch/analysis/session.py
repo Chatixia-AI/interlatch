@@ -7,12 +7,13 @@ import logging
 import sqlite3
 from datetime import timedelta
 
-from .. import ladder, news
-from ..cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
+from ..knowledge import ladder
+from .. import news
+from ..knowledge.cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from ..core.config import Config
 from .digest import build_digest
 from ..core.sessions import best_title
-from ..learning import TOPICS, normalize_interests, store_interests
+from ..knowledge.learning import TOPICS, normalize_interests, store_interests
 from .runners.base import BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
 from .runners.factory import make_runner
 from .language import written_in

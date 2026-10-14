@@ -3,7 +3,8 @@ and what the Projects page and a limited person see."""
 
 import pytest
 
-from interlatch import access, groups
+from interlatch import access
+from interlatch.projects import groups
 from interlatch.server import App
 
 AKTIO = "/Users/me/Work/AI-BPO/Aktio"

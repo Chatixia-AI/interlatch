@@ -10,9 +10,9 @@ from http.server import ThreadingHTTPServer
 import pytest
 from friction_fixture import ago, make_archive
 
-from interlatch import suggest
+from interlatch.knowledge import suggest
 from interlatch.cli import main
-from interlatch.instructions import BEGIN
+from interlatch.knowledge.instructions import BEGIN
 
 
 @pytest.fixture()
@@ -183,13 +183,13 @@ def test_background_run_refreshes_and_notifies(archive, monkeypatch):
     posted = []
     monkeypatch.setattr("interlatch.notify.post", lambda title, message: posted.append((title, message)) or True)
 
-    report = run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=False)
+    report = run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=None)
     assert report.suggestions == 2 and "2 new suggestions" in report.summary()
     assert posted == [("Interlatch", "2 new suggestions. Open the dashboard > Suggestions")]
-    assert run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=False).suggestions == 0
+    assert run_worker(replace(cfg, suggestions_notify=True), analyze=False, synthesize=False, export=None).suggestions == 0
     assert len(posted) == 1  # nothing new, no notification
 
     conn.execute("DELETE FROM suggestions")
     conn.commit()
-    run_worker(replace(cfg, suggestions_enabled=False), analyze=False, synthesize=False, export=False)
+    run_worker(replace(cfg, suggestions_enabled=False), analyze=False, synthesize=False, export=None)
     assert conn.execute("SELECT COUNT(*) FROM suggestions").fetchone()[0] == 0
