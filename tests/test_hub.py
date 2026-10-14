@@ -332,10 +332,10 @@ def _analyzed_on_spoke(spoke, *, title: str, at: str, lessons: list[tuple[str, s
 def test_knowledge_only_sharing(hubenv):
     """[hub] share = "knowledge": the spoke analyzes its own sessions and sends the hub only details, the analysis
     and project lessons; no transcript arrives, the hub never re-analyzes it, and folders still decide the project."""
-    from interlatch.analyze import AnalysisSkipped, analyze_session
+    from interlatch.analysis.session import AnalysisSkipped, analyze_session
     from interlatch.ingestion.service import sync
     from interlatch.ingestion.deletion import mark_missing_sources
-    from interlatch.worker import count_pending, pending_sessions
+    from interlatch.analysis.queue import count_pending, pending_sessions
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     spoke.hub_share = "knowledge"
@@ -425,7 +425,7 @@ def test_knowledge_mode_records_and_analyzes_here(env, monkeypatch):
     and the worker runs, then tries to share (an unreachable hub is just noted)."""
     from interlatch import hooks
     from interlatch.core.config import set_config_value
-    from interlatch.worker import run_worker
+    from interlatch.application.workflows import run_worker
 
     cfg = load_config(env["home"])
     set_config_value(cfg, "hub", "url", '"http://127.0.0.1:9"')
@@ -460,7 +460,7 @@ def test_normalize_remote():
 def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
     """A spoke that already analyzed its sessions sends the results once; the hub doesn't pay for them again."""
     from interlatch.ingestion.service import sync
-    from interlatch.worker import run_worker
+    from interlatch.application.workflows import run_worker
 
     monkeypatch.setattr(hub.IngestTrigger, "request", lambda self: None)
     cfg = synced["cfg"]
@@ -501,7 +501,7 @@ def test_spoke_hands_over_its_earlier_analyses(synced, tmp_path, monkeypatch):
 
 def test_spoke_sends_instead_of_recording(env, monkeypatch):
     from interlatch import hooks
-    from interlatch.worker import run_worker
+    from interlatch.application.workflows import run_worker
 
     cfg = env["cfg"]
     with open(cfg.config_path, "a") as fh:

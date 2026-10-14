@@ -7,16 +7,17 @@ import logging
 import sqlite3
 from datetime import timedelta
 
-from . import ladder, news
-from .cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
-from .core.config import Config
+from .. import ladder, news
+from ..cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
+from ..core.config import Config
 from .digest import build_digest
-from .core.sessions import best_title
-from .learning import TOPICS, normalize_interests, store_interests
-from .llm import (BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError, make_runner,
-                  written_in)
-from .core.redact import redact
-from .core.util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
+from ..core.sessions import best_title
+from ..learning import TOPICS, normalize_interests, store_interests
+from .runners.base import BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
+from .runners.factory import make_runner
+from .language import written_in
+from ..core.redact import redact
+from ..core.util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
 
 log = logging.getLogger("interlatch.analyze")
 
@@ -458,7 +459,7 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
         ),
     )
     kept = ladder.before_reanalysis(conn, session_id)
-    from .core.machine import local_machine_id
+    from ..core.machine import local_machine_id
 
     # a hub analyzing another computer's transcript: the lessons new to it are the Team page's news (news.py)
     other = s["machine_id"] if s["machine_id"] and s["machine_id"] != local_machine_id(cfg) and s["source"] != "history" else None

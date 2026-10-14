@@ -150,7 +150,7 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
         where.append("k.source = ?")
         params.append(source)
     if cases:
-        from .analyze import CASE_FILE_SQL
+        from .analysis.session import CASE_FILE_SQL
 
         where.append(CASE_FILE_SQL)
     if lessons:

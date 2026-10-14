@@ -127,8 +127,11 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `artifacts/`：セッションが作ったもの、その今の状態、開くこと
 - `ingestion/`：すべてのソースの同期（`service.py`）。生ファイルのアーカイブ、解析したセッションの保存、チャットの
   取り込み、エージェントのメモリーと履歴、忘れること
-- `connectors.py`（ソース）、`digest.py` / `analyze.py` / `llm.py`（分析）、`synthesize.py`（ナレッジベース）、
-  `diagram.py`（アーキテクチャ図）、`glossary.py`、`reviews.py`、`worker.py`（キュー）
+- `analysis/`：トランスクリプトの要約（`digest.py`）、モデルに教訓を尋ねること（`session.py`）、取り込んだチャットの
+  選別、キューとワーカー。`analysis/runners/` がエージェントの CLI かプロバイダーの API でモデルに尋ねます
+- `application/`：ワーカーの 1 回の実行で起きること（`workflows.py`）
+- `connectors.py`（ソース）、`synthesize.py`（ナレッジベース）、
+  `diagram.py`（アーキテクチャ図）、`glossary.py`、`reviews.py`
 - `server.py` ＋ `web/`（ダッシュボード）、`mcp_server.py`、`export_md.py`、`hooks.py` / `install.py`、`desktop.py`
   （macOS アプリ）、`cli.py`。`packaging/macos/` がアプリをビルドします
 

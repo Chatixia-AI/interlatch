@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from interlatch.analyze import analyze_session
+from interlatch.analysis.session import analyze_session
 from interlatch.export_md import export_markdown
 from interlatch.glossary import build_glossary, glossary_entries, lookup
 from interlatch.synthesize import GLOBAL

@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from interlatch.storage.kv import kv_set
 from interlatch.core.util import to_iso, utcnow
-from interlatch.worker import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
+from interlatch.analysis.queue import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
 
 from conftest import CWD, SID
 
@@ -67,11 +67,11 @@ def test_a_stopped_queue_says_why(synced, monkeypatch):
     conn.commit()
     off = replace(cfg, analysis=replace(cfg.analysis, auto=False))
     assert "automatic analysis is off" in count_pending(conn, off)["block"]
-    from interlatch.llm import ClaudeRunner
+    from interlatch.analysis.runners.claude import ClaudeRunner
 
     missing = ClaudeRunner(cfg)
     missing.bin = None  # not installed
-    monkeypatch.setattr("interlatch.worker.make_runner", lambda cfg: missing)
+    monkeypatch.setattr("interlatch.analysis.queue.make_runner", lambda cfg: missing)
     assert count_pending(conn, cfg)["block"] == "Claude Code (`claude`) was not found, so nothing can be analyzed"
 
 
@@ -88,7 +88,7 @@ def test_session_api_carries_the_reason(synced):
 
 def test_queued_ids_follow_the_reasons(synced):
     """The Queue's Analyze now takes exactly the sessions the reasons name: ready ones, or the ones still active."""
-    from interlatch.worker import queued_ids
+    from interlatch.analysis.queue import queued_ids
 
     conn, cfg = synced["conn"], synced["cfg"]
     conn.execute("DELETE FROM sessions")

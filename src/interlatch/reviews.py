@@ -9,7 +9,9 @@ from datetime import date, datetime, time, timedelta
 from . import ladder
 from .core.config import Config
 from .core.i18n import tr
-from .llm import Runner, make_runner, written_in
+from .analysis.runners.base import Runner
+from .analysis.runners.factory import make_runner
+from .analysis.language import written_in
 from .core.util import dumps, human_cost, human_count, human_duration, loads, one_line, to_iso, utcnow_iso
 
 log = logging.getLogger("interlatch.reviews")

@@ -73,7 +73,7 @@ def cmd_ingest_session(args) -> int:
         sync(cfg, conn)
     conn.close()
     if args.work:
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         run_worker(cfg, wait=False)
     return 0
@@ -99,7 +99,7 @@ def cmd_sync(args) -> int:
             print(f"  ! {err}", file=sys.stderr)
     conn.close()
     if args.work:
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         work = run_worker(cfg, progress=None if args.quiet else (lambda m: print(f"  {m}")))
         if not args.quiet:
@@ -114,7 +114,7 @@ def cmd_sync(args) -> int:
 
 def cmd_work(args) -> int:
     from .core.util import setup_logging
-    from .worker import run_worker
+    from .application.workflows import run_worker
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -133,7 +133,8 @@ def cmd_work(args) -> int:
 def cmd_analyze(args) -> int:
     from .core.util import human_cost, setup_logging
     from .views import resolve_session_id
-    from .worker import pending_sessions, run_worker
+    from .application.workflows import run_worker
+    from .analysis.queue import pending_sessions
 
     cfg = _cfg()
     setup_logging(cfg.logs_dir)
@@ -154,13 +155,13 @@ def cmd_analyze(args) -> int:
     if not ids:
         print("nothing to analyze (use SESSION ids, --pending or --all)")
         return 0
-    from .llm import make_runner
+    from .analysis.runners.factory import make_runner
 
     if args.backend:
         cfg.analysis.backend = args.backend
     runner = make_runner(cfg)
     if args.dry_run:
-        from .digest import build_digest
+        from .analysis.digest import build_digest
 
         total = 0
         for sid in ids:
@@ -400,9 +401,9 @@ def cmd_status(args) -> int:
     from .storage.kv import kv_get
     from .install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
     from .statusline import WINDOW_LABEL, plan_usage
-    from .llm import make_runner
+    from .analysis.runners.factory import make_runner
     from .core.util import human_cost, local_str
-    from .worker import PAUSE_KEY, QUEUE_REASON_LABEL, count_pending
+    from .analysis.queue import PAUSE_KEY, QUEUE_REASON_LABEL, count_pending
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -548,7 +549,7 @@ def _analysis_step(cfg, conn, console, analyzer, *, interactive: bool, choice: s
     analyze now. Returns (sessions to analyze now, sessions waiting, how the rest gets analyzed)."""
     import math
 
-    from .worker import pending_sessions
+    from .analysis.queue import pending_sessions
 
     ids = pending_sessions(conn, cfg, 100_000)
     n = len(ids)
@@ -647,7 +648,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
     Returns the line for the closing summary about what is left."""
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-    from .worker import run_worker
+    from .application.workflows import run_worker
 
     console.print(f"\nAnalyzing {len(ids)} session{'s' * (len(ids) != 1)}. Ctrl-C stops; what is left is analyzed {later}.",
                   highlight=False)
@@ -874,14 +875,14 @@ def _menu_bar_line(on: bool) -> str:
 
 
 def _analyzer(cfg) -> str:
-    from .llm import make_runner
+    from .analysis.runners.factory import make_runner
 
     return make_runner(cfg).label
 
 
 def _choose_analyzer(cfg, console, *, ask, dry_run: bool):
     """Settle which agent analyzes sessions; return its runner, or None when it is not installed."""
-    from .llm import BACKENDS, make_runner
+    from .analysis.runners.factory import BACKENDS, make_runner
 
     runner = make_runner(cfg)
     other = "codex" if runner.name == "claude" else "claude"
@@ -1046,7 +1047,7 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
     import tomllib
 
     from .core.config import LANGUAGES, load_config, set_config_value
-    from .llm import BACKENDS
+    from .analysis.runners.factory import BACKENDS
 
     if not key or value is None or "." not in key:
         print("usage: interlatch config set SECTION.KEY VALUE   (e.g. interlatch config set analysis.backend codex)",
@@ -1054,7 +1055,7 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
         return 2
     section, name = key.rsplit(".", 1) if key.startswith("providers.") else key.split(".", 1)
     if section.startswith("providers."):
-        from .providers import PROVIDERS, SETTINGS
+        from .analysis.runners.settings import PROVIDERS, SETTINGS
 
         if section.split(".", 1)[1] not in PROVIDERS or name not in SETTINGS:
             print(f"usage: interlatch config set providers.PROVIDER.KEY VALUE; PROVIDER is one of: {', '.join(PROVIDERS)}; "
@@ -1078,7 +1079,7 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
         return 2
     print(f"[{section}] {name} = {literal}")
     if key == "analysis.backend":
-        from .llm import make_runner
+        from .analysis.runners.factory import make_runner
 
         runner = make_runner(load_config(cfg.home))
         if not runner.available():
@@ -1089,8 +1090,8 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
 def _config_key(cfg, provider: str | None, value: str | None, *, forget: bool) -> int:
     """`interlatch config set-key PROVIDER [KEY]`: store a provider's API key (asked for, unechoed, when not given), or
     `forget-key PROVIDER` to remove it."""
-    from .llm import BACKENDS
-    from .providers import KEY_ENVS, keys_path, set_key
+    from .analysis.runners.factory import BACKENDS
+    from .analysis.runners.settings import KEY_ENVS, keys_path, set_key
 
     if provider not in KEY_ENVS:
         print(f"usage: interlatch config {'forget-key' if forget else 'set-key'} PROVIDER; PROVIDER is one of: "
@@ -1565,7 +1566,7 @@ def cmd_import(args) -> int:
 
 
 def _screen_run(cfg, conn, *, source, redo, limit, sample) -> int:
-    from .screen import SOURCES, screen_chats, screen_status
+    from .analysis.screen import SOURCES, screen_chats, screen_status
     from .core.util import human_cost
 
     report = screen_chats(cfg, conn, source=source, redo=redo, limit=limit, sample=sample,
@@ -1579,7 +1580,7 @@ def _screen_run(cfg, conn, *, source, redo, limit, sample) -> int:
 
 
 def cmd_screen(args) -> int:
-    from .screen import BATCH, candidates, queue, rule_verdict
+    from .analysis.screen import BATCH, candidates, queue, rule_verdict
 
     cfg = _cfg()
     conn = _conn(cfg)
@@ -1605,7 +1606,7 @@ def _screen_list(conn, args) -> int:
     from rich import box
     from rich.table import Table
 
-    from .screen import VERDICT_LABEL, source_filter
+    from .analysis.screen import VERDICT_LABEL, source_filter
 
     where, params = source_filter(args.source)
     rows = conn.execute(
@@ -2699,7 +2700,7 @@ def prog_name() -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from .llm import BACKENDS
+    from .analysis.runners.factory import BACKENDS
 
     p = argparse.ArgumentParser(
         prog=prog_name(),

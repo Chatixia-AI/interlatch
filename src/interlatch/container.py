@@ -135,7 +135,7 @@ def _work(home, minutes: float, stop: threading.Event) -> None:
     export. On a hub that takes knowledge only, with no model set up, this is mostly the Markdown export."""
     from .storage.sqlite import connect
     from .ingestion.service import sync
-    from .worker import run_worker
+    from .application.workflows import run_worker
 
     while not stop.wait(minutes * 60):
         try:

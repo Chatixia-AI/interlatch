@@ -73,7 +73,7 @@ def test_a_row_as_it_goes(synced):
 
 
 def test_the_background_run_writes_it(env, monkeypatch):
-    from interlatch.worker import run_worker
+    from interlatch.application.workflows import run_worker
 
     calls = []
     monkeypatch.setattr(mirror, "sync", lambda cfg, **kw: calls.append(cfg.mirror_include) or mirror.Result(sessions=2, removed=0))

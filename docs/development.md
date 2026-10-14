@@ -127,9 +127,12 @@ which installs from before the rename still run):
 - `artifacts/`: what sessions made, where each stands, and opening it
 - `ingestion/`: syncing every source (`service.py`): the raw-file archive, storing parsed sessions, chat imports,
   agent memory and history, forgetting
-- `connectors.py` (Sources), `digest.py` / `analyze.py` / `llm.py` (analysis),
-  `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and Mermaid export),
-  `glossary.py`, `reviews.py`, `worker.py` (queue)
+- `analysis/`: condensing a transcript (`digest.py`), asking a model for its lessons (`session.py`), screening
+  imported chats, the queue and the worker; `analysis/runners/` asks the model, through an agent's CLI or a
+  provider's API
+- `application/`: what a worker run does from start to finish (`workflows.py`)
+- `connectors.py` (Sources), `synthesize.py` (knowledge bases), `diagram.py` (architecture sketch: layout, Excalidraw and Mermaid export),
+  `glossary.py`, `reviews.py`
 - `server.py` + `web/` (dashboard), `mcp_server.py`, `export_md.py`, `hooks.py` / `install.py`, `desktop.py` (macOS
   app), `cli.py`; `packaging/macos/` builds the app
 

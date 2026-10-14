@@ -12,11 +12,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from interlatch import providers
+from interlatch.analysis.runners import api as providers
 from interlatch.core.config import load_config, set_config_value
-from interlatch.llm import LLMError, UsageLimitError, make_runner
-from interlatch.providers import ApiRunner, key_source, set_key, sigv4
-from interlatch.worker import run_worker
+from interlatch.analysis.runners.base import LLMError, UsageLimitError
+from interlatch.analysis.runners.factory import make_runner
+from interlatch.analysis.runners.api import ApiRunner, sigv4
+from interlatch.analysis.runners.settings import key_source, set_key
+from interlatch.application.workflows import run_worker
 
 from conftest import CWD, SID
 

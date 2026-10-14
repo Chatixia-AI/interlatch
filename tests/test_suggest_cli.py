@@ -172,7 +172,7 @@ def test_api_routes(queued):
 
 
 def test_background_run_refreshes_and_notifies(archive, monkeypatch):
-    from interlatch.worker import run_worker
+    from interlatch.application.workflows import run_worker
 
     a, conn, cfg = archive["a"], archive["conn"], archive["cfg"]
     cfg.ensure_dirs()

@@ -9,7 +9,9 @@ import sqlite3
 
 from .core.config import Config
 from .core.i18n import tr
-from .llm import Runner, make_runner, written_in
+from .analysis.runners.base import Runner
+from .analysis.runners.factory import make_runner
+from .analysis.language import written_in
 from .synthesize import GLOBAL, kb_sections
 from .core.util import dumps, loads, one_line, safe_text, truncate, utcnow_iso
 

@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone
 
-from interlatch.analyze import normalize_analysis, store_analysis
+from interlatch.analysis.session import normalize_analysis, store_analysis
 from interlatch.learning import glance
 from interlatch.server import App
 
