@@ -1,0 +1,445 @@
+{
+ "cli:a9a9a9a9-1111-2222-3333-444444444444": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 30.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 9990,
+    "cost_usd": 0.0145,
+    "input_tokens": 10,
+    "model": "gpt-5.6-luna",
+    "msg_id": "use0",
+    "output_tokens": 200,
+    "speed": null,
+    "ts": "2026-09-21T10:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 9990,
+    "cache_write_tokens": 500,
+    "cost_usd": 0.00338625,
+    "input_tokens": 10,
+    "model": "gpt-5.6-luna",
+    "msg_id": "use1",
+    "output_tokens": 150,
+    "speed": null,
+    "ts": "2026-09-21T10:00:20.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": "1.2.3",
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 4,
+   "lines_removed": 1,
+   "n_api_calls": 2,
+   "n_tool_errors": 1,
+   "peak_context": 10500,
+   "primary_model": "gpt-5.6-luna",
+   "totals": {
+    "cache_read_tokens": 9990,
+    "cache_write_tokens": 10490,
+    "cost": 0.01788625,
+    "input_tokens": 20,
+    "output_tokens": 350
+   }
+  },
+  "duration_s": 30.0,
+  "ended_at": "2026-09-21T10:00:30.000Z",
+  "entrypoint": "copilot:cli",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "Fix the flaky test",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:01.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "thinking",
+    "meta": null,
+    "role": "assistant",
+    "seq": 1,
+    "text": "Look at the test",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.6-luna",
+     "phase": null
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "Running the tests.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"command\": \"pytest -x\"}"
+    },
+    "role": "assistant",
+    "seq": 3,
+    "text": "bash: pytest -x",
+    "tool_name": "bash",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 4,
+    "text": "1 failed",
+    "tool_name": "bash",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:09.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"path\": \"/Users/test/Projects/copilot-app/test_app.py\"}"
+    },
+    "role": "assistant",
+    "seq": 5,
+    "text": "edit: /Users/test/Projects/copilot-app/test_app.py",
+    "tool_name": "edit",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:10.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 6,
+    "text": "ok",
+    "tool_name": "edit",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:11.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "gpt-5.6-luna",
+     "phase": null
+    },
+    "role": "assistant",
+    "seq": 7,
+    "text": "Seeded the RNG; the test is stable.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T10:00:20.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/copilot-app/test_app.py": {
+    "edits": 1,
+    "lines_added": 4,
+    "lines_removed": 1,
+    "reads": 0,
+    "writes": 0
+   }
+  },
+  "first_prompt": "Fix the flaky test",
+  "git_branch": null,
+  "git_remote": null,
+  "hooks": {},
+  "id": "a9a9a9a9-1111-2222-3333-444444444444",
+  "last_prompt": "Fix the flaky test",
+  "mcp_servers": {},
+  "models": {
+   "gpt-5.6-luna": 350
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/copilot-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T10:00:00.000Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "pytest -x",
+    "duration_ms": 5000,
+    "file_path": null,
+    "input": null,
+    "is_error": true,
+    "mcp_server": null,
+    "name": "bash",
+    "result_chars": 8,
+    "summary": "pytest -x",
+    "tool_use_id": "c1",
+    "ts": "2026-09-21T10:00:04.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/copilot-app/test_app.py",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "edit",
+    "result_chars": 2,
+    "summary": "/Users/test/Projects/copilot-app/test_app.py",
+    "tool_use_id": "c2",
+    "ts": "2026-09-21T10:00:10.000Z"
+   }
+  ],
+  "tools": {
+   "bash": 1,
+   "edit": 1
+  },
+  "workflows": []
+ },
+ "vscode:c0c0c0c0-0000-0000-0000-000000000000.jsonl": null,
+ "vscode:c0c0c0c0-1111-2222-3333-444444444444.jsonl": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 31.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0,
+    "input_tokens": 12000,
+    "model": "claude-sonnet-4-6",
+    "msg_id": "request_1",
+    "output_tokens": 300,
+    "speed": null,
+    "ts": "2026-09-21T14:13:51.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": null,
+  "commands": {},
+  "custom_title": "Health endpoint",
+  "derived": {
+   "lines_added": 3,
+   "lines_removed": 0,
+   "n_api_calls": 1,
+   "n_tool_errors": 0,
+   "peak_context": 12000,
+   "primary_model": "claude-sonnet-4-6",
+   "totals": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost": 0.0,
+    "input_tokens": 12000,
+    "output_tokens": 300
+   }
+  },
+  "duration_s": 31.0,
+  "ended_at": "2026-09-21T14:13:51.000Z",
+  "entrypoint": "copilot:vscode-chat",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "Add a health endpoint and run the tests",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "thinking",
+    "meta": null,
+    "role": "assistant",
+    "seq": 1,
+    "text": "Check the app first",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"filePath\": \"/Users/test/Projects/copilot-app/app.py\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "read_file: /Users/test/Projects/copilot-app/app.py",
+    "tool_name": "read_file",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "from fastapi import FastAPI",
+    "tool_name": "read_file",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"command\": \"pytest -q\"}"
+    },
+    "role": "assistant",
+    "seq": 4,
+    "text": "run_in_terminal: pytest -q",
+    "tool_name": "run_in_terminal",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:28.500Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "3 passed",
+    "tool_name": "run_in_terminal",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:28.500Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": {
+     "model": "claude-sonnet-4-6"
+    },
+    "role": "assistant",
+    "seq": 6,
+    "text": "Added `/health` and the tests pass.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:36.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/copilot-app/app.py": {
+    "edits": 1,
+    "lines_added": 3,
+    "lines_removed": 0,
+    "reads": 1,
+    "writes": 0
+   }
+  },
+  "first_prompt": "Add a health endpoint and run the tests",
+  "git_branch": null,
+  "git_remote": null,
+  "hooks": {},
+  "id": "c0c0c0c0-1111-2222-3333-444444444444",
+  "last_prompt": "Add a health endpoint and run the tests",
+  "mcp_servers": {},
+  "models": {
+   "claude-sonnet-4-6": 300
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": "agent",
+  "project_path": "/Users/test/Projects/copilot-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T14:13:20.000Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": null,
+    "file_path": "/Users/test/Projects/copilot-app/app.py",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "read_file",
+    "result_chars": 27,
+    "summary": "/Users/test/Projects/copilot-app/app.py",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": "pytest -q",
+    "duration_ms": null,
+    "file_path": null,
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "run_in_terminal",
+    "result_chars": 8,
+    "summary": "pytest -q",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:28.500Z"
+   }
+  ],
+  "tools": {
+   "read_file": 1,
+   "run_in_terminal": 1
+  },
+  "workflows": []
+ }
+}

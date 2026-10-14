@@ -1,0 +1,604 @@
+{
+ "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 60.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 4000,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.02,
+    "input_tokens": 900,
+    "model": null,
+    "msg_id": "task-total",
+    "output_tokens": 120,
+    "speed": null,
+    "ts": "2026-09-21T14:14:20.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": "1.0",
+  "commands": {},
+  "custom_title": "Dashboard by site",
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 1,
+   "n_tool_errors": 0,
+   "peak_context": 4900,
+   "primary_model": null,
+   "totals": {
+    "cache_read_tokens": 4000,
+    "cache_write_tokens": 0,
+    "cost": 0.02,
+    "input_tokens": 900,
+    "output_tokens": 120
+   }
+  },
+  "duration_s": 60.0,
+  "ended_at": "2026-09-21T14:14:20.000Z",
+  "entrypoint": "bob:normal",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "meta",
+    "meta": null,
+    "role": "system",
+    "seq": 0,
+    "text": "[system prompt, 46 chars]",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:20.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 1,
+    "text": "Show progress by site",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 2,
+    "text": "Listing files.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:22.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"path\": \"/Users/test/Projects/copilot-app\"}"
+    },
+    "role": "assistant",
+    "seq": 3,
+    "text": "list_files: /Users/test/Projects/copilot-app",
+    "tool_name": "list_files",
+    "tool_use_id": "tc1",
+    "ts": "2026-09-21T14:13:22.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 4,
+    "text": "app.py\nviews.py",
+    "tool_name": "list_files",
+    "tool_use_id": "tc1",
+    "ts": "2026-09-21T14:13:22.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "api_error",
+    "meta": null,
+    "role": "system",
+    "seq": 5,
+    "text": "rate limited",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:22.000Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/copilot-app": {
+    "edits": 0,
+    "lines_added": 0,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 0
+   }
+  },
+  "first_prompt": "Show progress by site",
+  "git_branch": "main",
+  "git_remote": null,
+  "hooks": {},
+  "id": "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0",
+  "last_prompt": "Show progress by site",
+  "mcp_servers": {},
+  "models": {},
+  "n_api_errors": 1,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/copilot-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T14:13:20.000Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": null,
+    "file_path": "/Users/test/Projects/copilot-app",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "list_files",
+    "result_chars": 15,
+    "summary": "/Users/test/Projects/copilot-app",
+    "tool_use_id": "tc1",
+    "ts": "2026-09-21T14:13:22.000Z"
+   }
+  ],
+  "tools": {
+   "list_files": 1
+  },
+  "workflows": []
+ },
+ "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1": null,
+ "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 60.0,
+  "ai_title": null,
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.1,
+    "input_tokens": 20000,
+    "model": null,
+    "msg_id": "",
+    "output_tokens": 0,
+    "speed": null,
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.01,
+    "input_tokens": 5000,
+    "model": null,
+    "msg_id": "",
+    "output_tokens": 0,
+    "speed": null,
+    "ts": "2026-09-21T14:13:23.600Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.002,
+    "input_tokens": 5200,
+    "model": null,
+    "msg_id": "",
+    "output_tokens": 0,
+    "speed": null,
+    "ts": "2026-09-21T14:13:23.800Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.11,
+    "input_tokens": 25000,
+    "model": null,
+    "msg_id": "",
+    "output_tokens": 0,
+    "speed": null,
+    "ts": "2026-09-21T14:13:23.000Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.128,
+    "input_tokens": 30000,
+    "model": null,
+    "msg_id": "",
+    "output_tokens": 0,
+    "speed": null,
+    "ts": "2026-09-21T14:13:25.000Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": null,
+  "commands": {},
+  "custom_title": "Explainer page",
+  "derived": {
+   "lines_added": 2,
+   "lines_removed": 0,
+   "n_api_calls": 3,
+   "n_tool_errors": 1,
+   "peak_context": 30000,
+   "primary_model": null,
+   "totals": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost": 0.35,
+    "input_tokens": 85200,
+    "output_tokens": 0,
+    "sub_cost": 0.012,
+    "sub_tokens": 10200
+   }
+  },
+  "duration_s": 60.0,
+  "ended_at": "2026-09-21T14:14:20.000Z",
+  "entrypoint": "bob:normal",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "Make an explainer page",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:20.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 1,
+    "text": "Researching first.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"name\": \"explore\", \"description\": \"Find how the dashboard groups sites\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "spawn_subagent: Find how the dashboard groups sites",
+    "tool_name": "spawn_subagent",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "<task_result>Sites group by region</task_result>",
+    "tool_name": "spawn_subagent",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.040Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "is_error": false,
+    "kind": "meta",
+    "meta": null,
+    "role": "system",
+    "seq": 0,
+    "text": "[system prompt, 42 chars]",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": null
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 1,
+    "text": "Find how the dashboard groups sites",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:23.500Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"path\": \"/Users/test/Projects/copilot-app/notes/findings.md\", \"content\": \"# Findings\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "write_file: /Users/test/Projects/copilot-app/notes/findings.md",
+    "tool_name": "write_file",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T14:13:23.600Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "Created file: notes/findings.md",
+    "tool_name": "write_file",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T14:13:23.640Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 4,
+    "text": "Done.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:23.800Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"id\": \"x\", \"title\": \"Explainer\", \"html\": \"<script></script>\"}"
+    },
+    "role": "assistant",
+    "seq": 4,
+    "text": "create_html_artifact: id=x, title=Explainer, html=<script></script>",
+    "tool_name": "create_html_artifact",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:23.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "Error from tool create_html_artifact: no <script>",
+    "tool_name": "create_html_artifact",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:23.040Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 6,
+    "text": "Writing a file instead.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-09-21T14:13:25.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"path\": \"/Users/test/Projects/copilot-app/docs/explainer.html\", \"content\": \"<!DOCTYPE html><html><body>hi</body></html>\"}"
+    },
+    "role": "assistant",
+    "seq": 7,
+    "text": "write_file: /Users/test/Projects/copilot-app/docs/explainer.html",
+    "tool_name": "write_file",
+    "tool_use_id": "t3",
+    "ts": "2026-09-21T14:13:25.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 8,
+    "text": "Created file: docs/explainer.html",
+    "tool_name": "write_file",
+    "tool_use_id": "t3",
+    "ts": "2026-09-21T14:13:25.040Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/copilot-app/docs/explainer.html": {
+    "edits": 0,
+    "lines_added": 2,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 1
+   },
+   "/Users/test/Projects/copilot-app/notes/findings.md": {
+    "edits": 0,
+    "lines_added": 0,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 1
+   }
+  },
+  "first_prompt": "Make an explainer page",
+  "git_branch": null,
+  "git_remote": null,
+  "hooks": {},
+  "id": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+  "last_prompt": "Make an explainer page",
+  "mcp_servers": {},
+  "models": {},
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [
+   {
+    "action": "created",
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "key": "file:/Users/test/Projects/copilot-app/notes/findings.md",
+    "kind": "doc",
+    "meta": {},
+    "path": "/Users/test/Projects/copilot-app/notes/findings.md",
+    "sha256": "1ca66f22ea1527dee5c20cf9e1c6a78f47f71455f504dc36d938fd2e36a76d1b",
+    "size": 10,
+    "title": "findings.md",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T14:13:23.600Z",
+    "url": null,
+    "versions": 1
+   },
+   {
+    "action": "created",
+    "agent_id": "",
+    "key": "file:/Users/test/Projects/copilot-app/docs/explainer.html",
+    "kind": "page",
+    "meta": {},
+    "path": "/Users/test/Projects/copilot-app/docs/explainer.html",
+    "sha256": "c34b9ccb3da6902ecc31a2e7e46f4859069d6e8c731684f7b80a1164654b44cf",
+    "size": 43,
+    "title": "explainer.html",
+    "tool_use_id": "t3",
+    "ts": "2026-09-21T14:13:25.000Z",
+    "url": null,
+    "versions": 1
+   }
+  ],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/copilot-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-09-21T14:13:20.000Z",
+  "subagents": {
+   "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b": {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "agent_type": "explore",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "description": "Find how the dashboard groups sites",
+    "ended_at": "2026-09-21T14:13:23.800Z",
+    "est_cost_usd": 0.012,
+    "input_tokens": 10200,
+    "model": null,
+    "n_tool_calls": 1,
+    "n_tool_errors": 0,
+    "output_tokens": 0,
+    "phase": null,
+    "started_at": "2026-09-21T14:13:23.500Z",
+    "tool_use_id": "t1",
+    "workflow_id": null
+   }
+  },
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 40,
+    "file_path": null,
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "spawn_subagent",
+    "result_chars": 48,
+    "summary": "Find how the dashboard groups sites",
+    "tool_use_id": "t1",
+    "ts": "2026-09-21T14:13:21.000Z"
+   },
+   {
+    "agent_id": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b",
+    "command": null,
+    "duration_ms": 40,
+    "file_path": "/Users/test/Projects/copilot-app/notes/findings.md",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "write_file",
+    "result_chars": 31,
+    "summary": "/Users/test/Projects/copilot-app/notes/findings.md",
+    "tool_use_id": "s1",
+    "ts": "2026-09-21T14:13:23.600Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 40,
+    "file_path": null,
+    "input": null,
+    "is_error": true,
+    "mcp_server": null,
+    "name": "create_html_artifact",
+    "result_chars": 49,
+    "summary": "id=x, title=Explainer, html=<script></script>",
+    "tool_use_id": "t2",
+    "ts": "2026-09-21T14:13:23.000Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 40,
+    "file_path": "/Users/test/Projects/copilot-app/docs/explainer.html",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "write_file",
+    "result_chars": 33,
+    "summary": "/Users/test/Projects/copilot-app/docs/explainer.html",
+    "tool_use_id": "t3",
+    "ts": "2026-09-21T14:13:25.000Z"
+   }
+  ],
+  "tools": {
+   "create_html_artifact": 1,
+   "spawn_subagent": 1,
+   "write_file": 2
+  },
+  "workflows": []
+ }
+}

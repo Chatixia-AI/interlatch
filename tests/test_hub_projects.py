@@ -3,7 +3,6 @@ to some of them (`--project`): what they see on the dashboard, what their comput
 
 import gzip
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -16,6 +15,7 @@ from chronicle.db import connect
 from conftest import CWD, SID
 from test_hub import _serve
 from test_people_web import MACHINE, _as, _call, _raw
+from test_route_matrix import served_routes
 
 PROJECTS = str(Path(CWD).parent)  # /Users/test/Projects: a folder above the synced session's own
 OTHER = "/work/other-client"
@@ -155,13 +155,10 @@ def test_project_and_access_commands(synced, monkeypatch, capsys):
 
 
 def _get_routes() -> list[str]:
-    """Every GET route the dashboard answers, read from server.py, with ids filled in."""
-    src = (Path(hub.__file__).parent / "server.py").read_text()
-    body = src[src.index("        def _get(self):"):src.index("        def _import_upload(self):")]
-    routes = set(re.findall(r'p == "(/api/[^"]+)"', body))
-    for pat in re.findall(r're\.fullmatch\(r"(/api/[^"]+)", p\)', body):
-        routes.add(pat.replace(r"([\w-]+)", "{sid}").replace(r"(\d+)", "1"))
-    return sorted(routes)
+    """Every GET route the dashboard answers, read from server.py's handler (test_route_matrix.served_routes), with
+    ids filled in."""
+    return sorted(r.replace("{id}", "{sid}").replace("{n}", "1") for v, r in served_routes()[0]
+                  if v == "GET" and r.startswith("/api/"))
 
 
 def test_someone_limited_to_projects_sees_nothing_else(limited):
@@ -169,7 +166,8 @@ def test_someone_limited_to_projects_sees_nothing_else(limited):
     nothing of it, of the transcripts, or of anyone's personal lessons comes back."""
     url, s = limited["url"], _as(limited["bob_session"])
     routes = _get_routes()
-    assert {"/api/sessions", "/api/search", "/api/sessions/{sid}/events", "/api/devices", "/api/export"} <= set(routes)
+    assert {"/api/sessions", "/api/search", "/api/sessions/{sid}/events", "/api/devices", "/api/export",
+            "/api/mirror", "/api/mirror/status"} <= set(routes)
     admin_sees = _raw(url, f"/api/sessions/{OTHER_SID}")[2].decode()
     assert "OTHER-CANARY" in admin_sees  # the canaries are there to be found
 

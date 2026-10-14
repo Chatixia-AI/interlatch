@@ -1,0 +1,564 @@
+{
+ "71a9ef40-0000-4000-8000-000000000001": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 8.0,
+  "ai_title": "Fix the failing test あ",
+  "api_calls": [
+   {
+    "agent_id": "",
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0,
+    "input_tokens": 1000,
+    "model": "gemini-3.8-flash",
+    "msg_id": "step-1",
+    "output_tokens": 50,
+    "speed": null,
+    "ts": "2026-10-02T09:00:01Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1000,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0,
+    "input_tokens": 200,
+    "model": "gemini-3.8-flash",
+    "msg_id": "step-3",
+    "output_tokens": 40,
+    "speed": null,
+    "ts": "2026-10-02T09:00:04Z"
+   },
+   {
+    "agent_id": "",
+    "cache_read_tokens": 1200,
+    "cache_write_tokens": 0,
+    "cost_usd": 0.0,
+    "input_tokens": 100,
+    "model": "gemini-3.8-flash",
+    "msg_id": "step-7",
+    "output_tokens": 30,
+    "speed": null,
+    "ts": "2026-10-02T09:00:08Z"
+   }
+  ],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": null,
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 3,
+   "n_tool_errors": 0,
+   "peak_context": 1300,
+   "primary_model": "gemini-3.8-flash",
+   "totals": {
+    "cache_read_tokens": 2200,
+    "cache_write_tokens": 0,
+    "cost": 0.0,
+    "input_tokens": 1300,
+    "output_tokens": 120
+   }
+  },
+  "duration_s": 8.0,
+  "ended_at": "2026-10-02T09:00:08Z",
+  "entrypoint": "antigravity",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "fix the failing test",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-10-02T09:00:00Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "thinking",
+    "meta": null,
+    "role": "assistant",
+    "seq": 1,
+    "text": "Run the tests first",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-10-02T09:00:01Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"commandLine\": \"pytest -q\", \"cwd\": \"/Users/test/Projects/agy-app\", \"waitMsBeforeAsync\": 5000, \"description\": \"Test run\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "run_command: pytest -q",
+    "tool_name": "run_command",
+    "tool_use_id": "1.0",
+    "ts": "2026-10-02T09:00:01Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "The command exited with code 1.\nOutput:\n1 failed",
+    "tool_name": "run_command",
+    "tool_use_id": "1.0",
+    "ts": "2026-10-02T09:00:03.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"absolutePath\": \"/Users/test/Projects/agy-app/app.py\", \"description\": \"App code\", \"filePath\": \"/Users/test/Projects/agy-app/app.py\"}"
+    },
+    "role": "assistant",
+    "seq": 4,
+    "text": "view_file: /Users/test/Projects/agy-app/app.py",
+    "tool_name": "view_file",
+    "tool_use_id": "3.0",
+    "ts": "2026-10-02T09:00:04Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "File Path: `file:///Users/test/Projects/agy-app/app.py`",
+    "tool_name": "view_file",
+    "tool_use_id": "3.0",
+    "ts": "2026-10-02T09:00:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"targetFile\": \"/Users/test/Projects/agy-app/app.py\", \"replacementContent\": \"x = 1\", \"description\": \"Fix off-by-one\", \"filePath\": \"/Users/test/Projects/agy-app/app.py\"}"
+    },
+    "role": "assistant",
+    "seq": 6,
+    "text": "replace_file_content: /Users/test/Projects/agy-app/app.py",
+    "tool_name": "replace_file_content",
+    "tool_use_id": "3.1",
+    "ts": "2026-10-02T09:00:04Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 7,
+    "text": "The following changes were made to app.py",
+    "tool_name": "replace_file_content",
+    "tool_use_id": "3.1",
+    "ts": "2026-10-02T09:00:05.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "notification",
+    "meta": null,
+    "role": "system",
+    "seq": 8,
+    "text": "Task id \"x/task-9\" finished with result:\nok",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-10-02T09:00:07Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 9,
+    "text": "Fixed the off-by-one; the tests pass.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-10-02T09:00:08Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/agy-app/app.py": {
+    "edits": 1,
+    "lines_added": 0,
+    "lines_removed": 0,
+    "reads": 1,
+    "writes": 0
+   }
+  },
+  "first_prompt": "fix the failing test",
+  "git_branch": "feature/fix-test",
+  "git_remote": "git@github.com:org/agy-app.git",
+  "hooks": {},
+  "id": "71a9ef40-0000-4000-8000-000000000001",
+  "last_prompt": "fix the failing test",
+  "mcp_servers": {},
+  "models": {
+   "gemini-3.8-flash": 120
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 1,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/agy-app",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-10-02T09:00:00Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": "pytest -q",
+    "duration_ms": 2000,
+    "file_path": null,
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "run_command",
+    "result_chars": 48,
+    "summary": "pytest -q",
+    "tool_use_id": "1.0",
+    "ts": "2026-10-02T09:00:01Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/agy-app/app.py",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "view_file",
+    "result_chars": 55,
+    "summary": "/Users/test/Projects/agy-app/app.py",
+    "tool_use_id": "3.0",
+    "ts": "2026-10-02T09:00:04Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 1000,
+    "file_path": "/Users/test/Projects/agy-app/app.py",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "replace_file_content",
+    "result_chars": 41,
+    "summary": "/Users/test/Projects/agy-app/app.py",
+    "tool_use_id": "3.1",
+    "ts": "2026-10-02T09:00:04Z"
+   }
+  ],
+  "tools": {
+   "replace_file_content": 1,
+   "run_command": 1,
+   "view_file": 1
+  },
+  "workflows": []
+ },
+ "8bf52945-0000-4000-8000-000000000002": {
+  "_cc_costs": {},
+  "_mentions": {},
+  "_skill_calls": {},
+  "_timestamps": [],
+  "active_s": 712.0,
+  "ai_title": null,
+  "api_calls": [],
+  "artifacts": [],
+  "branches": {},
+  "cc_cost_usd": null,
+  "cc_version": null,
+  "commands": {},
+  "custom_title": null,
+  "derived": {
+   "lines_added": 0,
+   "lines_removed": 0,
+   "n_api_calls": 0,
+   "n_tool_errors": 2,
+   "peak_context": 0,
+   "primary_model": "gemini-3.5-flash",
+   "totals": {}
+  },
+  "duration_s": 712.0,
+  "ended_at": "2026-05-23T06:30:40Z",
+  "entrypoint": "antigravity",
+  "events": [
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 0,
+    "text": "build a game",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-05-23T06:18:48Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 1,
+    "text": "I will list the folder.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-05-23T06:18:49Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"directoryPath\": \"/Users/test/Projects/game\", \"description\": \"Folder list\", \"path\": \"/Users/test/Projects/game\"}"
+    },
+    "role": "assistant",
+    "seq": 2,
+    "text": "list_dir: /Users/test/Projects/game",
+    "tool_name": "list_dir",
+    "tool_use_id": "2.0",
+    "ts": "2026-05-23T06:18:49Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 3,
+    "text": "{\"name\":\".git\"}",
+    "tool_name": "list_dir",
+    "tool_use_id": "2.0",
+    "ts": "2026-05-23T06:18:49.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"targetFile\": \"/Users/test/Projects/game/main.ts\", \"codeContent\": \"\\\"console.log(\", \"overwrite\": true, \"filePath\": \"/Users/test/Projects/game/main.ts\"}"
+    },
+    "role": "assistant",
+    "seq": 4,
+    "text": "write_to_file: /Users/test/Projects/game/main.ts",
+    "tool_name": "write_to_file",
+    "tool_use_id": "4.0",
+    "ts": "2026-05-23T06:18:52Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 5,
+    "text": "Created file main.ts",
+    "tool_name": "write_to_file",
+    "tool_use_id": "4.0",
+    "ts": "2026-05-23T06:18:52.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"targetFile\": \"<TMP>/agy/brain/8bf52945-0000-4000-8000-000000000002/task.md\", \"isArtifact\": true, \"filePath\": \"<TMP>/agy/brain/8bf52945-0000-4000-8000-000000000002/task.md\"}"
+    },
+    "role": "assistant",
+    "seq": 6,
+    "text": "write_to_file: <TMP>/agy/brain/8bf52945-0000-4000-8000-000000000002/task.md",
+    "tool_name": "write_to_file",
+    "tool_use_id": "6.0",
+    "ts": "2026-05-23T06:18:54Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 7,
+    "text": "There was a problem parsing the tool call.",
+    "tool_name": "write_to_file",
+    "tool_use_id": "6.0",
+    "ts": "2026-05-23T06:18:54.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "prompt",
+    "meta": null,
+    "role": "user",
+    "seq": 8,
+    "text": "Comments on artifact URI: implementation_plan.md\n\nThe user has approved this document.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-05-23T06:25:13Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "tool_use",
+    "meta": {
+     "input": "{\"commandLine\": \"pnpm -v\", \"cwd\": \"/Users/test/Projects/game\"}"
+    },
+    "role": "assistant",
+    "seq": 9,
+    "text": "run_command: pnpm -v",
+    "tool_name": "run_command",
+    "tool_use_id": "9.0",
+    "ts": "2026-05-23T06:25:14Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": true,
+    "kind": "tool_result",
+    "meta": null,
+    "role": "user",
+    "seq": 10,
+    "text": "Encountered error in step execution: user denied permission",
+    "tool_name": "run_command",
+    "tool_use_id": "9.0",
+    "ts": "2026-05-23T06:30:34.000Z"
+   },
+   {
+    "agent_id": "",
+    "is_error": false,
+    "kind": "text",
+    "meta": null,
+    "role": "assistant",
+    "seq": 11,
+    "text": "Done.",
+    "tool_name": null,
+    "tool_use_id": null,
+    "ts": "2026-05-23T06:30:40Z"
+   }
+  ],
+  "files": {
+   "/Users/test/Projects/game/main.ts": {
+    "edits": 0,
+    "lines_added": 0,
+    "lines_removed": 0,
+    "reads": 0,
+    "writes": 1
+   }
+  },
+  "first_prompt": "build a game",
+  "git_branch": null,
+  "git_remote": null,
+  "hooks": {},
+  "id": "8bf52945-0000-4000-8000-000000000002",
+  "last_prompt": "Comments on artifact URI: implementation_plan.md\n\nThe user has approved this document.",
+  "mcp_servers": {},
+  "models": {
+   "gemini-3.5-flash": 1
+  },
+  "n_api_errors": 0,
+  "n_compactions": 0,
+  "n_images": 0,
+  "n_interrupts": 0,
+  "n_prompts": 2,
+  "n_result_images": 0,
+  "outputs": [],
+  "parse_errors": 0,
+  "permission_mode": null,
+  "project_path": "/Users/test/Projects/game",
+  "prs": [],
+  "remote_control": false,
+  "skills": {},
+  "started_at": "2026-05-23T06:18:48Z",
+  "subagents": {},
+  "tool_calls": [
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 0,
+    "file_path": "/Users/test/Projects/game",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "list_dir",
+    "result_chars": 15,
+    "summary": "/Users/test/Projects/game",
+    "tool_use_id": "2.0",
+    "ts": "2026-05-23T06:18:49Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": 0,
+    "file_path": "/Users/test/Projects/game/main.ts",
+    "input": null,
+    "is_error": false,
+    "mcp_server": null,
+    "name": "write_to_file",
+    "result_chars": 20,
+    "summary": "/Users/test/Projects/game/main.ts",
+    "tool_use_id": "4.0",
+    "ts": "2026-05-23T06:18:52Z"
+   },
+   {
+    "agent_id": "",
+    "command": null,
+    "duration_ms": null,
+    "file_path": "<TMP>/agy/brain/8bf52945-0000-4000-8000-000000000002/task.md",
+    "input": null,
+    "is_error": true,
+    "mcp_server": null,
+    "name": "write_to_file",
+    "result_chars": 42,
+    "summary": "<TMP>/agy/brain/8bf52945-0000-4000-8000-000000000002/task.md",
+    "tool_use_id": "6.0",
+    "ts": "2026-05-23T06:18:54Z"
+   },
+   {
+    "agent_id": "",
+    "command": "pnpm -v",
+    "duration_ms": 320000,
+    "file_path": null,
+    "input": null,
+    "is_error": true,
+    "mcp_server": null,
+    "name": "run_command",
+    "result_chars": 59,
+    "summary": "pnpm -v",
+    "tool_use_id": "9.0",
+    "ts": "2026-05-23T06:25:14Z"
+   }
+  ],
+  "tools": {
+   "list_dir": 1,
+   "run_command": 1,
+   "write_to_file": 2
+  },
+  "workflows": []
+ },
+ "e0e0e0e0-0000-4000-8000-000000000003": null
+}
