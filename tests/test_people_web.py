@@ -109,6 +109,7 @@ def test_who_may_look_and_who_may_change(team):
         code, dv = _call(url, "/api/devices", headers=_as(s[name]))  # the page loads, without the admins' details
         assert code == 200 and dv["role"] == "hub" and dv["this"] == {"name": dv["this"]["name"]}
         assert dv["machines"] == [] and dv["store"] is None and dv["allowed_users"] == [] and dv["allowed_hosts"] == []
+        assert _call(url, "/api/team-store", headers=_as(s[name]))[0] == 403
     code, r = _call(url, "/api/suggestions/seen", {}, _as(s["Bob"], **{"X-Interlatch-Lang": "ja"}))
     assert r["error"] == "これができるのはこのハブの管理者だけです"
     # a browser signed in before the rename, in a tab opened then: its cookie and language header keep counting
