@@ -5,7 +5,7 @@ import pytest
 
 from interlatch import hub, people
 from interlatch.cli import main
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 
 from conftest import CWD, SID

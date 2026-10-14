@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from interlatch import providers
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 from interlatch.llm import LLMError, UsageLimitError, make_runner
 from interlatch.providers import ApiRunner, key_source, set_key, sigv4
 from interlatch.worker import run_worker

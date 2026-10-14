@@ -13,9 +13,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .config import Config
-from .i18n import tr
-from .util import utcnow_iso
+from .core.config import Config
+from .core.i18n import tr
+from .core.util import utcnow_iso
 
 LAUNCHD_LABEL = "com.interlatch.sync"
 UI_LABEL = "com.interlatch.ui"
@@ -32,7 +32,7 @@ WINDOWS_TASKS = {LAUNCHD_LABEL: "Sync", UI_LABEL: "Dashboard"}  # in Task Schedu
 
 
 def shim_path() -> Path:
-    from .config import interlatch_home
+    from .core.config import interlatch_home
 
     return interlatch_home() / "bin" / "interlatch"
 
@@ -641,7 +641,7 @@ def install_mcp(cfg: Config, exe: str, *, dry_run: bool = False) -> list[str]:
     cmd = [claude, "mcp", "add", "--scope", "user", "--transport", "stdio", MCP_NAME, "--", *args]
     if dry_run:
         return ["would run: " + " ".join(shlex.quote(c) for c in cmd)]
-    from .hooks import internal_env
+    from .core.process import internal_env
 
     legacy = LEGACY_MCP_NAME in mcp_servers()
     for name in (MCP_NAME, LEGACY_MCP_NAME) if legacy else (MCP_NAME,):

@@ -19,7 +19,7 @@ import pytest
 
 from interlatch import install, migrate
 from interlatch.cli import main
-from interlatch.config import interlatch_home, default_home, env, legacy_home
+from interlatch.core.config import interlatch_home, default_home, env, legacy_home
 from interlatch.db import connect
 
 EXE = "/opt/bin/interlatch"
@@ -56,13 +56,14 @@ def test_the_home_folder(tmp_path, monkeypatch):
 
 def test_internal_runs_are_not_recorded_under_either_name(env, monkeypatch):
     from interlatch import hooks
+    from interlatch.core.process import internal_env
 
     monkeypatch.setattr(hooks, "spawn_detached", lambda *a, **k: pytest.fail("recorded an internal run"))
     for name in ("INTERLATCH_INTERNAL", "CHRONICLE_INTERNAL"):
         monkeypatch.setenv(name, "1")
         assert hooks.hook_main("session-end") == 0
         monkeypatch.delenv(name)
-    assert hooks.internal_env()["INTERLATCH_INTERNAL"] == "1"
+    assert internal_env()["INTERLATCH_INTERNAL"] == "1"
 
 
 def test_hooks_of_either_name_are_ours():

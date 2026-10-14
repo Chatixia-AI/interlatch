@@ -26,9 +26,9 @@ from collections import Counter, deque
 from pathlib import Path
 
 from .copilot_parser import _Builder, estimate_cost, finish_session, uri_path
-from .parser import ApiCall, ParsedSession
-from .pricing import normalize_model
-from .util import one_line, parse_ts
+from .core.sessions import ApiCall, ParsedSession
+from .core.pricing import normalize_model
+from .core.util import one_line, parse_ts
 
 log = logging.getLogger("interlatch.antigravity")
 

@@ -7,11 +7,11 @@ import logging
 import re
 import sqlite3
 
-from .config import Config
-from .i18n import tr
+from .core.config import Config
+from .core.i18n import tr
 from .llm import Runner, make_runner, written_in
 from .synthesize import GLOBAL, kb_sections
-from .util import dumps, loads, one_line, safe_text, truncate, utcnow_iso
+from .core.util import dumps, loads, one_line, safe_text, truncate, utcnow_iso
 
 log = logging.getLogger("interlatch.glossary")
 

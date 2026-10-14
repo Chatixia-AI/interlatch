@@ -18,7 +18,7 @@ import types
 import webbrowser
 from pathlib import Path
 
-from .config import Config, load_config
+from .core.config import Config, load_config
 
 log = logging.getLogger("interlatch.desktop")
 
@@ -530,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
         print("The desktop app needs the `app` extra: uv tool install 'interlatch[app]'", file=sys.stderr)
         return 1
     from .migrate import migrate_if_due
-    from .util import file_lock, setup_logging
+    from .core.util import file_lock, setup_logging
 
     migrate_if_due()  # Chronicle's folder becomes Interlatch's
     cfg = load_config()

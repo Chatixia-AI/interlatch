@@ -12,7 +12,7 @@ import re
 import unicodedata
 from itertools import pairwise
 
-from .util import one_line
+from .core.util import one_line
 
 KINDS = ("component", "interface", "store", "external")
 MAX_NODES, MAX_EDGES = 14, 24

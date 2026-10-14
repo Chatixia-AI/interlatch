@@ -6,7 +6,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
-from interlatch.util import to_iso, utcnow
+from interlatch.core.util import to_iso, utcnow
 
 # real error texts, as the archive stores them (from the mining of the real archive)
 ERRORS = {
@@ -93,7 +93,7 @@ class Archive:
 
 def make_archive(tmp_path, monkeypatch):
     """A fresh database plus a sandboxed HOME (instruction files and ~/.claude.json live there); yields once."""
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
     from interlatch.db import connect
 
     home = tmp_path / "home"

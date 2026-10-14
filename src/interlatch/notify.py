@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 
-from .config import Config
+from .core.config import Config
 
 log = logging.getLogger("interlatch.notify")
 

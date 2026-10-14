@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from interlatch import hub, people
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 
 MACHINE = "11111111-2222-4333-8444-555555555555"
@@ -262,7 +262,7 @@ def test_people_from_the_command_line(hubcfg, monkeypatch, capsys):
 
 def test_people_commands_belong_to_the_hub(env, monkeypatch, capsys):
     from interlatch.cli import main
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
 
     set_config_value(env["cfg"], "hub", "url", '"https://hub.example"')
     assert main(["hub", "invite", "Ada"]) == 1

@@ -29,17 +29,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, i18n, news
-from .config import LANGUAGES, Config, env
+from . import __version__, news
+from .core import i18n
+from .core.config import LANGUAGES, Config, env
 from .db import connect, kv_get, kv_set
-from .i18n import tr
+from .core.i18n import tr
 from .ladder import reason_text
 from .ladder import refresh as refresh_stage
 from .llm import BACKENDS, make_runner
 from .search import search_all, search_events, search_knowledge, search_sessions
 from .synthesize import GLOBAL
-from .util import (PROGRESS_RE, abs_path_sql, clean_abs_path, is_abs_path, loads, normalize_project_path, path_kind,
-                   path_variants, to_iso, utcnow)
+from .core.util import (PROGRESS_RE, abs_path_sql, clean_abs_path, is_abs_path, loads, normalize_project_path,
+                        path_kind, path_variants, to_iso, utcnow)
 from .views import project_labels, reason_text as analysis_reason, resolve_session_id, session_record
 
 log = logging.getLogger("interlatch.server")
@@ -194,7 +195,7 @@ class App:
 
     def refresh_config(self) -> None:
         """The dashboard runs for days: pick up config.toml edits (e.g. `interlatch connect codex`) without a restart."""
-        from .config import load_config
+        from .core.config import load_config
 
         sig = self._config_sig()
         if sig != self._cfg_sig:
@@ -1189,7 +1190,7 @@ class App:
         return mcp_clients_status()
 
     def action_connector(self, name: str, action: str) -> dict:
-        from .config import load_config
+        from .core.config import load_config
         from .connectors import MCP_CLIENTS, connect, disconnect
         from .install import executable
 
@@ -1448,7 +1449,7 @@ class App:
         """Rename this hub, or change the address computers and browsers reach it at (invites and sign-in links
         use it). A new address's host name is added to [server] allowed_hosts, as `interlatch hub enable --url` does."""
         from . import people
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
         from .hub import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
@@ -1529,7 +1530,7 @@ class App:
         """Turn the team store on with these settings (tested first: nothing is saved if they don't work), or off.
         Off keeps the settings, so turning it on again needs no password."""
         from . import team_store
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         if self.cfg.is_spoke:
             return {"error": tr("this computer sends to a hub: the team store is set up on the hub")}
@@ -1554,7 +1555,7 @@ class App:
     # ---- Settings › Storage (mirror.py): a copy of this archive in Postgres; the password goes in, never out
     def mirror_info(self) -> dict:
         from . import mirror, pg
-        from .config import MIRROR_INCLUDES
+        from .core.config import MIRROR_INCLUDES
 
         return {"enabled": mirror.enabled(self.cfg), "include": self.cfg.mirror_include, "schema": self.cfg.mirror_schema,
                 "includes": list(MIRROR_INCLUDES), "driver": pg.driver_available(), "install": mirror.INSTALL,
@@ -1618,7 +1619,7 @@ class App:
         """Turn the mirror on with these settings (tested first: nothing is saved if they don't work) and write it
         now, or off. Off keeps the settings, so turning it on again needs no password, and leaves the copy as it is."""
         from . import mirror
-        from .config import MIRROR_INCLUDES, load_config, set_config_value
+        from .core.config import MIRROR_INCLUDES, load_config, set_config_value
 
         if not body.get("enabled"):
             set_config_value(self.cfg, "mirror", "to", '""')
@@ -1698,7 +1699,7 @@ class App:
         """add, invite, role, access, remove, revoke or shared-token, done by `by` (None: at the hub itself) for the
         audit."""
         from . import people
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         try:
             if verb == "add":
@@ -1777,7 +1778,7 @@ class App:
 
     def action_share_mode(self, share: str) -> dict:
         """[hub] share on a computer that sends to a hub: its transcripts, or only what it learned."""
-        from .config import SHARE_MODES, load_config, set_config_value
+        from .core.config import SHARE_MODES, load_config, set_config_value
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1790,7 +1791,7 @@ class App:
 
     def action_share_folders(self, all_folders) -> dict:
         """[hub] all_folders on a computer that shares knowledge: every folder's sessions, or only the hub's projects'."""
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         if not self.cfg.is_spoke:
             return {"error": tr("this computer has not joined a hub")}
@@ -1805,7 +1806,7 @@ class App:
         """[hub] accept on the hub: transcripts too, or knowledge only from every computer. `by` (None: at the hub
         itself) goes in the audit."""
         from . import people
-        from .config import SHARE_MODES, load_config, set_config_value
+        from .core.config import SHARE_MODES, load_config, set_config_value
         from .hub import read_token
 
         if self.cfg.is_spoke or not read_token(self.cfg):
@@ -1858,7 +1859,7 @@ class App:
 
     def action_update_setting(self, key: str, on: bool) -> dict:
         """Status › Updates switches: check_daily (while the dashboard is open) and notify (from the background)."""
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         set_config_value(self.cfg, "updates", key, "true" if on else "false")
         self.cfg = load_config(self.cfg.home)
@@ -1878,7 +1879,7 @@ class App:
                 "languages": [{"code": code, "label": label} for code, label in LANGUAGES.items()]}
 
     def action_backend(self, backend: str) -> dict:
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         if backend not in BACKENDS:
             return {"error": tr("unknown analysis backend {backend!r}", backend=backend)}
@@ -1889,7 +1890,7 @@ class App:
 
     def action_agent(self, body: dict) -> dict:
         """Change a coding agent's model and effort (AGENT_SETTINGS). An empty Codex model means Codex's default."""
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         name = str(body.get("agent") or "")
         allowed = AGENT_SETTINGS.get(name)
@@ -1918,7 +1919,7 @@ class App:
     def action_provider(self, body: dict) -> dict:
         """Save a model provider's settings ([providers.<name>]) and, when given, its API key ("" forgets it). For
         IBM Bob, only the key."""
-        from .config import load_config
+        from .core.config import load_config
         from .providers import KEY_ENVS, PROVIDERS, save_settings, set_key
 
         name = str(body.get("provider") or "")
@@ -1962,7 +1963,7 @@ class App:
 
     def action_language(self, lang: str) -> dict:
         """[analysis] language: what summaries, knowledge and proposed lines are written in from now on."""
-        from .config import load_config, set_config_value
+        from .core.config import load_config, set_config_value
 
         if lang not in LANGUAGES:
             return {"error": tr("unknown language {lang!r}", lang=lang)}
@@ -2013,7 +2014,7 @@ class App:
     def action_menu_bar(self, on: bool) -> dict:
         """Status › Recording's switch: the macOS menu-bar icon on or off, adding the `app` extra when it is missing."""
         from . import menubar
-        from .config import load_config
+        from .core.config import load_config
 
         info = menubar.setting_info(self.cfg)
         if not info["supported"]:

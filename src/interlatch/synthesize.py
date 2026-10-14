@@ -9,10 +9,10 @@ import sqlite3
 
 from . import ladder
 from .diagram import DIAGRAM_SCHEMA, normalize_diagram, to_mermaid
-from .config import Config
+from .core.config import Config
 from .ladder import STAGE_ORDER_SQL, SUPERSEDE_REASONS, TRUSTED
 from .llm import Runner, make_runner, written_in
-from .util import dumps, local_str, loads, one_line, truncate, utcnow_iso
+from .core.util import dumps, local_str, loads, one_line, truncate, utcnow_iso
 
 log = logging.getLogger("interlatch.synthesize")
 

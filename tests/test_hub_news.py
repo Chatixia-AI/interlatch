@@ -5,7 +5,7 @@ that keeps sending adds to its row; who sees what follows the Team page; each pe
 from datetime import timedelta
 
 from interlatch import hub, news, people
-from interlatch.util import to_iso, utcnow
+from interlatch.core.util import to_iso, utcnow
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, hubenv  # noqa: F401  (the fixture)
@@ -124,7 +124,7 @@ def test_a_computer_joining_is_news(team, monkeypatch):  # noqa: F811
 
 
 def _parse(ts):
-    from interlatch.util import parse_ts
+    from interlatch.core.util import parse_ts
 
     return parse_ts(ts)
 

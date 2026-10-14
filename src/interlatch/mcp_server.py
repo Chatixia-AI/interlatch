@@ -8,17 +8,17 @@ import sys
 from datetime import timedelta
 
 from . import __version__
-from .config import Config
-from .agents import AGENTS, short_name, speaker
+from .core.config import Config
+from .core.agents import AGENTS, short_name, speaker
 from .artifacts import KINDS as ARTIFACT_KINDS
 from .artifacts import STATUS as ARTIFACT_STATUS
 from .db import connect
 from .hub import team_from
 from .ladder import stage_label
-from .redact import redact
+from .core.redact import redact
 from .search import search_knowledge, search_sessions
 from .synthesize import GLOBAL, kb_for_path
-from .util import human_duration, local_str, one_line, to_iso, truncate, utcnow
+from .core.util import human_duration, local_str, one_line, to_iso, truncate, utcnow
 from .views import case_lines, project_labels, resolve_session_id, session_markdown, session_record
 
 SUPPORTED_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]

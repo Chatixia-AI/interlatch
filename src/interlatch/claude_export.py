@@ -12,8 +12,8 @@ from collections import Counter
 
 from . import artifacts
 from .copilot_parser import _Builder, finish_session
-from .parser import ParsedSession
-from .util import parse_ts, safe_text, to_iso
+from .core.sessions import ParsedSession
+from .core.util import parse_ts, safe_text, to_iso
 
 CLAUDE_AI_PARSER_VERSION = 3  # 3: artifacts (claude.ai artifacts, files presented); 2: only the branch shown, pasted images
 AGENT = "claude-ai"

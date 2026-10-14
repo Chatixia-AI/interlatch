@@ -9,7 +9,7 @@ import pytest
 
 from interlatch import notify, update
 from interlatch.cli import main
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 
 
@@ -77,7 +77,7 @@ def test_nothing_when_up_to_date_or_not_from_pypi(pypi, env, monkeypatch):
 
 
 def test_sync_runs_the_check(pypi, env, monkeypatch):
-    from interlatch.config import set_config_value
+    from interlatch.core.config import set_config_value
 
     set_config_value(env["cfg"], "updates", "notify", "true")
     assert main(["sync", "--quiet"]) == 0

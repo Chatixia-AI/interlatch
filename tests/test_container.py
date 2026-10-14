@@ -8,7 +8,7 @@ import urllib.request
 import pytest
 
 from interlatch import container, hub, people, update
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 from interlatch.db import connect
 
 from test_hub import _serve

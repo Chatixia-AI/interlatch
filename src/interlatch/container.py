@@ -19,8 +19,8 @@ import threading
 from collections.abc import Mapping
 from urllib.parse import urlparse
 
-from .config import STORES, Config, load_config, set_config_value
-from .config import env as _env
+from .core.config import STORES, Config, load_config, set_config_value
+from .core.config import env as _env
 
 log = logging.getLogger("interlatch.container")
 
@@ -156,7 +156,7 @@ def main(env: Mapping[str, str] | None = None) -> int:
     from . import hub
     from .db import connect
     from .server import serve
-    from .util import setup_logging
+    from .core.util import setup_logging
 
     env = os.environ if env is None else env
     cfg = load_config()

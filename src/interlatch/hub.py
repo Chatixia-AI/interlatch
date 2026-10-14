@@ -48,8 +48,8 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote, urlencode, urlparse
 
 from . import __version__, news
-from .config import Config
-from .util import is_abs_path, normalize_project_path, path_kind, path_variants, utcnow_iso
+from .core.config import Config
+from .core.util import is_abs_path, normalize_project_path, path_kind, path_variants, utcnow_iso
 
 log = logging.getLogger("interlatch.hub")
 
@@ -114,7 +114,7 @@ class FolderError(HubError):
         self.template, self.values = template, values
 
     def shown(self) -> str:
-        from .i18n import tr
+        from .core.i18n import tr
 
         return tr(self.template, **self.values)
 
@@ -923,8 +923,8 @@ def sharing(cfg: Config, wait: float):
     send the list it started with, and the hub would take the folder back out; one that started before a folder was
     removed or a project left would share it again. So a push reads the config only once it holds this, and a folder
     change waits for a push between its hello and its last batch. Held already by this thread: just the config."""
-    from .config import current
-    from .util import file_lock
+    from .core.config import current
+    from .core.util import file_lock
 
     if getattr(_sharing, "held", False):
         yield current(cfg)
@@ -1349,7 +1349,7 @@ def apply_team_lessons(cfg: Config, data: dict, repos: dict) -> int:
     held."""
     from . import ladder
     from .db import connect
-    from .util import dumps
+    from .core.util import dumps
 
     places = data.get("places") if isinstance(data.get("places"), dict) else {}
     clones: dict[str, list[str]] = {}
@@ -1472,7 +1472,7 @@ def _record_folders(cfg: Config, hello: dict, repos: dict | None = None) -> None
 
 # ------------------------------------------------------------------ a computer's folders and projects on the hub
 def _save_hub(cfg: Config, *, folders: dict[str, str] | None = None, left: list[str] | None = None) -> Config:
-    from .config import load_config, set_config_value, toml_table
+    from .core.config import load_config, set_config_value, toml_table
 
     if folders is not None:
         set_config_value(cfg, "hub", "folders", toml_table(folders))
@@ -1561,7 +1561,7 @@ def rejoin_project(cfg: Config, project: str) -> Config:
 def leave_hub(cfg: Config) -> Config:
     """`interlatch hub leave`: stop sending to the hub. This computer records and analyzes its own sessions again; the
     hub keeps what it was sent."""
-    from .config import load_config, set_config_value
+    from .core.config import load_config, set_config_value
 
     set_config_value(cfg, "hub", "url", '""')
     token_path(cfg).unlink(missing_ok=True)
@@ -2022,7 +2022,7 @@ class IngestTrigger:
         self.again = False
 
     def command(self) -> list[str]:
-        from .hooks import self_command
+        from .core.process import self_command
 
         return [*self_command(), "sync", "--work", "--quiet"]
 
@@ -2035,7 +2035,7 @@ class IngestTrigger:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self) -> None:
-        from .hooks import INTERNAL_ENV
+        from .core.process import INTERNAL_ENV
 
         while True:
             with self.lock:

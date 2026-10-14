@@ -8,7 +8,7 @@ import pytest
 
 from interlatch import connectors
 from interlatch.cli import main
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 from interlatch.install import hooks_installed
 
@@ -27,7 +27,7 @@ def machine(env, monkeypatch):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("CODEX_HOME", str(home / ".codex"))
     monkeypatch.setattr("interlatch.connectors.APPLICATIONS", env["tmp"] / "Applications")
-    monkeypatch.setattr("interlatch.config.Config.codex_bin", lambda self: None)
+    monkeypatch.setattr("interlatch.core.config.Config.codex_bin", lambda self: None)
     monkeypatch.setitem(connectors.CONNECTORS, "bob",
                         (lambda cfg, conn: {"name": "bob", "label": "IBM Bob", "detected": False, "connected": False, "on_disk": 0},
                          None, None))

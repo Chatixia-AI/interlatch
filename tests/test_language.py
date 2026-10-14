@@ -13,10 +13,11 @@ from pathlib import Path
 import pytest
 from friction_fixture import ERRORS, ago, make_archive
 
-from interlatch import friction, i18n, ladder, suggest
-from interlatch.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, set_config_value
-from interlatch.i18n import tr, trn
-from interlatch.i18n_ja import JA
+from interlatch import friction, ladder, suggest
+from interlatch.core import i18n
+from interlatch.core.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, set_config_value
+from interlatch.core.i18n import tr, trn
+from interlatch.core.i18n.ja import JA
 from interlatch.instructions import BEGIN, END
 from interlatch.llm import JAPANESE, written_in
 

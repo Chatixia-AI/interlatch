@@ -6,7 +6,7 @@ from interlatch.analyze import analyze_session, normalize_analysis
 from interlatch.db import kv_get
 from interlatch.digest import build_digest
 from interlatch.llm import UsageLimitError, parse_json_object
-from interlatch.redact import redact
+from interlatch.core.redact import redact
 from interlatch.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
 from interlatch.worker import PAUSE_KEY, pending_sessions, run_worker
 

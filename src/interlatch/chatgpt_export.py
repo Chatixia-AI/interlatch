@@ -10,8 +10,8 @@ other than "all") is a tool call whose output follows as a tool message.
 from __future__ import annotations
 
 from .copilot_parser import _Builder, finish_session
-from .parser import ParsedSession
-from .util import parse_ts, safe_text, to_iso
+from .core.sessions import ParsedSession
+from .core.util import parse_ts, safe_text, to_iso
 
 CHATGPT_PARSER_VERSION = 1
 AGENT = "chatgpt"

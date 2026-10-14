@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from interlatch.menubar import ATTENTION, OK, PAUSED, WORKING, ago, day_label, summarize, when
-from interlatch.util import to_iso
+from interlatch.core.util import to_iso
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 
@@ -224,7 +224,7 @@ def test_only_the_login_item_shows_the_icon_by_itself(env, monkeypatch):
 
 
 def test_menu_bar_is_off_until_turned_on_in_config(env):
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     cfg = env["cfg"]
     assert load_config(cfg.home).server_menu_bar is False
@@ -292,7 +292,7 @@ def _install(monkeypatch, answers, *extra):
 
 
 def test_install_asks_once_and_defaults_to_no(setup, monkeypatch, capsys):
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     asked = _install(monkeypatch, {"Open": "n"})  # Enter: the default
     assert len(asked) == 1 and "[y/N]" in asked[0]
@@ -302,7 +302,7 @@ def test_install_asks_once_and_defaults_to_no(setup, monkeypatch, capsys):
 
 
 def test_install_turns_it_on_when_asked(setup, monkeypatch, capsys):
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     monkeypatch.setattr("importlib.util.find_spec", lambda name, *a: None if name == "AppKit" else object())
     assert len(_install(monkeypatch, {"menu bar": "y", "Open": "n"})) == 1
@@ -312,7 +312,7 @@ def test_install_turns_it_on_when_asked(setup, monkeypatch, capsys):
 
 
 def test_install_flag_sets_it_without_asking(setup, monkeypatch):
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     assert _install(monkeypatch, {"Open": "n"}, "--menu-bar") == []
     assert load_config(setup["home"]).server_menu_bar is True
@@ -322,7 +322,7 @@ def test_install_flag_sets_it_without_asking(setup, monkeypatch):
 
 def test_install_does_not_ask_without_the_login_dashboard_a_terminal_or_a_mac(setup, monkeypatch):
     from interlatch.cli import main
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     assert _install(monkeypatch, {"Open": "n"}, "--no-ui") == []
     monkeypatch.setattr("platform.system", lambda: "Linux")
@@ -362,7 +362,7 @@ def mac(env, monkeypatch):
 
 
 def _on(env) -> bool:
-    from interlatch.config import load_config
+    from interlatch.core.config import load_config
 
     return load_config(env["home"]).server_menu_bar
 

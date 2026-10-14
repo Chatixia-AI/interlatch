@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 from interlatch.llm import BOB_TOOL_GROUPS, BobRunner, LLMError, UsageLimitError, make_runner
 from interlatch.providers import key_source, set_key
 from interlatch.worker import run_worker

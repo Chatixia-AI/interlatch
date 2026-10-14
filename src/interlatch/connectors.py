@@ -13,9 +13,9 @@ import time
 import tomllib
 from pathlib import Path
 
-from .config import Config, set_config_value
-from .hooks import internal_env
-from .i18n import tr
+from .core.config import Config, set_config_value
+from .core.process import internal_env
+from .core.i18n import tr
 from .install import LEGACY_MCP_NAME, MCP_NAME, exe_argv
 
 MCP_NAMES = (MCP_NAME, LEGACY_MCP_NAME)  # an agent that still has Chronicle's 'chronicle' server runs the same one

@@ -15,9 +15,9 @@ import subprocess
 import time
 
 from .copilot_parser import _Builder, finish_session
-from .hooks import internal_env
-from .parser import FileStat, ParsedSession
-from .util import safe_text
+from .core.process import internal_env
+from .core.sessions import FileStat, ParsedSession
+from .core.util import safe_text
 
 log = logging.getLogger("interlatch.codex_cloud")
 

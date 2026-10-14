@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from interlatch.bob_parser import load_tasks, parse_bob_task
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.copilot_parser import (load_chat, load_usage, parse_copilot_agent, parse_vscode_chat, uri_path,
                                       workspace_folder)
 from interlatch.db import connect as db_connect

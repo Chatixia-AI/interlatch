@@ -6,7 +6,7 @@ import json
 import pytest
 
 from interlatch import groups, hub
-from interlatch.config import load_config
+from interlatch.core.config import load_config
 from interlatch.db import connect
 from interlatch.server import App
 

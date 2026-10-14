@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 from interlatch.db import kv_set
-from interlatch.util import to_iso, utcnow
+from interlatch.core.util import to_iso, utcnow
 from interlatch.worker import PAUSE_KEY, count_pending, pending_sessions, waiting_reason
 
 from conftest import CWD, SID

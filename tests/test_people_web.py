@@ -9,7 +9,7 @@ from urllib.parse import quote
 import pytest
 
 from interlatch import hub, people
-from interlatch.config import load_config, set_config_value
+from interlatch.core.config import load_config, set_config_value
 
 from test_hub import _serve
 
@@ -341,7 +341,7 @@ def test_tailscale_logins_and_people(team):
 
 
 def test_learning_interests_use_the_authenticated_person_not_query_parameters(team):
-    from interlatch.util import utcnow_iso
+    from interlatch.core.util import utcnow_iso
 
     conn, url, sessions = team["conn"], team["url"], team["sessions"]
     for mid, person, sid, question in (
