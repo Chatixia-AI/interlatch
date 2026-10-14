@@ -3,6 +3,19 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.23.3 (2026-10-14)
+
+- **`python -m interlatch`:** Interlatch's Python package is now `interlatch` too, so it runs as `python -m interlatch`.
+  Hooks, background tasks and MCP servers set up with `python -m chronicle` keep working, as does the `chronicle`
+  command.
+- **Agents on Home:** a table with one row per coding agent: whether it is connected (or imported, or has issues),
+  when it was last used, and its sessions, active time, prompts, tool calls, lines changed, tokens, est. cost and
+  knowledge for the period, each with an inline bar. A dash marks what an agent doesn't record (a ChatGPT export has
+  no tokens); click a row to see only that agent, or its status to open it in **Sources**.
+- **Gemini costs:** Google Antigravity sessions, and GitHub Copilot sessions on Gemini models, now show an estimated
+  cost at Google's Gemini API list prices instead of $0 ([Sources](docs/sources.md)). The next sync re-prices the
+  sessions already recorded. Analysis through an OpenAI-compatible provider on a Gemini model is priced the same way.
+
 ## 0.23.2 (2026-10-14)
 
 - **Hub computers stay with admins:** on a hub with people, a member or read-only person no longer receives the hub's
