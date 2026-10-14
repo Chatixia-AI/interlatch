@@ -291,7 +291,7 @@ def summary(counts: dict) -> str:
 def import_status(conn) -> dict:
     """Per format: chats imported and analyzed, how screening sorted them, and the last import."""
     from ..storage.kv import kv_get
-    from ..screen import screen_status
+    from ..analysis.screen import screen_status
 
     out = {}
     for fmt in FORMATS:

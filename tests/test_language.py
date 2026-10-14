@@ -19,7 +19,7 @@ from interlatch.core.config import DEFAULT_CONFIG_TOML, LANGUAGES, load_config, 
 from interlatch.core.i18n import tr, trn
 from interlatch.core.i18n.ja import JA
 from interlatch.instructions import BEGIN, END
-from interlatch.llm import JAPANESE, written_in
+from interlatch.analysis.language import JAPANESE, written_in
 
 from conftest import CWD, SID, fake_log
 
@@ -63,7 +63,8 @@ def test_cli_config_set_checks_the_language(env, capsys):
 
 
 def test_english_prompts_are_left_exactly_as_they_were(env):
-    from interlatch import analyze, glossary, reviews, screen, synthesize
+    from interlatch.analysis import session as analyze, screen
+    from interlatch import glossary, reviews, synthesize
 
     cfg = env["cfg"]
     assert analyze.system_prompt(cfg) is analyze.SYSTEM_PROMPT
@@ -84,8 +85,9 @@ def _systems(env) -> list[str]:
 
 
 def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
-    from interlatch import analyze, reviews
-    from interlatch.analyze import analyze_session
+    from interlatch.analysis import session as analyze
+    from interlatch import reviews
+    from interlatch.analysis.session import analyze_session
     from interlatch.glossary import build_glossaries, build_themes
     from interlatch.reviews import generate_review
     from interlatch.synthesize import GLOBAL, synthesize_project
@@ -121,7 +123,7 @@ def test_japanese_prompts_ask_for_japanese_and_keep_codes(synced):
 def test_japanese_screening_prompt_and_rule_reasons(env):
     from interlatch.ingestion.chat_import import import_export
     from interlatch.storage.sqlite import connect
-    from interlatch.screen import screen_chats
+    from interlatch.analysis.screen import screen_chats
     from test_screen import write_export
 
     cfg = _set_language(env["cfg"], "ja")
@@ -320,7 +322,8 @@ def test_tr_and_trn_fall_back_to_english(ja):
 
 
 def test_every_translated_template_has_japanese_with_the_same_fields():
-    from interlatch import update, views, worker
+    from interlatch import update, views
+    from interlatch.analysis import queue
 
     need = set()
     for path in sorted((Path(i18n.__file__).parent).glob("*.py")):
@@ -334,7 +337,7 @@ def test_every_translated_template_has_japanese_with_the_same_fields():
         need.add(c["name"])
         need.update(f["title"] for f in c["fixes"])
     need.update([friction.CONCURRENT_NOTE, update.PYPI_ERROR, update.MOVE_NOTE, "user level", *ladder.STAGES, "pinned by you", "added by you",
-                 ladder.MEMORY_STAGE_REASON, "one session, low confidence", "one session", *worker.QUEUE_REASON_LABEL.values(),
+                 ladder.MEMORY_STAGE_REASON, "one session, low confidence", "one session", *queue.QUEUE_REASON_LABEL.values(),
                  *views.ANALYSIS_REASONS, views.NOT_ANALYZED_CHAT])
     assert sorted(need - set(JA)) == []
     fields = lambda s: {f for _, f, _, _ in string.Formatter().parse(s) if f}
@@ -361,7 +364,7 @@ def test_stored_english_templates_are_translated_when_read(ja):
 
 def test_status_texts_follow_the_dashboard_language(synced, ja):
     from interlatch.connectors import all_status
-    from interlatch.worker import count_pending
+    from interlatch.analysis.queue import count_pending
 
     cfg, conn = synced["cfg"], synced["conn"]
     claude = next(c for c in all_status(cfg, conn) if c["name"] == "claude")

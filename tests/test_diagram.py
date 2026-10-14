@@ -7,7 +7,7 @@ import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from interlatch.analyze import analyze_session
+from interlatch.analysis.session import analyze_session
 from interlatch.diagram import MAX_NODES, Metrics, layout, normalize_diagram, to_excalidraw, to_mermaid
 from interlatch.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
 

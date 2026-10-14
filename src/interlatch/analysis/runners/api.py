@@ -27,113 +27,23 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlsplit
 
-from . import llm
-from .core.config import Config
-from .llm import LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
+from ...core.config import Config
+from . import process  # its POLL_S and SLEEP_GRACE_S, read when a request runs
+from .base import CLAUDE_MODEL, LIMIT_MARKERS, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
+from .settings import PROVIDERS, key_source, settings
 
-KEYS_FILE = "provider-keys.json"
 ANTHROPIC_VERSION = "2023-06-01"
 AZURE_SCOPE = "https://cognitiveservices.azure.com"
 DEFAULT_MAX_OUTPUT = 32_000  # the Messages API needs one; thinking counts toward it
 
 
-@dataclass(frozen=True)
-class Provider:
-    label: str
-    dialect: str  # "anthropic" | "openai" | "ollama"
-    base_url: str = ""  # empty: must be configured
-    key_env: str = ""  # the environment variable the provider's own tools read
-    needs_key: bool = True
-    model: str = ""
-    small_model: str = ""
-    chunk_chars: int = 0  # 0: [analysis] chunk_chars
-    json_mode: bool = True  # openai: ask for a JSON object (response_format)
-    hint: str = ""  # what base_url looks like, for messages and the dashboard
-
-
-PROVIDERS: dict[str, Provider] = {
-    "anthropic": Provider("Anthropic API", "anthropic", "https://api.anthropic.com", "ANTHROPIC_API_KEY",
-                          model="claude-sonnet-5-5", small_model="claude-haiku-4-5"),
-    "bedrock": Provider("Amazon Bedrock", "anthropic", "", "AWS_BEARER_TOKEN_BEDROCK", needs_key=False,
-                        model="anthropic.claude-sonnet-5-5", small_model="anthropic.claude-haiku-4-5",
-                        hint="https://bedrock-mantle.<region>.api.aws/anthropic"),
-    "openai": Provider("OpenAI API", "openai", "https://api.openai.com/v1", "OPENAI_API_KEY"),
-    "azure": Provider("Azure OpenAI", "openai", "", "AZURE_OPENAI_API_KEY", needs_key=False,
-                      hint="https://<resource>.openai.azure.com/openai/v1"),
-    "openrouter": Provider("OpenRouter", "openai", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
-    "ollama": Provider("Ollama", "ollama", "http://localhost:11434", needs_key=False, chunk_chars=60_000),
-    "openai-compatible": Provider("OpenAI-compatible", "openai", "", "", needs_key=False, json_mode=False,
-                                  hint="http://localhost:1234/v1"),
-}
-# every backend whose API key Interlatch can store: the providers, and IBM Bob, whose headless runs need one
-KEY_ENVS = {**{name: p.key_env for name, p in PROVIDERS.items()}, "bob": "BOB_API_KEY"}
-# [providers.<name>] keys the dashboard and `interlatch config set` may write; anything else in the section is ignored
-SETTINGS = {"base_url": str, "model": str, "small_model": str, "region": str, "profile": str, "resource": str,
-            "num_ctx": int, "chunk_chars": int, "max_output_tokens": int, "json_mode": bool, "key_env": str}
 OLLAMA_NUM_CTX = 32_768
 _CLAUDE_ALIAS = re.compile(r"^(sonnet|haiku|opus|fable|mythos|opusplan|default)(\[.*\])?$")
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0")
 
-
-# ---- API keys -------------------------------------------------------------------------------------------------------
-
-def keys_path(cfg: Config) -> Path:
-    return cfg.home / KEYS_FILE
-
-
-def _read_keys(cfg: Config) -> dict:
-    try:
-        data = json.loads(keys_path(cfg).read_text())
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def set_key(cfg: Config, provider: str, key: str | None) -> None:
-    """Store (or, with None or "", forget) the API key for `provider`; the file is readable by this user only."""
-    keys = _read_keys(cfg)
-    if key and key.strip():
-        keys[provider] = key.strip()
-    else:
-        keys.pop(provider, None)
-    path = keys_path(cfg)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        json.dump(keys, fh, indent=1)
-    os.replace(tmp, path)
-
-
-def key_source(cfg: Config, provider: str) -> tuple[str | None, str]:
-    """(the key, where it came from: "stored", "$ENV_NAME" or ""). A stored key wins over the environment, so the
-    dashboard (started by launchd, without the shell's variables) and the CLI use the same one."""
-    stored = _read_keys(cfg).get(provider)
-    if isinstance(stored, str) and stored.strip():
-        return stored.strip(), "stored"
-    env = settings(cfg, provider).get("key_env") or KEY_ENVS.get(provider, "")
-    if env and os.environ.get(env, "").strip():
-        return os.environ[env].strip(), f"${env}"
-    return None, ""
-
-
-# ---- settings -------------------------------------------------------------------------------------------------------
-
-def settings(cfg: Config, provider: str) -> dict:
-    """[providers.<provider>] from config.toml, keeping only known keys of the right type."""
-    raw = cfg.providers.get(provider) or {}
-    out = {}
-    for k, typ in SETTINGS.items():
-        v = raw.get(k)
-        if v is None or (typ is int and isinstance(v, bool)):
-            continue
-        if isinstance(v, typ) or (typ is int and isinstance(v, float)):
-            out[k] = typ(v)
-    return out
 
 
 def _tool(name: str, extra: tuple[str, ...] = ()) -> str | None:
@@ -151,7 +61,7 @@ def _tool(name: str, extra: tuple[str, ...] = ()) -> str | None:
 # ---- HTTP -----------------------------------------------------------------------------------------------------------
 
 def http(method: str, url: str, *, body: bytes | None, headers: dict, timeout: int, name: str) -> tuple[int, bytes]:
-    """One request, with a wall-clock deadline that also notices system sleep (as `_run_sleep_aware` does for CLIs):
+    """One request, with a wall-clock deadline that also notices system sleep (as `run_sleep_aware` does for CLIs):
     the request runs in a thread while this one watches the clocks."""
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     box: dict = {}
@@ -169,12 +79,12 @@ def http(method: str, url: str, *, body: bytes | None, headers: dict, timeout: i
     t.start()
     wall0, mono0 = time.time(), time.monotonic()
     while True:
-        t.join(llm.POLL_S)
+        t.join(process.POLL_S)
         if not t.is_alive():
             break
         wall = time.time() - wall0
         slept = wall - (time.monotonic() - mono0)
-        if slept > llm.SLEEP_GRACE_S:
+        if slept > process.SLEEP_GRACE_S:
             raise SleepInterruptedError(f"machine slept for {int(slept)}s during the call")
         if wall > timeout:
             raise LLMError(f"{name} timed out after {int(wall)}s")
@@ -195,7 +105,7 @@ def _error(name: str, status: int, raw: bytes) -> LLMError:
     except (ValueError, AttributeError):
         msg = text
     msg = f"{name}: HTTP {status}: {str(msg).strip()[:600]}"
-    if status in (401, 402, 403, 429, 529) or any(m in msg.lower() for m in llm._LIMIT_MARKERS):
+    if status in (401, 402, 403, 429, 529) or any(m in msg.lower() for m in LIMIT_MARKERS):
         return UsageLimitError(msg)
     return LLMError(msg)
 
@@ -358,7 +268,7 @@ class ApiRunner(Runner):
         if not model:
             return main
         m = model.lower()
-        if _CLAUDE_ALIAS.match(m) or (self.spec.dialect != "anthropic" and llm._CLAUDE_MODEL.match(m)):
+        if _CLAUDE_ALIAS.match(m) or (self.spec.dialect != "anthropic" and CLAUDE_MODEL.match(m)):
             return small if "haiku" in m else main
         if self.name == "bedrock" and m.startswith("claude-"):
             return f"anthropic.{model}"
@@ -380,7 +290,7 @@ class ApiRunner(Runner):
         return "" if self.spec.needs_key else "none"
 
     def unavailable_reason(self) -> str:
-        from .core.i18n import tr
+        from ...core.i18n import tr
 
         if not self.base_url:
             return tr("{label}: set its endpoint (providers.{name}.base_url)", label=self.label, name=self.name)
@@ -451,7 +361,7 @@ class ApiRunner(Runner):
             raise self._cut_off()
         text = "".join(b.get("text") or "" for b in data.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
         u = data.get("usage") or {}
-        from .core.pricing import usage_cost
+        from ...core.pricing import usage_cost
 
         served = data.get("model") or model
         return text, LLMResult(
@@ -493,7 +403,7 @@ class ApiRunner(Runner):
         served = data.get("model") or model
         cost = u.get("cost")
         if not isinstance(cost, (int, float)):
-            from .core.pricing import is_openai_model, openai_cost
+            from ...core.pricing import is_openai_model, openai_cost
 
             cost = openai_cost(served, inp - cached, cached, out) if is_openai_model(served) else 0.0
         return str(text), LLMResult(data={}, cost_usd=float(cost), duration_ms=0, model=served,
@@ -560,32 +470,3 @@ class ApiRunner(Runner):
                                                  "small_model": self.spec.small_model,
                                                  "chunk_chars": self.spec.chunk_chars or self.cfg.analysis.chunk_chars,
                                                  "num_ctx": OLLAMA_NUM_CTX if self.spec.dialect == "ollama" else 0}}
-
-
-def save_settings(cfg: Config, provider: str, values: dict) -> list[str]:
-    """Write the given [providers.<provider>] settings to config.toml; an empty string or 0 removes one. Returns the
-    keys that were refused (unknown, or of the wrong type)."""
-    from .core.config import remove_config_value, set_config_value
-
-    refused = []
-    for k, v in values.items():
-        typ = SETTINGS.get(k)
-        if typ is None:
-            refused.append(k)
-            continue
-        if v in ("", None, 0) and typ is not bool:
-            remove_config_value(cfg, f"providers.{provider}", k)
-            continue
-        try:
-            v = typ(v) if not (typ is bool and isinstance(v, str)) else v.lower() in ("1", "true", "yes", "on")
-        except (TypeError, ValueError):
-            refused.append(k)
-            continue
-        if typ is int and v < 0:
-            refused.append(k)
-            continue
-        if k == "base_url" and v and urlsplit(v).scheme not in ("http", "https"):
-            refused.append(k)
-            continue
-        set_config_value(cfg, f"providers.{provider}", k, json.dumps(v) if typ is not bool else ("true" if v else "false"))
-    return refused

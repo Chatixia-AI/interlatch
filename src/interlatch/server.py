@@ -37,7 +37,7 @@ from .storage.kv import kv_get, kv_set
 from .core.i18n import tr
 from .ladder import reason_text
 from .ladder import refresh as refresh_stage
-from .llm import BACKENDS, make_runner
+from .analysis.runners.factory import BACKENDS, make_runner
 from .search import search_all, search_events, search_knowledge, search_sessions
 from .synthesize import GLOBAL
 from .core.util import PROGRESS_RE, loads, to_iso, utcnow
@@ -605,7 +605,7 @@ class App:
 
     @staticmethod
     def _reason(k: dict) -> dict:
-        from .analyze import case_of
+        from .analysis.session import case_of
         from .learning import topics_for
 
         raw_case = loads(k.pop("case_json", None), k.get("case"))  # lesson material: a case file, principle, diagram
@@ -664,7 +664,7 @@ class App:
             where.append("screen_verdict = ? AND screen_sig = files_sig")
             params.append(q["screen"])
         elif q.get("screen") == "none":
-            from .screen import SOURCES
+            from .analysis.screen import SOURCES
 
             where.append(f"source IN ({','.join('?' * len(SOURCES))}) AND analysis_status != 'done' "
                          "AND (screen_sig IS NULL OR screen_sig != files_sig)")
@@ -718,7 +718,7 @@ class App:
         s = session_record(self.conn, real)
         s["knowledge"] = [self._reason(k) for k in s["knowledge"]]
         s["analysis_reason"] = analysis_reason(s.get("analysis_reason"))
-        from .worker import waiting_reason
+        from .analysis.queue import waiting_reason
 
         row = self.conn.execute("SELECT * FROM sessions WHERE id = ?", (real,)).fetchone()
         why = waiting_reason(self.conn, self.cfg, row) if row else None
@@ -846,7 +846,7 @@ class App:
     def _billed(self) -> bool:
         """Analysis goes to a model provider's API with your key, which bills each call (not a local Ollama, and not a
         coding agent's own login)."""
-        from .llm import AGENTS
+        from .analysis.runners.factory import AGENTS
 
         backend = self.cfg.analysis.backend
         return backend in BACKENDS and backend not in AGENTS and not make_runner(self.cfg).local()
@@ -1086,7 +1086,7 @@ class App:
             "SELECT kind, COUNT(*) n FROM knowledge WHERE status = 'active' GROUP BY kind")}
         sources = dict(self.conn.execute(
             "SELECT source, COUNT(*) FROM knowledge WHERE status = 'active' GROUP BY source").fetchall())
-        from .analyze import CASE_FILE_SQL
+        from .analysis.session import CASE_FILE_SQL
 
         cases = self.conn.execute(
             "SELECT COUNT(*) FROM knowledge WHERE status = 'active' AND " + CASE_FILE_SQL).fetchone()[0]
@@ -1282,7 +1282,7 @@ class App:
                       "tldr": data["tldr"],
                       "stats": _stats(self.conn, row["start"], row["end"]) if row["start"] else loads(row["stats_json"], {}) or {},
                       "daily": week_glance(self.conn, row["start"], row["end"])["daily"] if row["start"] else []}
-        from .analyze import CASE_FILE_SQL
+        from .analysis.session import CASE_FILE_SQL
 
         cases = self.conn.execute(
             "SELECT COUNT(*) FROM knowledge WHERE status = 'active' AND " + CASE_FILE_SQL).fetchone()[0]
@@ -1309,7 +1309,7 @@ class App:
 
     def status_small(self, limited: bool = False) -> dict:
         from .update import available, recall
-        from .worker import PAUSE_KEY, count_pending
+        from .analysis.queue import PAUSE_KEY, count_pending
 
         if limited:  # the hub's own queue, jobs and updates are not theirs to see
             return {"pending": {"ready": 0, "queued": 0}, "analysis": {"auto": False, "max_per_run": 0, "label": ""}, "paused_until": None,
@@ -1951,7 +1951,7 @@ class App:
         """Save a model provider's settings ([providers.<name>]) and, when given, its API key ("" forgets it). For
         IBM Bob, only the key."""
         from .core.config import load_config
-        from .providers import KEY_ENVS, PROVIDERS, save_settings, set_key
+        from .analysis.runners.settings import KEY_ENVS, PROVIDERS, save_settings, set_key
 
         name = str(body.get("provider") or "")
         if name not in KEY_ENVS:
@@ -1969,7 +1969,7 @@ class App:
 
     def action_provider_test(self, name: str) -> dict:
         """One small call to a provider or agent, with its main model: do the endpoint, the key and the model work?"""
-        from .llm import LLMError
+        from .analysis.runners.base import LLMError
 
         if name not in BACKENDS:
             return {"error": tr("unknown analysis backend {backend!r}", backend=name)}
@@ -1986,7 +1986,7 @@ class App:
                 "tokens": res.input_tokens + res.output_tokens}
 
     def provider_models(self, name: str) -> dict:
-        from .providers import PROVIDERS
+        from .analysis.runners.settings import PROVIDERS
 
         if name not in PROVIDERS:
             return {"models": []}
@@ -2023,7 +2023,7 @@ class App:
 
     def action_screen(self, source: str | None, redo: bool = False) -> bool:
         """Screen imported chats in the background: which are worth analyzing (screen.py)."""
-        from .screen import screen_chats
+        from .analysis.screen import screen_chats
 
         def job(progress):
             conn = connect(self.cfg.db_path)
@@ -2038,7 +2038,7 @@ class App:
         return self.jobs.start("screen", job)
 
     def action_screen_queue(self, source: str | None, maybe: bool = False) -> dict:
-        from .screen import queue
+        from .analysis.screen import queue
 
         return {"queued": queue(self.conn, source=source, maybe=maybe), "per_run": self.cfg.analysis.max_per_run}
 
@@ -2103,7 +2103,7 @@ class App:
     # ------------------------------------------------------------------ actions
     def action_sync(self) -> bool:
         from .ingestion.service import sync
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         if self.cfg.sends_files:
             from .hub import push
@@ -2132,7 +2132,7 @@ class App:
         return self.jobs.start("sync", job)
 
     def action_analyze(self, sid: str) -> bool:
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         real = resolve_session_id(self.conn, sid)
         if not real:
@@ -2186,7 +2186,7 @@ class App:
 
     def action_analyze_many(self, refs: list) -> dict:
         """Analyze the sessions picked in the list, in one background job (history-only ones have nothing to send)."""
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         ids = []
         for ref in refs[:MAX_SELECTION]:
@@ -2212,7 +2212,8 @@ class App:
         """The Queue's Analyze now: the sessions ready now, or ("active") the ones that may still be going, analyzed
         at once instead of on the background run. It runs with automatic analysis off and through a usage-limit
         pause (the limit may be over by now); a run that gets through lifts the pause for the background run too."""
-        from .worker import PAUSE_KEY, queued_ids, run_worker
+        from .application.workflows import run_worker
+        from .analysis.queue import PAUSE_KEY, queued_ids
 
         if which not in ("ready", "active"):
             return {"started": False, "error": tr("unknown queue")}

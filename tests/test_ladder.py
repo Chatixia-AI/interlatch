@@ -5,7 +5,7 @@ import json
 import pytest
 
 from interlatch import ladder
-from interlatch.analyze import analyze_session
+from interlatch.analysis.session import analyze_session
 from interlatch.storage.sqlite import connect
 from interlatch.storage.migrations import init_schema
 from interlatch.reviews import generate_review

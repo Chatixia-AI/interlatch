@@ -143,7 +143,7 @@ class Background:
         from .storage.sqlite import connect
         from .ingestion.service import sync
         from .notify import release_check_safely
-        from .worker import run_worker
+        from .application.workflows import run_worker
 
         self.running = True
         self.on_change()
@@ -454,7 +454,7 @@ class DesktopApp:
                  "• register the interlatch MCP server, so Claude can search your past sessions"]
         if self.frozen:
             steps.append("• open Interlatch at login, so sessions are analyzed in the background")
-        from .llm import make_runner
+        from .analysis.runners.factory import make_runner
 
         runner = make_runner(self.cfg)
         how = (f"Analysis runs on this Mac with {runner.label}." if runner.local()

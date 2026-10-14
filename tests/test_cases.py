@@ -4,7 +4,7 @@ import json
 import sqlite3
 
 from interlatch import access
-from interlatch.analyze import case_of, normalize_analysis, store_analysis
+from interlatch.analysis.session import case_of, normalize_analysis, store_analysis
 from interlatch.cases import visual_of
 from interlatch.storage.sqlite import connect
 from interlatch.search import search_knowledge

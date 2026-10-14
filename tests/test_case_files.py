@@ -4,7 +4,7 @@ the leads the session ruled out, so the dashboard can ask before it tells and th
 import json
 import sqlite3
 
-from interlatch.analyze import PROMPT_VERSION, case_of, normalize_analysis, normalize_knowledge, store_analysis
+from interlatch.analysis.session import PROMPT_VERSION, case_of, normalize_analysis, normalize_knowledge, store_analysis
 from interlatch.storage.sqlite import connect
 from interlatch.storage.schema import SCHEMA_VERSION
 

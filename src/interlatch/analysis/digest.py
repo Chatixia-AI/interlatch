@@ -10,9 +10,9 @@ import sqlite3
 from collections import Counter
 from dataclasses import dataclass
 
-from .core.redact import redact
-from .core.agents import full_name, speaker
-from .core.util import human_count, human_duration, local_str, loads, one_line, truncate
+from ..core.redact import redact
+from ..core.agents import full_name, speaker
+from ..core.util import human_count, human_duration, local_str, loads, one_line, truncate
 
 CAPS = {
     # level: (prompt, assistant text, error result, ok result for Bash, agent result, notification)

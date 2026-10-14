@@ -2,13 +2,15 @@ import json
 
 import pytest
 
-from interlatch.analyze import analyze_session, normalize_analysis
+from interlatch.analysis.session import analyze_session, normalize_analysis
 from interlatch.storage.kv import kv_get
-from interlatch.digest import build_digest
-from interlatch.llm import UsageLimitError, parse_json_object
+from interlatch.analysis.digest import build_digest
+from interlatch.analysis.runners.base import UsageLimitError
+from interlatch.analysis.runners.replies import parse_json_object
 from interlatch.core.redact import redact
 from interlatch.synthesize import GLOBAL, projects_needing_synthesis, synthesize_project
-from interlatch.worker import PAUSE_KEY, pending_sessions, run_worker
+from interlatch.application.workflows import run_worker
+from interlatch.analysis.queue import PAUSE_KEY, pending_sessions
 
 from conftest import CWD, SECRET, SID, fake_log
 
@@ -216,26 +218,29 @@ def test_parse_json_object_local_repairs():
 def test_hung_call_hits_wall_clock_deadline(synced, monkeypatch):
     import time
 
-    import interlatch.llm as llm
+    from interlatch.analysis.runners import process
+    from interlatch.analysis.runners.base import LLMError
+    from interlatch.analysis.runners.claude import ClaudeRunner
 
-    monkeypatch.setattr(llm, "POLL_S", 0.2)
+    monkeypatch.setattr(process, "POLL_S", 0.2)
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "hang")
     cfg = synced["cfg"]
     cfg.analysis.timeout_seconds = 1
     t0 = time.monotonic()
-    with pytest.raises(llm.LLMError, match="timed out"):
-        llm.ClaudeRunner(cfg).run("x", {"type": "object"}, system="s")
+    with pytest.raises(LLMError, match="timed out"):
+        ClaudeRunner(cfg).run("x", {"type": "object"}, system="s")
     assert time.monotonic() - t0 < 10  # the child was killed, not waited for
 
 
 def test_sleep_interrupted_call_is_requeued_without_penalty(synced, monkeypatch):
-    import interlatch.llm as llm
+    from interlatch.analysis.runners import process
+    from interlatch.analysis.runners.base import SleepInterruptedError
 
-    monkeypatch.setattr(llm, "POLL_S", 0.2)
-    monkeypatch.setattr(llm, "SLEEP_GRACE_S", -1)  # simulate: wall clock ran ahead of the monotonic clock
+    monkeypatch.setattr(process, "POLL_S", 0.2)
+    monkeypatch.setattr(process, "SLEEP_GRACE_S", -1)  # simulate: wall clock ran ahead of the monotonic clock
     monkeypatch.setenv("FAKE_CLAUDE_MODE", "hang")
     conn, cfg = synced["conn"], synced["cfg"]
-    with pytest.raises(llm.SleepInterruptedError):
+    with pytest.raises(SleepInterruptedError):
         analyze_session(conn, cfg, SID)
     row = conn.execute("SELECT analysis_status, analysis_attempts FROM sessions WHERE id=?", (SID,)).fetchone()
     assert tuple(row) == ("pending", 0)
@@ -254,8 +259,8 @@ def test_ctrl_c_drops_the_queued_sessions(synced, monkeypatch):
         raise KeyboardInterrupt
         yield
 
-    monkeypatch.setattr("interlatch.analyze.analyze_session", slow)
-    monkeypatch.setattr("interlatch.worker.as_completed", interrupted)
+    monkeypatch.setattr("interlatch.analysis.session.analyze_session", slow)
+    monkeypatch.setattr("interlatch.analysis.worker.as_completed", interrupted)
     synced["cfg"].analysis.concurrency = 1
     with pytest.raises(KeyboardInterrupt):
         run_worker(synced["cfg"], session_ids=[SID] * 5, progress=messages.append)

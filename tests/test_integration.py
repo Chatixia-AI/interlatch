@@ -28,7 +28,7 @@ def _run_mcp(env, messages):
 
 
 def test_mcp_server_protocol(synced):
-    from interlatch.analyze import analyze_session
+    from interlatch.analysis.session import analyze_session
 
     analyze_session(synced["conn"], synced["cfg"], SID)
     out = _run_mcp(synced, [
@@ -235,7 +235,7 @@ def test_hooks_are_inert_for_internal_runs(env):
 
 
 def test_session_start_context(synced):
-    from interlatch.analyze import analyze_session
+    from interlatch.analysis.session import analyze_session
     from interlatch.hooks import build_session_context
     from interlatch.synthesize import synthesize_project
 
