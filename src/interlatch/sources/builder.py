@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
 from ..core import artifact_records
-from ..core.pricing import is_openai_model, normalize_model, openai_cost, usage_cost
+from ..core.pricing import gemini_cost, is_gemini_model, is_openai_model, normalize_model, openai_cost, usage_cost
 from ..core.sessions import Event, FileStat, IDLE_GAP_CAP_S, ParsedSession, TEXT_LIMITS, ToolCall
 from ..core.util import one_line, parse_ts, safe_text, truncate
 from .prompts import clean_prompt
@@ -58,6 +58,8 @@ def estimate_cost(model: str | None, uncached: int, cache_read: int, cache_write
         return 0.0
     if is_openai_model(m):
         return openai_cost(m, uncached + cache_write, cache_read, output)
+    if is_gemini_model(m):
+        return gemini_cost(m, uncached + cache_write, cache_read, output)
     return usage_cost(re.sub(r"(\d)\.(\d)", r"\1-\2", m), {"input_tokens": uncached, "output_tokens": output,
                                                            "cache_read_input_tokens": cache_read,
                                                            "cache_creation_input_tokens": cache_write})

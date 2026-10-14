@@ -23,7 +23,7 @@ from .builder import SessionBuilder, tool_args, estimate_cost, finish_session, m
 
 log = logging.getLogger("interlatch.copilot")
 
-COPILOT_PARSER_VERSION = 2  # 2: artifacts (files created, PRs, commits)
+COPILOT_PARSER_VERSION = 3  # 3: Gemini list prices; 2: artifacts (files created, PRs, commits)
 
 
 # ------------------------------------------------------------------ shared helpers

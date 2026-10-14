@@ -32,7 +32,7 @@ from ..core.util import one_line, parse_ts
 
 log = logging.getLogger("interlatch.antigravity")
 
-ANTIGRAVITY_PARSER_VERSION = 1
+ANTIGRAVITY_PARSER_VERSION = 2  # 2: Gemini list prices (the cost was 0)
 LOGS = Path(".system_generated") / "logs"
 _REQUEST_RE = re.compile(r"<USER_REQUEST>(.*?)</USER_REQUEST>", re.S)
 _BLOCK_RE = re.compile(r"<(USER_REQUEST|ADDITIONAL_METADATA|USER_SETTINGS_CHANGE)>.*?</\1>", re.S)
