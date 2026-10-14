@@ -7,6 +7,7 @@ import pytest
 from interlatch import hub
 from interlatch.core.config import load_config, set_config_value, toml_table
 from interlatch.core.util import file_lock
+from interlatch.core.machine import local_machine
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke
@@ -19,7 +20,7 @@ ADDED = "/home/test/code/coc-ai"  # a second folder of the same project, joined 
 def test_a_folder_added_during_a_run_stays_on_the_hub(teamenv):  # noqa: F811
     conn = teamenv["conn"]
     started_with = _in_project(teamenv)  # the config a long run read before the folder was added
-    me = hub.local_machine(started_with)["id"]
+    me = local_machine(started_with)["id"]
     set_config_value(started_with, "hub", "folders", toml_table({SPOKE_CWD: CWD, ADDED: CWD}))  # Join a project
     hub.push(started_with)  # the run ends and shares
     assert hub.folders_of(conn, me) == {SPOKE_CWD: CWD, ADDED: CWD}  # not taken back out, its sessions not moved
@@ -28,7 +29,7 @@ def test_a_folder_added_during_a_run_stays_on_the_hub(teamenv):  # noqa: F811
 def test_a_project_left_during_a_run_is_not_shared_again(teamenv):  # noqa: F811
     conn = teamenv["conn"]
     started_with = _in_project(teamenv)
-    me = hub.local_machine(started_with)["id"]
+    me = local_machine(started_with)["id"]
     hub.leave_project(started_with, CWD)
     _analyzed_on_spoke(started_with, title="Mine, again", at="2026-10-03T00:00:00Z", lessons=[("p2", "project", "fact")])
     report = hub.push_knowledge(started_with)  # what the analysis worker calls, with the config it began with
@@ -61,7 +62,7 @@ def test_a_callers_own_changes_hold_until_the_file_changes(teamenv):  # noqa: F8
 def test_each_folder_counts_its_own_sessions(teamenv):  # noqa: F811
     conn = teamenv["conn"]
     spoke = _in_project(teamenv)  # one session, run in SPOKE_CWD, filed under CWD
-    me = hub.local_machine(spoke)["id"]
+    me = local_machine(spoke)["id"]
     assert conn.execute("SELECT machine_path FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == SPOKE_CWD
     report = hub.folders_report(conn, me, {SPOKE_CWD: CWD, ADDED: CWD}, {}, {})
     assert (report[SPOKE_CWD]["sessions"], report[ADDED]["sessions"]) == (1, 0)

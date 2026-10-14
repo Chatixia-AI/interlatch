@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from interlatch import systems
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 
 
 def write(path: Path, text: str) -> None:

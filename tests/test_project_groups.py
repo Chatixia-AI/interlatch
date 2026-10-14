@@ -98,7 +98,7 @@ def test_a_person_limited_to_projects_sees_no_groups(projects):
 
 
 def test_an_existing_archive_gains_the_group_tables(synced):
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
 
     conn = synced["conn"]
     conn.execute("DROP TABLE project_groups")

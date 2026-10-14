@@ -33,14 +33,11 @@ import platform
 import re
 import secrets
 import shutil
-import socket
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import threading
 import time
-import uuid
 import zlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -50,13 +47,13 @@ from urllib.parse import quote, urlencode, urlparse
 from . import __version__, news
 from .core.config import Config
 from .core.util import is_abs_path, normalize_project_path, path_kind, path_variants, utcnow_iso
+from .core.machine import MACHINE_RE, local_machine
 
 log = logging.getLogger("interlatch.hub")
 
 PROTOCOL = 1
 TOKEN_FILE = "hub-token"
 ROOT_RE = re.compile(r"^(claude|codex)(-\d+)?$")
-MACHINE_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 MAX_FILE_BYTES = 4 << 30  # one transcript; far above any real one
 ANALYSES_FILE = "analyses.json.gz"
 MAX_SESSIONS_JSON = 256 << 20  # one batch of shared sessions, unpacked
@@ -124,33 +121,6 @@ class HubUnauthorized(HubError):
 
 
 # ------------------------------------------------------------------ identity
-def _computer_name() -> str:
-    if sys.platform == "darwin":
-        try:
-            out = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True, timeout=3)
-            if out.returncode == 0 and out.stdout.strip():
-                return out.stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            pass
-    name = socket.gethostname()
-    return name[:-6] if name.endswith(".local") else name
-
-
-def local_machine(cfg: Config) -> dict:
-    """This computer's id and name, made once and kept in <home>/machine.json (rename it there)."""
-    path = cfg.home / "machine.json"
-    try:
-        data = json.loads(path.read_text())
-        if isinstance(data, dict) and MACHINE_RE.match(str(data.get("id", ""))):
-            return {"id": data["id"], "name": str(data.get("name") or _computer_name())}
-    except (OSError, ValueError):
-        pass
-    data = {"id": str(uuid.uuid4()), "name": _computer_name()}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
-    tmp.write_text(json.dumps(data, indent=2) + "\n")
-    os.replace(tmp, path)
-    return data
 
 
 def machine_key(cfg: Config) -> str:
@@ -412,7 +382,7 @@ def clean_folders(raw) -> dict[str, str]:
 
 def folders_of(conn, machine_id: str) -> dict[str, str]:
     """The folders another computer added to projects here, as it last reported them."""
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     try:
         data = json.loads(kv_get(conn, FOLDERS_KV + machine_id) or "{}")
@@ -423,7 +393,7 @@ def folders_of(conn, machine_id: str) -> dict[str, str]:
 
 def left_of(conn, machine_id: str) -> list[str]:
     """The projects here another computer left, as it last reported them: it no longer shares there."""
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     if not machine_id:
         return []
@@ -850,7 +820,7 @@ class GroupRoutes:
         """Note the folders just sent to the hub, so they stay filed there after they leave their group."""
         if not self.active:
             return
-        from .db import connect
+        from .storage.sqlite import connect
 
         conn = connect(cfg.db_path)
         try:
@@ -868,7 +838,7 @@ def group_routes(cfg: Config, conn=None) -> GroupRoutes:
     send to a hub. Folders only: a path another computer recorded (host:/…) isn't one the hub files by."""
     if not cfg.is_spoke or (conn is None and not cfg.db_path.exists()):
         return GroupRoutes()
-    from .db import connect
+    from .storage.sqlite import connect
     from .groups import assign, groups
 
     own = conn is None
@@ -1115,7 +1085,7 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
     `routes`: the groups shared on the hub (GroupRoutes): a project in one goes to its hub project, whatever
     `projects_only` says; one in a shared group's folder but not in that group, or that left it, stays here.
     `conn`/`where`: the hub's own sessions in projects set up there (share_own)."""
-    from .db import connect
+    from .storage.sqlite import connect
 
     out: list[dict] = []
     unchanged = excluded = 0
@@ -1223,7 +1193,7 @@ def share_own(cfg: Config, conn, store) -> int:
     if not records:
         return 0
     from .ingest import project_name_for
-    from .team_store import payload
+    from .storage.team import payload
 
     _in_store(store.computer_seen, me["id"], me["name"], platform_label(), __version__)
     for i in range(0, len(records), SHARE_BATCH):
@@ -1290,7 +1260,7 @@ def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = No
 def pull_team_lessons(cfg: Config, client: HubClient, repos: dict) -> int:
     """Ask the hub for teammates' lessons in this computer's projects and keep them here, read-only (source 'team').
     Returns how many this computer holds. Nothing changes when the hub's answer is the one it already has."""
-    from .db import connect
+    from .storage.sqlite import connect
 
     state = last_team(cfg) or {}
     left = sorted(cfg.hub_left)
@@ -1348,7 +1318,7 @@ def apply_team_lessons(cfg: Config, data: dict, repos: dict) -> int:
     are skipped. A lesson the hub no longer sends is removed; one dismissed here stays dismissed. Returns how many are
     held."""
     from . import ladder
-    from .db import connect
+    from .storage.sqlite import connect
     from .core.util import dumps
 
     places = data.get("places") if isinstance(data.get("places"), dict) else {}
@@ -1621,7 +1591,7 @@ def inventory(cfg: Config, machine_id: str) -> dict[str, dict[str, list]]:
 
 def _store(cfg: Config):
     """The hub's team store (team_store.py) when `[hub] store` names one, else None; its errors as HubError."""
-    from .team_store import TeamStoreError, get
+    from .storage.team import TeamStoreError, get
 
     try:
         return get(cfg)
@@ -1630,7 +1600,7 @@ def _store(cfg: Config):
 
 
 def _in_store(call, *args):
-    from .team_store import TeamStoreError
+    from .storage.team import TeamStoreError
 
     try:
         return call(*args)
@@ -1688,7 +1658,7 @@ def hello(cfg: Config, conn, body: dict, person: dict | None = None) -> dict:
     )
     people.record_key(conn, machine_id, body.get("key"))  # the first one it shows: an invite for this id must show it
     conn.commit()
-    from .db import kv_get, kv_set
+    from .storage.kv import kv_get, kv_set
 
     folders, moved, refiled = folders_of(conn, machine_id), 0, False
     if "folders" in body:  # an older spoke doesn't send them: keep what it had
@@ -1922,7 +1892,7 @@ def receive_sessions(cfg: Config, conn, params: dict, rfile, length: int, person
         accepted.append((sid, {**rec, "knowledge": lessons}, row, remote))
     store = _store(cfg)
     if store and accepted:  # the team's record first: if it fails, nothing is kept and the computer sends it again
-        from .team_store import payload
+        from .storage.team import payload
 
         _in_store(store.put_sessions, machine_id, [
             payload(rec, project=row["project_path"], project_name=row["project_name"], remote=remote,
@@ -1989,7 +1959,7 @@ def team_lessons(cfg: Config, body: dict, person: dict | None = None, conn=None)
 
 
 def receive_analyses(cfg: Config, conn, params: dict, rfile, length: int) -> dict:
-    from .db import kv_set
+    from .storage.kv import kv_set
 
     machine_id = check_machine(cfg, params.get("machine", ""))
     if length > 512 << 20:
@@ -2057,7 +2027,7 @@ class IngestTrigger:
 # ------------------------------------------------------------------ analyses a spoke already did
 def export_analyses(cfg: Config) -> tuple[bytes, int]:
     """gzip JSON of this computer's finished analyses and the knowledge they produced (not memory notes)."""
-    from .db import connect
+    from .storage.sqlite import connect
 
     sessions: list[dict] = []
     if cfg.db_path.exists():
@@ -2166,7 +2136,7 @@ def machine_of(cfg: Config, path: Path | str | None) -> str | None:
 
 def machines(conn, cfg: Config) -> list[dict]:
     """Every computer the hub knows, with its session counts and whose it is, this one first."""
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     register_local(conn, cfg)
     conn.commit()
@@ -2237,7 +2207,7 @@ class ProjectResolver:
     def local_remotes(self) -> dict[str, str]:
         """{normalized remote: top-level folder} of the repositories this computer's own sessions ran in."""
         if self._local is None:
-            from .db import kv_get, kv_set
+            from .storage.kv import kv_get, kv_set
 
             self._local = {}
             paths = [r[0] for r in self.conn.execute(  # where they ran, also when a set-up project holds them

@@ -97,7 +97,7 @@ def _project_here(conn, cwd: str) -> str:
 
 def build_session_context(cfg, cwd: str) -> str | None:
     """A compact digest of what previous sessions learned about this project."""
-    from .db import connect
+    from .storage.sqlite import connect
     from .hub import team_from
     from .ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
 

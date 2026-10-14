@@ -66,7 +66,7 @@ class LeaderboardError(Exception):
 def totals(conn, cfg: Config, now=None) -> dict:
     """This computer's coding-agent sessions in each window: h<days> hours of active time, s<days> sessions started,
     t<days> tokens (input, output, cache read and write, as the dashboard counts them)."""
-    from .hub import local_machine
+    from .core.machine import local_machine
 
     now = now or utcnow()
     here = local_machine(cfg)["id"]
@@ -86,7 +86,7 @@ def totals(conn, cfg: Config, now=None) -> dict:
 
 def machine_tag(cfg: Config) -> str:
     """Which computer reports, without saying which: a hash of its machine id."""
-    from .hub import local_machine
+    from .core.machine import local_machine
 
     return hashlib.sha256(local_machine(cfg)["id"].encode()).hexdigest()[:16]
 

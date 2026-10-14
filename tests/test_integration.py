@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.install import hooks_installed, install_hooks, uninstall_hooks
 
 from conftest import CWD, SECRET, SID

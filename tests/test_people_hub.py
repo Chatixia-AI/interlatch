@@ -10,7 +10,8 @@ import pytest
 
 from interlatch import hub, people
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
+from interlatch.core.machine import local_machine
 
 MACHINE = "11111111-2222-4333-8444-555555555555"
 OTHER = "99999999-2222-4333-8444-555555555555"
@@ -68,7 +69,7 @@ def test_join_with_code(hubcfg):
 
     got = hub.join_with_code(cfg, conn, {"code": code.lower(), "machine": MACHINE, "name": "Ada laptop",
                                          "platform": "macOS", "version": "9.9"})
-    assert got["person"] == people.public(admin) and got["hub"] == hub.local_machine(cfg)["name"] and got["token"]
+    assert got["person"] == people.public(admin) and got["hub"] == local_machine(cfg)["name"] and got["token"]
     row = conn.execute("SELECT name, platform, role, person_id FROM machines WHERE id = ?", (MACHINE,)).fetchone()
     assert tuple(row) == ("Ada laptop", "macOS", "spoke", admin["id"])
     with pytest.raises(hub.HubError, match="already used"):
@@ -162,7 +163,7 @@ def test_join_with_an_invite_then_sign_in(hubcfg, monkeypatch, capsys):
         assert "knows you as Bob (member)" in _out(capsys)
         spoke = load_config(home)
         assert spoke.hub_url == url and spoke.shares_knowledge
-        ok, who = hub.authorize(cfg, conn, _bearer(hub.read_token(spoke)), hub.local_machine(spoke)["id"])
+        ok, who = hub.authorize(cfg, conn, _bearer(hub.read_token(spoke)), local_machine(spoke)["id"])
         assert ok and who["id"] == bob["id"]
 
         assert main(["hub", "signin"]) == 0

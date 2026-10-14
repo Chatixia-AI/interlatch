@@ -124,13 +124,13 @@ def parse_cloud_task(task: dict, diff: str | None, project_path: str | None) -> 
 
 
 def save_status(conn, **status) -> None:
-    from .db import kv_set
+    from .storage.kv import kv_set
 
     kv_set(conn, STATUS_KEY, json.dumps({**status, "checked_at": time.time()}))
 
 
 def load_status(conn) -> dict:
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     try:
         return json.loads(kv_get(conn, STATUS_KEY) or "{}")

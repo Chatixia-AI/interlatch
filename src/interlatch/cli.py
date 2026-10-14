@@ -18,7 +18,7 @@ def _cfg():
 
 
 def _conn(cfg):
-    from .db import connect
+    from .storage.sqlite import connect
 
     return connect(cfg.db_path)
 
@@ -397,7 +397,7 @@ def cmd_stats(args) -> int:
 
 
 def cmd_status(args) -> int:
-    from .db import kv_get
+    from .storage.kv import kv_get
     from .install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
     from .statusline import WINDOW_LABEL, plan_usage
     from .llm import make_runner
@@ -691,7 +691,7 @@ MENU_BAR_ASKED_KEY = "menu_bar_asked"  # kv: install asked about the menu-bar ic
 def _notify_choice(cfg, conn, args, *, ask, background_sync: bool) -> bool | None:
     """Turn release notifications on or off (True/False), or leave the setting alone (None). Asked once, and only
     where they can work: an install that updates from PyPI, with the background sync running to check."""
-    from .db import kv_get
+    from .storage.kv import kv_get
     from .update import compares_online
 
     if args.notify_updates is not None:
@@ -708,7 +708,7 @@ def _menu_bar_choice(cfg, conn, args, *, ask, login_dashboard: bool) -> bool | N
     once, and only where it can show, on a Mac whose dashboard runs at login."""
     import platform
 
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     if args.menu_bar is not None:
         return args.menu_bar
@@ -721,7 +721,7 @@ def _menu_bar_choice(cfg, conn, args, *, ask, login_dashboard: bool) -> bool | N
 
 def cmd_install(args) -> int:
     from .connectors import connect, disconnect
-    from .db import kv_get, kv_set
+    from .storage.kv import kv_get, kv_set
     from .ingest import sync
     from .install import (LAUNCHD_LABEL, UI_LABEL, agent_path, background_supported, executable, install_hooks,
                           install_launchd, install_mcp, install_statusline, install_ui_agent, launchd_status,
@@ -1709,6 +1709,7 @@ def cmd_hub(args) -> int:
     import platform
 
     from . import hub
+    from .core.machine import local_machine
     from .install import background_status, hooks_installed
 
     cfg = _cfg()
@@ -1733,7 +1734,7 @@ def cmd_hub(args) -> int:
         if address and address != cfg.hub_address:  # what invites and sign-in links point at from now on
             _set_config_value(cfg, "hub", "address", json.dumps(address))
         url = address or cfg.hub_address or (_hub_url_guess(cfg) or "").rstrip("/")
-        console.print(f"[bold]{hub.local_machine(cfg)['name']}[/] is a hub: other computers can send it their sessions.",
+        console.print(f"[bold]{local_machine(cfg)['name']}[/] is a hub: other computers can send it their sessions.",
                       highlight=False)
         if not url:
             console.print("Other computers need an address to reach it. Run `interlatch tailnet on` (Tailscale), then "
@@ -1909,7 +1910,7 @@ def cmd_hub(args) -> int:
     rows = hub.machines(conn, cfg)
     conn.close()
     role = "a hub" if hub.read_token(cfg) else "not a hub (`interlatch hub enable` makes it one)"
-    console.print(f"[bold]{hub.local_machine(cfg)['name']}[/] is {role}.", highlight=False)
+    console.print(f"[bold]{local_machine(cfg)['name']}[/] is {role}.", highlight=False)
     if hub.read_token(cfg) and cfg.hub_accept == "knowledge":
         console.print("  takes knowledge only: computers that send transcripts are turned away "
                       "(`interlatch config set hub.accept everything` takes them again)", highlight=False)
@@ -1930,7 +1931,8 @@ def cmd_hub(args) -> int:
 
 def _hub_store(cfg, console) -> int:
     """`interlatch hub store`: connect to the hub's team store, run its upgrade steps, and show what it holds."""
-    from . import hub, team_store
+    from . import hub
+    from .storage import team as team_store
 
     if cfg.is_spoke:
         console.print(f"The team store belongs to the hub; this computer sends to the hub at {cfg.hub_url}.",
@@ -2016,6 +2018,7 @@ def _hub_purge(cfg, console, args) -> int:
     """`interlatch hub purge <email|id|computer> --project <name>… | --outside-access`: remove for good what a person's
     computers (or one computer) sent to this hub, in some projects or outside the ones they see."""
     from . import hub, people
+    from .core.machine import local_machine
     from .ingest import project_name_for
 
     if cfg.is_spoke:
@@ -2033,7 +2036,7 @@ def _hub_purge(cfg, console, args) -> int:
             key = args.url.strip().lower()
             machines = [r[0] for r in conn.execute(
                 "SELECT id FROM machines WHERE id != ? AND (lower(name) = ? OR (length(?) >= 8 AND id LIKE ? || '%'))",
-                (hub.local_machine(cfg)["id"], key, key, key))]
+                (local_machine(cfg)["id"], key, key, key))]
             who = f"the computer {args.url}"
             if len(machines) > 1:
                 console.print(f"{len(machines)} computers are called {args.url}; pass the one you mean by its id "
@@ -2567,7 +2570,7 @@ def cmd_leaderboard(args) -> int:
 
 def cmd_mirror(args) -> int:
     """`interlatch mirror`: the copy of this archive in Postgres ([mirror] to = "postgres"): what it holds, or write it now."""
-    from . import mirror
+    from .storage import mirror
     from .core.util import setup_logging
 
     cfg = _cfg()

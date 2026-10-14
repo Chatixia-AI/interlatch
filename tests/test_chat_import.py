@@ -15,7 +15,7 @@ import pytest
 from interlatch.chat_import import CHATGPT, CLAUDE_AI, ExportError, import_export, import_status, read_export, summary
 from interlatch.chatgpt_export import parse_conversation as parse_chatgpt
 from interlatch.claude_export import parse_conversation
-from interlatch.db import connect as db_connect
+from interlatch.storage.sqlite import connect as db_connect
 
 PROJECT = "11111111-1111-1111-1111-111111111111"
 CHAT = "22222222-2222-2222-2222-222222222222"

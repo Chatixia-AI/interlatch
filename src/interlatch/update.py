@@ -294,7 +294,7 @@ def compares_online() -> bool:
 
 def recall(conn) -> None:
     """Load the last PyPI check from the database, when it is newer than the one in memory."""
-    from .db import kv_get
+    from .storage.kv import kv_get
 
     try:
         saved = json.loads(kv_get(conn, REMOTE_KEY) or "null")
@@ -306,7 +306,7 @@ def recall(conn) -> None:
 
 
 def remember(conn) -> None:
-    from .db import kv_set
+    from .storage.kv import kv_set
 
     kv_set(conn, REMOTE_KEY, json.dumps(_remote))
     conn.commit()

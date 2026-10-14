@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .core.config import Config
-from .db import connect, kv_get, kv_set
+from .storage.sqlite import connect
+from .storage.kv import kv_get, kv_set
 from .core.i18n import tr
 from .llm import BudgetExceededError, LLMError, Runner, UsageLimitError, make_runner
 from .core.util import file_lock, local_str, one_line, to_iso, utcnow
@@ -198,7 +199,7 @@ def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyse
         except HubError as exc:
             report.shared = f"not sent ({exc})"
     if cfg.mirror_to and not session_ids:  # a background or `interlatch work` run: bring the mirror up to date
-        from .mirror import sync as mirror_sync
+        from .storage.mirror import sync as mirror_sync
 
         report.mirrored = mirror_sync(cfg).summary()  # never raises; a missed write is caught up by the next run
     log.info("worker: %s", report.summary())

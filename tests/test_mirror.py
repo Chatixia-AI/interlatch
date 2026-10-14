@@ -14,7 +14,7 @@ import uuid
 
 import pytest
 
-from interlatch import mirror
+from interlatch.storage import mirror
 from interlatch.core.config import load_config, set_config_value
 from interlatch.core.util import one_line
 
@@ -89,7 +89,7 @@ def test_the_background_run_writes_it(env, monkeypatch):
 def test_settings_from_the_dashboard(env, monkeypatch):
     """Settings › Storage: tested before it is saved, the password goes in and never comes out, a schema another
     computer mirrors into is refused, and only a request from the computer itself may see or change it."""
-    from interlatch.hub import local_machine
+    from interlatch.core.machine import local_machine
 
     cfg, home = env["cfg"], env["home"]
     me = local_machine(cfg)["id"]

@@ -6,7 +6,8 @@ import sqlite3
 import pytest
 
 from interlatch import instructions, suggest
-from interlatch.db import SCHEMA_VERSION, connect
+from interlatch.storage.sqlite import connect
+from interlatch.storage.schema import SCHEMA_VERSION
 from interlatch.instructions import BEGIN
 
 from friction_fixture import ago, make_archive

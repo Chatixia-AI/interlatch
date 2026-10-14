@@ -243,7 +243,7 @@ def test_windows_hub_and_people_path_normalization():
 
 
 def test_the_hub_files_a_windows_computer_s_folder_under_one_spelling(tmp_path):
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
     from interlatch.hub import ProjectResolver
 
     cfg = load_config(tmp_path / "home")
@@ -278,7 +278,7 @@ def _windows_transcript(sid: str, cwd: str) -> str:
 
 def test_a_real_windows_transcript_s_backslash_paths_are_found(tmp_path, monkeypatch):
     """A Claude Code session on Windows records C:\\work\\app; the VS Code extension asks with c:\\ (fsPath) or C:/."""
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
     from interlatch.ingest import sync
     from interlatch.server import App
 

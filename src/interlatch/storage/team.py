@@ -24,12 +24,12 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import pg
-from .core.config import Config
-from .pg import PG_KEYS, SETTINGS, SSLMODES, driver_available  # noqa: F401 (this module's names, as before)
-from .core.util import fingerprint
+from . import postgres as pg
+from ..core.config import Config
+from .postgres import PG_KEYS, SETTINGS, SSLMODES, driver_available  # noqa: F401 (this module's names, as before)
+from ..core.util import fingerprint
 
-log = logging.getLogger("interlatch.team_store")
+log = logging.getLogger("interlatch.storage.team")
 
 ENV_FILE = "team-store.env"
 MAX_LESSONS = 2000  # sent to one computer per pull

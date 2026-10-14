@@ -17,7 +17,9 @@ import pytest
 
 from interlatch import hub
 from interlatch.core.config import load_config
-from interlatch.db import connect, kv_set
+from interlatch.storage.sqlite import connect
+from interlatch.storage.kv import kv_set
+from interlatch.core.machine import local_machine
 
 from conftest import CWD, PROJECT_DIR, SID, fake_log, write_fake_claude_tree
 
@@ -81,7 +83,7 @@ def test_push_then_ingest_tags_the_computer(hubenv):
     from interlatch.ingest import sync
 
     cfg, spoke = hubenv["cfg"], hubenv["spoke"]
-    spoke_id = hub.local_machine(spoke)["id"]
+    spoke_id = local_machine(spoke)["id"]
     report = hub.push(spoke)
     assert report.sent >= 3 and not report.errors  # transcript, subagent files, memory notes
     assert hubenv["ingest_requests"], "the hub was not asked to ingest what arrived"
@@ -95,7 +97,7 @@ def test_push_then_ingest_tags_the_computer(hubenv):
     assert row["machine_id"] == spoke_id and row["project_path"] == SPOKE_CWD and row["n_prompts"] == 2
     assert f"/archive/machines/{spoke_id}/claude/" in row["archive_path"]
     own = conn.execute("SELECT machine_id FROM sessions WHERE id = ?", (SID,)).fetchone()[0]
-    assert own == hub.local_machine(cfg)["id"] != spoke_id
+    assert own == local_machine(cfg)["id"] != spoke_id
     seen = {m["id"]: m for m in hub.machines(conn, cfg)}
     assert set(seen) == {own, spoke_id} and seen[own]["this"] and seen[spoke_id]["sessions"] == 1
     assert seen[spoke_id]["last_push"] and seen[spoke_id]["files"] >= 3
@@ -114,7 +116,7 @@ def test_hub_api_refuses_bad_tokens_and_paths(hubenv):
     with pytest.raises(hub.HubError, match="token"):
         hub.push(spoke)
     body = gzip.compress(b"x")
-    params = f"machine={hub.local_machine(spoke)['id']}&root=claude&path=projects/../../evil&size=1&mtime=1&sha256={hashlib.sha256(b'x').hexdigest()}"
+    params = f"machine={local_machine(spoke)['id']}&root=claude&path=projects/../../evil&size=1&mtime=1&sha256={hashlib.sha256(b'x').hexdigest()}"
     req = urllib.request.Request(f"{hubenv['url']}/api/hub/file?{params}", data=body, method="POST",
                                  headers={"Authorization": f"Bearer {hubenv['token']}"})
     with pytest.raises(urllib.error.HTTPError) as exc:
@@ -126,14 +128,14 @@ def test_hub_api_refuses_bad_tokens_and_paths(hubenv):
         urllib.request.urlopen(bad, timeout=10)
     assert exc.value.code == 401
     hub.write_token(spoke, hubenv["token"])
-    (spoke.home / "machine.json").write_text(json.dumps(hub.local_machine(hubenv["cfg"])))  # a copied Chronicle folder
+    (spoke.home / "machine.json").write_text(json.dumps(local_machine(hubenv["cfg"])))  # a copied Chronicle folder
     with pytest.raises(hub.HubError, match="own id"):
         hub.push(spoke)
 
 
 def test_damaged_upload_is_rejected(hubenv):
     data = b'{"a": 1}\n'
-    params = (f"machine={hub.local_machine(hubenv['spoke'])['id']}&root=claude&path=history.jsonl&size={len(data)}"
+    params = (f"machine={local_machine(hubenv['spoke'])['id']}&root=claude&path=history.jsonl&size={len(data)}"
               f"&mtime=1&sha256={hashlib.sha256(b'other').hexdigest()}")
     req = urllib.request.Request(f"{hubenv['url']}/api/hub/file?{params}", data=gzip.compress(data), method="POST",
                                  headers={"Authorization": f"Bearer {hubenv['token']}"})
@@ -174,7 +176,7 @@ def test_projects_matched_across_computers(hubenv, monkeypatch):
     assert row["project_path"] == CWD and row["machine_path"] == SPOKE_CWD  # same project as the hub's own session
 
     # by git remote: the spoke reported its repository, the hub knows the same remote for a folder of its own
-    spoke_id = hub.local_machine(hubenv["spoke"])["id"]
+    spoke_id = local_machine(hubenv["spoke"])["id"]
     conn.execute("UPDATE machines SET repos_json = ? WHERE id = ?",
                  (json.dumps({"/srv/x/app": ["/srv/x/app", "github.com/org/demo-app"]}), spoke_id))
     kv_set(conn, f"git:{CWD}", json.dumps([CWD, "github.com/org/demo-app"]))
@@ -184,14 +186,14 @@ def test_projects_matched_across_computers(hubenv, monkeypatch):
     assert r.resolve(spoke_id, "/srv/x/app/api") == f"{CWD}/api"
     assert r.resolve(spoke_id, "/srv/x/other") == "/srv/x/other"  # nothing known: kept as recorded
     assert r.resolve(spoke_id, "/work/demo", remote="git@github.com:Org/demo-app.git") == CWD  # Codex's own remote
-    assert r.resolve(hub.local_machine(cfg)["id"], "/srv/x/app") == "/srv/x/app"  # the hub's own sessions: untouched
+    assert r.resolve(local_machine(cfg)["id"], "/srv/x/app") == "/srv/x/app"  # the hub's own sessions: untouched
 
 
 def test_added_folders_and_what_wins(hubenv):
     """A folder a computer added files everything below it; a repository with a remote the hub knows, when it is the
     more specific match, follows its remote."""
     cfg, conn = hubenv["cfg"], hubenv["conn"]
-    spoke_id = hub.local_machine(hubenv["spoke"])["id"]
+    spoke_id = local_machine(hubenv["spoke"])["id"]
     hub.push(hubenv["spoke"])  # registers the computer
     conn.execute("UPDATE machines SET repos_json = ? WHERE id = ?", (json.dumps({
         "/w/client/app": ["/w/client/app", "github.com/org/demo-app"],      # known here: CWD
@@ -256,7 +258,7 @@ def test_hub_add_folder_files_and_moves_sessions(hubenv, monkeypatch, capsys):
     assert conn.execute("SELECT knowledge_max_id FROM project_kb WHERE project_path = ?", (CWD,)).fetchone()[0] == 0
     seen = hub.last_folders(spoke)
     assert seen["moved"] == 1 and seen["folders"][SPOKE_CWD]["sessions"] == 1
-    listed = {m["id"]: m for m in hub.machines(conn, cfg)}[hub.local_machine(spoke)["id"]]["folders"]
+    listed = {m["id"]: m for m in hub.machines(conn, cfg)}[local_machine(spoke)["id"]]["folders"]
     assert {f["folder"] for f in listed} == {SPOKE_CWD, str(folder.resolve())}
 
     with open(hubenv["spoke_main"], "a") as fh:  # the session goes on: ingesting it again keeps the project
@@ -336,7 +338,7 @@ def test_knowledge_only_sharing(hubenv):
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
     spoke.hub_share = "knowledge"
     assert spoke.shares_knowledge and not spoke.sends_files
-    spoke_id = hub.local_machine(spoke)["id"]
+    spoke_id = local_machine(spoke)["id"]
     _analyzed_on_spoke(spoke, title="Shared title", at="2026-09-20T12:00:00Z",
                        lessons=[("p-gotcha", "project", "gotcha"), ("p-pref", "project", "preference"),
                                 ("g-gotcha", "global", "gotcha")])
@@ -407,7 +409,7 @@ def test_hub_keeps_its_own_record_of_a_session_it_has(hubenv):
     body = gzip.compress(json.dumps({"sessions": [{"id": "../x", "agent": "claude"}, {"id": "ok-1", "agent": "chatgpt"},
                                                   {"id": "ok-2", "agent": "claude", "tools_json": {"Bash": 1},
                                                    "knowledge": [{"kind": "fact", "title": "t", "scope": "global"}]}]}).encode())
-    params = f"machine={hub.local_machine(spoke)['id']}"
+    params = f"machine={local_machine(spoke)['id']}"
     req = urllib.request.Request(f"{hubenv['url']}/api/hub/sessions?{params}", data=body, method="POST",
                                  headers={"Authorization": f"Bearer {hubenv['token']}"})
     assert json.loads(urllib.request.urlopen(req, timeout=10).read())["stored"] == 1

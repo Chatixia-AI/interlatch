@@ -172,7 +172,7 @@ def test_app_and_source_installs_do_not_run_commands(method, monkeypatch):
 
 def test_pypi_check_is_kept_in_the_database(method, env, monkeypatch):
     """The last answer outlives a restart (the in-memory copy is gone; the database still has it)."""
-    from interlatch.db import connect
+    from interlatch.storage.sqlite import connect
 
     method(kind="uv", command=["uv", "tool", "upgrade", "interlatch"])
     monkeypatch.setattr(update, "urlopen", lambda req, timeout: io.BytesIO(b'{"info": {"version": "99.0.0"}}'))

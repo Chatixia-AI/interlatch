@@ -7,7 +7,7 @@ import re
 import sqlite3
 from datetime import datetime, timedelta
 
-from .db import kv_set
+from .storage.kv import kv_set
 from .core.redact import redact
 from .core.util import dumps, loads, to_iso, utcnow
 

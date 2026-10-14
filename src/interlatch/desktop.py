@@ -140,7 +140,7 @@ class Background:
             self.wake.wait(SYNC_INTERVAL_S)
 
     def run_once(self) -> None:
-        from .db import connect
+        from .storage.sqlite import connect
         from .ingest import sync
         from .notify import release_check_safely
         from .worker import run_worker
@@ -416,7 +416,8 @@ class DesktopApp:
     # ------------------------------------------------------------------ setup
     def onboard(self) -> None:
         """First launch: offer to connect Claude Code (hooks + MCP). Asked once; the menu keeps the option."""
-        from .db import connect, kv_get, kv_set
+        from .storage.sqlite import connect
+        from .storage.kv import kv_get, kv_set
         from .install import hooks_installed
 
         if self.frozen and in_temporary_location():

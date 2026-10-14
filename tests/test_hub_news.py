@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from interlatch import hub, news, people
 from interlatch.core.util import to_iso, utcnow
+from interlatch.core.machine import local_machine
 
 from conftest import CWD
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, hubenv  # noqa: F401  (the fixture)
@@ -21,7 +22,7 @@ def _rows(conn):
 
 def test_shared_knowledge_is_news_once(teamenv):  # noqa: F811
     conn, spoke = teamenv["conn"], teamenv["spoke"]
-    me = hub.local_machine(spoke)["id"]
+    me = local_machine(spoke)["id"]
     _analyzed_on_spoke(spoke, title="Mine", at="2026-10-02T00:00:00Z",
                        lessons=[("p1", "project", "gotcha"), ("pref", "project", "preference"), ("g1", "global", "fix")])
     assert hub.push(spoke).sent == 1
@@ -38,7 +39,7 @@ def test_transcripts_and_the_hubs_own_analysis_of_them(hubenv):  # noqa: F811
     from interlatch.ingest import sync
 
     cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
-    me = hub.local_machine(spoke)["id"]
+    me = local_machine(spoke)["id"]
     hub.push(spoke)
     sync(cfg, conn)
     assert _rows(conn) == [{"kind": "shared", "machine_id": me, "project_path": SPOKE_CWD, "sessions": 1, "lessons": 0}]
@@ -133,7 +134,8 @@ def test_an_archive_at_the_case_files_schema_gains_the_news_table(tmp_path):
     """Case files (#101) took schema 17 first: an archive already there must still get hub_news."""
     import sqlite3
 
-    from interlatch.db import SCHEMA_VERSION, connect
+    from interlatch.storage.sqlite import connect
+    from interlatch.storage.schema import SCHEMA_VERSION
 
     db = tmp_path / "chronicle.db"
     connect(db).close()

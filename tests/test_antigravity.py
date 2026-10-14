@@ -5,7 +5,7 @@ import pytest
 from interlatch.antigravity_parser import (conversation_dirs, load_db_meta, load_steps, load_title,
                                           parse_antigravity_conversation, transcript_files)
 from interlatch.core.config import load_config
-from interlatch.db import connect as db_connect
+from interlatch.storage.sqlite import connect as db_connect
 from interlatch.ingest import sync
 
 from antigravity_fixture import EMPTY_ID, FOLDER, GAME, NEW_ID, OLD_ID, write_antigravity_home

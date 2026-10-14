@@ -8,7 +8,7 @@ from http.server import ThreadingHTTPServer
 
 from interlatch.chat_import import import_export, import_status
 from interlatch.cli import main
-from interlatch.db import connect as db_connect
+from interlatch.storage.sqlite import connect as db_connect
 from interlatch.screen import candidates, queue, rule_verdict, screen_chats, screen_status
 
 PASTED = "The quarterly report shows revenue grew in every region, led by the new subscription plans. " * 4

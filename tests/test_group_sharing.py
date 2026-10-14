@@ -7,7 +7,7 @@ import pytest
 
 from interlatch import groups, hub
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.server import App
 
 AKTIO = "/home/yuma/Work/Aktio"

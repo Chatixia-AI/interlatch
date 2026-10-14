@@ -10,7 +10,8 @@ import pytest
 from interlatch import hub, people
 from interlatch.cli import main
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
+from interlatch.core.machine import local_machine
 
 from conftest import CWD, SID
 from test_hub import _serve
@@ -35,7 +36,7 @@ def _project_setup(conn, cfg):
         conn.execute("INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, scope, confidence, "
                      "source, fingerprint, created_at, updated_at, status) VALUES (?, ?, 'Projects', ?, ?, 'b', ?, 'high', "
                      "'analysis', ?, '2026-09-21', '2026-09-21', 'active')", (SID, PROJECTS, kind, title, scope, title))
-    me = hub.local_machine(cfg)["id"]
+    me = local_machine(cfg)["id"]
     conn.execute("INSERT INTO sessions(id, source, agent, project_path, project_name, title, llm_title, summary, "
                  "first_prompt, analysis_status, started_at, machine_id) VALUES (?, 'transcript', 'claude', ?, "
                  "'OTHER-CANARY-name', 'OTHER-CANARY title', 'OTHER-CANARY title', 'OTHER-CANARY summary', 'OTHER-CANARY prompt', "
@@ -288,7 +289,7 @@ def test_a_limited_computer_shares_only_its_projects(tmp_path, monkeypatch):
 def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
     """With a team store, the hub owner's analyzed sessions in a project set up there go to the store as well, so a
     member's computer gets those lessons back; another project's never do."""
-    from interlatch import team_store
+    from interlatch.storage import team as team_store
     from interlatch.core.config import set_config_value
 
     from test_team import FakeStore
@@ -303,7 +304,7 @@ def test_the_hubs_own_sessions_reach_the_team_store(limited, monkeypatch):
                                                            "remotes": []}, {"Authorization": f"Bearer {token}"})
     assert status == 200 and r["team"]
     assert [x["title"] for x in r["lessons"]] == ["Resona lesson"]  # project lessons only, of PROJECTS only
-    me = hub.local_machine(load_config(cfg.home))["id"]
+    me = local_machine(load_config(cfg.home))["id"]
     assert set(fake.shared(me)) == {SID}
     assert "OTHER-CANARY" not in json.dumps(fake.sessions) and "PREF-CANARY" not in json.dumps(fake.lessons)
 

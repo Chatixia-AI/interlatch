@@ -10,7 +10,7 @@ import pytest
 from interlatch import notify, update
 from interlatch.cli import main
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 
 
 @pytest.fixture

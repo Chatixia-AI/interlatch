@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .db import fts_query, short_terms
+from .storage.fts import fts_query, short_terms
 from .ladder import STAGE_ORDER_SQL, confirmations
 from .core.util import loads
 

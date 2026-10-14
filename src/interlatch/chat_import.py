@@ -202,7 +202,7 @@ def read_export(path: Path, name: str | None = None) -> Export:
 
 def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None, name: str | None = None) -> dict:
     """Import (or re-import) an export. `name` is the file's name when `path` is an upload's temporary copy."""
-    from .db import kv_set
+    from .storage.kv import kv_set
     from .ingest import _unchanged, forgotten_ids, store_parsed
     from .core.util import file_lock
 
@@ -310,7 +310,7 @@ def summary(counts: dict) -> str:
 
 def import_status(conn) -> dict:
     """Per format: chats imported and analyzed, how screening sorted them, and the last import."""
-    from .db import kv_get
+    from .storage.kv import kv_get
     from .screen import screen_status
 
     out = {}

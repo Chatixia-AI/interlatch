@@ -32,7 +32,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 from . import __version__, news
 from .core import i18n
 from .core.config import LANGUAGES, Config, env
-from .db import connect, kv_get, kv_set
+from .storage.sqlite import connect
+from .storage.kv import kv_get, kv_set
 from .core.i18n import tr
 from .ladder import reason_text
 from .ladder import refresh as refresh_stage
@@ -375,7 +376,8 @@ class App:
         """This computer as a hub: the name its dashboard shows, whether it has people (then Home is the team's), its
         address, whether it takes knowledge only, and whether it is a dedicated hub (`[hub] dedicated`: a server for
         the team, whose dashboard leaves out a person's own computer). None on a computer that isn't a hub."""
-        from .hub import local_machine, read_token
+        from .hub import read_token
+        from .core.machine import local_machine
         from .people import has_people
 
         if self.cfg.is_spoke or not read_token(self.cfg):
@@ -386,7 +388,8 @@ class App:
 
     def _here(self) -> dict:
         """This computer, recorded in the machines table, which whose-session joins go through."""
-        from .hub import local_machine, register_local
+        from .hub import register_local
+        from .core.machine import local_machine
 
         here = local_machine(self.cfg)
         if not self.conn.execute("SELECT 1 FROM machines WHERE id = ?", (here["id"],)).fetchone():
@@ -1333,7 +1336,8 @@ class App:
 
     def devices(self) -> dict:
         """This computer's role, the computers a hub hears from, and how the dashboard is reachable."""
-        from .hub import last_folders, last_push, local_machine, machines, read_token
+        from .hub import last_folders, last_push, machines, read_token
+        from .core.machine import local_machine
 
         from .hub import last_team
 
@@ -1460,7 +1464,8 @@ class App:
     def hub_settings(self) -> dict:
         """This hub's name and address, what it takes, and which of them a container's variables set (each start
         writes them again, so the dashboard can't change them)."""
-        from .hub import local_machine, read_token
+        from .hub import read_token
+        from .core.machine import local_machine
 
         if self.cfg.is_spoke or not read_token(self.cfg):
             return {"error": tr("this computer is not a hub")}
@@ -1518,7 +1523,7 @@ class App:
 
     # ---- Devices › Team store (team_store.py): the password goes in, never out
     def team_store_info(self) -> dict:
-        from . import team_store
+        from .storage import team as team_store
 
         return {"enabled": self.cfg.hub_store == "postgres", "driver": team_store.driver_available(),
                 "settings": team_store.read_settings(self.cfg), "file": str(team_store.env_path(self.cfg)),
@@ -1526,7 +1531,7 @@ class App:
 
     def team_store_status(self) -> dict:
         """What the store holds; asked for after the page shows, since the database may be far away."""
-        from . import team_store
+        from .storage import team as team_store
 
         if self.cfg.hub_store != "postgres" or self.cfg.is_spoke:
             return {"enabled": False}
@@ -1536,7 +1541,7 @@ class App:
             return {"enabled": True, "error": str(exc)}
 
     def _store_params(self, body: dict) -> dict:
-        from . import team_store
+        from .storage import team as team_store
 
         try:
             saved = team_store.connection_params(self.cfg)
@@ -1545,7 +1550,7 @@ class App:
         return team_store.check_settings(body, saved)
 
     def action_team_store_test(self, body: dict) -> dict:
-        from . import team_store
+        from .storage import team as team_store
 
         try:
             return {"ok": True, **team_store.probe(self._store_params(body))}
@@ -1555,7 +1560,7 @@ class App:
     def action_team_store_save(self, body: dict) -> dict:
         """Turn the team store on with these settings (tested first: nothing is saved if they don't work), or off.
         Off keeps the settings, so turning it on again needs no password."""
-        from . import team_store
+        from .storage import team as team_store
         from .core.config import load_config, set_config_value
 
         if self.cfg.is_spoke:
@@ -1580,7 +1585,7 @@ class App:
 
     # ---- Settings › Storage (mirror.py): a copy of this archive in Postgres; the password goes in, never out
     def mirror_info(self) -> dict:
-        from . import mirror, pg
+        from .storage import mirror, postgres as pg
         from .core.config import MIRROR_INCLUDES
 
         return {"enabled": mirror.enabled(self.cfg), "include": self.cfg.mirror_include, "schema": self.cfg.mirror_schema,
@@ -1591,7 +1596,7 @@ class App:
 
     def mirror_status(self) -> dict:
         """What the mirror holds; asked for after the page shows, since the database may be far away."""
-        from . import mirror
+        from .storage import mirror
 
         if not mirror.enabled(self.cfg):
             return {"enabled": False}
@@ -1601,7 +1606,7 @@ class App:
             return {"enabled": True, "error": tr(str(exc))}
 
     def _mirror_params(self, body: dict) -> dict:
-        from . import mirror
+        from .storage import mirror
 
         try:
             saved = mirror.connection_params(self.cfg)
@@ -1610,7 +1615,7 @@ class App:
         return mirror.check_settings(body, saved)
 
     def _mirror_schema(self, body: dict) -> str:
-        from . import mirror
+        from .storage import mirror
 
         schema = str(body.get("schema") or self.cfg.mirror_schema).strip()
         if not (schema.isidentifier() and schema.isascii()):
@@ -1620,8 +1625,8 @@ class App:
     def _mirror_check(self, params: dict, schema: str) -> dict:
         """probe(), plus whether this computer may write there: a schema no other computer's mirror is in, and a user
         that can create its tables."""
-        from . import mirror
-        from .hub import local_machine
+        from .storage import mirror
+        from .core.machine import local_machine
 
         found = mirror.probe(params, schema)
         owner = found["owner"]
@@ -1634,7 +1639,7 @@ class App:
         return found
 
     def action_mirror_test(self, body: dict) -> dict:
-        from . import mirror
+        from .storage import mirror
 
         try:
             return {"ok": True, **self._mirror_check(self._mirror_params(body), self._mirror_schema(body))}
@@ -1644,7 +1649,7 @@ class App:
     def action_mirror_save(self, body: dict) -> dict:
         """Turn the mirror on with these settings (tested first: nothing is saved if they don't work) and write it
         now, or off. Off keeps the settings, so turning it on again needs no password, and leaves the copy as it is."""
-        from . import mirror
+        from .storage import mirror
         from .core.config import MIRROR_INCLUDES, load_config, set_config_value
 
         if not body.get("enabled"):
@@ -1668,7 +1673,7 @@ class App:
         return {"ok": True, "mirror": self.mirror_info(), "started": self.action_mirror_sync()}
 
     def action_mirror_sync(self) -> bool:
-        from . import mirror
+        from .storage import mirror
 
         cfg = self.cfg
 

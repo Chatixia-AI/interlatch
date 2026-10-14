@@ -12,10 +12,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from interlatch import hub
 from interlatch import leaderboard as lb
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.core.util import to_iso, utcnow
+from interlatch.core.machine import local_machine
 
 from test_people_web import TAILNET, hubweb  # noqa: F401  (the fixture)
 from test_people_web import _call as _http
@@ -87,7 +87,7 @@ def _joined(cfg, **extra):
 
 def test_totals_count_this_computers_coding_agent_sessions_only(home):
     conn, cfg = home["conn"], home["cfg"]
-    here = hub.local_machine(cfg)["id"]
+    here = local_machine(cfg)["id"]
     _session(conn, "a", days_ago=1)  # this computer, no machine id recorded
     _session(conn, "b", days_ago=20, machine=here, active=7200)
     _session(conn, "c", days_ago=60, agent="codex")
@@ -160,7 +160,7 @@ def test_a_send_carries_totals_name_and_a_hashed_machine_only(home, net):
     assert fields["name"] == {"stringValue": "Ada"} and fields["photo"] == {"stringValue": PHOTO}
     assert fields["s7"] == {"integerValue": "1"} and fields["h7"] == {"doubleValue": 1.0}
     machine = fields["machine"]["stringValue"]
-    assert machine != hub.local_machine(cfg)["id"] and len(machine) == 16  # which computer, without saying which
+    assert machine != local_machine(cfg)["id"] and len(machine) == 16  # which computer, without saying which
     assert write["updateTransforms"] == [{"fieldPath": "at", "setToServerValue": "REQUEST_TIME"}]  # the rules check it
     assert st["last_sent"] and st["refresh_token"] == "R1"  # a rotated refresh token is kept
 

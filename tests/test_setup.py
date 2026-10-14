@@ -9,7 +9,7 @@ import pytest
 from interlatch import connectors
 from interlatch.cli import main
 from interlatch.core.config import load_config
-from interlatch.db import connect
+from interlatch.storage.sqlite import connect
 from interlatch.install import hooks_installed
 
 

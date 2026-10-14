@@ -112,7 +112,7 @@ def _upgrade(kind: str) -> str:
 def release_check(cfg: Config, conn) -> str | None:
     """Notify about a release newer than this copy, once per release. Returns the version notified about."""
     from . import update
-    from .db import kv_get, kv_set
+    from .storage.kv import kv_get, kv_set
 
     if not cfg.update_notify or not update.compares_online():
         return None
@@ -134,7 +134,7 @@ def release_check(cfg: Config, conn) -> str | None:
 
 def release_check_safely(cfg: Config) -> None:
     """For the background sync: never let a notification problem fail the sync."""
-    from .db import connect
+    from .storage.sqlite import connect
 
     if not cfg.update_notify:
         return
