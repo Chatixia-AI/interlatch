@@ -14,6 +14,10 @@ the dashboard with the Firebase refresh token in the URL fragment, which the das
 the one it made. Only that refresh token is kept, in <home>/leaderboard.json (0600). One computer reports for an
 account at a time: the one that signed in last.
 
+The same sign-in opens the Party (knowledge/party.py) without joining the board: signing in from the Party page keeps
+"board": false in the state, and nothing is sent until the person joins (join()). A state from before the Party has no
+"board" and is on the board.
+
 The totals are self-reported. The rules bound them, nothing proves them: it's a game, not a record.
 """
 
@@ -34,6 +38,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
+from ..core.agents import CODING_AGENTS
 from ..core.config import Config
 from ..core.util import parse_ts, to_iso, utcnow, utcnow_iso
 
@@ -52,7 +57,7 @@ SEND_EVERY = 10 * 60  # a sync more often than this sends nothing new
 BOARD_TTL = 5 * 60  # the board is read again at most this often, per tab
 SIGNIN_TTL = 15 * 60  # how long a sign-in may take
 TIMEOUT = 15
-AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")  # coding agents (protocol.SHARED_AGENTS); chats stay out
+AGENTS = CODING_AGENTS  # chats stay out
 
 DB = f"projects/{PROJECT}/databases/(default)/documents"
 FIRESTORE = f"https://firestore.googleapis.com/v1/{DB}"
@@ -203,8 +208,15 @@ def _refresh(refresh_token: str) -> dict:
     return r
 
 
-def sign_in(cfg: Config, refresh_token: str) -> dict:
-    """Keep the session the sign-in page came back with: who it is, and the name and picture they show."""
+def on_board(state: dict | None) -> bool:
+    """The sign-in sends to the board: signed in, and not signed in for the Party only ("board": false)."""
+    return state is not None and state.get("board", True) is not False
+
+
+def sign_in(cfg: Config, refresh_token: str, *, board: bool | None = True) -> dict:
+    """Keep the session the sign-in page came back with: who it is, and the name and picture they show. `board`: on
+    the board (the leaderboard's sign-in), or not (False); None keeps this account as it was on this computer, off the
+    board when it is new here (the Party's sign-in)."""
     if not isinstance(refresh_token, str) or not 20 <= len(refresh_token) <= 4096:
         raise LeaderboardError("no sign-in came back")
     r = _refresh(refresh_token)
@@ -221,6 +233,10 @@ def sign_in(cfg: Config, refresh_token: str) -> dict:
              "last_sent": None, "error": None, "paused": None}
     if not state["uid"]:
         raise LeaderboardError("Firebase didn't say who you are")
+    if board is None:
+        before = read_state(cfg)
+        board = on_board(before) and before.get("uid") == state["uid"]
+    state["board"] = bool(board)
     write_state(cfg, state)
     return state
 
@@ -259,10 +275,10 @@ def _plain(fields: dict) -> dict:
 
 # ------------------------------------------------------------------ sending, renaming and leaving
 def send(cfg: Config, conn, *, force: bool = False) -> dict | None:
-    """Send this computer's totals, once signed in; None when not. Another computer that signed in to the same account
-    since takes over: this one stops sending (state "paused") until it signs in again."""
+    """Send this computer's totals, once signed in and on the board; None when not signed in. Another computer that
+    signed in to the same account since takes over: this one stops sending (state "paused") until it signs in again."""
     state = read_state(cfg)
-    if state is None or state.get("paused"):
+    if state is None or state.get("paused") or not on_board(state):
         return state
     if not force and state.get("last_sent"):
         last = parse_ts(state["last_sent"])
@@ -312,29 +328,42 @@ def rename(cfg: Config, conn, name) -> dict:
     return send(cfg, conn, force=True)
 
 
+def join(cfg: Config, conn) -> dict:
+    """Join the board with the sign-in kept for the Party: on the board from now on, and sent now. Like signing in on
+    the board, this computer reports for the account from here on."""
+    state = read_state(cfg)
+    if state is None:
+        raise LeaderboardError("sign in first")
+    if not on_board(state):
+        _update_state(cfg, board=True, joined_at=utcnow_iso(), last_sent=None, paused=None, error=None)
+    return send(cfg, conn, force=True)
+
+
 def leave(cfg: Config) -> None:
-    """Delete this account's row from the board, then forget the sign-in. The row goes even if this computer had
-    stopped sending."""
+    """Forget the sign-in, deleting this account's row from the board first when it is on the board (the row goes even
+    if this computer had stopped sending). Signed in for the Party only, nothing is sent: there is no row of its own."""
     state = read_state(cfg)
     if state is None:
         return
-    try:
-        token = _id_token(cfg, state)
-        _call("DELETE", f"{FIRESTORE}/players/{quote(state['uid'])}", token=token)
-    except LeaderboardError as e:
-        if not str(e).startswith("404"):
-            raise
+    if on_board(state):
+        try:
+            token = _id_token(cfg, state)
+            _call("DELETE", f"{FIRESTORE}/players/{quote(state['uid'])}", token=token)
+        except LeaderboardError as e:
+            if not str(e).startswith("404"):
+                raise
     state_path(cfg).unlink(missing_ok=True)
     _clear_board()
 
 
 def status(cfg: Config) -> dict:
+    """signed_in: a Google sign-in is kept here (the Party opens); joined: on the board too."""
     state = read_state(cfg)
     if state is None:
-        return {"joined": False}
-    return {"joined": True, "uid": state.get("uid"), "name": state.get("name"), "photo": bool(state.get("photo")),
-            "provider": state.get("provider"), "joined_at": state.get("joined_at"), "last_sent": state.get("last_sent"),
-            "error": state.get("error"), "paused": state.get("paused")}
+        return {"signed_in": False, "joined": False}
+    return {"signed_in": True, "joined": on_board(state), "uid": state.get("uid"), "name": state.get("name"),
+            "photo": bool(state.get("photo")), "provider": state.get("provider"), "joined_at": state.get("joined_at"),
+            "last_sent": state.get("last_sent"), "error": state.get("error"), "paused": state.get("paused")}
 
 
 # ------------------------------------------------------------------ the board

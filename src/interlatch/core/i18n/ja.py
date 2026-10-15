@@ -346,6 +346,12 @@ JA: dict[str, str] = {
     "you're not on this hub; ask an admin to add you": "あなたはこのハブに登録されていません。管理者に追加を頼んでください",
     "only an admin of this hub can do this": "これができるのはこのハブの管理者だけです",
     "the leaderboard is on the dashboard of your own computer": "リーダーボードは自分のコンピューターのダッシュボードで開けます",
+    # ---- the Party (party.py)
+    "the Party opens on the dashboard of your own computer, or of a hub you're signed in to":
+        "パーティーは自分のコンピューターのダッシュボードか、サインインしているハブのダッシュボードで開けます",
+    "sign in to see your party": "パーティーを見るにはサインインしてください",
+    "no such quest": "そのクエストはありません",
+    "no such track": "そのトラックはありません",
     "this computer is not a hub": "このコンピューターはハブではありません",
     "Could not sign in": "サインインできませんでした",
     "Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "

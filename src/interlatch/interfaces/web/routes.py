@@ -38,6 +38,9 @@ OWNER = Access(lambda h, ctx: h._can_admin(), NOT_HERE)
 ADMIN_PERSON = Access(lambda h, ctx: h.viewer is None or h._can_admin(), NOT_ADMIN)  # refuses only people who aren't admins
 HERE = Access(lambda h, ctx: h._from_here(), NOT_HERE)  # what leaves this computer, or changes it: only from here
 LEADERBOARD = Access(lambda h, ctx: h._from_here(), "the leaderboard is on the dashboard of your own computer")
+# the Party: this computer's own (behind its Google sign-in), or a hub person's own (api/party.py)
+PARTY = Access(lambda h, ctx: h._from_here() or h.viewer is not None,
+               "the Party opens on the dashboard of your own computer, or of a hub you're signed in to")
 LOCAL_FILES = Access(lambda h, ctx: h._local(), "files open only on the computer Interlatch runs on")
 # a dedicated hub has no sessions of its own, so there its admins may set up (by name) and remove projects too
 HERE_OR_HUB_ADMIN = Access(lambda h, ctx: h._from_here() or (ctx.cfg.hub_dedicated and h._can_admin()), NOT_HERE)
@@ -157,6 +160,11 @@ GET: list[Route] = [
     Route("/api/leaderboard", LEADERBOARD, lambda h, ctx, m, q: h._json(api.leaderboard.leaderboard(ctx, q))),
     Route(r"/api/leaderboard/avatar/([\w-]+)", LEADERBOARD, _avatar),
     Route("/api/leaderboard/", LEADERBOARD, _not_found, prefix=True),
+    # nothing about the agents before a sign-in; limited people see the party their projects' lessons make
+    Route("/api/party", PARTY, lambda h, ctx, m, q: h._json(api.party.party(ctx, h.viewer, here=h._from_here()))),
+    Route("/api/party/skill", PARTY, lambda h, ctx, m, q: h._json(*api.party.skill(ctx, h.viewer, q))),
+    Route("/api/party/track", PARTY, lambda h, ctx, m, q: h._json(*api.party.track(ctx, h.viewer, q))),
+    Route("/api/party/tracks", PARTY, lambda h, ctx, m, q: h._json(api.party.tracks(ctx))),
     Route("/api/team/who", ANYONE, lambda h, ctx, m, q: h._json(api.team.who_options(ctx))),
     Route("/api/team", ANYONE, lambda h, ctx, m, q: h._json(api.team.team(
         ctx, q, scope=people.projects_of(h.viewer), admin=h._can_admin(), viewer=h.viewer))),
@@ -239,9 +247,27 @@ def _leaderboard(h, ctx, m, body):  # signing in keeps a credential on this comp
             return h._json(api.leaderboard.action_leaderboard_name(ctx, body))
         if m.group(1) == "send":
             return h._json(api.leaderboard.action_leaderboard_send(ctx))
+        if m.group(1) == "join":
+            return h._json(api.leaderboard.action_leaderboard_join(ctx))
         return h._json(api.leaderboard.action_leaderboard_leave(ctx))
     except LeaderboardError as e:
         return h._json({"error": str(e)}, 502)
+
+
+def _party_sign(h, ctx, m, body):  # the Party's Google sign-in: the leaderboard's, kept off the board
+    from ...sharing.leaderboard import LeaderboardError
+
+    try:
+        if m.group(1) == "signin":  # back to this dashboard, as it was opened (the Leaderboard page forwards)
+            return h._json(api.party.action_party_signin(ctx, f"http://{h._host()}/", i18n.lang.get()))
+        return h._json(api.party.action_party_signout(ctx))
+    except LeaderboardError as e:
+        return h._json({"error": str(e)}, 502)
+
+
+def _party_own(h, ctx, m, body):  # the viewer's own quest log and goal
+    act = api.party.action_party_quest if m.group(1) == "quest" else api.party.action_party_goal
+    return h._json(*act(ctx, h.viewer, _body(body), here=h._from_here()))
 
 
 def _reveal(h, ctx, m, body):  # open the file in its own app, or show it in Finder: only from this computer
@@ -293,7 +319,11 @@ def _suggestions_refresh(h, ctx, m, body):
 
 POST: list[Route] = [
     Route("/api/sync", ANYONE, lambda h, ctx, m, b: h._json({"started": api.status.action_sync(ctx)})),
-    Route(r"/api/leaderboard/(signin|finish|cancel|send|name|leave)", LEADERBOARD, _leaderboard),
+    Route(r"/api/leaderboard/(signin|finish|cancel|join|send|name|leave)", LEADERBOARD, _leaderboard),
+    # a Google sign-in kept on this computer: only from here
+    Route(r"/api/party/(signin|signout)", HERE, _party_sign),
+    # the viewer's own quest log: from here, or any person signed in to a hub, not only admins (handler.PARTY_OWN)
+    Route(r"/api/party/(quest|goal)", PARTY, _party_own),
     Route(r"/api/artifacts/(\d+)/reveal", LOCAL_FILES, _reveal),
     # a password: at the hub itself, or an admin of a hub with people
     Route("/api/team-store/test", OWNER, lambda h, ctx, m, b: h._json(api.hub_admin.action_team_store_test(ctx, b))),

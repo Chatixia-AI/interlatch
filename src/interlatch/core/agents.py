@@ -9,6 +9,8 @@ AGENTS = {  # id -> (full name, short name, speaker label in digests)
     "claude-ai": ("Claude.ai", "Claude.ai", "CLAUDE"),  # chats imported from a claude.ai data export
     "chatgpt": ("ChatGPT", "ChatGPT", "CHATGPT"),  # chats imported from a ChatGPT data export
 }
+# the agents that code (their sessions run on a computer): never the imported chats (claude-ai, chatgpt)
+CODING_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")
 
 
 def full_name(agent: str | None) -> str:

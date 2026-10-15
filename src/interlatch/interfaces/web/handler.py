@@ -28,6 +28,8 @@ LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the re
 PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
 HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub/done", "/api/hub/hello",
             "/api/hub/withdraw")
+# POSTs any person signed in to a hub may make, not only admins: their own Party quest log (routes.PARTY decides)
+PARTY_OWN = ("/api/party/quest", "/api/party/goal")
 
 log = logging.getLogger("interlatch.server")
 SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "
@@ -466,6 +468,40 @@ def make_handler(app: App, port: int):
                 dest.unlink(missing_ok=True)
             return self._json({"started": started})
 
+        def _small_body(self, limit: int = 4096):
+            """The JSON body of a POST any signed-in person may make: at most `limit` bytes, else None. A missing,
+            negative or unreadable Content-Length is refused before anything is read (read(-1) would read until the
+            caller hangs up)."""
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                if not 0 <= length <= limit:
+                    return None
+                return json.loads(self.rfile.read(length) or b"{}") if length else {}
+            except ValueError:
+                return None
+
+        def _party_own(self, ctx, p: str):
+            """A Party quest marked done, or the goal: the viewer's own log, so members and read-only people may too.
+            The route's access still decides, and someone limited to projects is answered from those projects only,
+            as on GET."""
+            from ...sharing import access, people
+
+            body = self._small_body()
+            if body is None:
+                return self._json({"error": tr("bad json")}, 400)
+            try:
+                route, m = routes.find(routes.POST, p)
+                if not route.access.allows(self, ctx):
+                    return self._json({"error": tr(route.access.refusal)}, 403)
+                scope = people.projects_of(self.viewer)
+                if scope is not None:
+                    access.limit(app.conn, scope)
+                    self.limited = True
+                return route.answer(self, ctx, m, body)
+            except Exception as exc:
+                log.exception("POST %s failed", p)
+                return self._json({"error": str(exc)}, 500)
+
         def _post(self):
             ctx = app.context()
             if not self._host_ok():
@@ -484,15 +520,13 @@ def make_handler(app: App, port: int):
             if refused:
                 return self._json(*refused)
             if urlparse(self.path).path == "/api/team/news/seen":  # anyone who sees the Team page: their own news only
-                length = int(self.headers.get("Content-Length") or 0)
-                try:
-                    if length > 4096:
-                        raise ValueError
-                    body = json.loads(self.rfile.read(length) or b"{}") if length else {}
-                except ValueError:
+                body = self._small_body()
+                if body is None:
                     return self._json({"error": tr("bad json")}, 400)
                 news.mark_seen(app.conn, self.viewer, body.get("at") if isinstance(body, dict) else None)
                 return self._json({"ok": True})
+            if urlparse(self.path).path in PARTY_OWN:  # anyone who sees the Party: their own quests and goal only
+                return self._party_own(ctx, urlparse(self.path).path)
             if self.viewer is not None and self.viewer["role"] != "admin":  # members and read-only people look
                 return self._json({"error": tr("only an admin of this hub can do this")}, 403)
             if urlparse(self.path).path == "/api/import":

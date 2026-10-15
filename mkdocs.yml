@@ -69,6 +69,7 @@ nav:
       - Dashboard, glossary and Map: dashboard.md
       - Command line: cli.md
       - Suggestions and What goes wrong: suggestions.md
+      - Party: party.md
       - MCP server: mcp.md
       - VS Code extension: vscode.md
       - Phone and other computers: devices.md
@@ -90,6 +91,7 @@ nav:
       - ダッシュボード、用語集、マップ: ja/dashboard.md
       - コマンドライン: ja/cli.md
       - 提案と「うまくいかないこと」: ja/suggestions.md
+      - パーティー: ja/party.md
       - MCP サーバー: ja/mcp.md
       - VS Code 拡張機能: ja/vscode.md
       - スマートフォンとほかのコンピューター: ja/devices.md

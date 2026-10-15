@@ -203,7 +203,7 @@ def test_translations_are_not_empty():
 
 def test_scripts_load_in_order():
     html = (WEB / "index.html").read_text()
-    order = [html.index(f'src="{name}"') for name in ("ja.js", "i18n.js", "app.js")]
+    order = [html.index(f'src="{name}"') for name in ("ja.js", "i18n.js", "sprites.js", "app.js")]
     assert order == sorted(order)
     assert 'id="lang-btn"' in html
 
@@ -212,7 +212,7 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(not NODE, reason="node is not installed")
-@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js"])
+@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js"])
 def test_scripts_parse(name):
     proc = subprocess.run([NODE, "--check", str(WEB / name)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr

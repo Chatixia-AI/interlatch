@@ -9,6 +9,7 @@
 | [Dashboard, glossary and Map](dashboard.md) | The layout, keyboard shortcuts, every page, the glossary, the Map and themes |
 | [Command line](cli.md) | Every `interlatch` command and the Markdown vault |
 | [Suggestions and What goes wrong](suggestions.md) | Recurring failures across your sessions, and the fixes Interlatch proposes for your instruction files and config: what it reads and writes, approving, backups, undo |
+| [Party](party.md) | Your coding agents as pixel-art characters who level up on a career roadmap: signing in, XP and levels, classes, quests, the journey |
 | [MCP server](mcp.md) | The tools your agents get, connecting Claude Desktop, Cursor, Windsurf, Gemini CLI or any other MCP client |
 | [VS Code extension](vscode.md) | The sessions behind the open file and every file agents worked on, in VS Code's Explorer |
 | [Phone and other computers](devices.md) | The dashboard on your phone through Tailscale, and one archive for several computers (a hub) |
