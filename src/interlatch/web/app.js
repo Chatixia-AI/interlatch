@@ -7485,6 +7485,7 @@ function crossRealm(realm) {
   brand.setAttribute("aria-label", realm ? t("Innerlatch home") : t("Interlatch home"));
   brand.querySelector("span").textContent = realm ? "Innerlatch" : "Interlatch";
   renderRail();
+  if (!realm && lastPath !== null) window.Innerlatch?.farewell(); // the door shuts behind them
   if (realm && lastPath !== null && root.dataset.motion !== "off") {
     const stage = $(".stage");
     stage.classList.remove("portal-in");

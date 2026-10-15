@@ -15,8 +15,9 @@ out, the door is locked and asks you to sign in with Google, then opens by itsel
 in until you leave, even if you reload the page.
 
 Inside, the rail shows Innerlatch's sections: **Party**, **Leaderboard** and **Arena**, and the door at the bottom of
-the rail (**Back to Interlatch**) leads back to the page you came from. The Leaderboard and the Arena show only on the
-computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to some projects.
+the rail (**Back to Interlatch**) leads back to the page you came from, and the door shuts behind you. The Leaderboard
+and the Arena show only on the computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to
+some projects.
 
 The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work, and every address in
 Innerlatch meets the door first. To hide the door icon, set **Settings › Appearance › The door** to **Hidden** (this

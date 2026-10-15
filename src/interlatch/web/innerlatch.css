@@ -557,3 +557,17 @@
 /* locked, the door steps back to make room for how to open it */
 .door-scene[data-state="locked"] .ds-door { --dh: min(44vh, 440px); }
 @media (max-width: 600px) { .ds-door, .door-scene[data-state="locked"] .ds-door { --dh: min(44vh, 400px); } .ds-stage { gap: 30px; } }
+
+/* leaving: the open door swings shut with a thud, then the scene shrinks into the rail's door icon, which glows */
+.door-exit { pointer-events: none; animation: ds-in 0.2s ease-out; transform-origin: var(--exit-x) var(--exit-y); }
+.door-exit .ds-stage { transition: transform 0.6s ease-out; }
+.door-exit[data-state="opening"] .ds-leaf { transition: none; }
+.door-exit[data-state="shut"] .ds-leaf { transition: transform 0.55s cubic-bezier(0.55, 0, 0.9, 0.45); }
+.door-exit[data-state="shut"] .ds-light { filter: brightness(0.7); }
+.door-exit[data-state="shut"] .ds-arch { animation: ds-thud 0.28s ease-out 0.55s; }
+@keyframes ds-thud { 30% { transform: translateY(3px) scale(1.01); } 60% { transform: translateY(-1px); } }
+.door-exit.gone { animation: ds-exit 0.55s cubic-bezier(0.6, 0, 0.85, 0.25) forwards; }
+@keyframes ds-exit { to { transform: scale(0.02); border-radius: 50%; opacity: 0.15; } }
+.rail a.rail-door.landed { color: var(--gold); }
+.rail a.rail-door.landed .icon { animation: door-landed 0.9s ease-out; }
+@keyframes door-landed { 0% { transform: scale(1.5); filter: drop-shadow(0 0 8px var(--gold)); } 100% { transform: scale(1); filter: none; } }

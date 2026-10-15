@@ -1187,6 +1187,34 @@ function journeyStrip(p) {
 // hosted sign-in page returns in a new tab (#/leaderboard?lb_token=…), which meets the door too and finishes there.
 // =====================================================================================
 let doorScene = null;
+function doorLeaf() {
+  return h("span", { class: "ds-leaf" },
+    h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }),
+    h("span", { class: "ds-knob" }), h("span", { class: "ds-keyhole" }));
+}
+// Leaving: the door you came through stands open behind you, swings shut, and the whole scene shrinks back into the
+// rail's door icon while the dashboard comes back. app.js calls it once the dashboard's rail is drawn again; it never
+// blocks a click (the page underneath is already the dashboard). Not with animations off.
+function farewell() {
+  if (stillMotion() || doorScene) return;
+  const icon = document.querySelector("#rail a.rail-door")?.getBoundingClientRect();
+  const scene = h("div", { class: "door-scene door-exit", "aria-hidden": "true", "data-state": "opening" },
+    h("div", { class: "ds-sky" }),
+    h("div", { class: "ds-stage" }, h("span", { class: "ds-door" }, h("span", { class: "ds-arch" }, h("span", { class: "ds-light" }), doorLeaf()),
+      h("span", { class: "ds-spill" }))));
+  // it shrinks into the door icon (gone: the middle of the bottom of the screen)
+  setStyle(scene, { "--exit-x": `${icon?.width ? icon.left + icon.width / 2 : innerWidth / 2}px`, "--exit-y": `${icon?.height ? icon.top + icon.height / 2 : innerHeight}px` });
+  document.body.append(scene);
+  void scene.offsetWidth; // drawn open first, so the swing shut runs
+  scene.dataset.state = "shut";
+  setTimeout(() => scene.classList.add("gone"), 700);
+  setTimeout(() => {
+    scene.remove();
+    const door = document.querySelector("#rail a.rail-door");
+    door?.classList.add("landed");
+    setTimeout(() => door?.classList.remove("landed"), 900);
+  }, 1250);
+}
 function doorSigninLine(p) {
   return p.can_sign_in ? t("Sign in with Google to open it. It's the leaderboard's account, but signing in here doesn't put you on the board.")
     : p.error || t("Signing in happens on the computer that runs Interlatch: open Innerlatch there and sign in with Google. On a team hub, sign in to the hub as one of its people.");
@@ -1207,9 +1235,7 @@ async function threshold(to) {
   const lock = h("div", { class: "ds-lock", hidden: true });
   const motes = h("div", { class: "ds-motes", "aria-hidden": "true" }, Array.from({ length: 18 }, (_, i) =>
     h("i", { style: { left: `${(i * 53) % 100}%`, animationDelay: `${-((i * 7) % 11)}s`, animationDuration: `${9 + (i % 5) * 2}s` } })));
-  const leaf = h("span", { class: "ds-leaf" },
-    h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }),
-    h("span", { class: "ds-knob" }), h("span", { class: "ds-keyhole" }));
+  const leaf = doorLeaf();
   const padlock = h("span", { class: "ds-padlock", "aria-hidden": "true" }, pxIcon("lock", 4));
   const door = h("button", { class: "ds-door", type: "button", "aria-label": t("Open the door"), "aria-describedby": "ds-hint-text",
     onclick: () => knock() },
@@ -1321,6 +1347,7 @@ function realmCrumbs(path) {
 }
 window.Innerlatch = Object.freeze({
   threshold,
+  farewell,
   sections: () => REALM_SECTIONS.filter((x) => !x.here || realmHere()),
   sectionOf: realmSectionOf,
   crumbs: realmCrumbs,
