@@ -37,7 +37,8 @@ def sheet(cfg: Config, conn, state: dict) -> dict:
 
     agents = rules.sheet_agents(party.compute(conn, local_machine_id(cfg)))
     return {"name": state["name"], "photo": state.get("photo") or "", "machine": lb.machine_tag(cfg), "v": rules.SHEET_V,
-            "agents": agents, "champion": rules.champion_of(agents, state.get("champion"))}
+            "agents": {n: rules.encode_agent(a) for n, a in agents.items()},  # one string each: see knowledge/arena.py
+            "champion": rules.champion_of(agents, state.get("champion"))}
 
 
 def champion(cfg: Config, conn, state: dict | None) -> str:

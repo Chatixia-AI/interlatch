@@ -3,7 +3,9 @@ and the two champions fight a deterministic duel, so everyone computes the same 
 (sharing/arena.py publishes and reads the sheets). Pure functions: no clock, no global random.
 
 A sheet holds, per coding agent, its level (1..200), tier, class (a track id or None) and six attribute levels (0..100),
-and which agent is the champion: nothing about any lesson. Stats come from those (stats()); a duel is rounds of turns
+and which agent is the champion: nothing about any lesson. Each agent travels as one string, "29;master;backend;21,8,16,
+11,8,8" (encode_agent): Firestore's rules may evaluate at most 1000 expressions a write, and checking five agents' maps
+field by field took more, so the rules check each agent with one regex, AGENT_RE's. Stats come from those (stats()); a duel is rounds of turns
 by speed until one champion falls or MAX_ROUNDS pass (then the one with more of its HP left wins).
 """
 
@@ -16,7 +18,7 @@ from datetime import date
 
 from ..core.agents import CODING_AGENTS
 
-SHEET_V = 2  # 2: a champion
+SHEET_V = 3  # 2: a champion; 3: each agent one string (encode_agent)
 ATTRS = ("craft", "data", "ops", "guard", "arcana", "lore")
 TIERS = ("novice", "adept", "expert", "master")
 LEVEL_MAX, ATTR_MAX = 200, 100
@@ -27,6 +29,9 @@ HEAL_LORE = 10
 SPECIALS = {"adept": "Second wind", "expert": "Focus", "master": "Overdrive"}
 OVERDRIVE = 2.5  # the master's special: one hit this much harder
 CLS_RE = re.compile(r"^[a-z0-9-]{1,64}$")
+_N = r"([0-9]|[1-9][0-9]|100)"  # an attribute level, 0..100, no leading zero
+# leaderboard/firestore.rules checks each agent with this same pattern (tests/test_arena.py keeps the two equal)
+AGENT_RE = re.compile(rf"^([1-9]|[1-9][0-9]|1[0-9][0-9]|200);(novice|adept|expert|master);([a-z0-9-]{{1,64}})?;{_N}(,{_N}){{5}}$")
 
 
 # ------------------------------------------------------------------ sheets
@@ -34,9 +39,25 @@ def _int(v, lo: int, hi: int) -> int:
     return max(lo, min(hi, v)) if isinstance(v, int) and not isinstance(v, bool) else lo
 
 
+def encode_agent(a) -> str:
+    """One agent as a sheet sends it: "level;tier;class;craft,data,ops,guard,arcana,lore" (no class: empty)."""
+    a = clean_agent(a)
+    return f"{a['level']};{a['tier']};{a['cls'] or ''};" + ",".join(str(a["attrs"][k]) for k in ATTRS)
+
+
+def decode_agent(s) -> dict:
+    """An agent string (encode_agent) back to its fields; {} for anything that isn't one."""
+    if not isinstance(s, str) or not AGENT_RE.match(s):
+        return {}
+    level, tier, cls, attrs = s.split(";")
+    nums = map(int, attrs.split(","))  # six: AGENT_RE says so
+    return {"level": int(level), "tier": tier, "cls": cls or None, "attrs": dict(zip(ATTRS, nums, strict=True))}
+
+
 def clean_agent(a) -> dict:
-    """One agent of a sheet within the rules' bounds (a sheet read from the board may be anything)."""
-    a = a if isinstance(a, dict) else {}
+    """One agent of a sheet within the rules' bounds (a sheet read from the board may be anything): its fields, or the
+    string a sheet sends (encode_agent)."""
+    a = decode_agent(a) if isinstance(a, str) else a if isinstance(a, dict) else {}
     attrs = a.get("attrs") if isinstance(a.get("attrs"), dict) else {}
     cls = a.get("cls")
     return {"level": _int(a.get("level"), 1, LEVEL_MAX), "tier": a.get("tier") if a.get("tier") in TIERS else "novice",

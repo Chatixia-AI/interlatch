@@ -112,21 +112,16 @@ service cloud.firestore {
     }
 
     // The arena: a party's sheet (src/interlatch/sharing/arena.py writes it). Fields (all required, no others):
-    //   name, photo, machine: as for players; v: int, the sheet format (2);
-    //   agents: a map of exactly the five coding agents, each {level: int 1-200, tier: novice|adept|expert|master,
-    //           cls: null or a track id, attrs: {craft, data, ops, guard, arcana, lore: int 0-100}};
+    //   name, photo, machine: as for players; v: int, the sheet format (3);
+    //   agents: a map of exactly the five coding agents, each one string "level;tier;class;craft,data,ops,guard,arcana,lore"
+    //           (level 1-200, tier novice|adept|expert|master, class a track id or empty, attributes 0-100);
     //   champion: which of the five fights for the party;
     //   at: timestamp, the server time of the upload (request.time). No lessons, projects or titles.
+    // One regex an agent, on purpose: a rule may evaluate at most 1000 expressions, and checking five agents' maps field
+    // by field took more, so every sheet was refused (knowledge/arena.py AGENT_RE is the same pattern).
     function isValidArenaAgent(a) {
-      let keys = ['level', 'tier', 'cls', 'attrs'];
-      let attrs = ['craft', 'data', 'ops', 'guard', 'arcana', 'lore'];
-      return a is map && a.keys().hasOnly(keys) && a.keys().hasAll(keys)
-        && a.level is int && a.level >= 1 && a.level <= 200
-        && a.tier in ['novice', 'adept', 'expert', 'master']
-        && (a.cls == null || (a.cls is string && a.cls.matches('^[a-z0-9-]{1,64}$')))
-        && a.attrs is map && a.attrs.keys().hasOnly(attrs) && a.attrs.keys().hasAll(attrs)
-        && isCount(a.attrs.craft, 100) && isCount(a.attrs.data, 100) && isCount(a.attrs.ops, 100)
-        && isCount(a.attrs.guard, 100) && isCount(a.attrs.arcana, 100) && isCount(a.attrs.lore, 100);
+      return a is string
+        && a.matches('^([1-9]|[1-9][0-9]|1[0-9][0-9]|200);(novice|adept|expert|master);([a-z0-9-]{1,64})?;([0-9]|[1-9][0-9]|100)(,([0-9]|[1-9][0-9]|100)){5}$');
     }
 
     function isValidArena(data) {
@@ -138,9 +133,9 @@ service cloud.firestore {
         && (data.photo == ''
             || data.photo.matches('^https://(lh3[.]googleusercontent[.]com|avatars[.]githubusercontent[.]com)/[^\\s]+$'))
         && data.machine is string && data.machine.matches('^[A-Za-z0-9-]{8,64}$')
-        && data.v == 2
+        && data.v == 3
         && data.champion in agents
-        && data.agents is map && data.agents.keys().hasOnly(agents) && data.agents.keys().hasAll(agents)
+        && data.agents is map && data.agents.keys().hasOnly(agents) && data.agents.size() == 5
         && isValidArenaAgent(data.agents.claude) && isValidArenaAgent(data.agents.codex)
         && isValidArenaAgent(data.agents.copilot) && isValidArenaAgent(data.agents.bob)
         && isValidArenaAgent(data.agents.antigravity)

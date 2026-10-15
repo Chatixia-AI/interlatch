@@ -57,6 +57,21 @@ def test_stats_follow_the_formulas():
     assert rules.power(STRONG) == 29 + 13 + 4 + 3 + 3
 
 
+def test_an_agent_travels_as_one_string_the_rules_check_with_one_regex():
+    a = _agent(29, "master", "backend", craft=21, data=8, ops=16, guard=11, arcana=8, lore=8)
+    assert rules.encode_agent(a) == "29;master;backend;21,8,16,11,8,8"
+    assert rules.decode_agent(rules.encode_agent(a)) == rules.clean_agent(a) == rules.clean_agent(rules.encode_agent(a))
+    assert rules.encode_agent(_agent(1)) == "1;novice;;0,0,0,0,0,0"  # no class: empty
+    for bad in ("0;novice;;0,0,0,0,0,0", "201;novice;;0,0,0,0,0,0", "07;novice;;0,0,0,0,0,0", "1;god;;0,0,0,0,0,0",
+                "1;novice;Bad!;0,0,0,0,0,0", "1;novice;;101,0,0,0,0,0", "1;novice;;0,0,0,0,0", "1;novice;;0,0,0,0,0,0,0",
+                "1;novice;;-1,0,0,0,0,0", 5, None):
+        assert rules.decode_agent(bad) == {} and rules.clean_agent(bad)["level"] == 1, bad
+    # the rules' regex is AGENT_RE's: firestore.rules can't import it, so the two are kept equal here
+    text = (Path(__file__).parents[1] / "leaderboard" / "firestore.rules").read_text()
+    (pattern,) = re.findall(r"a\.matches\('([^']+)'\)", text)
+    assert pattern == rules.AGENT_RE.pattern and "data.v == %d" % rules.SHEET_V in text
+
+
 def test_the_champion_is_the_one_picked_else_the_highest_level():
     assert rules.default_champion(STRONG) == "claude"
     assert rules.default_champion(_party(codex=_agent(9), bob=_agent(9))) == "codex"  # ties: CODING_AGENTS order
@@ -157,7 +172,7 @@ def test_the_sheet_holds_levels_tiers_classes_and_attributes_only(home, net):  #
         _lesson(conn, sid, f"pytest SECRET-TITLE-{n}", "SECRET-BODY sql query", stage="canonical")
     _joined(cfg, board=True, arena=True)
     sheet = arena.sheet(cfg, conn, lb.read_state(cfg))
-    assert set(sheet) == {"name", "photo", "machine", "v", "agents", "champion"} and sheet["v"] == rules.SHEET_V == 2
+    assert set(sheet) == {"name", "photo", "machine", "v", "agents", "champion"} and sheet["v"] == rules.SHEET_V == 3
     assert sheet["champion"] == rules.default_champion(sheet["agents"]) == "claude"
     lb.write_state(cfg, {**lb.read_state(cfg), "champion": "not-an-agent"})  # a hand-edited state: the default
     assert arena.sheet(cfg, conn, lb.read_state(cfg))["champion"] == "claude"
@@ -165,9 +180,8 @@ def test_the_sheet_holds_levels_tiers_classes_and_attributes_only(home, net):  #
     assert arena.sheet(cfg, conn, lb.read_state(cfg))["champion"] == "codex"
     lb.write_state(cfg, {**lb.read_state(cfg), "champion": None})
     assert set(sheet["agents"]) == set(CODING_AGENTS)
-    assert all(set(a) == {"level", "tier", "cls", "attrs"} and set(a["attrs"]) == set(rules.ATTRS)
-               for a in sheet["agents"].values())
-    assert sheet["agents"]["claude"]["level"] > 1 and "SECRET" not in json.dumps(sheet)
+    assert all(isinstance(a, str) and rules.AGENT_RE.match(a) for a in sheet["agents"].values())  # one string each
+    assert rules.clean_agent(sheet["agents"]["claude"])["level"] > 1 and "SECRET" not in json.dumps(sheet)
     assert sheet["machine"] == lb.machine_tag(cfg) and sheet["name"] == "Ada"
     net.on("POST", lb.FIRESTORE + ":commit", {})
     lb.send(cfg, conn, force=True)
@@ -279,8 +293,9 @@ def test_a_new_sign_in_never_opts_in_by_itself(home, net):  # noqa: F811
 
 
 # ------------------------------------------------------------------ the dashboard
-def _doc(uid, name, agents, v=2, champion=None):
-    fields = {"name": name, "photo": "", "machine": "m" * 16, "v": v, "agents": agents,
+def _doc(uid, name, agents, v=3, champion=None):
+    sent = {n: rules.encode_agent(a) for n, a in agents.items()} if v >= 3 else agents  # as the sheet sends them
+    fields = {"name": name, "photo": "", "machine": "m" * 16, "v": v, "agents": sent,
               "champion": champion or rules.default_champion(agents)}
     return {"document": {"name": f"{lb.DB}/arena/{uid}", "fields": {k: lb._value(x) for k, x in fields.items()}}}
 
@@ -290,7 +305,7 @@ def test_the_arena_board_and_a_battle(hubweb, catalog, net):  # noqa: F811
     arena.clear()
     net.on("POST", lb.FIRESTORE + ":runQuery", [
         _doc("uid1", "Ada", STRONG), _doc("uid2", "Ben", WEAK), _doc("uid3", "Cy", _party()),
-        _doc("uid4", "Old", STRONG, v=1), {"readTime": "x"}])
+        _doc("uid4", "Old", STRONG, v=2), {"readTime": "x"}])
     _joined(cfg, arena=True)
     status, data = _http(url, "/api/leaderboard?by=arena")
     assert status == 200 and data["by"] == "arena" and data["me"]["arena"] is True and data["week"].startswith("20")
@@ -371,10 +386,11 @@ def test_the_rules_keep_the_board_and_add_the_arena():
     assert block.count("allow ") == 4
     valid = re.search(r"function isValidArena\(data\) \{.*?\n    \}", text, re.S).group(0)
     assert "['name', 'photo', 'machine', 'v', 'agents', 'champion', 'at']" in valid and "data.at == request.time" in valid
-    assert "data.v == 2" in valid and "data.champion in agents" in valid
+    assert "data.v == 3" in valid and "data.champion in agents" in valid and "data.agents.size() == 5" in valid
     assert "['claude', 'codex', 'copilot', 'bob', 'antigravity']" in valid
     agent = re.search(r"function isValidArenaAgent\(a\) \{.*?\n    \}", text, re.S).group(0)
-    assert "a.level >= 1 && a.level <= 200" in agent and "'^[a-z0-9-]{1,64}$'" in agent
+    assert "a is string" in agent and "a.matches(" in agent  # one regex an agent (AGENT_RE): see the test above
+    assert "isCount(" not in agent  # field-by-field checks pass Firestore's 1000-expression limit for five agents
 
 
 def test_picking_a_champion(hubweb, catalog, net):  # noqa: F811
