@@ -8079,14 +8079,26 @@ function setHomeJourneyOpen(open) {
 function sceneLabels() { // the scene fills the {placeholders}
   return { wave: t("Wave {n} / {total}"), xp: t("+{xp} XP · {skill}"), levelUp: t("{agent} reached level {n}!"),
     skillUp: t("{agent}: {skill} Lv {n}"), boss: t("Boss: {text}"), bossHint: t("Mark the quest done to defeat it"),
-    asleep: t("Your party is asleep"), quiet: t("A quiet week: no new lessons"), zone: t("{attr} · {module}") };
+    asleep: t("Your party is asleep"), quiet: t("A quiet week: no new lessons"), zone: t("{attr} · {module}"),
+    preview: t("This week's lessons") };
 }
+// signed out on this computer: the strip shows this week's lessons (the engine's `preview`), waiting for the party
+function journeyPreview(p) { return !p.signed_in && p.can_sign_in && p.preview ? p.preview : null; }
 function zoneLabel(p) {
   const z = p.signed_in ? p.zone : null;
   if (!z) return null;
   return t("{attr} · {module}", { attr: p.attrs?.find((a) => a.id === z.attr)?.name || z.attr, module: z.module_name || z.module });
 }
 function journeySummary(p) { // what the strip shows, in words, for a screen reader
+  const pre = journeyPreview(p);
+  if (pre) {
+    const by = new Map(Object.entries(pre.week?.by_agent || {}).filter(([, n]) => n > 0));
+    if (!pre.week) for (const l of pre.recent || []) by.set(l.agent, (by.get(l.agent) || 0) + 1);
+    const taught = [...by.entries()].sort((x, y) => y[1] - x[1])
+      .map(([a, n]) => tn(n, "{agent} taught {n} lesson", "{agent} taught {n} lessons", { agent: agentShort(a) }));
+    return [taught.length ? t("This week: {list}", { list: taught.join(LANG === "ja" ? "、" : ", ") }) : t("A quiet week: no new lessons"),
+      t("Your party is asleep")].join("; ");
+  }
   if (!p.signed_in) return t("Your party is asleep");
   const names = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.short || agentShort(a.agent)]));
   const by = new Map(Object.entries(p.week?.by_agent || {}).filter(([, n]) => n > 0)); // the whole week: `recent` stops at 60
@@ -8100,7 +8112,10 @@ function journeySummary(p) { // what the strip shows, in words, for a screen rea
 function journeyTip(p, item, at) {
   if (!item) { hideTip(); return; }
   const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 };
-  if (item.type === "lesson" && item.lesson) {
+  if (item.type === "lesson" && item.lesson && journeyPreview(p)) { // before signing in: no XP or skills, just the lesson
+    const l = item.lesson;
+    showTip(where, l.title, [kindLabel(l.kind), agentName(l.agent)].join(" · "), l.at ? fmtDateY(partyDay(l.at)) : null);
+  } else if (item.type === "lesson" && item.lesson) {
     const l = item.lesson;
     showTip(where, l.title, [kindLabel(l.kind), agentName(l.agent), t("+{n} XP", { n: l.xp })].join(" · "),
       (l.modules || []).map((m) => m.name).join(", ") || null);
@@ -8125,7 +8140,8 @@ function journeyPick(item) {
 }
 function journeyStill(p, height, width) { // scene.js is missing: the five on a still stage, as large as fits in one row
   const tiers = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.tier]));
-  const label = !p.signed_in ? t("Your party is asleep") : (p.recent || []).length ? null : t("A quiet week: no new lessons"); // the zone is in the head
+  const label = journeyPreview(p)?.recent?.length ? t("This week's lessons") : !p.signed_in ? t("Your party is asleep")
+    : (p.recent || []).length ? null : t("A quiet week: no new lessons"); // the zone is in the head
   return h("div", { class: "hj-still px-stage", style: { height: `${height}px` } },
     h("div", { class: "hj-still-row" }, PARTY_AGENTS.map((a) => partySprite(a, { tier: tiers[a], scale: height >= 170 && width >= 560 ? 3 : width >= 380 ? 2 : 1, locked: !p.signed_in, still: true, decorative: true }))),
     label ? h("span", { class: "hj-still-label", "aria-hidden": "true" }, label) : null); // the summary says it
@@ -8147,13 +8163,14 @@ function homeJourney(box) {
     clearTimeout(poll);
     if (!p.signed_in && p.signing_in) poll = setTimeout(() => { if (box.isConnected) fill(true); }, 4000); // the sign-in runs in another tab
     const open = homeJourneyOpen(), height = narrow.matches ? 140 : 200;
-    const zone = zoneLabel(p), weekN = p.week?.lessons ?? (p.recent || []).length;
+    const pre = journeyPreview(p);
+    const zone = zoneLabel(p), weekN = pre ? pre.week?.lessons ?? (pre.recent || []).length : p.week?.lessons ?? (p.recent || []).length;
     const fold = h("button", { class: "icon-btn hj-fold", type: "button", "aria-expanded": String(open), "aria-controls": "hj-body",
       "aria-label": open ? t("Hide the journey") : t("Show the journey"), title: open ? t("Hide the journey") : t("Show the journey"),
       onclick: () => { setHomeJourneyOpen(!open); draw(p, { focus: true }); } }, icon("chevron"));
     const host = h("div", { class: "hj-scene", style: { height: `${height}px` } });
     const signin = p.signed_in ? null : h("div", { class: "hj-signin" }, p.can_sign_in
-      ? [h("span", null, t("Sign in with Google to wake your party.")),
+      ? [h("span", null, pre ? t("Sign in with Google to send your party after them.") : t("Sign in with Google to wake your party.")),
         h("button", { class: "btn small primary", type: "button", onclick: () => { partyCache = null; partySignin(); } }, t("Sign in with Google")),
         p.signing_in ? h("span", { class: "muted small" }, t("Finish signing in on the page that opened. This page carries on by itself once you have.")) : null]
       : h("span", { class: "muted" }, t("Signing in happens on the computer that runs Interlatch: open the Party there and sign in with Google. On a team hub, sign in to the hub as one of its people.")));
@@ -8162,7 +8179,7 @@ function homeJourney(box) {
         h("div", { class: "card-title" }, icon("party"), h("h2", null, t("Journey"))),
         h("div", { class: "hj-meta" },
           zone ? h("span", { class: "hj-zone" }, pxIcon(p.zone.attr, 1), zone) : null,
-          p.signed_in ? h("span", null, tn(weekN, "This week: {n} lesson", "This week: {n} lessons", { n: fmtNum(weekN) })) : null,
+          p.signed_in || pre ? h("span", null, tn(weekN, "This week: {n} lesson", "This week: {n} lessons", { n: fmtNum(weekN) })) : null,
           h("a", { class: "link-arrow", href: "#/party" }, t("Open the Party"), icon("arrow"))),
         fold),
       open ? h("div", { class: "hj-body", id: "hj-body" }, h("p", { class: "sr-only", id: "hj-summary" }, journeySummary(p)), host, signin) : null));

@@ -888,6 +888,29 @@ def _recent(cat: Catalog, lessons: list[Lesson], today: date) -> tuple[list[dict
     return out, {"since": since, "until": until, "lessons": sum(by_agent.values()), "by_agent": by_agent}
 
 
+def preview(conn: sqlite3.Connection, here_id: str, *, today: date | None = None) -> dict:
+    """This week's lessons before anyone signs in: this computer's coding-agent lessons of the last RECENT_DAYS days
+    (the same lessons and dates as "recent", but every one of them, matched to the roadmap or not), newest first, at
+    most RECENT_MAX, and the week's tally. Nothing of the game: no XP, modules, levels or classes. Lessons aren't
+    behind the sign-in (the Knowledge page shows them); the Party is."""
+    today = today or utcnow().date()
+    since, until = (today - timedelta(days=RECENT_DAYS - 1)).isoformat(), today.isoformat()
+    after = (today + timedelta(days=1)).isoformat()
+    where, params = scope(None, here_id)
+    rows = conn.execute(
+        "SELECT k.id, k.title, k.kind, COALESCE(s.agent, k.agent) AS agent, k.session_id, "
+        "COALESCE(s.started_at, k.created_at, '') AS at FROM knowledge k JOIN sessions s ON s.id = k.session_id "
+        f"WHERE {_LESSONS_WHERE} AND {where} AND COALESCE(s.started_at, k.created_at, '') >= ? "
+        "AND COALESCE(s.started_at, k.created_at, '') < ? ORDER BY at DESC, k.id DESC",
+        (*KINDS, *CODING_AGENTS, *params, since, after)).fetchall()
+    by_agent = {a: 0 for a in CODING_AGENTS}
+    for r in rows:
+        by_agent[r["agent"]] += 1
+    return {"recent": [{"id": r["id"], "title": r["title"] or "", "kind": r["kind"], "agent": r["agent"],
+                        "at": r["at"][:10], "session_id": r["session_id"]} for r in rows[:RECENT_MAX]],
+            "week": {"since": since, "until": until, "lessons": len(rows), "by_agent": by_agent}}
+
+
 def _zone(cat: Catalog, recent: list[dict], newest_skill: int | None) -> dict | None:
     """Where the party is: the module that earned the most XP in `recent` (ties: the one seen newest), else the
     newest skill event's module, else nowhere yet."""

@@ -43,8 +43,8 @@ def party(ctx: Context, viewer: dict | None, *, here: bool) -> dict:
     # a sign-in runs only at this computer: a hub person isn't told about one in progress there
     gate = {"signing_in": here and _signing_in(ctx), "can_sign_in": here}
     me = who(ctx, viewer)
-    if me is None:
-        return {"signed_in": False, **gate}
+    if me is None:  # the Party stays locked; at this computer, the week's lessons show (they aren't gated)
+        return {"signed_in": False, **gate, **({"preview": pt.preview(ctx.conn, _here_id(ctx))} if here else {})}
     data = pt.compute(ctx.conn, _here_id(ctx), viewer)
     # who's hiring for the classes it shows: read from Firebase only now, signed in (the numbers are public)
     return {"signed_in": True, **gate, "who": me, **data, "market": pt.market_block(pt.payload_tracks(data))}
