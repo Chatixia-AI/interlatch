@@ -297,6 +297,8 @@ def test_the_arena_board_and_a_battle(hubweb, catalog, net):  # noqa: F811
     assert [(r["rank"], r["name"], r["wins"], r["losses"], r["me"]) for r in data["rows"]] == [
         (1, "Ada", 2, 0, True), (2, "Ben", 1, 1, False), (3, "Cy", 0, 2, False)]  # an older sheet format: left out
     assert data["rows"][0]["power"] == rules.power(STRONG)
+    champ = data["rows"][0]["champion"]  # the champion's own level and tier come along, so its sprite isn't a Lv 1 novice
+    assert data["rows"][0]["agents"] == {champ: rules.clean_agent(STRONG[champ])} and data["rows"][0]["agents"][champ]["level"] > 1
     status, fight = _http(url, "/api/leaderboard/arena/battle?uid=uid2")
     assert status == 200 and fight["me"]["name"] == "Ada" and fight["rival"]["uid"] == "uid2"
     assert fight["me"]["champion"] == "claude" and fight["rival"]["champion"] == "claude"

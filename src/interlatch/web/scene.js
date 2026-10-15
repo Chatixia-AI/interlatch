@@ -7,9 +7,9 @@
   "use strict";
 
   const FRAME_MS = 1000 / 30;
-  const LABELS = { wave: "Wave {n} / {total}", xp: "+{xp} XP · {skill}", levelUp: "{agent} reached level {n}!",
+  const LABELS = { wave: "Lesson {n} of {total}", xp: "+{xp} XP · {skill}", levelUp: "{agent} reached level {n}!",
     skillUp: "{agent}: {skill} Lv {n}", boss: "Boss: {text}", bossHint: "Mark the quest done to defeat it",
-    asleep: "Your party is asleep", quiet: "A quiet week: no new lessons", zone: "{attr} · {module}",
+    asleep: "Your party is asleep", quiet: "A quiet week: no new lessons",
     preview: "This week's lessons" };
   const AGENT_ORDER = ["claude", "codex", "copilot", "bob", "antigravity"];
   const FONT = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
@@ -967,7 +967,7 @@
         if (d < 1.7) {
           const rise = ease(d / 1.7) * 9;
           const label = e.skill ? fill(labels.xp, { xp: e.xp, skill: e.skill }) : `+${e.xp} XP`;
-          text(label, LX + 26, feet() - 38 - rise, { size: 11, weight: 700, color: textColor(e.agent), align: "center", panel: false,
+          text(label, LX + 26, feet() - 38 - rise, { size: 11, weight: 700, color: textColor(e.agent), align: "center", panel: true,
             alpha: d > 1.3 ? 1 - (d - 1.3) / 0.4 : 1, max: Math.max(60, W - 20) });
         }
         e.events.forEach((ev, k) => {
@@ -1038,16 +1038,9 @@
         else text(labels.preview, 4, top, { max: W - 12 });
         return;
       }
-      let used = 0;
       if (story.encounters.length) {
         const n = Math.min(story.encounters.length, st.cur + 1);
-        const r = text(fill(labels.wave, { n, total: story.encounters.length }), W - 4, top, { align: "right", color: gold() });
-        used = r.w + 6;
-      }
-      const z = party.zone;
-      if (z && z.module_name) {
-        const attr = ((party.attrs || []).find((x) => x.id === z.attr) || {}).name || z.attr || "";
-        text(fill(labels.zone, { attr, module: z.module_name }), 4, top, { max: W - used - 12 });
+        text(fill(labels.wave, { n, total: story.encounters.length }), W - 4, top, { align: "right", color: gold() });
       }
       if (quiet) text(labels.quiet, W / 2, top + 16, { size: 11, align: "center" });
       const seg = st.seg;
@@ -1306,7 +1299,7 @@
     // two rows a side: the three highest levels in front, the others behind; the right side mirrors the left
     function layout() {
       if (duel) { // the two champions big, facing each other in the middle of the floor
-        const k = L >= 110 && W >= 300 ? 3 : 2, gap = W >= 300 ? Math.round(W * 0.05) : 0, cx = W / 2;
+        const k = L >= 110 && W >= 300 ? 3 : 2, gap = W >= 300 ? Math.round(W * 0.05) : 6, cx = W / 2;
         for (const u of units) {
           const left = u.side === leftSide;
           slot.set(u.key, { x: Math.round(left ? cx - gap - 28 * k : cx + gap - 4 * k), feet: L - 3, flip: !left, row: 0, k });
@@ -1520,17 +1513,30 @@
       }
     }
     // a duel's HUD, as in a fighting game: each champion's owner and name, level and tier, and a wide HP bar
+    // "owner · champion" within `max`: the owner's name is shortened first, so the champion's always shows
+    function nameLine(owner, who, size, max) {
+      const full = owner ? `${owner} · ${who}` : who;
+      if (!owner) return full;
+      ctx.save();
+      ctx.font = `700 ${Math.round(size * dpr)}px ${FONT}`;
+      const fits = (s) => ctx.measureText(s).width <= max * P;
+      let o = owner;
+      if (!fits(full)) while (o.length > 1 && !fits(`${o}… · ${who}`)) o = o.slice(0, -1);
+      ctx.restore();
+      return o === owner ? full : `${o}… · ${who}`;
+    }
     function drawDuelHud(cur, done, hpNow, hpBefore, u) {
       const barWide = Math.max(40, Math.floor(W / 2) - 14), narrow = W < 300;
       for (const un of units) {
         const left = un.side === leftSide, x = left ? 4 : W - 4, align = left ? "left" : "right";
         const owner = sideName[un.side], who = name(un.key);
         // the name, then level and tier on the same row (toward the middle); the bar under them
-        const n = text(owner ? `${owner} · ${who}` : who, x, 8, { size: narrow ? 10 : 12, align, panel: true, weight: 700, max: Math.max(30, barWide - (narrow ? 0 : 70)) });
+        const room = Math.max(30, barWide - (narrow ? 0 : 76));
+        const n = text(nameLine(owner, who, narrow ? 10 : 12, room - 6), x, 8, { size: narrow ? 10 : 12, align, panel: true, weight: 700, max: room });
         if (!narrow) {
           const tierColor = { master: gold(), expert: theme.accent, adept: green(), novice: theme.panelInk }[un.tier] || theme.panelInk;
-          const lv = text(fill(labels.level, { n: un.level }), left ? n.x + n.w + 3 : n.x - 3, 8, { size: 10, align, panel: true, weight: 600 });
-          text(labels.tiers[un.tier] || un.tier, left ? lv.x + lv.w + 3 : lv.x - 3, 8, { size: 10, align, panel: true, weight: 700, color: tierColor });
+          const lv = text(fill(labels.level, { n: un.level }), left ? n.x + n.w + 3 : n.x - 3, 8, { size: 11, align, panel: true, weight: 600 });
+          text(labels.tiers[un.tier] || un.tier, left ? lv.x + lv.w + 3 : lv.x - 3, 8, { size: 11, align, panel: true, weight: 700, color: tierColor });
         }
         const now = hpNow.get(un.key), before = hpBefore.get(un.key), lag = done || u > 0.3 ? now : before;
         const bx = left ? 4 : W - 4 - barWide, by = n.y + n.h + 3, frac = now / un.max, ghost = Math.max(now, lag) / un.max;
@@ -1547,7 +1553,7 @@
           text(`${fill(labels.level, { n: un.level })} · ${labels.tiers[un.tier] || un.tier}`, left ? 4 : W - 4, by + 11, { size: 9, align, panel: true, weight: 600, color: tierColor });
         }
       }
-      if (cur && !done && !narrow) text(fill(labels.round, { n: cur.r || 1 }), W / 2, 8, { size: 11, color: gold(), weight: 700 });
+      if (cur && !done && !narrow) text(fill(labels.round, { n: cur.r || 1 }), W / 2, 8, { size: 12, color: gold(), weight: 700, panel: true });
       // a special: a band across the whole arena with its name
       const i = log.indexOf(cur), sp = !done && cur ? lastSpecial(i) : null;
       if (sp && sp[1] < 1.2) {
@@ -1575,10 +1581,12 @@
     }
     function drawEnd(since, a) {
       const won = result.winner === leftSide;
-      const slide = still ? 1 : ease(since / 0.3), y = Math.round(L * 0.3 - 8 + 8 * slide);
+      const slide = still ? 1 : ease(since / 0.3), y = Math.round(L * 0.42 - 8 + 8 * slide);
       ctx.save();
       ctx.font = `700 ${Math.round(18 * dpr)}px ${FONT}`;
       const msg = won ? labels.victory : labels.defeat, w = Math.ceil(ctx.measureText(msg).width / P) + 24, h = 20, x = Math.round(W / 2 - w / 2);
+      ctx.fillStyle = theme.dark ? `rgba(4, 10, 24, ${0.5 * slide})` : `rgba(255, 255, 255, ${0.55 * slide})`; // the stage steps back
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = won ? theme.cta : theme.panelRim;
       ctx.fillRect((x + 1) * P, (y - 1) * P, (w - 2) * P, (h + 2) * P);
       ctx.fillRect(x * P, y * P, w * P, h * P);
