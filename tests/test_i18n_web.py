@@ -138,9 +138,9 @@ def _calls(path: Path) -> list[tuple[str, list[str], int]]:
 
 
 def _keys() -> tuple[dict[str, int], list[str]]:
-    """{key: first line used} for every literal key in app.js and i18n.js, and the problems: non-literal keys."""
+    """{key: first line used} for every literal key in the page's scripts, and the problems: non-literal keys."""
     keys, problems = {}, []
-    for path in (WEB / "app.js", WEB / "learning.js", WEB / "i18n.js"):
+    for path in (WEB / "app.js", WEB / "learning.js", WEB / "innerlatch.js", WEB / "i18n.js"):
         for name, args, line in _calls(path):
             texts = [args[k] if k < len(args) else "" for k in HELPERS[name]]
             bad = [x for x in texts if not PLAIN.fullmatch(x)]
@@ -203,16 +203,24 @@ def test_translations_are_not_empty():
 
 def test_scripts_load_in_order():
     html = (WEB / "index.html").read_text()
-    order = [html.index(f'src="{name}"') for name in ("ja.js", "i18n.js", "sprites.js", "scene.js", "app.js")]
+    order = [html.index(f'src="{name}"') for name in ("ja.js", "i18n.js", "app.js")]
     assert order == sorted(order)
     assert 'id="lang-btn"' in html
+
+
+def test_innerlatch_loads_only_through_the_door():
+    """The dashboard carries none of Innerlatch until someone walks in: app.js loads its files then, the page never."""
+    html, app = (WEB / "index.html").read_text(), (WEB / "app.js").read_text()
+    for name in ("innerlatch.js", "innerlatch.css", "sprites.js", "scene.js"):
+        assert name not in html
+        assert f'"{name}"' in app
 
 
 NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(not NODE, reason="node is not installed")
-@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js"])
+@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js", "innerlatch.js"])
 def test_scripts_parse(name):
     proc = subprocess.run([NODE, "--check", str(WEB / name)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr

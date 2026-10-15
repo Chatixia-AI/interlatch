@@ -63,14 +63,14 @@ writes only inside its own block, and every change can be undone ([Suggestions](
 [configuration](configuration.md); it is then never recorded, analyzed or sent to a hub. Remove a single session for
 good with `interlatch forget <id>`.
 
-**What is the leaderboard, and does it send my usage?** The **Leaderboard** page compares your hours, sessions and
-tokens with other people's. Nothing is sent until you sign in there with Google. From then on, each sync sends your
+**What is the leaderboard, and does it send my usage?** The **Leaderboard** compares your hours, sessions and
+tokens with other people's. It is in Innerlatch, behind the door at the bottom of the dashboard's rail. Nothing is sent until you sign in there with Google. From then on, each sync sends your
 totals for the last 7, 30 and 90 days, with the name and picture you show: no email, project, prompt or title.
 `interlatch leaderboard leave` deletes your row and stops sending.
 
 **What is the Party?** Your coding agents as pixel-art characters who level up from the lessons their sessions
-taught, matched to a technical career roadmap ([Party](party.md)). It needs a Google sign-in but sends nothing,
-and the levels are your agents', not yours.
+taught, matched to a technical career roadmap ([Party](party.md)). It is in Innerlatch, with the Leaderboard and the
+Arena. It needs a Google sign-in but sends nothing, and the levels are your agents', not yours.
 
 **Is it open source?** Yes, under the MIT license, the hub included. Only `ee/`, the features a company needs to roll
 it out across teams (single sign-on, policies, audit export), is under the

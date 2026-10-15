@@ -7,12 +7,22 @@ Copilot, IBM Bob, Google Antigravity and OpenCode each level up from the lessons
 of a technical career roadmap: 65 tracks, from AI product engineer to site reliability engineer, built from 70 learning
 modules, with four milestones each. Chats imported from claude.ai or ChatGPT don't take part.
 
+## Getting there
+
+The Party lives in **Innerlatch**, an area of the dashboard of its own, drawn in violet. The door at the bottom of the
+rail opens it. Inside, the rail shows Innerlatch's sections: **Party**, **Leaderboard** and **Arena**, and the door at
+the bottom (**Back to Interlatch**) leads back to the page you came from. The Leaderboard and the Arena show only on the
+computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to some projects.
+
+The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work. To hide the door, set
+**Settings › Appearance › The door** to **Hidden** (this browser only). Innerlatch still opens from its address.
+
 ## Signing in
 
 The Party page stays locked until you sign in with Google, with the same account as the leaderboard
 ([Data and privacy](privacy.md)). Signing in for the Party doesn't put you on
 the leaderboard and sends nothing: your characters are worked out on your computer, from your own archive. To join the
-board later, use **Join the board** on the Leaderboard page. **Sign out** on the Party page forgets the sign-in, and
+board later, use **Join the board** on the **Leaderboard** in Innerlatch. **Sign out** on the Party page forgets the sign-in, and
 takes your row off the leaderboard if you joined it.
 
 On a team hub, sign in to the hub as usual ([Joining your team's hub](join-a-hub.md)). You see a party made from your
@@ -46,28 +56,28 @@ person's review before a milestone counts.
 and when you completed a quest, with a chart of each agent's level over time. A lesson that lifted several skills at
 once is one line. Every join, level, class and quest stays on the list; of the skill-ups, the newest 120 do.
 
-## The journey on Home
+## The journey on the Party page
 
-Once you're signed in, the top of **Home** shows your party on the move, in the style of an idle game. The six
+Once you're signed in, the top of the **Party** page shows your party on the move, in the style of an idle game. The six
 characters walk across a blueprint landscape that matches the skill area they levelled most this week, and fight this
 week's lessons: each lesson is a monster (a fix is Glitch the bug, a gotcha is Mal's pot, and so on), beaten by the
 agent whose session taught it, for the XP it earned. The week replays wave by wave; when it passes one of your real
 level-ups, a banner says so. Main-quest milestones with possible evidence stand at the end as bosses the party can't
 beat until you mark the quest done. Point at a monster to see its lesson, click it to open the session, and fold the
 strip away with the button in its corner. It pauses when it's out of sight, and stays still when animations are off
-(**Settings › Appearance**). Before you sign in, the strip already shows this week's lessons waiting while your party
-sleeps; point at one to see it, click it to open its session.
+(**Settings › Appearance**). Before you sign in, the Party page already shows this week's lessons in grey above the
+sign-in card, waiting while your party sleeps; point at one to see it, click it to open its session.
 
 ## The arena
 
-People on the leaderboard can also put their parties in the **Arena**. Open **Leaderboard ›
-Arena** and choose **Enter the arena** (you join the board first). From then on each sync publishes your party's
+People on the leaderboard can also put their parties in the **Arena**, a page of its own in Innerlatch. Open
+**Arena** in Innerlatch's rail and choose **Enter the arena** (you join the board first). From then on each sync publishes your party's
 character sheet: for each of your coding agents its level, tier, class and six attribute levels, and which agent
 is your champion, with the name and picture you show on the board and the code that tells your computers apart (a
 hash, not a name). No lessons, projects, sessions, titles or prompts go.
 
 The arena is champion against champion. Your champion is your highest-level agent until you pick another from the
-tiles on your arena card. Every week it duels every other player's champion once, and the Arena board ranks you by
+tiles on your arena card. Every week it duels every other player's champion once, and the Arena page ranks you by
 wins, with each player's champion and level. Click a rival to watch the duel: your champion on the left, theirs on
 the right, round by round, with the same fight written out as a log underneath and both full parties below. Each battle is worked out on your own
 computer from the two published sheets and the week, so both players see the same result. The numbers are
