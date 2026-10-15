@@ -45,6 +45,17 @@ person's review before a milestone counts.
 **Journey** lists level-ups week by week: when each agent joined, reached a level, learned a skill or changed class,
 and when you completed a quest, with a chart of each agent's level over time.
 
+## The journey on Home
+
+Once you're signed in, the top of **Home** shows your party on the move, in the style of an idle game. The five
+characters walk across a blueprint landscape that matches the skill area they levelled most this week, and fight this
+week's lessons: each lesson is a monster (a fix is Glitch the bug, a gotcha is Mal's pot, and so on), beaten by the
+agent whose session taught it, for the XP it earned. The week replays wave by wave; when it passes one of your real
+level-ups, a banner says so. Main-quest milestones with possible evidence stand at the end as bosses the party can't
+beat until you mark the quest done. Point at a monster to see its lesson, click it to open the session, and fold the
+strip away with the button in its corner. It pauses when it's out of sight, and stays still when animations are off
+(**Settings › Appearance**).
+
 !!! note "Your agents' level, not yours"
     Levels show what your agents' lessons cover on the roadmap. They aren't your own level: the roadmap keeps that
     separate, and only a check of your own work can show it.
