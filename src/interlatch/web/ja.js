@@ -2197,4 +2197,8 @@ window.INTERLATCH_JA = {
   "Employers ask for": "企業が求めるもの",
   "employers ask for it": "企業が求めています",
   "A green corner marks a module employers ask for.": "緑の角は、企業が求めるモジュールです。",
+  "This week's lessons": "今週の教訓",
+  "{agent} taught {n} lesson": "{agent} が {n} 件の教訓",
+  "{agent} taught {n} lessons": "{agent} が {n} 件の教訓",
+  "Sign in with Google to send your party after them.": "Google でサインインして、パーティーを送り出しましょう。",
 };

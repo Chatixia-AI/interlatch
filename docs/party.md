@@ -54,7 +54,8 @@ agent whose session taught it, for the XP it earned. The week replays wave by wa
 level-ups, a banner says so. Main-quest milestones with possible evidence stand at the end as bosses the party can't
 beat until you mark the quest done. Point at a monster to see its lesson, click it to open the session, and fold the
 strip away with the button in its corner. It pauses when it's out of sight, and stays still when animations are off
-(**Settings › Appearance**).
+(**Settings › Appearance**). Before you sign in, the strip already shows this week's lessons waiting while your party
+sleeps; point at one to see it, click it to open its session.
 
 ## The arena
 

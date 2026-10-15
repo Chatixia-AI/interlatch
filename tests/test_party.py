@@ -18,6 +18,7 @@ import pytest
 from interlatch.core import i18n
 from interlatch.core.agents import CODING_AGENTS
 from interlatch.core.machine import local_machine
+from interlatch.core.util import utcnow, utcnow_iso
 from interlatch.knowledge import party
 from interlatch.sharing import leaderboard as lb
 from interlatch.sharing import people
@@ -457,8 +458,35 @@ def _sign_in(cfg, **extra):
 def test_nothing_about_the_agents_before_signing_in(hubweb, catalog):  # noqa: F811
     url, cfg, conn = hubweb["url"], hubweb["cfg"], hubweb["conn"]
     _lesson(conn, SID, "pytest secrets")  # the synced session: this computer's
+    now = utcnow_iso()
+    fresh = _lesson(conn, _session(conn, at=now), "a note that names no module", kind="gotcha", stage="canonical")
+    _lesson(conn, _session(conn, at=now), "pytest unsure", stage="wip")  # not settled: not even a preview
+    _lesson(conn, _session(conn, at=now, agent="chatgpt", source="chatgpt-export"), "a chat", agent="chatgpt")
+    _lesson(conn, _session(conn, at=now, machine=TEAMMATE_PC, source="remote"), "a teammate's")
     status, data = _http(url, "/api/party")
-    assert status == 200 and data == {"signed_in": False, "signing_in": False, "can_sign_in": True}
+    assert status == 200 and set(data) == {"signed_in", "signing_in", "can_sign_in", "preview"}
+    assert (data["signed_in"], data["signing_in"], data["can_sign_in"]) == (False, False, True)
+    preview = data["preview"]
+    assert preview["recent"] == [{"id": fresh, "title": "a note that names no module", "kind": "gotcha",
+                                  "agent": "claude", "at": now[:10], "session_id": preview["recent"][0]["session_id"]}]
+    assert preview["week"] == {"since": (utcnow().date() - timedelta(days=6)).isoformat(), "until": now[:10],
+                               "lessons": 1, "by_agent": {a: int(a == "claude") for a in CODING_AGENTS}}
+    keys = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            keys.update(x)
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+
+    walk(data)  # nothing of the game before signing in: no level, XP, class, module, zone, quest or skill
+    assert not keys & {"xp", "level", "level_xp", "next_xp", "tier", "stage", "class", "classes", "modules", "module",
+                       "zone", "quests", "quest", "skills", "skill", "attrs", "attr_levels", "agents", "journey",
+                       "series", "goal", "who", "catalog", "market"}
+    assert "pytest secrets" not in json.dumps(data)  # an older lesson: not this week
     for path in ("/api/party/skill?agent=claude&module=M-python", "/api/party/track?id=backend"):
         status, r = _http(url, path)
         assert status == 403 and r["signin"] is True and "pytest" not in json.dumps(r), path
@@ -505,7 +533,9 @@ def test_signing_in_for_the_party_keeps_the_sign_in_off_the_board(hubweb, catalo
     status, r = _http(url, "/api/party/signin", {})
     q = {k: v[0] for k, v in parse_qs(urlparse(r["url"]).query).items()}
     assert status == 200 and r["url"].startswith(lb.SIGNIN_PAGE) and q["return"] == url + "/"
-    assert _http(url, "/api/party")[1] == {"signed_in": False, "signing_in": True, "can_sign_in": True}
+    locked = _http(url, "/api/party")[1]
+    assert {k: locked[k] for k in ("signed_in", "signing_in", "can_sign_in")} == {"signed_in": False, "signing_in": True,
+                                                                               "can_sign_in": True}
     status, r = _http(url, "/api/leaderboard/finish", {"state": q["state"], "token": "R0-from-the-hosted-page"})
     assert status == 200 and r["next"] == "party" and r["signed_in"] is True and r["joined"] is False
     assert net.commits() == [] and lb.read_state(cfg)["board"] is False  # not on the board: nothing sent
@@ -521,7 +551,9 @@ def test_signing_in_for_the_party_keeps_the_sign_in_off_the_board(hubweb, catalo
     net.on("DELETE", lb.FIRESTORE + "/players/uid1", {})
     net.on("DELETE", lb.FIRESTORE + "/arena/uid1", {})
     status, r = _http(url, "/api/party/signout", {})  # on the board: signing out is leaving it (and the arena)
-    assert status == 200 and r == {"signed_in": False, "signing_in": False, "can_sign_in": True}
+    assert status == 200 and {k: r[k] for k in ("signed_in", "signing_in", "can_sign_in")} == {
+        "signed_in": False, "signing_in": False, "can_sign_in": True} and set(r) - {"preview"} == {
+        "signed_in", "signing_in", "can_sign_in"}
     assert [c["method"] for c in net.calls].count("DELETE") == 2 and lb.read_state(cfg) is None
     assert _http(url, "/api/leaderboard/join", {})[0] == 502  # nobody signed in to join with
 
@@ -748,3 +780,28 @@ def test_the_real_roadmap_loads_and_computes_a_party(synced):
     finally:
         i18n.lang.reset(token)
     party.clear_cache()
+
+
+def test_the_preview_is_this_computers_week_of_lessons_matched_or_not(home):
+    conn, here = home["conn"], home["here"]
+    edge = _lesson(conn, _session(conn, at="2026-10-09T00:00:00.000Z"), "nothing it knows", kind="decision")
+    _lesson(conn, _session(conn, at="2026-10-08T23:59:59.000Z"), "the day before the week")
+    _lesson(conn, _session(conn, at="2026-10-16T00:00:00.000Z"), "tomorrow")
+    day = _session(conn, at="2026-10-15T08:00:00.000Z")
+    ids = [_lesson(conn, day, f"note {n}", kind="command") for n in range(party.RECENT_MAX + 2)]
+    _lesson(conn, day, "dismissed", status="dismissed")
+    _lesson(conn, day, "a fact", kind="fact")
+    codex = _lesson(conn, _session(conn, at="2026-10-15T08:00:00.000Z", agent="codex"), "codex note", agent="codex")
+    got = party.preview(conn, here, today=TODAY)
+    assert [k["id"] for k in got["recent"]][:3] == [codex, ids[-1], ids[-2]]  # newest first (same time: newest id)
+    assert len(got["recent"]) == party.RECENT_MAX and edge not in [k["id"] for k in got["recent"]]
+    assert got["week"] == {"since": "2026-10-09", "until": "2026-10-15", "lessons": party.RECENT_MAX + 2 + 2,
+                           "by_agent": {"claude": party.RECENT_MAX + 3, "codex": 1, "copilot": 0, "bob": 0,
+                                        "antigravity": 0}}
+    assert all(set(k) == {"id", "title", "kind", "agent", "at", "session_id"} for k in got["recent"])
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(party, "load_catalog", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no roadmap")))
+    try:
+        assert party.preview(conn, here, today=TODAY) == got  # the roadmap plays no part
+    finally:
+        monkeypatch.undo()

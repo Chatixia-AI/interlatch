@@ -9,7 +9,8 @@
   const FRAME_MS = 1000 / 30;
   const LABELS = { wave: "Wave {n} / {total}", xp: "+{xp} XP · {skill}", levelUp: "{agent} reached level {n}!",
     skillUp: "{agent}: {skill} Lv {n}", boss: "Boss: {text}", bossHint: "Mark the quest done to defeat it",
-    asleep: "Your party is asleep", quiet: "A quiet week: no new lessons", zone: "{attr} · {module}" };
+    asleep: "Your party is asleep", quiet: "A quiet week: no new lessons", zone: "{attr} · {module}",
+    preview: "This week's lessons" };
   const AGENT_ORDER = ["claude", "codex", "copilot", "bob", "antigravity"];
   const FONT = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
   const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
@@ -67,6 +68,18 @@
       wire: glow(tint(accent, 0.45), dark ? 0.34 : 0.3), mark: dark ? "#ffb45e" : "#d08a20",
       panel: dark ? "rgba(6, 18, 36, 0.78)" : "rgba(255, 255, 255, 0.9)", panelRim: dark ? glow(base, 0.6) : glow(base, 0.55),
       panelInk: ink, shadow: dark ? "rgba(2, 8, 22, 0.42)" : "rgba(22, 52, 100, 0.18)" };
+  }
+
+  // the same blueprint with every colour turned to a grey of its own lightness (the signed-out preview)
+  function greyTheme(theme) {
+    const grey = (c) => {
+      if (isHex(c)) { const [r, g, b] = rgbOf(c), v = r * 0.3 + g * 0.55 + b * 0.15; return hexOf([v, v, v + 4]); }
+      const m = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(c);
+      if (!m) return c;
+      const v = Math.round(m[1] * 0.3 + m[2] * 0.55 + m[3] * 0.15);
+      return `rgba(${v}, ${v}, ${v}, ${m[4]})`;
+    };
+    return Object.fromEntries(Object.entries(theme).map(([k, v]) => [k, typeof v === "string" ? grey(v) : v]));
   }
 
   // the Cast's style for everything that isn't an agent: Sprites.art shades and edges a pixel map like the agents
@@ -479,7 +492,9 @@
       const h = new Date().getHours();
       return h >= 7 && h < 17 ? "day" : (h >= 17 && h < 20) || (h >= 5 && h < 7) ? "dusk" : "night";
     }
-    function asleep() { return !party || party.signed_in === false; }
+    // signed out with a preview: this week's lessons parade by, without a party; without one, the party sleeps
+    function previewing() { return !!party && party.signed_in === false && !!party.preview && Array.isArray(party.preview.recent); }
+    function asleep() { return !party || (party.signed_in === false && !previewing()); }
     function biome() {
       if (asleep()) return "meadow";
       const a = party.zone && party.zone.attr;
@@ -501,6 +516,13 @@
       time = asleep() ? "night" : timeOfDay();
       theme = readTheme(biome());
       const names = BIOMES[biome()], seed = 1 + Object.keys(BIOMES).indexOf(biome()) * 101;
+      if (previewing()) { // signed out: the blueprint in plain greys, nothing on it but the lessons
+        theme = greyTheme(theme);
+        const none = blank(1, 1);
+        layers = { wall: wallTile(theme, ground, P), far: none, near: none, floor: floorLayer(theme, W, ground, L, P), marks: none };
+        art.clear();
+        return;
+      }
       layers = {
         wall: wallTile(theme, ground, P),
         far: propsLayer(names, theme, 420, L, ground - 2, P, seed + 1, true),
@@ -620,8 +642,10 @@
       hits = [];
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const sleeping = asleep(), quiet = !sleeping && !story.encounters.length;
-      const st = sleeping ? { cam: 0, cur: 0, seg: null } : quiet ? { cam: t * SPEED, cur: 0, seg: null } : at(t);
+      const sleeping = asleep(), preview = previewing(), lessons = preview ? previewLessons() : [];
+      const quiet = !sleeping && (preview ? !lessons.length : !story.encounters.length);
+      const st = sleeping ? { cam: 0, cur: 0, seg: null } : preview ? { cam: 0, cur: 0, seg: null }
+        : quiet ? { cam: t * SPEED, cur: 0, seg: null } : at(t);
       const cam = st.cam;
       const sh = shake(st);
       ctx.save();
@@ -633,7 +657,7 @@
       tile(layers.near, 300, cam * 0.6, 0);
       tile(layers.marks, 200, cam, ground + 2);
       // dusk and night: lighting over the blueprint (the cast stays lit)
-      const light = LIGHT[time];
+      const light = preview ? null : LIGHT[time];
       if (light) {
         const steps = 6;
         for (let i = 0; i < steps; i++) {
@@ -646,6 +670,7 @@
         }
       }
       if (sleeping) drawCamp(a);
+      else if (preview) drawParade(t, a, lessons);
       else drawWorld(t, a, st, quiet);
       ctx.restore();
       // the week replays: a fade at the end of the wave and back in at its start
@@ -692,10 +717,10 @@
     }
 
     const feet = () => L - 7; // where a sprite's feet touch the floor, near its front edge
-    function groundShadow(cx, w) {
+    function groundShadow(cx, w, at = feet()) {
       const x = Math.round(cx - w / 2);
-      px(ctx, P, theme.shadow, x + 1, feet() - 1, w - 2, 1);
-      px(ctx, P, theme.shadow, x + 2, feet(), w - 4, 1);
+      px(ctx, P, theme.shadow, x + 1, at - 1, w - 2, 1);
+      px(ctx, P, theme.shadow, x + 2, at, w - 4, 1);
     }
     function agentAt(id, x, frame, stride, opts2 = {}) {
       const ag = story.agents.get(id) || {};
@@ -703,6 +728,30 @@
       const y = feet() - 31 + (opts2.dy || 0);
       put(img, x, y);
       hits.push({ key: "agent:" + id, item: { type: "agent", agent: ag.agent ? ag : { agent: id } }, box: [x + 8, y + 4, 16, 26] });
+    }
+
+    // ---- the preview, signed out: the week's newest lessons as their monsters, greyed, standing in a row, each titled
+    function previewLessons() {
+      const recent = party.preview.recent.slice().sort((p, q) => String(q.at).localeCompare(String(p.at)) || q.id - p.id);
+      return recent.slice(0, W < 300 ? 3 : 5);
+    }
+    function drawParade(t, a, lessons) {
+      const n = lessons.length, fy = Math.round(L * 0.74);
+      lessons.forEach((l, i) => {
+        const type = KIND_MONSTER[l.kind] || "mal", mm = MONSTERS[type];
+        const frame = still ? 0 : Math.floor(a * 1.2 + i * 0.7) % 2; // a gentle two-frame idle
+        const key = `g|${type}|${frame}`;
+        if (!art.has(key)) art.set(key, greyed(monster(type, "provisional", frame, false)));
+        const img = art.get(key), w = img.w * img.size, h = img.h * img.size;
+        const cx = Math.round((W * (i + 0.5)) / n), x = cx - Math.round(w / 2);
+        const y = fy - h + 1 - (mm.fly ? Math.round(mm.fly * 0.6) : 0);
+        groundShadow(cx, Math.round(w * 0.7), fy);
+        put(img.cv, x, y);
+        const title = String(l.title || "");
+        text(title.length > 28 ? title.slice(0, 27).trimEnd() + "…" : title, cx, fy + 8, { size: 9, align: "center", panel: false,
+          color: theme.panelInk, alpha: 0.85, max: Math.floor(W / n) - 4 });
+        hits.push({ key: "lesson:" + l.id, item: { type: "lesson", lesson: l }, box: [x, y, w, fy + 12 - y] });
+      });
     }
 
     function drawCamp(a) {
@@ -984,6 +1033,11 @@
     function drawHud(t, a, st, sleeping, quiet) {
       const top = 8;
       if (sleeping) { text(labels.asleep, W / 2, top + 4, { size: 12, align: "center" }); return; }
+      if (previewing()) {
+        if (quiet) text(labels.quiet, W / 2, top + 16, { size: 11, align: "center" });
+        else text(labels.preview, 4, top, { max: W - 12 });
+        return;
+      }
       let used = 0;
       if (story.encounters.length) {
         const n = Math.min(story.encounters.length, st.cur + 1);
