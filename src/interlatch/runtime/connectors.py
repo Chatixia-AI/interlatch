@@ -18,7 +18,8 @@ from ..core.process import internal_env
 from ..core.i18n import tr
 from .install import LEGACY_MCP_NAME, MCP_NAME, exe_argv
 from ..sources import discovery  # discovery.vscode_user_dirs() through the module: one patch there reaches every caller
-from ..sources.discovery import antigravity_home, app_support_dir, bob_home, codex_home, copilot_home
+from ..sources.discovery import (antigravity_home, app_support_dir, bob_home, codex_home, copilot_home, opencode_config_dir,
+                                 opencode_home)
 
 MCP_NAMES = (MCP_NAME, LEGACY_MCP_NAME)  # an agent that still has Chronicle's 'chronicle' server runs the same one
 
@@ -575,6 +576,73 @@ def disconnect_antigravity(cfg: Config) -> list[str]:
     return actions
 
 
+# ------------------------------------------------------------------ OpenCode
+
+
+def opencode_mcp_config() -> Path:
+    """Where the MCP server is written: opencode.json in OpenCode's global config folder. OpenCode merges config.json,
+    opencode.json and opencode.jsonc, so an opencode.jsonc with comments stays untouched."""
+    return opencode_config_dir() / "opencode.json"
+
+
+def opencode_status(cfg: Config, conn: sqlite3.Connection) -> dict:
+    from ..sources.opencode import mcp_servers, opencode_dbs, root_folders
+
+    home = cfg.opencode_dirs[0] if cfg.opencode_dirs else opencode_home()
+    dbs = opencode_dbs(home)
+    sessions = sum(1 for db in dbs for d in root_folders(db) if not cfg.is_internal_path(d))
+    connected = bool(cfg.opencode_dirs)
+    binary = shutil.which("opencode")
+    app = APPLICATIONS / "OpenCode.app"  # the desktop app, which writes the same database
+    mcp = any(name in mcp_servers(opencode_config_dir()) for name in MCP_NAMES)
+    return {
+        "name": "opencode",
+        "label": "OpenCode",
+        "vendor": "OpenCode",
+        "detected": bool(binary) or home.is_dir() or app.exists(),
+        "connected": connected,
+        "version": _version(binary) or _app_version(app),
+        "binary": binary or (str(app) if app.exists() else None),
+        "dirs": [_tilde(home)],
+        "on_disk": sessions,
+        "recorded": _recorded(conn, "agent = 'opencode'"),
+        "recovered": 0,
+        "recording": tr("background sync every 15 min") if connected else tr("not recording"),
+        "checks": [
+            {"key": "files", "label": tr("Session database"), "ok": bool(dbs),
+             "detail": tr("{where} · {n} sessions", where=", ".join(_tilde(db) for db in dbs) or _tilde(home / "opencode.db"),
+                          n=sessions)},
+            {"key": "recording", "label": tr("Recording"), "ok": connected,
+             "detail": tr("scanned every sync") if connected else tr("not scanned (connect to start)")},
+            {"key": "mcp", "label": tr("MCP server in OpenCode"), "ok": mcp, "detail": _tilde(opencode_mcp_config())},
+            {"key": "hook", "label": tr("Session-end hook"), "ok": None, "optional": True,
+             "detail": tr("not used: sessions are picked up by the 15-minute sync")},
+        ],
+        "notes": [tr("A subagent's session is recorded inside the session that started it")],
+    }
+
+
+def connect_opencode(cfg: Config, exe: str) -> list[str]:
+    actions = []
+    home = opencode_home()
+    if not cfg.opencode_dirs:
+        set_config_value(cfg, "sources", "opencode_dirs", json.dumps([_tilde(home)], ensure_ascii=False))
+        actions.append(tr("recording {where}", where=_tilde(home)))
+    if home.is_dir() or opencode_config_dir().is_dir():
+        command, args = _split_exe(exe)
+        actions.append(_mcp_json_set(cfg, opencode_mcp_config(), "mcp",
+                                     {"type": "local", "command": [command, *args], "enabled": True}, "OpenCode"))
+    return actions
+
+
+def disconnect_opencode(cfg: Config) -> list[str]:
+    set_config_value(cfg, "sources", "opencode_dirs", "[]")
+    actions = [tr("stopped recording {label} (recorded sessions are kept)", label="OpenCode")]
+    if _mcp_json_has(opencode_mcp_config(), "mcp"):
+        actions.append(_mcp_json_set(cfg, opencode_mcp_config(), "mcp", None, "OpenCode"))
+    return actions
+
+
 # ------------------------------------------------------------------ MCP-only clients
 # Tools Interlatch does not record but can give its MCP server to. Each keeps a JSON config with a server map.
 APPLICATIONS = Path("/Applications")
@@ -635,6 +703,7 @@ CONNECTORS = {
     "copilot": (copilot_status, connect_copilot, disconnect_copilot),
     "bob": (bob_status, connect_bob, disconnect_bob),
     "antigravity": (antigravity_status, connect_antigravity, disconnect_antigravity),
+    "opencode": (opencode_status, connect_opencode, disconnect_opencode),
 }
 
 

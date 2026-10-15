@@ -132,7 +132,7 @@ the Projects page and sidebar list the group's projects under that project as we
 - From each `claude_dirs` folder: `projects/` (transcripts, subagent threads, memory notes) and `history.jsonl`.
   From each `codex_dirs` folder: `sessions/`, `memories/` and Codex's session index.
 - Projects in `sources.exclude_projects` are never sent.
-- GitHub Copilot, IBM Bob, Google Antigravity, Codex Cloud and chat exports are not sent: connect or import those on the hub.
+- GitHub Copilot, IBM Bob, Google Antigravity, OpenCode, Codex Cloud and chat exports are not sent: connect or import those on the hub.
 - Files travel over HTTPS (inside your tailnet, or through the HTTPS proxy in front of the hub), compressed, and are
   checked against a SHA-256 on arrival. Only files the hub lacks, or has an older copy of, are sent. Each computer
   proves itself with a token kept in `~/.interlatch/hub-token`, readable by your user only: the hub's shared
@@ -166,7 +166,7 @@ sessions from every folder, join with `--all-folders`, run `interlatch config se
 **Every folder** under **Settings › Devices › What this computer sends**.
 
 Prompts, shell commands, file paths, transcripts and lessons about you (global ones and preferences) never leave
-the computer. Sessions from GitHub Copilot, IBM Bob and Google Antigravity are shared too; imported chats are not.
+the computer. Sessions from GitHub Copilot, IBM Bob, Google Antigravity and OpenCode are shared too; imported chats are not.
 
 On the hub these sessions are filed like any other from that computer (by git remote, an added folder or
 `path_map`) and their lessons join the project's knowledge base. A session page shows **transcript on

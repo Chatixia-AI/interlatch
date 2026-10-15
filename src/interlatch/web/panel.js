@@ -35,9 +35,9 @@
   const icon = (name) => { const s = h("span", { class: "ic" }); s.innerHTML = ICONS[name]; return s; };
 
   const AGENTS = { claude: ["C", "Claude Code"], codex: ["X", "Codex"], copilot: ["G", "GitHub Copilot"], bob: ["B", "IBM Bob"],
-                   antigravity: ["A", "Google Antigravity"], "claude-ai": ["C", "Claude.ai"], chatgpt: ["G", "ChatGPT"] };
+                   antigravity: ["A", "Google Antigravity"], opencode: ["O", "OpenCode"], "claude-ai": ["C", "Claude.ai"], chatgpt: ["G", "ChatGPT"] };
   // each agent's own mark (agent-*.svg, as on the dashboard); the one-colour ones are masks in the text colour
-  const MONO = new Set(["copilot", "chatgpt"]);
+  const MONO = new Set(["copilot", "chatgpt", "opencode"]);
   const OUTCOMES = { completed: "Completed", partial: "Partial", blocked: "Blocked", abandoned: "Abandoned",
                      exploratory: "Exploratory", unclear: "Unclear" };
 

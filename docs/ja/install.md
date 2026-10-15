@@ -32,7 +32,7 @@ Intel 版はまだありません。Intel Mac ではコマンドラインでイ�
 | Install Command-Line Tool | アプリ内蔵の `interlatch` コマンドを `~/.local/bin` にリンク（既に存在する場合は何もしません） |
 | Open Data Folder | `~/.interlatch` |
 
-Codex、Copilot、Bob、Antigravity はダッシュボードの **Sources** ページから接続します。フックと MCP の登録は
+Codex、Copilot、Bob、Antigravity、OpenCode はダッシュボードの **Sources** ページから接続します。フックと MCP の登録は
 `~/.interlatch/bin/interlatch` を指しています。これはアプリが起動のたびに書き直す小さなスクリプトなので、
 アプリを移動・更新しても壊れません。アプリを終了すると、次に起動するまで同期は止まります。終了で中断された分析は、
 次の同期で改めて実行されます。
@@ -53,7 +53,7 @@ interlatch install                               # pick the agents to record, im
 `interlatch install`（`interlatch setup` でも可）は次の順にセットアップします：
 
 1. セッションを分析するエージェント（既定は Claude Code）を確認します。見つからず Codex がインストールされていれば、Codex で分析するか尋ねます。どちらもなければ、セッションは記録されますが、どちらかをインストールするまで分析されません。
-2. この Mac にあるコーディングエージェント（Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity）と、MCP のみのクライアント
+2. この Mac にあるコーディングエージェント（Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity、OpenCode）と、MCP のみのクライアント
    （Claude Desktop、Cursor、Windsurf、Gemini CLI）を、ディスク上のセッション数とともに一覧にします。
 3. 見つかってまだ接続していないものごとに、記録するか（既定は「はい」）、MCP クライアントには Interlatch のツールを
    渡すかを尋ねます。Codex Cloud はオンラインにアクセスするため、Codex の後に尋ね、既定は「いいえ」です。

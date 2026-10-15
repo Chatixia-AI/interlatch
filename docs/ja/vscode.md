@@ -62,7 +62,7 @@ code --install-extension interlatch-0.3.0.vsix
   `../myapp-feature/src/app.py` で、`myapp/src/app.py` とは別のパスです。
 - **リモートウィンドウのファイル**（SSH、コンテナー、WSL）。一覧には、Interlatch はこのコンピューター上のファイルしか
   わからないと表示されます。
-- **まだ同期されていないセッション。** Claude Code のセッションは終わったときに、Codex、Copilot、Bob、Antigravity のセッションは
+- **まだ同期されていないセッション。** Claude Code のセッションは終わったときに、Codex、Copilot、Bob、Antigravity、OpenCode のセッションは
   15 分ごとに取り込まれます（[ソース](sources.md)）。
 
 ## エンドポイント

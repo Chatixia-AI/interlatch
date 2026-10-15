@@ -19,7 +19,7 @@ computer, and only **Join the board** on the Leaderboard page starts sending tot
 public job-market numbers (open roles per roadmap track) from Interlatch's Firebase project, at most every six hours.
 That request carries the project's public web key and nothing about you, not even your sign-in.
 If you also **Enter the arena** on the Leaderboard page, each sync publishes your party's character sheet to the same
-Firebase project, readable by anyone: for each of your five coding agents its level, tier, class and six attribute
+Firebase project, readable by anyone: for each of your coding agents its level, tier, class and six attribute
 levels, and which agent is your champion, with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
 titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving
 the board) deletes your sheet ([The arena](party.md#the-arena)).
@@ -91,7 +91,7 @@ the internet the connection uses TLS (SSL mode `require`) unless you turn it off
   client's conversation and so reach that client's model, with secrets redacted as in the digests. Give the server
   only to clients whose model provider you trust with your sessions. See [MCP server](mcp.md#privacy).
 - **Other agents' stores are only read.** SQLite databases are opened read-only and archived as snapshots; Bob's
-  login state is never read, and from Antigravity only conversation logs and Markdown artifacts are archived. Connecting an agent edits its MCP config, backed up to `~/.interlatch/backups/`
+  login state is never read, and from Antigravity only conversation logs and Markdown artifacts are archived. From OpenCode's database only its session, message and part tables are read, and each session is archived as JSON, never the database, which also holds OpenCode's credentials. Connecting an agent edits its MCP config, backed up to `~/.interlatch/backups/`
   first.
 - **Instruction files and `~/.claude.json` are written only when you apply a suggestion.** Interlatch may add a line
   to a `CLAUDE.md` or `AGENTS.md`, inside its own `<!-- BEGIN interlatch -->` block and nowhere else in the file, or

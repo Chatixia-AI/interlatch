@@ -1,11 +1,11 @@
-# Sources: Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity
+# Sources: Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode
 
 [← Interlatch](../README.md) · [Docs index](README.md)
 
 `interlatch sources` (or the dashboard's **Sources** tab) shows each coding agent: detected or not, version,
 sessions on disk vs. recorded and analyzed, how it is recorded, and whether its hook and MCP server are in
 place. Connect or disconnect from the dashboard or with `interlatch connect <agent>` / `interlatch disconnect <agent>`
-(`claude`, `codex`, `codex-cloud`, `copilot`, `bob`, `antigravity`; recorded sessions are always kept). Every source maps onto the same session
+(`claude`, `codex`, `codex-cloud`, `copilot`, `bob`, `antigravity`, `opencode`; recorded sessions are always kept). Every source maps onto the same session
 model, so sessions from all agents share the dashboard, analysis, knowledge bases, glossary and MCP tools.
 
 **Codex** (`~/.codex`) is opt-in. Connecting it:
@@ -64,6 +64,21 @@ counts those. Antigravity records no prices, so the cost of a session on a Gemin
 Gemini API list prices (a Gemini model without a published price at those of its kind: Flash, Flash-Lite or Pro),
 as are GitHub Copilot sessions on Gemini models. Connecting
 registers the MCP server in `~/.gemini/config/mcp_config.json`, Antigravity's global MCP config.
+
+**OpenCode** is opt-in (`interlatch connect opencode`). OpenCode 1.2 and later keep every session in one SQLite
+database, `~/.local/share/opencode/opencode.db` (under `$XDG_DATA_HOME` when set, on Windows too; preview builds use
+`opencode-<channel>.db`, which is read as well); the desktop app writes the same file. Interlatch opens it read-only and
+reads only the session and message tables (`session`, `message` and `part` in 1.x; `session_v2` and `session_message`
+in 2.x): prompts (attached images are counted; the file contents OpenCode adds to a prompt are not your
+words and are left out), replies, reasoning, tool calls with their input, output or error and duration, file edits
+with line counts (`edit`, `write`, `apply_patch` or `patch`), commands you ran with `!`, tokens and cost per model call, retried API errors, interrupts and
+compactions. A subagent (the `task` tool in 1.x, `subagent` in 2.x) runs in a session of its own; it is recorded inside the session that started
+it. A call OpenCode priced at 0 (a subscription or a free model) is estimated at list price. Each session is archived as
+one JSON document in `~/.interlatch/archive/opencode/`; the database itself is not copied, since it also holds
+OpenCode's credentials. Sessions from before 1.2 (JSON files under `storage/`) are read once OpenCode has moved them
+into the database, which it does on its first start. OpenCode has no session-end hook here, so sessions are picked up
+by the 15-minute sync. Connecting registers the MCP server in `~/.config/opencode/opencode.json` (OpenCode merges it
+with `opencode.jsonc`, which is never rewritten).
 
 **Chats on claude.ai and ChatGPT** are not stored on your Mac, so they come in from a data export: on claude.ai,
 **Settings › Privacy › Export data**; on ChatGPT, **Settings › Data controls › Export data**. The email's link

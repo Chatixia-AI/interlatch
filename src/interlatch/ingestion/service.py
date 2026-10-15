@@ -26,6 +26,8 @@ from ..sources.claude.files import decode_project_dir, peek_cwd, session_dir_for
 from ..sources.claude.parser import PARSER_VERSION, parse_session
 from ..sources.codex.parser import (CODEX_PARSER_VERSION, load_imports, load_titles, parent_thread_id,
                                     parse_codex_session, read_meta, rollout_files, rollout_id)
+from ..sources.opencode import (OPENCODE_PARSER_VERSION, list_sessions, load_tree, mcp_servers, opencode_dbs,
+                                parse_opencode_session, session_trees)
 from ..sources.copilot import (COPILOT_PARSER_VERSION, agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
                                parse_vscode_chat, workspace_folder)
 from ..storage.kv import kv_get, kv_set
@@ -212,7 +214,8 @@ def sync(cfg: Config, conn: sqlite3.Connection, *, only: Path | None = None, end
                     log.exception("codex cloud sync failed")
                     report.errors.append(f"codex cloud: {exc}")
             for name, dirs, fn in (("copilot", cfg.copilot_dirs, _sync_copilot), ("bob", cfg.bob_dirs, _sync_bob),
-                                   ("antigravity", cfg.antigravity_dirs, _sync_antigravity)):
+                                   ("antigravity", cfg.antigravity_dirs, _sync_antigravity),
+                                   ("opencode", cfg.opencode_dirs, _sync_opencode)):
                 for d in dirs:
                     try:
                         fn(cfg, conn, archiver, d, report, skip, force=force)
@@ -436,6 +439,59 @@ def _sync_antigravity(cfg: Config, conn, archiver: Archiver, root: Path, report:
         for f in [*conv.glob("*.md"), *conv.glob("*.md.metadata.json")]:  # task, plan and walkthrough (not the images)
             archiver.archive(f, dst / cid / f.name)
         store_source_session(conn, cfg, ps, report, root=root, transcript=logs[0], archive=archived[0], sig=sig, agent="antigravity")
+
+
+def _stat(path: Path) -> os.stat_result | None:
+    try:
+        return path.stat()
+    except OSError:
+        return None
+
+
+def _sync_opencode(cfg: Config, conn, archiver: Archiver, root: Path, report: SyncReport, skip: set[str], *, force=False):
+    """OpenCode sessions from ~/.local/share/opencode/opencode.db (read-only: the session, message and part tables).
+    Each session, with its subagents' sessions, is archived as one JSON document; the database itself is not copied,
+    since it also holds OpenCode's credentials."""
+    from ..sources.discovery import opencode_config_dir
+
+    dst = cfg.archive_dir / "opencode"
+    servers = mcp_servers(opencode_config_dir())
+    for db in opencode_dbs(root):
+        state = "|".join(f"{st.st_size}:{st.st_mtime_ns}" for f in (db, db.with_name(db.name + "-wal"))
+                         if (st := _stat(f))) + f"|v{OPENCODE_PARSER_VERSION}"
+        if not force and kv_get(conn, f"opencode-db:{db}") == state:
+            continue  # nothing written since the last sync: skip reading every part again
+        failed = False
+        for info, children in session_trees(list_sessions(db)):
+            sid = info["id"]
+            if cfg.is_internal_path(info.get("directory")):
+                continue
+            sig = hashlib.sha1("|".join([info["_sig"], *(c["_sig"] for c in children),
+                                         f"v{OPENCODE_PARSER_VERSION}"]).encode()).hexdigest()
+            if sid in skip or is_unchanged(conn, sid, sig, force):
+                report.sessions_unchanged += 1
+                continue
+            conn.commit()
+            try:
+                doc = load_tree(db, info, children)
+                ps = parse_opencode_session(doc, servers=servers)
+            except Exception as exc:
+                log.exception("opencode parse failed: %s %s", db, sid)
+                report.errors.append(f"parse {db} {sid}: {exc}")
+                failed = True
+                continue
+            if ps is None:
+                continue  # a session that never got a prompt
+            archive = dst / f"{sid}.json.gz"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            tmp = archive.with_name(archive.name + f".tmp{os.getpid()}")
+            with gzip.open(tmp, "wt", encoding="utf-8") as f:  # kept even after the session is deleted in OpenCode
+                json.dump(doc, f, ensure_ascii=False)
+            os.replace(tmp, archive)
+            store_source_session(conn, cfg, ps, report, root=root, transcript=db, archive=archive, sig=sig, agent="opencode")
+        if not failed:  # a session that failed to parse is tried again next sync
+            kv_set(conn, f"opencode-db:{db}", state)
+            conn.commit()
 
 
 def _cloud_project(conn, label: str | None) -> str | None:

@@ -98,7 +98,7 @@ Interlatch は、記録したセッションから何度も繰り返す失敗を
 | --- | --- | --- |
 | Claude Code | `~/.claude/CLAUDE.md`（`$CLAUDE_CONFIG_DIR` があればその中） | `<project>/CLAUDE.md` |
 | Codex | `~/.codex/AGENTS.md`（`$CODEX_HOME` があればその中） | `<project>/AGENTS.md` |
-| GitHub Copilot、IBM Bob、Google Antigravity | なし（対象外） | `<project>/AGENTS.md` |
+| GitHub Copilot、IBM Bob、Google Antigravity、OpenCode | なし（対象外） | `<project>/AGENTS.md` |
 
 ユーザーレベルのファイルは `[sources] claude_dirs` と `codex_dirs` の最初のフォルダーに従います（[設定](configuration.md)）。
 そのため、バックグラウンドの処理とあなたのシェルが同じファイルに書きます。プロジェクトの行は、今もあるフォルダーにだけ提案し、

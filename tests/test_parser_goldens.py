@@ -1,7 +1,7 @@
 """Safety net: the full parsed output of every agent's parser, compared to tests/goldens/parsers/<agent>.json.
 
 Each test parses every session its agent's fixture writes (conftest.py, codex_fixture.py, copilot_fixture.py,
-antigravity_fixture.py) and serializes the whole ParsedSession: every field (events, tool calls, API calls with
+antigravity_fixture.py, opencode_fixture.py) and serializes the whole ParsedSession: every field (events, tool calls, API calls with
 tokens and cost, file stats, subagents, counters, timestamps) and the aggregates the database is filled from. A parser
 refactor that changes any of it fails here. For a deliberate change, rerun with UPDATE_GOLDENS=1 and review the diff.
 """
@@ -15,6 +15,7 @@ from typing import Any
 
 from interlatch.sources.antigravity import conversation_dirs, load_db_meta, load_title, parse_antigravity_conversation
 from interlatch.sources.bob import load_tasks, parse_bob_task
+from interlatch.sources.opencode import list_sessions, load_tree, parse_opencode_session, session_trees
 from interlatch.sources.codex.parser import parse_codex_session
 from interlatch.sources.copilot import (agent_session_dirs, chat_files, load_usage, parse_copilot_agent,
                                         parse_vscode_chat, workspace_folder)
@@ -26,6 +27,7 @@ from codex_fixture import CODE_ID, CODEX_ID, code_mode_rollout, write_codex_home
 from conftest import CWD, SID, write_fake_claude_tree
 from copilot_fixture import BOB_TOOLS, CHAT_ID, write_bob_home, write_copilot_home, write_vscode_user
 from golden import assert_golden
+from opencode_fixture import ROOT_ID as OC_ID, V2_ROOT as OC2_ID, write_opencode2_home, write_opencode_home
 
 SKIP = ("_seen_",)  # dedupe bookkeeping while parsing, not output
 
@@ -150,3 +152,17 @@ def test_golden_antigravity(tmp_path):
     assert new["entrypoint"] == "antigravity" and new["ai_title"] == "Fix the failing test あ"
     assert [t["name"] for t in new["tool_calls"]] == ["run_command", "view_file", "replace_file_content"]
     assert new["api_calls"][1]["input_tokens"] == 200 and new["api_calls"][1]["cache_read_tokens"] == 1000
+
+
+def test_golden_opencode(tmp_path):
+    sessions = {}
+    for db in (write_opencode_home(tmp_path / "opencode") / "opencode.db",  # 1.x
+               write_opencode2_home(tmp_path / "opencode2") / "opencode.db"):  # 2.x
+        sessions.update({root["id"]: parse_opencode_session(load_tree(db, root, children), servers=["interlatch"])
+                         for root, children in session_trees(list_sessions(db))})
+    data = _golden("opencode", sessions, tmp_path)
+
+    main = data[OC_ID]
+    assert main["entrypoint"] == "opencode" and main["ai_title"] == "Fix flaky login test" and main["subagents"]
+    assert [t["name"] for t in main["tool_calls"]][:3] == ["read", "bash", "edit"]
+    assert data[OC2_ID]["cc_version"] == "2.0.29" and data[OC2_ID]["subagents"]

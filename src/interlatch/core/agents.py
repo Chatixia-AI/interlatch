@@ -6,11 +6,14 @@ AGENTS = {  # id -> (full name, short name, speaker label in digests)
     "copilot": ("GitHub Copilot", "Copilot", "COPILOT"),
     "bob": ("IBM Bob", "Bob", "BOB"),
     "antigravity": ("Google Antigravity", "Antigravity", "ANTIGRAVITY"),
+    "opencode": ("OpenCode", "OpenCode", "OPENCODE"),
     "claude-ai": ("Claude.ai", "Claude.ai", "CLAUDE"),  # chats imported from a claude.ai data export
     "chatgpt": ("ChatGPT", "ChatGPT", "CHATGPT"),  # chats imported from a ChatGPT data export
 }
-# the agents that code (their sessions run on a computer): never the imported chats (claude-ai, chatgpt)
-CODING_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")
+# the agents that code (their sessions run on a computer): never the imported chats (claude-ai, chatgpt). They are also
+# the Party's characters and the arena's; leaderboard/firestore.rules lists them for arena sheets (a new one there is
+# allowed, not required, so sheets from older versions still pass).
+CODING_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity", "opencode")
 
 
 def full_name(agent: str | None) -> str:

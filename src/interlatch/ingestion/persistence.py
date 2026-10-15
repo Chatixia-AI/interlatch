@@ -234,7 +234,7 @@ def store_parsed(
 
 def store_source_session(conn, cfg, ps: ParsedSession, report: SyncReport, *, root: Path, transcript: Path, archive: Path,
                  sig: str, agent: str, source: str = "transcript") -> None:
-    """Store a parsed Copilot/Bob/Antigravity/Codex Cloud session (the tail every non-Claude source shares)."""
+    """Store a parsed Copilot/Bob/Antigravity/OpenCode/Codex Cloud session (the tail every non-Claude source shares)."""
     if cfg.is_excluded(ps.project_path) or kv_get(conn, f"forget:{ps.id}"):
         return
     try:

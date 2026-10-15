@@ -32,7 +32,7 @@ top of it, and the window moves by its toolbar or the strip above the sidebar. T
 | Install Command-Line Tool | Links the app's own `interlatch` command into `~/.local/bin` (skipped if one exists) |
 | Open Data Folder | `~/.interlatch` |
 
-Codex, Copilot, Bob and Antigravity are connected from the dashboard's **Sources** page. Hooks and MCP registrations point
+Codex, Copilot, Bob, Antigravity and OpenCode are connected from the dashboard's **Sources** page. Hooks and MCP registrations point
 at `~/.interlatch/bin/interlatch`, a small script the app rewrites on every launch, so moving or updating the
 app does not break them. Quitting stops the sync until the next launch; an analysis cut off by quitting runs
 again at the next sync.
@@ -54,7 +54,7 @@ run `uv tool install --python 3.13 .` in it.
 
 1. Checks the agent that analyzes sessions (Claude Code by default). If it is missing and Codex is installed, offers
    to analyze with Codex instead; with neither, sessions are recorded but not analyzed until one is installed.
-2. Lists the coding agents on this Mac (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity) and the MCP-only clients it
+2. Lists the coding agents on this Mac (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode) and the MCP-only clients it
    finds (Claude Desktop, Cursor, Windsurf, Gemini CLI), with how many sessions each has on disk.
 3. Asks, for each one found and not yet connected, whether to record it (default yes), and whether to give each
    MCP client Interlatch's tools. Codex Cloud is offered after Codex and defaults to no, since it goes online.

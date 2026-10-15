@@ -1,6 +1,6 @@
 # Interlatch for VS Code
 
-Adds two sections to the Explorer that list coding-agent sessions (Claude Code, Codex, Copilot, IBM Bob, Antigravity): the ones
+Adds two sections to the Explorer that list coding-agent sessions (Claude Code, Codex, Copilot, IBM Bob, Antigravity, OpenCode): the ones
 that read or changed the open file, and the workspace's files that sessions touched, each expanding to its sessions.
 Expand a session for its details, and open it in your local [Interlatch](https://interlatch.com) dashboard.
 

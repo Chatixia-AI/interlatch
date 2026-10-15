@@ -8,7 +8,7 @@
   "use strict";
 
   const SIZE = 32, ICON = 16, FRAMES = 4;
-  const AGENTS = ["claude", "codex", "copilot", "bob", "antigravity"];
+  const AGENTS = ["claude", "codex", "copilot", "bob", "antigravity", "opencode"];
   const TIERS = ["novice", "adept", "expert", "master"];
   const LOCKED = { fill: "#7f8999", rim: "#c3cad5", z: "#97a1b1" };
   const SHADOW = "rgba(16, 28, 64, 0.22)";
@@ -455,7 +455,54 @@
     },
   };
 
-  const CHARS = { claude, codex, copilot, bob, antigravity };
+  // ---- opencode: an ivory block of a ninja, cut like OpenCode's mark (a frame round a dark screen) with the face on the
+  // screen; a headband, then a scarf and a blade shaped like a terminal cursor, curly-brace shuriken, an aura
+  const ocBody = P(8, 5, [
+    ".qqqqqqqqqqqqqq.",
+    "qqqqqqqqqqqqqqqq",
+    "qqqqqqqqqqqqqqqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqnnnnnnnnnnnnqq",
+    "qqqqqqqqqqqqqqqq",
+    "qqqqqqqqqqqqqqqq",
+    "qqqqqqqqqqqqqqqq",
+    "qqqqqqqqqqqqqqqq",
+    ".qqqqqqqqqqqqqq.",
+  ]);
+  const ocLegs = P(10, 24, [".qqq....qqq.", ".qqq....qqq.", ".qqq....qqq."]);
+  const ocBand = [P(8, 6, ["rrrrrrrrrrrrrrrr"]), P(24, 5, ["r..", ".rr", "r.r", "..r"])];
+  const ocScarf = [P(8, 19, ["RRRRRRRRRRRRRRRR", "RRRRRRRRRRRRRRRR"]), P(6, 20, ["RR", "RR", ".R", ".R"])];
+  const ocBlade = P(27, 5, [".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", ".gg.", "oooo", ".oo."]);
+  const ocEmblem = P(15, 5, ["yy", "yy"]);
+  const brace = (x, y, on) => P(x, y, [".GG", ".G.", "G..", ".G.", ".GG"], on);
+  const ocBraces = [brace(1, 7, [0, 1]), brace(1, 6, [2, 3])];
+  const ocCrown = [brace(1, 7, [0, 1]), brace(1, 6, [2, 3]), P(13, 0, ["G.G.G.", "GGGGGG"])];
+  const opencode = {
+    color: "#d1497b", // raspberry: OpenCode's mark is black and white, and every other hue here is taken
+    pal: { q: "*#ece8df", a: "#ece8df", n: "=#161b29", s: "#5b6478", r: "*#d1497b", R: "#c23f70", g: "=#b8ffd9",
+      o: "#7a5a3a", y: "*#f6c445", G: "=#ff8fbf" },
+    waist: 24, blink: closed(10, 11, "n"),
+    tiers: {
+      novice: { body: [ocBody, ...face(10, 11), ...ARMS(15), ocLegs, SHOES, ...ocBand] },
+      adept: { body: [ocBody, ...face(10, 11), ...ARMS(15), ocLegs, SHOES, ...ocBand, ...ocScarf, ocBlade] },
+      expert: { body: [ocBody, ...face(10, 11), ...ARMS(15), ocLegs, SHOES, ...ocBand, ocEmblem, ...ocScarf, ocBlade],
+        front: ocBraces },
+      master: { body: [ocBody, ...face(10, 11), ...ARMS(15), ocLegs, SHOES, ...ocBand, ocEmblem, ...ocScarf, ocBlade],
+        front: ocCrown, aura: "255, 120, 170",
+        sparks: [[5, 26], [26, 25], [30, 2], [4, 1], [22, 0]], spark: ["#ffffff", "#ff8fbf"] },
+    },
+  };
+
+  const CHARS = { claude, codex, copilot, bob, antigravity, opencode };
 
   // =====================================================================================
   // Composing a frame

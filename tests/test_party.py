@@ -238,7 +238,7 @@ def test_stages_earn_their_xp_and_only_settled_lessons_of_coding_agents_count(ho
     assert claude["counted"] == 3 and claude["level"] == party.char_level(10) == 2
     assert claude["lessons"] == 6  # every active lesson of its sessions: the wip one, the fact and the preference too
     assert _skills(data, "codex") == {"M-python": 1}
-    assert [a["agent"] for a in data["agents"]] == list(CODING_AGENTS)  # all five, always, in order
+    assert [a["agent"] for a in data["agents"]] == list(CODING_AGENTS)  # all of them, always, in order
     bob = _agent(data, "bob")
     assert (bob["level"], bob["xp"], bob["tier"], bob["class"], bob["classes"], bob["skills"]) == (1, 0, "novice", None, [], [])
     assert bob["next_xp"] == 3 and bob["level_xp"] == 0
@@ -811,7 +811,7 @@ def test_the_preview_is_this_computers_week_of_lessons_matched_or_not(home):
     assert len(got["recent"]) == party.RECENT_MAX and edge not in [k["id"] for k in got["recent"]]
     assert got["week"] == {"since": "2026-10-09", "until": "2026-10-15", "lessons": party.RECENT_MAX + 2 + 2,
                            "by_agent": {"claude": party.RECENT_MAX + 3, "codex": 1, "copilot": 0, "bob": 0,
-                                        "antigravity": 0}}
+                                        "antigravity": 0, "opencode": 0}}
     assert all(set(k) == {"id", "title", "kind", "agent", "at", "session_id"} for k in got["recent"])
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(party, "load_catalog", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no roadmap")))

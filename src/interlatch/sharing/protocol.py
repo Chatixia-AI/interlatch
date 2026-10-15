@@ -32,7 +32,7 @@ SHARED_COLS = ("agent", "started_at", "ended_at", "duration_s", "active_s", "git
                "n_tool_calls", "n_tool_errors", "n_interrupts", "n_compactions", "n_api_errors", "n_subagents", "n_files",
                "lines_added", "lines_removed", "input_tokens", "output_tokens", "cache_read_tokens",
                "cache_write_tokens", "sub_tokens", "est_cost_usd", "sub_cost_usd", "peak_context", "ended_flag")
-SHARED_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity")  # coding agents; imported chats stay personal
+SHARED_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity", "opencode")  # coding agents; imported chats stay personal
 SHARE_BATCH = 200
 SHARE_KV = "hub-share:"  # + machine id: what that computer sends, as it last said
 SESSION_ID_RE = re.compile(r"^[\w.:-]{1,128}$")

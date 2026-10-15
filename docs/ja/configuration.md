@@ -15,6 +15,7 @@
 | `copilot_dirs` | `[]` | Copilot を接続すると `~/.copilot` と VS Code の `User` ディレクトリ |
 | `bob_dirs` | `[]` | Bob を接続すると `["~/.bob"]` |
 | `antigravity_dirs` | `[]` | Antigravity を接続すると `["~/.gemini/antigravity"]` |
+| `opencode_dirs` | `[]` | OpenCode を接続すると `["~/.local/share/opencode"]` |
 | `import_history` | `true` | Claude Code がすでに削除したセッションのプロンプトを `history.jsonl` から復元する |
 | `import_memory` | `true` | Claude の自動メモリーノート（`projects/*/memory/*.md`）をナレッジとして取り込む |
 | `exclude_projects` | `[]` | 完全に無視するプロジェクトパスの glob パターン。例：`["/Users/me/secret/*"]` |

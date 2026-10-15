@@ -100,7 +100,7 @@ A suggestion is not made when a line outside Interlatch's block in that file alr
 | --- | --- | --- |
 | Claude Code | `~/.claude/CLAUDE.md` (in `$CLAUDE_CONFIG_DIR` when set) | `<project>/CLAUDE.md` |
 | Codex | `~/.codex/AGENTS.md` (in `$CODEX_HOME` when set) | `<project>/AGENTS.md` |
-| GitHub Copilot, IBM Bob, Google Antigravity | none (skipped) | `<project>/AGENTS.md` |
+| GitHub Copilot, IBM Bob, Google Antigravity, OpenCode | none (skipped) | `<project>/AGENTS.md` |
 
 User-level files follow the first folder in `[sources] claude_dirs` and `codex_dirs` (see
 [Configuration](configuration.md)), so the background job and your shell write to the same file. A project line is

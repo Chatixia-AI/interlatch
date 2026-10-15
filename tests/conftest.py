@@ -327,10 +327,12 @@ def env(tmp_path, monkeypatch):
         """))
     monkeypatch.setenv("INTERLATCH_HOME", str(home))
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(tmp_path / "fake_claude.log"))
-    # never read the real Copilot / VS Code / Bob / Antigravity stores from tests
+    # never read the real Copilot / VS Code / Bob / Antigravity / OpenCode stores from tests
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / "no-copilot"))
     monkeypatch.setenv("BOB_HOME", str(tmp_path / "no-bob"))
     monkeypatch.setenv("ANTIGRAVITY_HOME", str(tmp_path / "no-antigravity"))
+    monkeypatch.setenv("OPENCODE_HOME", str(tmp_path / "no-opencode"))
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "no-opencode-config"))
     monkeypatch.setattr("interlatch.sources.discovery.vscode_user_dirs", lambda: [])
     from interlatch.core.config import load_config
 

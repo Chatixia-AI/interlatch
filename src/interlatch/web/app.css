@@ -889,6 +889,7 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .agent-tag.a-copilot { --c: var(--series-7); }
 .agent-tag.a-bob { --c: var(--series-1); }
 .agent-tag.a-antigravity { --c: var(--series-8); }
+.agent-tag.a-opencode { --c: var(--series-6); }
 .agent-tag.a-claude-ai { --c: var(--series-2); }
 .agent-tag.a-chatgpt { --c: var(--series-5); }
 /* Sources: one list per kind of source; each row opens to its checks and actions */
@@ -916,6 +917,7 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .agent-icon.mono { background: currentColor; mask: var(--mark) center / contain no-repeat; }
 .agent-icon.a-copilot { --mark: url(agent-copilot.svg); }
 .agent-icon.a-chatgpt { --mark: url(agent-chatgpt.svg); }
+.agent-icon.a-opencode { --mark: url(agent-opencode.svg); }
 table.data.sessions :is(th, td) { padding-left: 8px; padding-right: 8px; } /* eleven columns: fit a 1440 px window */
 /* Home's Agents card: the agent Home is filtered to is marked; the badge links to the agent's row in Sources */
 table.agents-table .agent-cell b { font-weight: 500; white-space: nowrap; }
@@ -939,6 +941,7 @@ tr:hover .cell-bar i:not(.part) { background: var(--chart-strong); }
 .src-dot.a-copilot { --c: var(--series-7); }
 .src-dot.a-bob { --c: var(--series-1); }
 .src-dot.a-antigravity { --c: var(--series-8); }
+.src-dot.a-opencode { --c: var(--series-6); }
 .src-dot.a-claude-ai { --c: var(--series-2); }
 .src-dot.a-chatgpt { --c: var(--series-5); }
 .src-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }

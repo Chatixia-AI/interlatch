@@ -280,7 +280,7 @@ def target_for(agent: str | None, scope: str, project_path: str | None, cfg: Con
         if claude_md.exists() and _mentions(claude_md, "@AGENTS.md"):
             return agents_md
         return claude_md
-    if agent in ("codex", "copilot", "bob", "antigravity"):
+    if agent in ("codex", "copilot", "bob", "antigravity", "opencode"):
         if agents_md.exists() and _mentions(agents_md, "CLAUDE.md"):
             return claude_md
         return agents_md

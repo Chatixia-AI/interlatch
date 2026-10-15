@@ -54,7 +54,7 @@ def test_stats_follow_the_formulas():
     assert rules.stats(_agent(1, lore=9))["heal"] == 0 and rules.stats(_agent(1, lore=10))["heal"] == 5
     odd = rules.clean_agent({"level": 999, "tier": "god", "cls": "Not A Track!", "attrs": {"craft": -3, "data": "9"}})
     assert odd == {"level": 200, "tier": "novice", "cls": None, "attrs": dict.fromkeys(rules.ATTRS, 0)}
-    assert rules.power(STRONG) == 29 + 13 + 4 + 3 + 3
+    assert rules.power(STRONG) == 29 + 13 + 4 + 3 + 3 + 1  # opencode: level 1 by default
 
 
 def test_the_champion_is_the_one_picked_else_the_highest_level():
@@ -372,9 +372,15 @@ def test_the_rules_keep_the_board_and_add_the_arena():
     valid = re.search(r"function isValidArena\(data\) \{.*?\n    \}", text, re.S).group(0)
     assert "['name', 'photo', 'machine', 'v', 'agents', 'champion', 'at']" in valid and "data.at == request.time" in valid
     assert "data.v == 2" in valid and "data.champion in agents" in valid
-    assert "['claude', 'codex', 'copilot', 'bob', 'antigravity']" in valid
+    assert "let agents = ['claude', 'codex', 'copilot', 'bob', 'antigravity', 'opencode'];" in valid
+    # sheets from versions before OpenCode joined still pass: opencode is allowed, never required
+    assert "let required = ['claude', 'codex', 'copilot', 'bob', 'antigravity'];" in valid
+    assert "data.agents.keys().hasOnly(agents) && data.agents.keys().hasAll(required)" in valid
+    assert "(!('opencode' in data.agents) || isValidArenaAgent(data.agents.opencode))" in valid
     agent = re.search(r"function isValidArenaAgent\(a\) \{.*?\n    \}", text, re.S).group(0)
-    assert "a.level >= 1 && a.level <= 200" in agent and "'^[a-z0-9-]{1,64}$'" in agent
+    assert "a.level >= 1 && a.level <= 200" in agent and "a.cls.size() <= 64" in agent
+    # the 1000-expression budget: per-attribute bounds put five agents over it (the readers clamp them instead)
+    assert "isCount" not in agent and agent.count("is int") == 7
 
 
 def test_picking_a_champion(hubweb, catalog, net):  # noqa: F811

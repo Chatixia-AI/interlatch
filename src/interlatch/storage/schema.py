@@ -414,7 +414,7 @@ CREATE TABLE IF NOT EXISTS suggestions (
     cause_id TEXT,                                 -- friction.CATALOG id
     knowledge_id INTEGER,
     project_path TEXT,                             -- NULL = user level
-    agent TEXT,                                    -- claude | codex | copilot | bob | antigravity | all
+    agent TEXT,                                    -- claude | codex | copilot | bob | antigravity | opencode | all
     target_path TEXT,                              -- the file the change goes to; NULL for environment steps
     title TEXT NOT NULL,
     text TEXT NOT NULL,                            -- the proposed line / config change / command (editable before apply)

@@ -5,7 +5,7 @@
 ## Tests and a local install
 
 ```bash
-uv sync && uv run pytest -q        # ~300 tests, ~40 s: a fake `claude` binary and synthetic Codex, Copilot, Bob and Antigravity stores
+uv sync && uv run pytest -q        # ~300 tests, ~40 s: a fake `claude` binary and synthetic Codex, Copilot, Bob, Antigravity and OpenCode stores
 # redeploy: --reinstall picks up uncommitted edits too (uv rebuilds on its own only when pyproject.toml, the commit or a tag changes)
 uv tool install --force --reinstall --python 3.13 . && interlatch install   # install restarts the agents
 ```
@@ -122,7 +122,7 @@ which installs from before the rename still run):
 - `core/`: configuration, session records, paths, translations, agent names, pricing, redaction, this computer's
   identity, and what counts as an artifact a session made
 - `storage/`: the SQLite archive (schema, migrations, connections) and the optional Postgres stores
-- `sources/`: where each agent keeps its files (`discovery.py`), a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`) and per chat export
+- `sources/`: where each agent keeps its files (`discovery.py`), a reader per agent (`claude/`, `codex/`, `copilot.py`, `bob.py`, `antigravity.py`, `opencode.py`) and per chat export
   (`claude/export.py`, `chatgpt.py`)
 - `artifacts/`: what sessions made, where each stands, and opening it
 - `ingestion/`: syncing every source (`service.py`): the raw-file archive, storing parsed sessions, chat imports,

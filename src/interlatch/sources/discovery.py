@@ -1,4 +1,5 @@
-"""Where each coding agent keeps its files on this computer (Codex, Copilot and VS Code, Bob, Antigravity), and
+"""Where each coding agent keeps its files on this computer (Codex, Copilot and VS Code, Bob, Antigravity,
+OpenCode), and
 where this system keeps apps' settings. Finding them only; connecting an agent is runtime/connectors.py."""
 
 from __future__ import annotations
@@ -37,3 +38,17 @@ def bob_home() -> Path:
 
 def antigravity_home() -> Path:
     return Path(os.environ.get("ANTIGRAVITY_HOME", "~/.gemini/antigravity")).expanduser()
+
+
+def opencode_home() -> Path:
+    """OpenCode's data folder: $XDG_DATA_HOME/opencode, else ~/.local/share/opencode (on Windows too)."""
+    if os.environ.get("OPENCODE_HOME"):
+        return Path(os.environ["OPENCODE_HOME"]).expanduser()
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "opencode"
+
+
+def opencode_config_dir() -> Path:
+    """Where OpenCode reads its global config: $OPENCODE_CONFIG_DIR, else $XDG_CONFIG_HOME/opencode or ~/.config/opencode."""
+    if os.environ.get("OPENCODE_CONFIG_DIR"):
+        return Path(os.environ["OPENCODE_CONFIG_DIR"]).expanduser()
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "opencode"

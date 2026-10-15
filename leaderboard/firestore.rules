@@ -113,25 +113,29 @@ service cloud.firestore {
 
     // The arena: a party's sheet (src/interlatch/sharing/arena.py writes it). Fields (all required, no others):
     //   name, photo, machine: as for players; v: int, the sheet format (2);
-    //   agents: a map of exactly the five coding agents, each {level: int 1-200, tier: novice|adept|expert|master,
-    //           cls: null or a track id, attrs: {craft, data, ops, guard, arcana, lore: int 0-100}};
-    //   champion: which of the five fights for the party;
+    //   agents: a map of the coding agents, each {level: int 1-200, tier: novice|adept|expert|master,
+    //           cls: null or a track id (<= 64), attrs: {craft, data, ops, guard, arcana, lore: int}}: always the first
+    //           five, and opencode from Interlatch versions that know it (sheets from older ones have no opencode);
+    //   champion: which of them fights for the party;
     //   at: timestamp, the server time of the upload (request.time). No lessons, projects or titles.
+    // Cheap on purpose: a request may evaluate at most 1000 expressions, and the full bounds on every attribute (as
+    // before) went over it with five agents, so no sheet could be written. The values' bounds are left to the readers,
+    // which clamp what they read (arena.clean_agent: level 1-200, attributes 0-100, a class that isn't a track id is
+    // none). This shape fits six agents with room for one more (measured with the rules test API).
     function isValidArenaAgent(a) {
-      let keys = ['level', 'tier', 'cls', 'attrs'];
-      let attrs = ['craft', 'data', 'ops', 'guard', 'arcana', 'lore'];
-      return a is map && a.keys().hasOnly(keys) && a.keys().hasAll(keys)
+      return a.keys().toSet() == ['level', 'tier', 'cls', 'attrs'].toSet()
         && a.level is int && a.level >= 1 && a.level <= 200
         && a.tier in ['novice', 'adept', 'expert', 'master']
-        && (a.cls == null || (a.cls is string && a.cls.matches('^[a-z0-9-]{1,64}$')))
-        && a.attrs is map && a.attrs.keys().hasOnly(attrs) && a.attrs.keys().hasAll(attrs)
-        && isCount(a.attrs.craft, 100) && isCount(a.attrs.data, 100) && isCount(a.attrs.ops, 100)
-        && isCount(a.attrs.guard, 100) && isCount(a.attrs.arcana, 100) && isCount(a.attrs.lore, 100);
+        && (a.cls == null || (a.cls is string && a.cls.size() <= 64))
+        && a.attrs.keys().toSet() == ['craft', 'data', 'ops', 'guard', 'arcana', 'lore'].toSet()
+        && a.attrs.craft is int && a.attrs.data is int && a.attrs.ops is int
+        && a.attrs.guard is int && a.attrs.arcana is int && a.attrs.lore is int;
     }
 
     function isValidArena(data) {
       let fields = ['name', 'photo', 'machine', 'v', 'agents', 'champion', 'at'];
-      let agents = ['claude', 'codex', 'copilot', 'bob', 'antigravity'];
+      let agents = ['claude', 'codex', 'copilot', 'bob', 'antigravity', 'opencode'];
+      let required = ['claude', 'codex', 'copilot', 'bob', 'antigravity'];
       return hasOnlyAllowedFields(fields) && hasRequiredFields(fields)
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 64
         && data.photo is string && data.photo.size() <= 500
@@ -140,10 +144,11 @@ service cloud.firestore {
         && data.machine is string && data.machine.matches('^[A-Za-z0-9-]{8,64}$')
         && data.v == 2
         && data.champion in agents
-        && data.agents is map && data.agents.keys().hasOnly(agents) && data.agents.keys().hasAll(agents)
+        && data.agents is map && data.agents.keys().hasOnly(agents) && data.agents.keys().hasAll(required)
         && isValidArenaAgent(data.agents.claude) && isValidArenaAgent(data.agents.codex)
         && isValidArenaAgent(data.agents.copilot) && isValidArenaAgent(data.agents.bob)
         && isValidArenaAgent(data.agents.antigravity)
+        && (!('opencode' in data.agents) || isValidArenaAgent(data.agents.opencode))
         && data.at == request.time;
     }
 

@@ -3,7 +3,7 @@
 <h1 align="center">Interlatch</h1>
 
 <p align="center"><b>Different agents. Knowledge that stays.</b><br>
-Shared memory for your coding agents. Claude Code, Codex, GitHub Copilot, IBM Bob and Google Antigravity sessions and your
+Shared memory for your coding agents. Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity and OpenCode sessions and your
 claude.ai and ChatGPT chats, recorded on your own machine, and every lesson in them linked to the session it came from.</p>
 
 <p align="center">
@@ -106,6 +106,7 @@ Connect more agents later from **Settings › Sources**, `interlatch connect <ag
 | GitHub Copilot | Copilot CLI and agent sessions; Copilot Chat logs in VS Code | every 15 min | ✅ VS Code and Copilot CLI |
 | IBM Bob | `~/.bob/db/bob.db`, read-only | every 15 min | ✅ |
 | Google Antigravity | `~/.gemini/antigravity` conversation logs, read-only | every 15 min | ✅ |
+| OpenCode | `~/.local/share/opencode/opencode.db`, read-only | every 15 min | ✅ |
 | claude.ai, ChatGPT | data export: `interlatch import <zip>` | when you import it | – |
 
 All of them share one dashboard, knowledge base, glossary and set of MCP tools; analysis runs through Claude Code

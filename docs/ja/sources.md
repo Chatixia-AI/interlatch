@@ -1,11 +1,11 @@
-# ソース：Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity
+# ソース：Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity、OpenCode
 
 [← Interlatch](../../README.ja.md) · [ドキュメント一覧](README.md)
 
 `interlatch sources`（またはダッシュボードの **Sources** タブ）で、各コーディングエージェントについて次の情報を確認できます：
 検出されたかどうか、バージョン、ディスク上のセッション数と記録・分析済みの数、記録方法、フックと MCP サーバーが設定されているか。
 接続と切断はダッシュボード、または `interlatch connect <agent>` / `interlatch disconnect <agent>` で行います
-（`claude`、`codex`、`codex-cloud`、`copilot`、`bob`、`antigravity`。記録済みのセッションは常に残ります）。どのソースも同じセッションモデルに変換されるため、
+（`claude`、`codex`、`codex-cloud`、`copilot`、`bob`、`antigravity`、`opencode`。記録済みのセッションは常に残ります）。どのソースも同じセッションモデルに変換されるため、
 すべてのエージェントのセッションがダッシュボード、分析、ナレッジベース、用語集、MCP ツールを共有します。
 
 **Codex**（`~/.codex`）は任意で接続します。接続すると：
@@ -59,6 +59,21 @@ IDE はそれ以外の会話ファイルをローカルに保存しません。�
 アーカイブします（生成された画像は対象外）。暗号化された形式にしかない会話は読み込めず、その件数は Sources のカードに
 表示されます。Antigravity は料金を記録しないため、Gemini モデルのセッションにはトークン数だけが表示され、費用は出ません。
 接続すると、Antigravity のグローバルな MCP 設定 `~/.gemini/config/mcp_config.json` に MCP サーバーが登録されます。
+
+**OpenCode** は任意で接続します（`interlatch connect opencode`）。OpenCode 1.2 以降は、すべてのセッションを 1 つの SQLite
+データベース `~/.local/share/opencode/opencode.db` に保存します（`$XDG_DATA_HOME` があればその下。Windows も同じです。
+プレビュー版の `opencode-<channel>.db` も読み込みます）。デスクトップアプリも同じファイルに書き込みます。Interlatch はこれを
+読み取り専用で開き、セッションとメッセージの表だけを読みます（1.x では `session`、`message`、`part`、2.x では `session_v2` と
+`session_message`）：プロンプト（添付した画像は数えます。OpenCode がプロンプトに加えるファイルの内容はあなたの言葉ではないので
+除きます）、返答、推論、入力・出力またはエラーと所要時間付きのツール呼び出し、行数付きのファイル編集（`edit`、`write`、
+`apply_patch` または `patch`）、`!` で実行したコマンド、モデル呼び出しごとのトークンと費用、再試行された API エラー、中断、コンパクション。サブエージェント
+（1.x の `task` ツール、2.x の `subagent`）は独自のセッションで動きますが、それを始めたセッションの中に記録します。OpenCode が 0 と計上した呼び出し
+（サブスクリプションや無料のモデル）は定価で見積もります。各セッションは 1 つの JSON 文書として
+`~/.interlatch/archive/opencode/` にアーカイブします。OpenCode の認証情報も入っているため、データベースそのものはコピー
+しません。1.2 より前のセッション（`storage/` の JSON ファイル）は、OpenCode が初回の起動でデータベースに移したあとに
+読み込まれます。OpenCode にはここで使えるセッション終了のフックがないため、セッションは 15 分ごとの同期で取り込みます。
+接続すると `~/.config/opencode/opencode.json` に MCP サーバーが登録されます（OpenCode はこれを `opencode.jsonc` と
+合わせて読みます。`opencode.jsonc` は書き換えません）。
 
 **claude.ai と ChatGPT のチャット**は Mac に保存されないため、データのエクスポートから取り込みます。claude.ai は
 **設定 › プライバシー › データをエクスポート**、ChatGPT は **設定 › データコントロール › データをエクスポート** を開くと、届いたメールのリンクから

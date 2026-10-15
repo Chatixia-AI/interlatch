@@ -27,7 +27,7 @@ PR と成果物、そして API 呼び出しごとのトークン使用量（メ
 
 Claude 自身の自動メモリーノート（`projects/*/memory/*.md`）と Codex のメモリーノートも、ナレッジとして取り込まれます。
 
-Codex、Copilot、Bob、Antigravity のセッションも、ログにデータがある範囲で同じ項目を埋めます。たとえば Copilot Chat のログにはキャッシュの内訳がない
+Codex、Copilot、Bob、Antigravity、OpenCode のセッションも、ログにデータがある範囲で同じ項目を埋めます。たとえば Copilot Chat のログにはキャッシュの内訳がない
 （そのため費用の見積もりもない）、Bob のタスクには呼び出しごとの所要時間がない、Antigravity の Gemini モデルには料金がない、といった違いがあります。
 
 ## 分析の仕組み

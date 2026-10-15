@@ -32,6 +32,8 @@ copilot_dirs = []
 bob_dirs = []
 # Google Antigravity homes (~/.gemini/antigravity). `interlatch connect antigravity`.
 antigravity_dirs = []
+# OpenCode data folders (~/.local/share/opencode). `interlatch connect opencode`.
+opencode_dirs = []
 # Recover prompts of sessions whose transcripts Claude Code already deleted (from history.jsonl).
 import_history = true
 # Import Claude's auto-memory files (projects/*/memory/*.md) as knowledge.
@@ -289,6 +291,7 @@ class Config:
     copilot_dirs: list[Path] = field(default_factory=list)
     bob_dirs: list[Path] = field(default_factory=list)
     antigravity_dirs: list[Path] = field(default_factory=list)
+    opencode_dirs: list[Path] = field(default_factory=list)
     import_history: bool = True
     import_memory: bool = True
     exclude_projects: list[str] = field(default_factory=list)
@@ -490,6 +493,7 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
         copilot_dirs=[Path(d).expanduser() for d in sources.get("copilot_dirs", [])],
         bob_dirs=[Path(d).expanduser() for d in sources.get("bob_dirs", [])],
         antigravity_dirs=[Path(d).expanduser() for d in sources.get("antigravity_dirs", [])],
+        opencode_dirs=[Path(d).expanduser() for d in sources.get("opencode_dirs", [])],
         import_history=bool(sources.get("import_history", True)),
         import_memory=bool(sources.get("import_memory", True)),
         exclude_projects=list(sources.get("exclude_projects", [])),
