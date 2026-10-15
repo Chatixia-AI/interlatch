@@ -884,6 +884,23 @@ function showLoadNote() {
 const REALM = "/innerlatch";
 function inRealm(path) { return path === REALM || path.startsWith(REALM + "/"); }
 let realmLoading = null;
+// Innerlatch opens to someone who walked through its door, signed in: coming from the dashboard or an address, the door
+// shows first (Innerlatch.threshold); once through, this tab stays in until it leaves (a reload keeps it in)
+const REALM_OPEN_KEY = "interlatch.innerlatch.open";
+let realmOpenHere = false; // when this tab's storage is out of reach
+function realmOpen() { try { return sessionStorage.getItem(REALM_OPEN_KEY) === "1"; } catch (e) { return realmOpenHere; } }
+function setRealmOpen(open) {
+  realmOpenHere = open;
+  try { if (open) sessionStorage.setItem(REALM_OPEN_KEY, "1"); else sessionStorage.removeItem(REALM_OPEN_KEY); } catch (e) { /* this page only */ }
+}
+// the door to Innerlatch, over the page that's showing; `to`: the page to open once through
+async function walkIn(to = "#" + REALM) {
+  if (realmOpen() && !/[?&]lb_token=/.test(to)) { go(to); return; } // back from the sign-in page: it finishes at the door
+  try { await loadRealm(); } catch (e) { toast(t("Could not load: {error}", { error: e.message }), 6000); return; }
+  Innerlatch.threshold(to);
+}
+function enterRealm(to) { setRealmOpen(true); go(to); } // the door opened
+function leaveRealm() { setRealmOpen(false); go(realmReturn); } // signed out in there
 function loadRealm() {
   if (window.Innerlatch) return Promise.resolve();
   const add = (el) => new Promise((resolve, reject) => { el.onload = resolve; el.onerror = () => reject(new Error(`${el.src || el.href} did not load`)); document.head.append(el); });
@@ -916,6 +933,12 @@ async function render() {
   const { path, params } = parseHash();
   const app = $("#app");
   const seq = ++renderSeq;
+  if (inRealm(path) && (!realmOpen() || params.lb_token)) { // the door first, over the page underneath
+    const to = location.hash;
+    history.replaceState(null, "", realmReturn);
+    walkIn(to);
+    return render();
+  }
   if (inRealm(path) && !window.Innerlatch) {
     try { await loadRealm(); } catch (e) {
       if (seq !== renderSeq) return;
@@ -7179,7 +7202,8 @@ function renderRail() {
       h("a", { class: "rail-door out", href: realmReturn, "data-section": "door", "aria-label": t("Back to Interlatch"), title: t("Back to Interlatch") }, icon("door")));
     return;
   }
-  const door = doorShown() ? [h("a", { class: "rail-door", href: "#/innerlatch", "data-section": "door", "aria-label": "Innerlatch", title: "Innerlatch" }, icon("door"))] : [];
+  const door = doorShown() ? [h("a", { class: "rail-door", href: "#/innerlatch", "data-section": "door", "aria-label": "Innerlatch", title: "Innerlatch",
+    onclick: (e) => { e.preventDefault(); walkIn(); } }, icon("door"))] : [];
   const settings = SECTIONS.find((x) => x.key === "settings");
   const shown = SECTIONS.filter((x) => (!x.team || ME?.hub?.team) && !(dedicated() && DEDICATED_HIDDEN.has(x.key)));
   if (limited()) { // no transcripts to search, no settings of this hub to see
@@ -7452,6 +7476,7 @@ function sidebarExpanded() {
 // page opens like a door (not with animations off)
 function crossRealm(realm) {
   shellRealm = realm;
+  if (!realm) setRealmOpen(false); // back out: the door shows again next time
   shellSection = null; // the sidebar is redrawn for the other side's section
   const root = document.documentElement;
   root.classList.toggle("in-realm", realm);
@@ -7503,7 +7528,7 @@ function paletteCommands() {
     nav(t("Global playbook"), `#/project?path=${encodeURIComponent("__global__")}`, "playbook"), nav(t("Weekly reviews"), "#/reviews", "reviews"),
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
-      : doorShown() ? [nav("Innerlatch", "#/innerlatch", "door")] : []),
+      : doorShown() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
     nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),

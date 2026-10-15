@@ -9,21 +9,27 @@ modules, with four milestones each. Chats imported from claude.ai or ChatGPT don
 
 ## Getting there
 
-The Party lives in **Innerlatch**, an area of the dashboard of its own, drawn in violet. The door at the bottom of the
-rail opens it. Inside, the rail shows Innerlatch's sections: **Party**, **Leaderboard** and **Arena**, and the door at
-the bottom (**Back to Interlatch**) leads back to the page you came from. The Leaderboard and the Arena show only on the
-computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to some projects.
+The Party lives in **Innerlatch**, an area of the dashboard of its own, drawn in violet. The door icon at the bottom of
+the rail brings up a large door: click it to go through. Innerlatch opens only to someone signed in (see below): signed
+out, the door is locked and asks you to sign in with Google, then opens by itself once you have. Once through, you stay
+in until you leave, even if you reload the page.
 
-The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work. To hide the door, set
-**Settings › Appearance › The door** to **Hidden** (this browser only). Innerlatch still opens from its address.
+Inside, the rail shows Innerlatch's sections: **Party**, **Leaderboard** and **Arena**, the sidebar sits on the right,
+and the door at the bottom of the rail (**Back to Interlatch**) leads back to the page you came from. The Leaderboard
+and the Arena show only on the computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to
+some projects.
+
+The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work, and every address in
+Innerlatch meets the door first. To hide the door icon, set **Settings › Appearance › The door** to **Hidden** (this
+browser only). Innerlatch still opens from its address.
 
 ## Signing in
 
-The Party page stays locked until you sign in with Google, with the same account as the leaderboard
+Innerlatch's door stays locked until you sign in with Google, with the same account as the leaderboard
 ([Data and privacy](privacy.md)). Signing in for the Party doesn't put you on
 the leaderboard and sends nothing: your characters are worked out on your computer, from your own archive. To join the
-board later, use **Join the board** on the **Leaderboard** in Innerlatch. **Sign out** on the Party page forgets the sign-in, and
-takes your row off the leaderboard if you joined it.
+board later, use **Join the board** on the **Leaderboard** in Innerlatch. **Sign out** on the Party page forgets the sign-in, takes
+your row off the leaderboard if you joined it, and takes you back out of Innerlatch.
 
 On a team hub, sign in to the hub as usual ([Joining your team's hub](join-a-hub.md)). You see a party made from your
 own computers' sessions only. A teammate's sessions never level up your agents.

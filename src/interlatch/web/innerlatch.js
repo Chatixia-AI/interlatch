@@ -130,23 +130,6 @@ function lbBoard(lb) {
     h("ol", { class: "lb-list" }, head, lb.rows.map(row)),
     lb.me.joined && !meShown && !lb.me.paused ? h("p", { class: "muted" }, lb.me.last_sent ? t("You're not in the top {n} on this board.", { n: lb.rows.length }) : t("Your row appears after the first send.")) : null);
 }
-// The hosted sign-in page always comes back to #/leaderboard (app.js forwards it here) with the session in the address.
-// It leaves the address bar first; a sign-in the Party started opens the Party, and nothing went to the board.
-async function lbFinish(params) {
-  const { lb_token: token, lb_state: state } = params;
-  history.replaceState(null, "", "#/innerlatch/leaderboard");
-  lastHash = location.hash;
-  const r = await lbPost("/api/leaderboard/finish", { state, token });
-  if (r?.next === "party") {
-    toast(t("Signed in as {name}", { name: r.name }), 6000);
-    partyCache = null;
-    history.replaceState(null, "", "#/innerlatch");
-    render();
-    return false;
-  }
-  if (r) toast(t("Signed in as {name}. Your totals are on the board.", { name: r.name }), 6000);
-  return true;
-}
 function lbWatch(lb, path) { // a sign-in runs in another tab: look again now and then
   if (!lb.signing_in || lb.me.joined) return;
   const seq = renderSeq;
@@ -154,10 +137,6 @@ function lbWatch(lb, path) { // a sign-in runs in another tab: look again now an
 }
 route(/^\/innerlatch\/leaderboard$/, async (params) => {
   clearTimeout(lbPoll);
-  if (params.lb_token || params.lb_state) {
-    if (!(await lbFinish(params))) return h("div");
-    params = {};
-  }
   const by = LB_METRICS.some(([v]) => v === params.by) ? params.by : "hours";
   const days = LB_DAYS.some(([v]) => v === params.days) ? params.days : "30";
   const lb = await api("/api/leaderboard", { by, days });
@@ -630,7 +609,7 @@ function partyGate(p, seq = renderSeq) {
           h("div", { class: "lb-actions" }, h("button", { class: "btn primary", type: "button", onclick: partySignin }, t("Sign in with Google")),
             p.signing_in ? h("button", { class: "btn", type: "button", onclick: async () => { if (await lbPost("/api/leaderboard/cancel")) render(); } }, t("Cancel")) : null),
           p.signing_in ? h("div", { class: "muted lb-wait" }, t("Finish signing in on the page that opened. This page carries on by itself once you have.")) : null,
-        ] : h("p", { class: "warn-line" }, t("Signing in happens on the computer that runs Interlatch: open the Party there and sign in with Google. On a team hub, sign in to the hub as one of its people.")),
+        ] : h("p", { class: "warn-line" }, t("Signing in happens on the computer that runs Interlatch: open Innerlatch there and sign in with Google. On a team hub, sign in to the hub as one of its people.")),
         p.error ? h("p", { class: "muted small" }, p.error) : null)));
 }
 
@@ -642,7 +621,7 @@ async function partySignout(p) {
   if (!r) return;
   partyRefresh(r);
   toast(t("Signed out of the Party."));
-  render();
+  leaveRealm(); // Innerlatch opens to the signed in only
 }
 function partyLeader(p) {
   const who = p.who || {}, main = (p.quests || []).filter((q) => q.main);
@@ -1201,6 +1180,121 @@ function journeyStrip(p) {
 }
 
 // =====================================================================================
+// The door: Innerlatch opens to someone who walks through it signed in, with Google on the computer that runs
+// Interlatch or with a hub's own sign-in. app.js shows it over the page that's showing, whenever someone comes in from
+// the dashboard or an address; `to` is the page they were going to. Click it: signed in, it swings open and the page
+// goes through; signed out, it's locked and asks for the sign-in, then opens by itself once that comes back. The
+// hosted sign-in page returns in a new tab (#/leaderboard?lb_token=…), which meets the door too and finishes there.
+// =====================================================================================
+let doorScene = null;
+function doorSigninLine(p) {
+  return p.can_sign_in ? t("Sign in with Google to open it. It's the leaderboard's account, but signing in here doesn't put you on the board.")
+    : p.error || t("Signing in happens on the computer that runs Interlatch: open Innerlatch there and sign in with Google. On a team hub, sign in to the hub as one of its people.");
+}
+async function threshold(to) {
+  if (doorScene) return;
+  const [path, qs] = to.replace(/^#/, "").split("?");
+  const params = Object.fromEntries(new URLSearchParams(qs || ""));
+  let dest = `#${path}`; // the sign-in's session never stays in an address
+  delete params.lb_token; delete params.lb_state;
+  const rest = new URLSearchParams(params).toString();
+  if (rest) dest += `?${rest}`;
+  const back = to.match(/[?&]lb_token=([^&]*)/), state = to.match(/[?&]lb_state=([^&]*)/);
+  let p = null, poll = 0, opening = false;
+  const still = stillMotion(), returnFocus = document.activeElement;
+
+  const hint = h("p", { class: "ds-hint" }, t("Click the door to go in"));
+  const lock = h("div", { class: "ds-lock", hidden: true });
+  const motes = h("div", { class: "ds-motes", "aria-hidden": "true" }, Array.from({ length: 18 }, (_, i) =>
+    h("i", { style: { left: `${(i * 53) % 100}%`, animationDelay: `${-((i * 7) % 11)}s`, animationDuration: `${9 + (i % 5) * 2}s` } })));
+  const leaf = h("span", { class: "ds-leaf" },
+    h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }), h("span", { class: "ds-panel" }),
+    h("span", { class: "ds-knob" }), h("span", { class: "ds-keyhole" }));
+  const padlock = h("span", { class: "ds-padlock", "aria-hidden": "true" }, pxIcon("lock", 4));
+  const door = h("button", { class: "ds-door", type: "button", "aria-label": t("Open the door"), "aria-describedby": "ds-hint-text",
+    onclick: () => knock() },
+    h("span", { class: "ds-arch" }, h("span", { class: "ds-light" }), leaf, padlock), h("span", { class: "ds-spill", "aria-hidden": "true" }));
+  hint.id = "ds-hint-text";
+  const close = () => {
+    if (opening) return;
+    clearTimeout(poll);
+    document.removeEventListener("keydown", onKey, true);
+    scene.classList.add("leaving");
+    setTimeout(() => { scene.remove(); doorScene = null; }, still ? 0 : 260);
+    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  };
+  const onKey = (e) => { if (e.key === "Escape" && !pal.open) { e.preventDefault(); close(); } };
+  const scene = h("div", { class: "door-scene", id: "door-scene", role: "dialog", "aria-modal": "true", "aria-labelledby": "ds-title", "data-state": "closed" },
+    h("div", { class: "ds-sky", "aria-hidden": "true" }), motes,
+    h("div", { class: "ds-stage" },
+      h("h1", { class: "ds-title", id: "ds-title" }, "Innerlatch"),
+      door, hint, lock),
+    h("button", { class: "btn small ds-close", type: "button", onclick: close }, t("Not now")),
+    h("div", { class: "ds-flash", "aria-hidden": "true" }));
+  doorScene = scene;
+  document.body.append(scene);
+  document.addEventListener("keydown", onKey, true);
+  door.focus({ preventScroll: true });
+
+  const setState = (st) => { scene.dataset.state = st; };
+  const open = () => { // through the door: it swings in, the light takes the screen, and Innerlatch is on the other side
+    if (opening) return;
+    opening = true;
+    clearTimeout(poll);
+    setState("opening");
+    lock.hidden = true;
+    hint.textContent = t("The door is open");
+    const through = () => {
+      document.removeEventListener("keydown", onKey, true);
+      enterRealm(dest);
+      scene.classList.add("through");
+      setTimeout(() => { scene.remove(); doorScene = null; }, still ? 0 : 700);
+    };
+    if (still) through(); else setTimeout(through, 1500);
+  };
+  const locked = (fresh) => { // signed out: the door rattles, and says how to open it
+    setState("locked");
+    if (fresh && !still) { leaf.classList.remove("rattle"); void leaf.offsetWidth; leaf.classList.add("rattle"); }
+    hint.textContent = t("The door is locked");
+    const waiting = p.signing_in;
+    lock.replaceChildren(...[h("p", null, doorSigninLine(p)),
+      p.can_sign_in ? h("div", { class: "lb-actions" },
+        h("button", { class: "btn primary", type: "button", onclick: async () => { await openSignin("/api/party/signin"); await refresh(); } }, t("Sign in with Google")),
+        waiting ? h("button", { class: "btn", type: "button", onclick: async () => { if (await lbPost("/api/leaderboard/cancel")) await refresh(); } }, t("Cancel")) : null) : null,
+      waiting ? h("p", { class: "muted small" }, t("Finish signing in on the page that opened. The door opens by itself once you have.")) : null].filter(Boolean)); // replaceChildren prints a null
+    lock.hidden = false;
+    clearTimeout(poll);
+    if (waiting) poll = setTimeout(refresh, 3000); // the sign-in runs in another tab
+  };
+  const load = async () => {
+    partyCache = null;
+    try { p = await partyLoad(); } catch (e) { p = { signed_in: false, signing_in: false, can_sign_in: false, error: e.message }; }
+    return p;
+  };
+  const refresh = async () => { // after a sign-in started, or while it runs: unlocked, the door opens by itself
+    if (!scene.isConnected) return;
+    await load();
+    if (!scene.isConnected) return;
+    if (p.signed_in) { hint.textContent = t("Unlocked"); setTimeout(open, still ? 0 : 500); } else locked(false);
+  };
+  const knock = async () => {
+    if (opening) return;
+    if (!p) await load();
+    if (p.signed_in) open(); else locked(true);
+  };
+
+  if (back && state) { // back from the hosted sign-in page: finish it here, then the door unlocks
+    hint.textContent = t("Unlocking…");
+    const r = await lbPost("/api/leaderboard/finish", { state: decodeURIComponent(state[1]), token: decodeURIComponent(back[1]) });
+    if (r?.name) toast(r.next === "party" ? t("Signed in as {name}", { name: r.name }) : t("Signed in as {name}. Your totals are on the board.", { name: r.name }), 6000);
+    if (r?.next === "party") dest = "#/innerlatch"; // the Party started it; the Leaderboard's own comes back there
+    await refresh();
+    return;
+  }
+  load(); // ready before the click
+}
+
+// =====================================================================================
 // The shell's side: Innerlatch's rail, sidebars, crumbs and palette, which app.js shows in place of its own in here
 // =====================================================================================
 // the leaderboard and the arena keep a Google credential on this computer: only from here, and not on a dedicated hub
@@ -1226,6 +1320,7 @@ function realmCrumbs(path) {
   return [home]; // a character or a battle names itself
 }
 window.Innerlatch = Object.freeze({
+  threshold,
   sections: () => REALM_SECTIONS.filter((x) => !x.here || realmHere()),
   sectionOf: realmSectionOf,
   crumbs: realmCrumbs,

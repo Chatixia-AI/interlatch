@@ -475,3 +475,104 @@
   .acc-name { display: none; }
   .arena-champ-cell { gap: 3px; } .acc-lv { font-size: 10.5px; }
 }
+
+/* ------------------------------------------------------------------ the other side: the sidebar on the right */
+:root.in-realm .shell { grid-template-columns: 52px minmax(0, 1fr) var(--sb); }
+:root.in-realm .stage { grid-column: 2; margin: 8px 8px 0 0; }
+:root.in-realm .sidebar { grid-column: 3; }
+:root.in-realm .titlestrip { left: auto; right: 0; width: var(--sb); padding-left: 15px; }
+:root.in-realm.no-sidebar .titlestrip { display: none; }
+@media (min-width: 861px) {
+  :root.in-realm.no-sidebar.peek-sidebar .sidebar { left: auto; right: 0; animation-name: sb-peek-right;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18), inset 1px 0 0 var(--border); }
+}
+@keyframes sb-peek-right { from { opacity: 0; transform: translateX(10px); } }
+@media (max-width: 860px) {
+  :root.in-realm .sidebar { left: auto; right: 0; box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18), inset 1px 0 0 var(--border); }
+  :root.in-realm .titlestrip { display: none; }
+}
+@media (max-width: 600px) { :root.in-realm .stage { grid-column: 1; margin: 0; } }
+/* in the app window the traffic lights sit over the rail, which widens for them */
+:root.in-app.in-realm .shell { grid-template-columns: 82px minmax(0, 1fr) var(--sb); }
+
+/* ------------------------------------------------------------------ the door (threshold): a night sky, a stone arch, a
+   violet door with light behind it. Click: it swings in, the light takes the screen, and Innerlatch is behind it. */
+.door-scene {
+  --ds-ink: #efe6ff; --ds-soft: #cbb8ff; --ds-frame: #2a1d4d; --ds-frame-hi: #5a44a0; --ds-aura: rgba(150, 110, 255, 0.38);
+  --ds-sky: linear-gradient(#07041a, #120a2e 55%, #1d1043); --ds-floor: rgba(160, 130, 255, 0.16); --ds-card: rgba(20, 12, 45, 0.88);
+  position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; overflow: hidden; color: var(--ds-ink);
+  animation: ds-in 0.35s ease-out; }
+:root[data-theme="light"] .door-scene, :root:not([data-theme]) .door-scene {
+  --ds-ink: #1d1040; --ds-soft: #5b3fa8; --ds-frame: #3a2a6e; --ds-frame-hi: #7a62c8; --ds-aura: rgba(120, 80, 230, 0.32);
+  --ds-sky: linear-gradient(#f6f2ff, #e2d6fa 55%, #cbb9f2); --ds-floor: rgba(91, 50, 180, 0.14); --ds-card: rgba(255, 255, 255, 0.9); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .door-scene {
+    --ds-ink: #efe6ff; --ds-soft: #cbb8ff; --ds-frame: #2a1d4d; --ds-frame-hi: #5a44a0; --ds-aura: rgba(150, 110, 255, 0.38);
+    --ds-sky: linear-gradient(#07041a, #120a2e 55%, #1d1043); --ds-floor: rgba(160, 130, 255, 0.16); --ds-card: rgba(20, 12, 45, 0.88); }
+}
+.ds-sky { position: absolute; inset: 0; background: radial-gradient(ellipse 55% 45% at 50% 56%, var(--ds-aura), transparent 70%), var(--ds-sky); }
+.ds-sky::after { content: ""; position: absolute; left: -20%; right: -20%; bottom: 0; height: 30%; transform: perspective(400px) rotateX(58deg); transform-origin: bottom;
+  background-image: linear-gradient(var(--ds-floor) 1px, transparent 1px), linear-gradient(90deg, var(--ds-floor) 1px, transparent 1px); background-size: 48px 48px;
+  mask-image: linear-gradient(transparent, #000 70%); -webkit-mask-image: linear-gradient(transparent, #000 70%); }
+.ds-motes { position: absolute; inset: 0; pointer-events: none; }
+.ds-motes i { position: absolute; bottom: -8px; width: 4px; height: 4px; border-radius: 50%; background: #d9c8ff; box-shadow: 0 0 8px #b99cff;
+  opacity: 0; animation: ds-rise linear infinite; }
+@keyframes ds-rise { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: 0.9; } 100% { transform: translateY(-105vh) translateX(18px); opacity: 0; } }
+.ds-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 40px; padding: 24px 16px; max-width: 100%;
+  transition: transform 1.5s cubic-bezier(0.5, 0, 0.75, 0); }
+.ds-title { font: 600 clamp(20px, 3.6vw, 34px)/1 var(--mono); text-transform: uppercase; letter-spacing: 0.42em; margin-right: -0.42em;
+  color: var(--ds-ink); text-shadow: 0 0 18px var(--ds-aura); }
+.ds-door { --dh: min(62vh, 600px); position: relative; padding: 0; border: 0; background: none; cursor: pointer; perspective: 1400px; border-radius: 50% 50% 4px 4px / 22% 22% 4px 4px; }
+.ds-door:focus-visible { outline: 3px solid var(--ds-soft); outline-offset: 22px; }
+.ds-arch { position: relative; display: block; width: calc(var(--dh) * 0.52); height: var(--dh); border-radius: 50% 50% 0 0 / 22% 22% 0 0; background: #05020f;
+  box-shadow: 0 0 0 14px var(--ds-frame), 0 0 0 17px var(--ds-frame-hi), 0 0 70px 26px var(--ds-aura); transition: box-shadow 0.4s ease; }
+.ds-door:hover .ds-arch { box-shadow: 0 0 0 14px var(--ds-frame), 0 0 0 17px var(--ds-frame-hi), 0 0 110px 40px var(--ds-aura); }
+.ds-light { position: absolute; inset: 0; border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 62%, #ffffff 0%, #eadfff 22%, #a98bff 52%, #3a1c86 100%); transition: filter 1s ease; }
+.ds-leaf { position: absolute; inset: 4px; display: grid; grid-template: 1.35fr 1fr / 1fr 1fr; gap: 7%; padding: 16% 13% 11%;
+  border-radius: 50% 50% 0 0 / 21% 21% 0 0; transform-origin: 0 50%; transition: transform 1.25s cubic-bezier(0.6, 0.05, 0.3, 1);
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 11px), linear-gradient(90deg, #35206a, #4e3393 46%, #3b2577);
+  box-shadow: inset 0 0 0 3px #24144d, inset 0 0 50px rgba(0, 0, 0, 0.55); }
+.ds-panel { border-radius: 4px; background: rgba(0, 0, 0, 0.14); box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.08), inset -2px -2px 0 rgba(0, 0, 0, 0.38); }
+.ds-panel:nth-child(-n+2) { border-radius: 40% 40% 4px 4px / 18% 18% 4px 4px; }
+.ds-knob { position: absolute; right: 11%; top: 55%; width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe7b5, #ffb45e 45%, #a8651a); box-shadow: 0 0 14px rgba(255, 180, 94, 0.75); }
+.ds-keyhole { position: absolute; right: calc(11% + 5px); top: calc(55% + 28px); width: 8px; height: 14px; border-radius: 4px 4px 2px 2px; background: #0b0618;
+  box-shadow: 0 0 6px rgba(255, 220, 255, 0.35); }
+.door-scene[data-state="closed"] .ds-door:hover .ds-leaf { transform: rotateY(-7deg); }
+.ds-spill { position: absolute; left: 50%; top: calc(100% + 17px); width: 200%; height: 90px; transform: translateX(-50%); transform-origin: top; pointer-events: none;
+  background: radial-gradient(ellipse 40% 70% at 50% 0, rgba(200, 170, 255, 0.5), transparent 75%); transition: opacity 1s ease, transform 1s ease; }
+.ds-padlock { position: absolute; left: 50%; top: 42%; display: grid; place-items: center; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%;
+  background: rgba(10, 4, 28, 0.82); box-shadow: 0 0 0 2px var(--ds-frame-hi), 0 0 30px var(--ds-aura); opacity: 0; transform: scale(0.6); pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.ds-padlock .px-icon, .ds-padlock .icon { width: 56px; height: 56px; color: #ffd28a; image-rendering: pixelated; }
+.door-scene[data-state="locked"] .ds-padlock { opacity: 1; transform: scale(1); }
+.ds-leaf.rattle { animation: ds-rattle 0.5s ease-in-out; }
+@keyframes ds-rattle { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-7px) rotate(-0.6deg); } 32% { transform: translateX(6px) rotate(0.5deg); }
+  50% { transform: translateX(-4px); } 68% { transform: translateX(3px); } 84% { transform: translateX(-1px); } }
+.ds-hint { margin: 0; font: 500 12px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.24em; color: var(--ds-soft); animation: ds-breathe 2.4s ease-in-out infinite; }
+@keyframes ds-breathe { 50% { opacity: 0.45; } }
+.ds-lock { max-width: 440px; padding: 14px 18px; border-radius: 8px; text-align: center; color: var(--ds-ink); background: var(--ds-card);
+  box-shadow: 0 0 0 1px var(--ds-frame-hi), 0 18px 50px rgba(0, 0, 0, 0.35); animation: ds-in 0.3s ease-out; }
+.ds-lock p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; }
+.ds-lock p.muted { margin: 10px 0 0; color: var(--ds-soft); }
+.ds-lock .lb-actions { justify-content: center; }
+.ds-close { position: absolute; top: max(18px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); }
+.ds-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 50%, #ffffff, #e6dbff 40%, #8a63f0 100%); }
+/* opening: the door swings in, the light brightens, the view leans in; then through: a flash, and the scene fades away */
+.door-scene[data-state="opening"] .ds-leaf { transform: rotateY(-108deg); }
+.door-scene[data-state="opening"] .ds-light { filter: brightness(1.25) saturate(1.2); }
+.door-scene[data-state="opening"] .ds-spill { transform: translateX(-50%) scale(1.5, 2); }
+.door-scene[data-state="opening"] .ds-stage { transform: scale(1.35); }
+.door-scene[data-state="opening"] .ds-hint, .door-scene[data-state="opening"] .ds-close { opacity: 0; transition: opacity 0.3s ease; }
+.door-scene.through { animation: ds-out 0.7s ease forwards; pointer-events: none; }
+.door-scene.through .ds-stage { transform: scale(4); transition: transform 0.7s ease-in; }
+.door-scene.through .ds-flash { animation: ds-flash 0.7s ease forwards; }
+.door-scene.leaving { animation: ds-leave 0.26s ease forwards; }
+@keyframes ds-in { from { opacity: 0; } }
+@keyframes ds-out { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ds-flash { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 1; } }
+@keyframes ds-leave { to { opacity: 0; } }
+/* locked, the door steps back to make room for how to open it */
+.door-scene[data-state="locked"] .ds-door { --dh: min(44vh, 440px); }
+@media (max-width: 600px) { .ds-door, .door-scene[data-state="locked"] .ds-door { --dh: min(44vh, 400px); } .ds-stage { gap: 30px; } }
