@@ -33,7 +33,7 @@ from pathlib import Path
 
 from ..core.agents import CODING_AGENTS, full_name, short_name
 from ..core.i18n import lang
-from ..core.util import loads, utcnow_iso
+from ..core.util import loads, utcnow, utcnow_iso
 from ..storage.kv import kv_get, kv_set
 
 CATALOG_PATH = Path(__file__).with_name("roadmap.json")
@@ -50,6 +50,8 @@ EVIDENCE_KINDS = ("pr", "commit", "doc", "page", "published", "deck", "diagram")
 EVIDENCE_MAX = 3
 SIDE_TRACKS = 3
 JOURNEY_MAX = 120
+RECENT_DAYS = 7  # "recent": the counted lessons of today and the 6 days before (the journey's dates, in UTC)...
+RECENT_MAX = 60  # ...newest first, at most this many
 SKILL_LESSONS_MAX = 200
 GOAL_KEY = "party.goal:"  # + scope key: the track the person picked
 QUESTS_KEY = "party.quests:"  # + scope key: {milestone id: {"at": iso}}, the milestones the person marked done
@@ -800,8 +802,9 @@ def _quest(cat: Catalog, ms_id: str, *, main: bool, done: dict, artifacts: list[
             "done_at": mark.get("at") if mark else None, "evidence": evidence}
 
 
-def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict], dict]:
-    """The story so far, newest first (at most JOURNEY_MAX events), and each agent's level and XP week by week."""
+def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict], dict, int | None]:
+    """The story so far, newest first (at most JOURNEY_MAX events), each agent's level and XP week by week, and the
+    module of the newest skill event."""
     tallies = {a: _Tally(len(cat.modules)) for a in CODING_AGENTS}
     level = dict.fromkeys(CODING_AGENTS, 1)
     cls: dict[str, int | None] = dict.fromkeys(CODING_AGENTS)
@@ -819,6 +822,7 @@ def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict
             "text": quest["text"] if quest else None, "quest": quest}))
 
     week = None
+    newest_skill = None  # the module of the newest skill event (the walk goes oldest first)
     active: dict[str, Lesson] = {}  # agent: its last lesson in the week being walked
 
     def close(week: tuple[str, str]) -> None:
@@ -849,6 +853,7 @@ def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict
             for sl in range(skill_level(old) + 1, skill_level(tally.mxp[i]) + 1):
                 if _skill_marked(sl):
                     event(k.at, wk[0], k.agent, "skill", lvl=sl, module=i, lesson=k)
+                    newest_skill = i
         now = char_level(tally.xp)
         for lv in range(level[k.agent] + 1, now + 1):
             if _level_marked(lv):
@@ -862,7 +867,42 @@ def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict
             track, _n, ms = cat.milestone[ms_id]
             event(mark["at"], wk[0], None, "quest", track=track, quest={"id": ms_id, "text": _t(ms, "text")})
     events.sort(key=lambda e: (e[0], e[1]), reverse=True)
-    return [e[2] for e in events[:JOURNEY_MAX]], series
+    return [e[2] for e in events[:JOURNEY_MAX]], series, newest_skill
+
+
+def _recent(cat: Catalog, lessons: list[Lesson], today: date) -> tuple[list[dict], dict]:
+    """The counted lessons of the last RECENT_DAYS days (today included), newest first, at most RECENT_MAX; and the
+    whole week's tally (`week`), which the cap doesn't cut: its dates, and how many lessons each agent beat."""
+    since, until = (today - timedelta(days=RECENT_DAYS - 1)).isoformat(), today.isoformat()
+    out = []
+    by_agent = {a: 0 for a in CODING_AGENTS}
+    for k in reversed(lessons):  # oldest first, so newest first here
+        if not k.modules or not since <= k.at[:10] <= until:
+            continue
+        by_agent[k.agent] += 1
+        if len(out) < RECENT_MAX:
+            out.append({"id": k.id, "title": k.title, "kind": k.kind, "stage": k.stage, "agent": k.agent,
+                        "xp": k.xp * len(k.modules), "at": k.at[:10], "session_id": k.session_id,
+                        "modules": [{"id": cat.modules[i]["id"], "name": _t(cat.modules[i], "name"),
+                                     "attr": cat.modules[i].get("attr")} for i in k.modules]})
+    return out, {"since": since, "until": until, "lessons": sum(by_agent.values()), "by_agent": by_agent}
+
+
+def _zone(cat: Catalog, recent: list[dict], newest_skill: int | None) -> dict | None:
+    """Where the party is: the module that earned the most XP in `recent` (ties: the one seen newest), else the
+    newest skill event's module, else nowhere yet."""
+    xp: dict[str, int] = {}
+    for k in recent:  # newest first: a module's place in `xp` is how new its newest lesson is
+        for m in k["modules"]:
+            xp[m["id"]] = xp.get(m["id"], 0) + k["xp"] // len(k["modules"])
+    if xp:
+        mid = max(xp, key=lambda m: xp[m])  # max keeps the first of equals: the newest
+        m = cat.module[mid]
+    elif newest_skill is not None:
+        m = cat.modules[newest_skill]
+    else:
+        return None
+    return {"attr": m.get("attr"), "module": m["id"], "module_name": _t(m, "name")}
 
 
 def _sessions_by_agent(conn: sqlite3.Connection, where: str, params: tuple) -> dict:
@@ -879,7 +919,7 @@ def _sessions_by_agent(conn: sqlite3.Connection, where: str, params: tuple) -> d
 
 
 def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Lesson], done: dict,
-           goal: str | None) -> dict:
+           goal: str | None, today: date) -> dict:
     tallies = {a: _Tally(len(cat.modules)) for a in CODING_AGENTS}
     for k in lessons:
         tallies[k.agent].add(k)
@@ -902,7 +942,8 @@ def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Les
     for tid, main in ([(goal_id, True)] if goal_id else []) + [(t, False) for t in side]:
         quests += [_quest(cat, ms["id"], main=main, done=done, artifacts=artifacts, newest=newest)
                    for ms in cat.track[tid].get("milestones") or []]
-    journey, series = _journey(cat, lessons, done)
+    journey, series, newest_skill = _journey(cat, lessons, done)
+    recent, week = _recent(cat, lessons, today)
     return {
         "catalog": {"title": _t(cat.raw, "title"), "version": cat.raw.get("version"), "tracks": len(cat.tracks),
                     "modules": len(cat.modules)},
@@ -912,21 +953,27 @@ def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Les
         "quests": quests,
         "journey": journey,
         "series": series,
+        "recent": recent,
+        "week": week,
+        "zone": _zone(cat, recent, newest_skill),
     }
 
 
-def compute(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, *, catalog: Catalog | None = None) -> dict:
+def compute(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, *, catalog: Catalog | None = None,
+            today: date | None = None) -> dict:
     """The party as GET /api/party shows it once signed in (without who is signed in): the five agents, the attrs,
-    the goal, quests, journey and series. `here_id`: this computer's machine id. Cached; don't change what it returns."""
+    the goal, quests, journey, series, this week's lessons and where the party is. `here_id`: this computer's machine
+    id; `today`: the UTC date "recent" ends on. Cached (per day, as "recent" moves); don't change what it returns."""
     cat = catalog or load_catalog()
+    today = today or utcnow().date()
     sc = _scope_of(conn, here_id, viewer)
     done, goal = quests_done(conn, sc.key), goal_of(conn, sc.key)
-    key = (sc.key, sc.finger, json.dumps(done, sort_keys=True), goal, cat.key, lang.get())
+    key = (sc.key, sc.finger, json.dumps(done, sort_keys=True), goal, cat.key, lang.get(), today.isoformat())
     with _lock:
         hit = _party_cache.get(key)
     if hit is not None:
         return hit
-    return _remember(_party_cache, key, _build(conn, cat, sc, lessons_in(conn, cat, sc), done, goal))
+    return _remember(_party_cache, key, _build(conn, cat, sc, lessons_in(conn, cat, sc), done, goal, today))
 
 
 def skill(conn: sqlite3.Connection, here_id: str, viewer: dict | None, agent, module, *,

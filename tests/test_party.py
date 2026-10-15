@@ -10,6 +10,7 @@ from __future__ import annotations
 import itertools
 import json
 import re
+from datetime import date, timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -350,6 +351,73 @@ def test_the_journey_is_newest_first_capped_and_the_series_weekly(home, tmp_path
     oldest = party._journey(party.load_catalog(), party.lessons_in(conn, party.load_catalog(), party._scope_of(
         conn, home["here"], None)), {})[0][-1]
     assert oldest["type"] in ("join", "skill", "level", "class")
+
+
+# ------------------------------------------------------------------ this week: "recent" and the zone
+TODAY = date(2026, 10, 15)
+
+
+def test_recent_is_this_weeks_counted_lessons_newest_first(home):
+    conn, here = home["conn"], home["here"]
+    edge = _lesson(conn, _session(conn, at="2026-10-09T00:00:00.000Z"), "SQL query at the week's start")  # 6 days before
+    _lesson(conn, _session(conn, at="2026-10-08T23:59:59.000Z"), "pytest the day before the week")
+    day = _session(conn, at="2026-10-15T08:00:00.000Z")
+    first = _lesson(conn, day, "pytest and a token", tags=["llm"], stage="established")
+    _lesson(conn, day, "a note that names no module")  # in the week, earns nothing: not recent
+    newest = _lesson(conn, day, "deploy it")
+    _lesson(conn, _session(conn, at="2026-10-15T09:00:00.000Z", agent="chatgpt", source="chatgpt-export"), "pytest chat",
+            agent="chatgpt")
+    _lesson(conn, _session(conn, at="2026-10-15T09:00:00.000Z", machine=TEAMMATE_PC, source="remote"), "pytest elsewhere")
+    undated = _session(conn, at=None)  # no session start: the lesson's own date (2026-10-01), out of this week
+    _lesson(conn, undated, "pytest undated")
+    recent = party.compute(conn, here, today=TODAY)["recent"]
+    assert [k["id"] for k in recent] == [newest, first, edge]
+    k = recent[1]
+    assert {x: k[x] for x in ("title", "kind", "stage", "agent", "xp", "at", "session_id")} == {
+        "title": "pytest and a token", "kind": "fix", "stage": "established", "agent": "claude", "xp": 3 * 3,
+        "at": "2026-10-15", "session_id": day}
+    assert k["modules"] == [{"id": "M-python", "name": "Python", "attr": "craft"},
+                            {"id": "M-auth", "name": "Auth", "attr": "guard"}, {"id": "M-llm", "name": "Llm", "attr": "arcana"}]
+    assert [x["id"] for x in party.compute(conn, here, today=date(2026, 10, 3))["recent"]] == \
+        [party.lessons_in(conn, home["catalog"], party._scope_of(conn, here, None))[0].id]  # the undated one, by its own date
+    token = i18n.lang.set("ja")
+    try:
+        assert party.compute(conn, here, today=TODAY)["recent"][1]["modules"][0]["name"] == "M-python（日本語）"
+    finally:
+        i18n.lang.reset(token)
+    # the cache keeps a day's answer for that day only: a week on, the same archive has no recent lessons
+    assert party.compute(conn, here, today=TODAY + timedelta(days=7))["recent"] == []
+    assert len(party.compute(conn, here, today=TODAY)["recent"]) == 3
+
+
+def test_recent_keeps_the_newest_sixty(home):
+    conn = home["conn"]
+    sid = _session(conn, at="2026-10-15T08:00:00.000Z")
+    ids = [_lesson(conn, sid, f"pytest {n}") for n in range(party.RECENT_MAX + 5)]
+    data = party.compute(conn, home["here"], today=TODAY)
+    assert [k["id"] for k in data["recent"]] == ids[::-1][:party.RECENT_MAX]
+    # the week's tally isn't cut by the cap: the page says how many there really were
+    week = data["week"]
+    assert week["lessons"] == party.RECENT_MAX + 5 and week["by_agent"]["claude"] == party.RECENT_MAX + 5
+    assert week["until"] == TODAY.isoformat() and week["since"] == (TODAY - timedelta(days=6)).isoformat()
+    assert set(week["by_agent"]) == set(CODING_AGENTS)
+
+
+def test_the_zone_is_where_this_weeks_xp_went(home):
+    conn, here = home["conn"], home["here"]
+    assert party.compute(conn, here, today=TODAY)["zone"] is None  # nothing yet: nowhere
+    old = _session(conn, at="2026-09-01T08:00:00.000Z")
+    _lesson(conn, old, "deploy a while ago")
+    assert party.compute(conn, here, today=TODAY)["zone"] == {"attr": "ops", "module": "M-deploy", "module_name": "Deploy"}
+    _lesson(conn, old, "pytest a while ago")  # the newest skill event now: python's first level
+    assert party.compute(conn, here, today=TODAY)["zone"]["module"] == "M-python"
+    week = _session(conn, at="2026-10-14T08:00:00.000Z")
+    _lesson(conn, week, "SQL query", stage="established")  # sql 3 this week
+    _lesson(conn, _session(conn, at="2026-10-15T08:00:00.000Z"), "a token and a prompt", stage="established")  # auth 3, llm 3
+    zone = party.compute(conn, here, today=TODAY)["zone"]
+    assert zone == {"attr": "guard", "module": "M-auth", "module_name": "Auth"}  # three ways tied at 3: the newest wins
+    _lesson(conn, week, "more SQL queries")
+    assert party.compute(conn, here, today=TODAY)["zone"]["module"] == "M-sql"  # 4: the most this week
 
 
 def test_journey_events_join_level_skill_class_and_quest(home):

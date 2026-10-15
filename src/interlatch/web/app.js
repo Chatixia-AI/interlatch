@@ -1418,6 +1418,8 @@ async function activityView(params, own = false) {
   const counts = { sessions: fmtNum(tot.sessions), projects: fmtNum(tot.projects), date: tot.first_at ? fmtDateY(tot.first_at) : "" };
   const sgBox = h("div"); // filled in when the queue has something to review; Home does not wait for it
   suggestionsHomeCard(sgBox, project);
+  const journeyBox = h("div"); // the Party's week, once Home is on screen
+  homeJourney(journeyBox);
   return h("div", null,
     h("div", { class: "page-head" }, titled("dashboard", h("h1", null, own ? t("Activity") : t("Home")),
       h("div", { class: "sub" }, tot.first_at ? t("{sessions} sessions across {projects} projects since {date}", counts) : t("{sessions} sessions across {projects} projects", counts))),
@@ -1426,6 +1428,7 @@ async function activityView(params, own = false) {
         segControl([["", t("All agents")], ...Object.keys(AGENTS).filter((a) => a === agent || data.agents.some((x) => x.agent === a && x.sessions))
           .map((a) => [a, agentName(a)])], agent, (v) => update({ agent: v })),
         h("select", { "aria-label": t("Project"), onchange: (e) => update({ project: e.target.value }) }, await projectOptions(project)))),
+    journeyBox,
     tiles,
     sgBox,
     data.agents.length ? h("div", { class: "section-gap" }, agentsCard(data.agents, { agent, project, period: days === "all" ? t("All time") : t("Last {n} days", { n: days }), pick: (a) => update({ agent: a }) })) : null,
@@ -7744,6 +7747,128 @@ async function partySidebar(box) {
       sbRow(t("Journey"), "#/party/journey", "history", null, ["/party/journey"]),
       h("div", { class: "sb-group" }, t("Characters")),
       on ? p.agents.map(agentRow) : h("div", { class: "sb-empty" }, t("Sign in to meet your party."))));
+}
+
+// ------------------------------------------------------------------ Home's Journey strip: the party walks through this
+// week's lessons and fights them (scene.js draws it, from the Party's own payload: nothing in it is made up). Home never
+// waits for it: the card fills in once Home is on screen. Folded, it mounts no canvas. Without scene.js, a still stage.
+const HOME_JOURNEY_KEY = "interlatch.home.journey"; // "0": folded
+const HOME_JOURNEY_FRESH = 120000; // a payload the Party pages fetched this recently is reused
+function homeJourneyOpen() { try { return localStorage.getItem(HOME_JOURNEY_KEY) !== "0"; } catch (e) { return true; } }
+function setHomeJourneyOpen(open) {
+  try { if (open) localStorage.removeItem(HOME_JOURNEY_KEY); else localStorage.setItem(HOME_JOURNEY_KEY, "0"); } catch (e) { /* this tab only */ }
+}
+function sceneLabels() { // the scene fills the {placeholders}
+  return { wave: t("Wave {n} / {total}"), xp: t("+{xp} XP · {skill}"), levelUp: t("{agent} reached level {n}!"),
+    skillUp: t("{agent}: {skill} Lv {n}"), boss: t("Boss: {text}"), bossHint: t("Mark the quest done to defeat it"),
+    asleep: t("Your party is asleep"), quiet: t("A quiet week: no new lessons"), zone: t("{attr} · {module}") };
+}
+function zoneLabel(p) {
+  const z = p.signed_in ? p.zone : null;
+  if (!z) return null;
+  return t("{attr} · {module}", { attr: p.attrs?.find((a) => a.id === z.attr)?.name || z.attr, module: z.module_name || z.module });
+}
+function journeySummary(p) { // what the strip shows, in words, for a screen reader
+  if (!p.signed_in) return t("Your party is asleep");
+  const names = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.short || agentShort(a.agent)]));
+  const by = new Map(Object.entries(p.week?.by_agent || {}).filter(([, n]) => n > 0)); // the whole week: `recent` stops at 60
+  if (!p.week) for (const l of p.recent || []) by.set(l.agent, (by.get(l.agent) || 0) + 1);
+  const beat = [...by.entries()].sort((x, y) => y[1] - x[1])
+    .map(([a, n]) => tn(n, "{agent} beat {n} lesson", "{agent} beat {n} lessons", { agent: names[a] || agentShort(a) }));
+  const bosses = (p.quests || []).filter((q) => q.main && q.status === "evidence")
+    .map((q) => t("main quest boss: {text}", { text: String(q.text || "").replace(/[.。]\s*$/, "") }));
+  return [beat.length ? t("This week: {list}", { list: beat.join(LANG === "ja" ? "、" : ", ") }) : t("A quiet week: no new lessons"), ...bosses].join("; ");
+}
+function journeyTip(p, item, at) {
+  if (!item) { hideTip(); return; }
+  const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 };
+  if (item.type === "lesson" && item.lesson) {
+    const l = item.lesson;
+    showTip(where, l.title, [kindLabel(l.kind), agentName(l.agent), t("+{n} XP", { n: l.xp })].join(" · "),
+      (l.modules || []).map((m) => m.name).join(", ") || null);
+  } else if (item.type === "boss" && item.quest) {
+    const q = item.quest;
+    showTip(where, q.text, t("Main quest boss · {track}", { track: q.track_name || p.goal?.name || "" }),
+      q.status === "done" ? t("Defeated: the quest is done") : t("Mark the quest done to defeat it"));
+  } else if (item.type === "agent") {
+    const id = item.agent?.agent || item.agent, a = (p.agents || []).find((x) => x.agent === id);
+    if (!a) { hideTip(); return; }
+    showTip(where, a.name, `${t("Lv {n}", { n: a.level })} · ${tierLabel(a.tier)}`, a.class?.name || null);
+  } else hideTip();
+}
+function journeyPick(item) {
+  hideTip();
+  if (item?.type === "lesson" && item.lesson?.session_id) go(`#/session/${item.lesson.session_id}`);
+  else if (item?.type === "boss") go("#/party/quests");
+  else if (item?.type === "agent") {
+    const id = item.agent?.agent || item.agent;
+    if (PARTY_AGENTS.includes(id)) go(`#/party/${id}`);
+  }
+}
+function journeyStill(p, height, width) { // scene.js is missing: the five on a still stage, as large as fits in one row
+  const tiers = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.tier]));
+  const label = !p.signed_in ? t("Your party is asleep") : (p.recent || []).length ? null : t("A quiet week: no new lessons"); // the zone is in the head
+  return h("div", { class: "hj-still px-stage", style: { height: `${height}px` } },
+    h("div", { class: "hj-still-row" }, PARTY_AGENTS.map((a) => partySprite(a, { tier: tiers[a], scale: height >= 170 && width >= 560 ? 3 : width >= 380 ? 2 : 1, locked: !p.signed_in, still: true, decorative: true }))),
+    label ? h("span", { class: "hj-still-label", "aria-hidden": "true" }, label) : null); // the summary says it
+}
+function homeJourney(box) {
+  let scene = null, poll = 0, shown = null; // shown: the payload on screen, to redraw it at another height
+  const narrow = matchMedia("(max-width: 600px)");
+  const fill = async (fresh = false) => {
+    let p = !fresh && partyCache && Date.now() - partyCacheAt < HOME_JOURNEY_FRESH ? partyCache : null;
+    if (!p) {
+      try { p = await partyLoad(); } catch (e) { return; } // refused (another device, 403) or failed: Home shows no card
+    }
+    if (box.isConnected) draw(p);
+  };
+  const draw = (p, { focus = false } = {}) => {
+    try { scene?.destroy?.(); } catch (e) { /* gone already */ }
+    scene = null;
+    shown = p;
+    clearTimeout(poll);
+    if (!p.signed_in && p.signing_in) poll = setTimeout(() => { if (box.isConnected) fill(true); }, 4000); // the sign-in runs in another tab
+    const open = homeJourneyOpen(), height = narrow.matches ? 140 : 200;
+    const zone = zoneLabel(p), weekN = p.week?.lessons ?? (p.recent || []).length;
+    const fold = h("button", { class: "icon-btn hj-fold", type: "button", "aria-expanded": String(open), "aria-controls": "hj-body",
+      "aria-label": open ? t("Hide the journey") : t("Show the journey"), title: open ? t("Hide the journey") : t("Show the journey"),
+      onclick: () => { setHomeJourneyOpen(!open); draw(p, { focus: true }); } }, icon("chevron"));
+    const host = h("div", { class: "hj-scene", style: { height: `${height}px` } });
+    const signin = p.signed_in ? null : h("div", { class: "hj-signin" }, p.can_sign_in
+      ? [h("span", null, t("Sign in with Google to wake your party.")),
+        h("button", { class: "btn small primary", type: "button", onclick: () => { partyCache = null; partySignin(); } }, t("Sign in with Google")),
+        p.signing_in ? h("span", { class: "muted small" }, t("Finish signing in on the page that opened. This page carries on by itself once you have.")) : null]
+      : h("span", { class: "muted" }, t("Signing in happens on the computer that runs Interlatch: open the Party there and sign in with Google. On a team hub, sign in to the hub as one of its people.")));
+    box.replaceChildren(h("section", { class: `card hj px-frame${open ? "" : " folded"}` },
+      h("div", { class: "hj-head" },
+        h("div", { class: "card-title" }, icon("party"), h("h2", null, t("Journey"))),
+        h("div", { class: "hj-meta" },
+          zone ? h("span", { class: "hj-zone" }, pxIcon(p.zone.attr, 1), zone) : null,
+          p.signed_in ? h("span", null, tn(weekN, "This week: {n} lesson", "This week: {n} lessons", { n: fmtNum(weekN) })) : null,
+          h("a", { class: "link-arrow", href: "#/party" }, t("Open the Party"), icon("arrow"))),
+        fold),
+      open ? h("div", { class: "hj-body", id: "hj-body" }, h("p", { class: "sr-only", id: "hj-summary" }, journeySummary(p)), host, signin) : null));
+    if (focus) fold.focus();
+    if (!open) return;
+    const S = window.Scene;
+    if (S && typeof S.mount === "function") {
+      try {
+        scene = S.mount(host, { party: p, labels: sceneLabels(), height, reducedMotion: stillMotion(),
+          onHover: (item, at) => journeyTip(p, item, at), onPick: journeyPick });
+        const cv = host.querySelector("canvas");
+        if (cv) {
+          cv.setAttribute("role", "img");
+          cv.setAttribute("aria-label", t("Journey: use ← and → to move between characters and monsters, Enter to open one"));
+          cv.setAttribute("aria-describedby", "hj-summary");
+        }
+        return;
+      } catch (e) { scene = null; host.replaceChildren(); } // the still stage instead
+    }
+    host.append(journeyStill(p, height, host.clientWidth));
+  };
+  const refit = () => { if (!box.isConnected) narrow.removeEventListener("change", refit); else if (shown) draw(shown); };
+  narrow.addEventListener("change", refit); // crossing the phone width redraws at the other height
+  whenShown(box, () => fill()); // after Home is on screen: it never waits for the Party
 }
 
 // =====================================================================================
