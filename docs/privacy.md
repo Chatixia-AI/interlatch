@@ -11,14 +11,14 @@ runs when you click **Check for updates** on the Status page, and once a day onl
 updates daily** or **Notify me about new versions** there (both off by default; `interlatch install` asks about
 the second). If you connect Codex Cloud, each sync also runs the
 `codex cloud` CLI, which fetches your own tasks from OpenAI with your Codex login; nothing is sent the other way.
-If you sign in to the **Leaderboard** with Google, each sync sends Interlatch's Firebase project your totals for the
+If you sign in to the **Leaderboard** with Google (in Innerlatch, behind the door at the bottom of the dashboard's rail), each sync sends Interlatch's Firebase project your totals for the
 last 7, 30 and 90 days (active hours, sessions, tokens) with the name and picture you show: no email, project,
 prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
 Signing in with Google for the [Party](party.md) page alone sends nothing: your characters are worked out on your
-computer, and only **Join the board** on the Leaderboard page starts sending totals. Once signed in, the Party reads
+computer, and only **Join the board** on the Leaderboard starts sending totals. Once signed in, the Party reads
 public job-market numbers (open roles per roadmap track) from Interlatch's Firebase project, at most every six hours.
 That request carries the project's public web key and nothing about you, not even your sign-in.
-If you also **Enter the arena** on the Leaderboard page, each sync publishes your party's character sheet to the same
+If you also **Enter the arena** on the Arena page, each sync publishes your party's character sheet to the same
 Firebase project, readable by anyone: for each of your coding agents its level, tier, class and six attribute
 levels, and which agent is your champion, with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
 titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving

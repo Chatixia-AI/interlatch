@@ -89,8 +89,8 @@ def cmd_leaderboard(args) -> int:
         elif args.action == "join":  # signing in is a browser's job: Google's page, then back to the dashboard
             import webbrowser
 
-            url = f"http://127.0.0.1:{cfg.server_port}/#/leaderboard"
-            console.print(f"Sign in with Google from the dashboard's Leaderboard page: {url}", highlight=False)
+            url = f"http://127.0.0.1:{cfg.server_port}/#/innerlatch/leaderboard"
+            console.print(f"Sign in with Google from the Leaderboard page in Innerlatch: {url}", highlight=False)
             if not wait_for_port(cfg.server_port, 1.0):
                 console.print("[yellow]The dashboard isn't running[/]: start it with `interlatch ui`.", highlight=False)
                 return 1
@@ -119,7 +119,7 @@ def cmd_leaderboard(args) -> int:
                       "`interlatch leaderboard join` joins it.", highlight=False)
         return 0
     if not st["joined"]:
-        console.print("Not on the leaderboard. `interlatch leaderboard join` opens the dashboard's Leaderboard page, "
+        console.print("Not on the leaderboard. `interlatch leaderboard join` opens the Leaderboard page in Innerlatch, "
                       "where you sign in with Google.", highlight=False)
         return 0
     arena = " · in the arena" if st.get("arena") else ""
