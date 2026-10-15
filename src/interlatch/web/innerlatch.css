@@ -476,25 +476,6 @@
   .arena-champ-cell { gap: 3px; } .acc-lv { font-size: 10.5px; }
 }
 
-/* ------------------------------------------------------------------ the other side: the sidebar on the right */
-:root.in-realm .shell { grid-template-columns: 52px minmax(0, 1fr) var(--sb); }
-:root.in-realm .stage { grid-column: 2; margin: 8px 8px 0 0; }
-:root.in-realm .sidebar { grid-column: 3; }
-:root.in-realm .titlestrip { left: auto; right: 0; width: var(--sb); padding-left: 15px; }
-:root.in-realm.no-sidebar .titlestrip { display: none; }
-@media (min-width: 861px) {
-  :root.in-realm.no-sidebar.peek-sidebar .sidebar { left: auto; right: 0; animation-name: sb-peek-right;
-    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18), inset 1px 0 0 var(--border); }
-}
-@keyframes sb-peek-right { from { opacity: 0; transform: translateX(10px); } }
-@media (max-width: 860px) {
-  :root.in-realm .sidebar { left: auto; right: 0; box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18), inset 1px 0 0 var(--border); }
-  :root.in-realm .titlestrip { display: none; }
-}
-@media (max-width: 600px) { :root.in-realm .stage { grid-column: 1; margin: 0; } }
-/* in the app window the traffic lights sit over the rail, which widens for them */
-:root.in-app.in-realm .shell { grid-template-columns: 82px minmax(0, 1fr) var(--sb); }
-
 /* ------------------------------------------------------------------ the door (threshold): a night sky, a stone arch, a
    violet door with light behind it. Click: it swings in, the light takes the screen, and Innerlatch is behind it. */
 .door-scene {
