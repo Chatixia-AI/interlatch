@@ -18,8 +18,10 @@ IDENTITY = os.environ.get("INTERLATCH_CODESIGN_IDENTITY") or None
 a = Analysis(
     [str(HERE / "interlatch_app.py")],
     pathex=[str(ROOT / "src")],
-    # the package metadata carries the version (interlatch.__version__ reads it)
-    datas=[(str(ROOT / "src" / "interlatch" / "web"), "interlatch/web")] + copy_metadata("interlatch"),
+    # the package metadata carries the version (interlatch.__version__ reads it); the Party reads its roadmap catalog
+    datas=[(str(ROOT / "src" / "interlatch" / "web"), "interlatch/web"),
+           (str(ROOT / "src" / "interlatch" / "knowledge" / "roadmap.json"), "interlatch/knowledge")]
+          + copy_metadata("interlatch"),
     # interlatch imports most modules lazily inside functions, and rich loads some of its own on demand
     hiddenimports=collect_submodules("interlatch") + collect_submodules("rich"),
     excludes=["tkinter", "pytest", "PIL"],

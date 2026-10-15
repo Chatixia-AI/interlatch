@@ -68,6 +68,10 @@ tokens with other people's. Nothing is sent until you sign in there with Google.
 totals for the last 7, 30 and 90 days, with the name and picture you show: no email, project, prompt or title.
 `interlatch leaderboard leave` deletes your row and stops sending.
 
+**What is the Party?** Your coding agents as pixel-art characters who level up from the lessons their sessions
+taught, matched to a technical career roadmap ([Party](party.md)). It needs a Google sign-in but sends nothing,
+and the levels are your agents', not yours.
+
 **Is it open source?** Yes, under the MIT license, the hub included. Only `ee/`, the features a company needs to roll
 it out across teams (single sign-on, policies, audit export), is under the
 [Interlatch Enterprise License](../ee/README.md).

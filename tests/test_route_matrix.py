@@ -141,9 +141,18 @@ ROUTES: dict[tuple[str, str], Access] = {
     # the computer itself: a person's own leaderboard
     ("GET", "/api/leaderboard"): HERE,
     ("GET", "/api/leaderboard/avatar/{id}"): HERE.ok(404),  # no picture
+    # the Party: this computer, or any person signed in to the hub, limited people too (their projects' lessons);
+    # behind a Google sign-in here, which the matrix's hub hasn't made: it answers only that it's locked
+    ("GET", "/api/party"): LIMITED_OK,
+    ("GET", "/api/party/skill"): LIMITED_OK.ok(404).but(here=403),  # no such module; here: not signed in
+    ("GET", "/api/party/track"): LIMITED_OK.ok(404).but(here=403),  # no such track; here: not signed in
+    ("GET", "/api/party/tracks"): LIMITED_OK,  # the catalog's own tracks, for picking a goal
     # POST: anyone, and any signed-in person (their own news)
     ("POST", "/api/signout"): POST_ANYONE,
     ("POST", "/api/team/news/seen"): POST_SIGNED_IN,
+    # POST: any signed-in person, for their own Party quest log (no such quest or track; here: not signed in)
+    ("POST", "/api/party/quest"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/goal"): POST_SIGNED_IN.ok(400).but(here=403),
     # POST: admins (the hub computer, or an admin person)
     ("POST", "/api/import"): POST_ADMIN,
     ("POST", "/api/sync"): POST_ADMIN,
@@ -215,6 +224,9 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/leaderboard/send"): POST_HERE,
     ("POST", "/api/leaderboard/name"): POST_HERE,
     ("POST", "/api/leaderboard/leave"): POST_HERE,
+    ("POST", "/api/leaderboard/join"): POST_HERE,
+    ("POST", "/api/party/signin"): POST_HERE,
+    ("POST", "/api/party/signout"): POST_HERE,
     # the hub API: computers, by token
     ("POST", "/api/hub/join"): HUB_JOIN.ok(400),  # an unknown invite code
     ("POST", "/api/hub/signin"): HUB_READ.but(shared=400),  # a computer that is nobody's: no sign-in
@@ -241,6 +253,8 @@ QUERY = {
     "/api/export": f"?ids={SID}&format=md&check=1",
     "/api/search": "?q=login",
     "/api/system": "?id=nothing",
+    "/api/party/skill": "?agent=claude&module=M-nothing",
+    "/api/party/track": "?id=nothing",
 }
 BODY = {
     "/api/team-store/save": {"enabled": False},
@@ -254,6 +268,7 @@ BODY = {
     "/api/people/shared-token": {"on": True},
     "/api/update/daily": {"on": False},
     "/api/update/notify": {"on": False},
+    "/api/party/goal": {"track": "no-such-track"},
 }
 PARAMS = {"{id}": SID, "{n}": "999999"}
 PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connectors/{id}/disconnect": {"{id}": "claude"},
@@ -267,7 +282,8 @@ STUBS = {
     "action_import": False, "action_push": False, "action_leaderboard_cancel": None,
     "action_leaderboard_signin": {"stub": True}, "action_leaderboard_finish": {"stub": True},
     "action_leaderboard_send": {"stub": True}, "action_leaderboard_name": {"stub": True},
-    "action_leaderboard_leave": {"stub": True}, "leaderboard": {"stub": True},
+    "action_leaderboard_leave": {"stub": True}, "leaderboard": {"stub": True}, "action_leaderboard_join": {"stub": True},
+    "action_party_signout": {"stub": True},
     "action_team_store_test": {"stub": True}, "action_mirror_test": {"stub": True},
     "action_update": {"stub": True}, "action_menu_bar": {"stub": True},
     "action_provider_test": {"stub": True}, "provider_models": {"stub": True},

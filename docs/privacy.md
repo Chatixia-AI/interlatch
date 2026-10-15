@@ -14,6 +14,8 @@ the second). If you connect Codex Cloud, each sync also runs the
 If you sign in to the **Leaderboard** with Google, each sync sends Interlatch's Firebase project your totals for the
 last 7, 30 and 90 days (active hours, sessions, tokens) with the name and picture you show: no email, project,
 prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
+Signing in with Google for the [Party](party.md) page alone sends nothing: your characters are worked out on your
+computer, and only **Join the board** on the Leaderboard page starts sending totals.
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is

@@ -8,6 +8,7 @@ from . import (  # noqa: F401
     hub_admin,
     knowledge,
     leaderboard,
+    party,
     projects,
     sessions,
     settings,

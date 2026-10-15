@@ -169,6 +169,8 @@ ICONS.chevron = ["m6 9 6 6 6-6"];
 ICONS.shield = ["M12 3 3 6v6c0 5 9 9 9 9s9-4 9-9V6z", "m8 12 3 3 5-6"];
 ICONS.leaderboard = ["M6 9H4.5a2.5 2.5 0 0 1 0-5H6", "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", "M4 22h16", "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22",
   "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", "M18 2H6v7a6 6 0 0 0 12 0V2Z"]; // a trophy
+ICONS.ring = [C10]; // an open quest
+ICONS.party = ["M14.5 17.5 3 6V3h3l11.5 11.5", "m13 19 6-6", "m16 16 4 4", "m19 21 2-2", "M14 3.5 17.5 2 21 3.5V7c0 2.4-3.5 4-3.5 4S14 9.4 14 7z"]; // a sword and a shield
 function icon(name, cls = "") {
   return s("svg", { class: `icon ${cls}`, viewBox: "0 0 24 24", "aria-hidden": "true" },
     (ICONS[name] || ICONS.dot).map((p) => (typeof p === "string" ? s("path", { d: p }) : s(p[0], p[1]))));
@@ -489,7 +491,7 @@ async function api(path, params) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401 && body.signin) { showSignin(); throw handledError(body.error); }
     if (res.status === 403 && body.nobody) { showSignin(body.error); throw handledError(body.error); }
-    throw new Error(body.error || res.statusText);
+    throw Object.assign(new Error(body.error || res.statusText), { status: res.status }); // a page may answer a refusal itself
   }
   return res.json();
 }
@@ -927,6 +929,7 @@ function navKey(path) {
   if (path.startsWith("/friction")) return "friction";
   if (path.startsWith("/artifacts")) return "artifacts";
   if (path === "/leaderboard") return "leaderboard";
+  if (path === "/party" || path.startsWith("/party/")) return { "/party": "party", "/party/quests": "partyquests", "/party/journey": "partyjourney" }[path] || "partyagent";
   if (path.startsWith("/team")) return { "/team/projects": "teamprojects", "/team/computers": "teamcomputers", "/team/store": "teamstore", "/team/settings": "teamsettings" }[path] || "team";
   if (path === "/activity") return "activity";
   if (path === "/overview") return "teamhome";
@@ -7085,8 +7088,9 @@ async function lbPost(path, body) {
     return r;
   } catch (e) { if (!e.handled) toast(e.message, 6000); return null; }
 }
-async function lbSignin() { // Google's sign-in runs on the hosted page, in the browser; it comes back to this dashboard
-  const r = await lbPost("/api/leaderboard/signin");
+function lbSignin() { return openSignin("/api/leaderboard/signin"); }
+async function openSignin(path) { // Google's sign-in runs on the hosted page, in the browser; it comes back to this dashboard
+  const r = await lbPost(path);
   if (!r || !safeUrl(r.url)) return;
   const a = h("a", { href: r.url, target: "_blank", rel: "noopener" });
   document.body.append(a);
@@ -7119,6 +7123,15 @@ function lbYouCard(lb) {
   const period = LB_DAYS.find(([v]) => v === String(lb.days))[1];
   const mine = h("div", { class: "lb-mine" }, LB_METRICS.map(([k, label]) => fact(label, lbValue(k, lb.mine[k]))));
   const head = cardHead(t("You"), { iconName: "person", hint: t("This computer, last {period}", { period }) });
+  if (!me.joined && me.signed_in) { // signed in for the Party only: one click puts these on the board
+    return h("section", { class: "card lb-you" }, head, mine,
+      h("p", null, t("You're signed in with Google for the Party, but not on this board. Join to put these on it: only the totals go, with your first name and picture. Leave whenever you like and your row is deleted.")),
+      h("div", { class: "lb-actions" }, h("button", { class: "btn primary", type: "button", onclick: async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        if (await lbPost("/api/leaderboard/join")) { toast(t("You're on the board.")); render(); } else btn.disabled = false;
+      } }, t("Join the board as {name}", { name: me.name || "" }))));
+  }
   if (!me.joined) {
     return h("section", { class: "card lb-you" }, head, mine,
       h("p", null, t("Sign in with Google to put these on the board. Only the totals go, with your first name and picture: no email, project, prompt or title. Leave whenever you like and your row is deleted.")),
@@ -7173,6 +7186,13 @@ route(/^\/leaderboard$/, async (params) => {
     history.replaceState(null, "", "#/leaderboard");
     lastHash = location.hash;
     const r = await lbPost("/api/leaderboard/finish", { state, token });
+    if (r?.next === "party") { // a sign-in the Party started: it opens there, and nothing went to the board
+      toast(t("Signed in as {name}", { name: r.name }), 6000);
+      partyCache = null;
+      history.replaceState(null, "", "#/party");
+      render();
+      return h("div");
+    }
     if (r) toast(t("Signed in as {name}. Your totals are on the board.", { name: r.name }), 6000);
     params = {};
   }
@@ -7199,6 +7219,534 @@ function leaderboardSidebar(box) {
 }
 
 // =====================================================================================
+// Party: each coding agent is a pixel-art character that levels up from the lessons its sessions produced, matched to
+// the modules of the career roadmap (knowledge/party.py). It opens once the person signs in with Google (the
+// leaderboard's account) or is a signed-in hub person. A level says what the lessons cover, never the person's own.
+// The sprites and pixel icons come from sprites.js; without it, each agent shows its initial on its colour.
+// =====================================================================================
+const PARTY_AGENTS = ["claude", "codex", "copilot", "bob", "antigravity"];
+const PARTY_TIER = { novice: t("Novice"), adept: t("Adept"), expert: t("Expert"), master: t("Master") };
+const PARTY_COLOR = { claude: "#d97757", codex: "#14b88c", copilot: "#8b6cf0", bob: "#0f62fe", antigravity: "#e0a100" }; // until Sprites.color
+// the line icon that stands in for each pixel icon while sprites.js is missing
+const PX_STANDIN = { craft: "tool", data: "data", ops: "cloud", guard: "shield", arcana: "sparkles", lore: "knowledge", quest: "ring",
+  "quest-done": "completed", "quest-evidence": "partial", star: "sparkles", xp: "zap", lock: "shield", party: "party", journey: "history" };
+const PARTY_SHOWN_EVENTS = 40;
+let partyCache = null, partyCacheAt = 0, partyInflight = null, partyPoll = null;
+function sprites() { return window.Sprites && typeof window.Sprites.draw === "function" ? window.Sprites : null; }
+function stillMotion() { return document.documentElement.dataset.motion === "off"; } // Appearance › Animations, or Reduce motion
+function partyColor(a) {
+  try { return sprites()?.color?.(a) || PARTY_COLOR[a] || "#8a94a3"; } catch (e) { return PARTY_COLOR[a] || "#8a94a3"; }
+}
+function partyDay(day) { return day ? `${String(day).slice(0, 10)}T12:00:00` : null; } // a YYYY-MM-DD at local noon: no time zone moves it
+function tierLabel(tier) { return PARTY_TIER[tier] || PARTY_TIER.novice; }
+function tierOf(level) { return level >= 25 ? "master" : level >= 12 ? "expert" : level >= 5 ? "adept" : "novice"; } // party.py's tiers
+function pctOf(v) { return `${Math.round((v || 0) * 100)}%`; }
+function whenShown(node, fn, tries = 600) { // a page's nodes join the document once render() has all of them
+  if (node.isConnected) { fn(); return; }
+  if (tries > 0) requestAnimationFrame(() => whenShown(node, fn, tries - 1));
+}
+// An agent's sprite, idling unless animations are off. `label` names it for screen readers; `decorative` when the text
+// beside it already does.
+function partySprite(agent, { tier = "novice", scale = 4, locked = false, still = false, label = null, decorative = false } = {}) {
+  const SP = sprites(), size = (SP?.SIZE || 32) * scale;
+  const named = decorative ? { "aria-hidden": "true" } : { role: "img", "aria-label": label || agentName(agent) };
+  const standIn = () => h("span", { class: `px-sprite px-standin${locked ? " locked" : ""}`, ...named,
+    style: { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.46)}px`, "--ac": partyColor(agent) } },
+    (AGENT_SHORT[agent] || agent || "?").slice(0, 1));
+  if (!SP) return standIn();
+  const c = h("canvas", { class: "px-sprite", width: size, height: size, ...named });
+  try { SP.draw(c, { agent, tier, frame: 0, scale, locked }); } catch (e) { return standIn(); }
+  if (!still && !stillMotion() && typeof SP.animate === "function") {
+    whenShown(c, () => { try { SP.animate(c, { agent, tier, scale, locked }); } catch (e) { /* the first frame stays */ } });
+  }
+  return c;
+}
+function pxIcon(name, scale = 1) { // a 16×16 pixel icon from sprites.js, or the line icon of the same idea
+  const SP = sprites();
+  if (SP && typeof SP.icon === "function") {
+    const c = h("canvas", { class: "px-icon", width: 16 * scale, height: 16 * scale, "aria-hidden": "true" });
+    try { // an icon it doesn't know leaves the canvas empty: the line icon then
+      SP.icon(c, name, scale);
+      if (c.width && c.getContext("2d").getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 === 3 && v)) return c;
+    } catch (e) { /* the line icon */ }
+  }
+  const el = icon(PX_STANDIN[name] || "dot", "px-icon px-icon-line");
+  setStyle(el, { width: `${16 * scale}px`, height: `${16 * scale}px` });
+  return el;
+}
+function partySparkle(canvas) {
+  if (!canvas || stillMotion() || canvas.tagName !== "CANVAS") return;
+  try { sprites()?.sparkle?.(canvas); } catch (e) { /* only a flourish */ }
+}
+
+// ------------------------------------------------------------------ the payload: one request for the page and the sidebar
+function partyLoad() {
+  partyInflight ||= api("/api/party").then((p) => { partyKeep(p); return p; }).finally(() => { partyInflight = null; });
+  return partyInflight;
+}
+function partyKeep(p) { partyCache = p; partyCacheAt = Date.now(); } // a POST answers with the fresh payload too
+async function partyGet() { // a page's payload; the sidebar follows a sign-in or a sign-out
+  const was = partyCache?.signed_in;
+  let p;
+  try { p = await partyLoad(); } catch (e) {
+    if (e.status !== 403) throw e;
+    p = { signed_in: false, signing_in: false, can_sign_in: false, error: e.message }; // refused here: say how it opens
+  }
+  if (was != null && was !== p.signed_in && sbSection === "party") buildSidebar("party");
+  if (p.signed_in) clearTimeout(partyPoll);
+  return p;
+}
+function partyRefresh(p) { // after a sign-out, a quest or a goal: the page and the sidebar from the new payload
+  if (p) partyKeep(p); else partyCache = null;
+  if (sbSection === "party") buildSidebar("party");
+}
+
+// ------------------------------------------------------------------ pieces
+function partyShell(title, sub, ...body) {
+  return h("div", { class: "party-page" },
+    title ? h("div", { class: "page-head" }, h("div", { class: "head-title" }, pxIcon("party", 3),
+      h("div", null, h("h1", null, title), sub ? h("div", { class: "sub" }, sub) : null))) : null,
+    body,
+    h("p", { class: "party-foot" }, icon("fact"),
+      h("span", null, t("Levels show what your agents' lessons cover on the roadmap. They aren't your own level: the roadmap keeps that separate."))));
+}
+function lvBadge(level, big = false) {
+  return h("span", { class: `px-lv${big ? " big" : ""}` }, h("small", null, t("Lv")), h("b", null, String(level)));
+}
+function tierBadge(tier) { return h("span", { class: `px-tier t-${PARTY_TIER[tier] ? tier : "novice"}` }, tierLabel(tier)); }
+function partyLabel(a) { return t("{agent}, level {n} {tier}", { agent: a.name, n: a.level, tier: tierLabel(a.tier).toLowerCase() }); }
+// XP within the current level, in gold segments
+function xpBar(xp, from, to, level, { small = false } = {}) {
+  const span = Math.max(1, to - from), into = Math.max(0, Math.min(span, xp - from));
+  return h("div", { class: `xp${small ? " small" : ""}` },
+    h("div", { class: "xp-bar", role: "progressbar", "aria-label": t("XP toward level {n}", { n: level + 1 }),
+      "aria-valuemin": String(from), "aria-valuemax": String(to), "aria-valuenow": String(Math.min(Math.max(xp, from), to)) },
+      h("i", { style: { width: `${(into / span) * 100}%` } })),
+    small ? null : h("div", { class: "xp-text" }, h("span", null, t("{n} XP", { n: fmtNum(xp) })),
+      h("span", null, t("{n} to Lv {level}", { n: fmtNum(Math.max(0, to - xp)), level: level + 1 }))));
+}
+// the six attributes; a bar's length is its XP against the strongest attribute in the whole party
+function attrBars(a, attrs, max, { about = false } = {}) {
+  return h("ul", { class: `px-attrs${about ? " big" : ""}` }, attrs.map((at) => {
+    const v = a.attrs?.[at.id] || 0, lv = a.attr_levels?.[at.id] || 0;
+    return h("li", { title: `${at.name}: ${t("{n} XP", { n: fmtNum(v) })}` }, pxIcon(at.id, 1),
+      h("span", { class: "pa-name" }, at.name, about && at.about ? h("small", null, at.about) : null),
+      h("span", { class: "pa-bar", "aria-hidden": "true" }, h("i", { style: { width: `${v && max ? Math.max(4, (v / max) * 100) : 0}%` } })),
+      h("span", { class: "pa-lv" }, lv ? t("Lv {n}", { n: lv }) : "–"));
+  }));
+}
+function partyMax(p) { return Math.max(1, ...p.agents.flatMap((a) => Object.values(a.attrs || {}))); }
+function questTrack(qs) { // one square a quest: done, evidence found, open (the text beside it says the counts)
+  return h("span", { class: "qtrack", "aria-hidden": "true" }, qs.map((q) => h("i", { class: `q-${q.status}` })));
+}
+function questCounts(qs) {
+  const done = qs.filter((q) => q.status === "done").length, found = qs.filter((q) => q.status === "evidence").length;
+  return [t("{a} of {b} done", { a: done, b: qs.length }), found ? tn(found, "{n} with possible evidence", "{n} with possible evidence") : null].filter(Boolean).join(" · ");
+}
+
+// ------------------------------------------------------------------ the sign-in gate
+async function partySignin() { await openSignin("/api/party/signin"); }
+function partyGate(p, seq = renderSeq) {
+  clearTimeout(partyPoll);
+  if (p.signing_in) { // the sign-in runs in another tab: look again now and then
+    partyPoll = setTimeout(() => { if (seq === renderSeq && parseHash().path.startsWith("/party")) render(); }, 3000);
+  }
+  return partyShell(t("Party"), t("Your coding agents, as a party of characters."),
+    h("section", { class: "card party-gate px-frame" },
+      h("div", { class: "pg-stage px-stage" },
+        h("div", { class: "pg-sleepers", "aria-hidden": "true" }, PARTY_AGENTS.map((a) => partySprite(a, { scale: 3, locked: true, decorative: true }))),
+        h("span", { class: "pg-lock" }, pxIcon("lock", 2))),
+      h("div", { class: "pg-body" },
+        h("h2", null, t("Sign in with Google to meet your party")),
+        h("p", null, t("Each of your coding agents is a character here. It levels up from the lessons its sessions produced, matched to the modules of a career roadmap, and takes the class of the roadmap track it covers most.")),
+        p.can_sign_in ? [
+          h("p", { class: "muted" }, t("It's the leaderboard's Google account, but signing in here doesn't put you on the board.")),
+          h("div", { class: "lb-actions" }, h("button", { class: "btn primary", type: "button", onclick: partySignin }, t("Sign in with Google")),
+            p.signing_in ? h("button", { class: "btn", type: "button", onclick: async () => { if (await lbPost("/api/leaderboard/cancel")) render(); } }, t("Cancel")) : null),
+          p.signing_in ? h("div", { class: "muted lb-wait" }, t("Finish signing in on the page that opened. This page carries on by itself once you have.")) : null,
+        ] : h("p", { class: "warn-line" }, t("Signing in happens on the computer that runs Interlatch: open the Party there and sign in with Google. On a team hub, sign in to the hub as one of its people.")),
+        p.error ? h("p", { class: "muted small" }, p.error) : null)));
+}
+
+// ------------------------------------------------------------------ #/party: the leader and the five characters
+async function partySignout(p) {
+  if (!confirm(p.who?.board ? t("Sign out of the Party? This also takes you off the leaderboard: your row there is deleted.")
+    : t("Sign out of the Party? Your agents keep their levels: sign in again to see them."))) return;
+  const r = await lbPost("/api/party/signout");
+  if (!r) return;
+  partyRefresh(r);
+  toast(t("Signed out of the Party."));
+  render();
+}
+function partyLeader(p) {
+  const who = p.who || {}, main = (p.quests || []).filter((q) => q.main);
+  const out = who.kind === "google" && ME?.viewer?.here !== false
+    ? h("button", { class: "btn small", type: "button", onclick: () => partySignout(p) }, t("Sign out")) : null;
+  return h("section", { class: "card party-leader px-frame" },
+    h("div", { class: "pl-who" }, lbAvatar(who.uid, who.name, who.photo),
+      h("div", null, h("h2", null, t("{name}'s party", { name: who.name || "" })),
+        h("div", { class: "muted small" }, who.kind === "hub" ? t("Signed in to this hub") : t("Signed in with Google")))),
+    h("a", { class: "pl-quest", href: "#/party/quests" }, pxIcon("quest", 2),
+      h("div", { class: "pl-quest-text" }, h("span", { class: "px-label" }, t("Main quest")),
+        p.goal ? [h("b", null, p.goal.name), h("div", { class: "pl-progress" }, questTrack(main), h("span", { class: "muted small" }, questCounts(main)))]
+          : h("b", null, t("No main quest yet: pick a goal track")))),
+    out);
+}
+// the class, or while there is none (few lessons, or low coverage) "No class yet" and the track it leans towards
+function partyClassLine(a, { category = false } = {}) {
+  const lean = !a.class && a.classes?.length ? a.classes[0] : null;
+  return h("div", { class: "pc-class" }, h("span", { class: "px-label" }, t("Class")),
+    a.class ? [h("b", null, a.class.name), h("span", { class: "muted" }, [category ? a.class.category_name : null,
+      t("{pct} covered", { pct: pctOf(a.class.coverage) })].filter(Boolean).join(" · "))]
+      : [h("b", null, t("No class yet")), lean ? h("span", { class: "muted" }, t("Leaning towards {track}", { track: lean.name })) : null]);
+}
+function partyRecruit(a) { return !a.counted; } // no lesson of its counts yet
+function partyCard(a, attrs, max) {
+  const recruit = partyRecruit(a);
+  return h("a", { class: `party-card px-frame${recruit ? " recruit" : ""}`, href: `#/party/${a.agent}`, style: { "--ac": partyColor(a.agent) },
+    "aria-label": [partyLabel(a), a.class?.name].filter(Boolean).join(" · ") }, // the whole card would make a long name
+    h("div", { class: "pc-stage px-stage" }, partySprite(a.agent, { tier: a.tier, scale: 4, label: partyLabel(a) }), tierBadge(a.tier)),
+    h("div", { class: "pc-head" }, h("b", { class: "pc-name" }, a.name), lvBadge(a.level)),
+    xpBar(a.xp, a.level_xp, a.next_xp, a.level),
+    recruit ? h("div", { class: "pc-recruit" }, h("b", null, t("No lessons yet")), h("span", null, t("A recruit: it levels up once its sessions produce lessons.")))
+      : [partyClassLine(a),
+        attrBars(a, attrs, max),
+        a.skills?.length ? h("div", { class: "pc-top" }, h("span", { class: "px-label" }, t("Top skills")),
+          h("ol", { class: "pc-skills" }, a.skills.slice(0, 3).map((sk) => h("li", null, h("span", null, sk.name), h("b", null, t("Lv {n}", { n: sk.level })))))) : null]);
+}
+route(/^\/party$/, async () => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  return partyShell(t("Party"), t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
+    partyLeader(p), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p)))));
+});
+
+// ------------------------------------------------------------------ #/party/quests: the quest log and the goal
+function partyEvidence(e) {
+  const meta = h("span", { class: "muted" }, [e.agent ? agentShort(e.agent) : null, e.at ? fmtDate(partyDay(e.at)) : null].filter(Boolean).join(" · "));
+  if (e.kind === "artifact") {
+    const u = safeUrl(e.url); // only a web address opens: never a file path, a javascript: or a data: link
+    return h("li", null, icon(ICONS[e.artifact_kind] ? e.artifact_kind : "artifacts"),
+      u ? h("a", { href: u, target: "_blank", rel: "noopener", title: e.title || u }, e.title || u) : h("span", { title: e.title }, e.title), meta);
+  }
+  return h("li", null, icon("learning"),
+    e.session_id ? h("a", { href: `#/session/${e.session_id}`, title: e.title }, e.title) : h("span", { title: e.title }, e.title), meta);
+}
+function partyQuest(q, draw) {
+  const [ic, label] = { done: ["quest-done", t("Done")], evidence: ["quest-evidence", t("Possible evidence")] }[q.status] || ["quest", tc("quest", "Open")];
+  const btn = h("button", { class: `btn small${q.status === "evidence" ? " primary" : ""}`, type: "button", onclick: async () => {
+    btn.disabled = true;
+    const done = q.status !== "done";
+    const r = await lbPost("/api/party/quest", { id: q.id, done });
+    if (!r) { btn.disabled = false; return; }
+    partyRefresh(r);
+    if (done) toast(t("Quest complete: {text}", { text: q.text }));
+    draw(r, { sparkle: done ? q.id : null, focus: q.id });
+  } }, q.status === "done" ? t("Undo") : t("Mark done"));
+  return h("li", { class: `quest qs-${q.status}`, "data-quest": q.id },
+    h("span", { class: "q-icon" }, pxIcon(ic, 2)),
+    h("div", { class: "q-body" },
+      h("div", { class: "q-top" }, h("span", { class: "px-label" }, `G${q.n}`), h("span", { class: `q-status s-${q.status}` }, label),
+        q.done_at ? h("span", { class: "muted small" }, t("on {date}", { date: fmtDateY(q.done_at) })) : null),
+      h("div", { class: "q-text" }, q.text),
+      q.evidence?.length ? h("ul", { class: "q-evidence", "aria-label": t("Evidence") }, q.evidence.map(partyEvidence))
+        : q.status === "open" ? h("div", { class: "muted small q-none" }, t("Nothing in your sessions matches it yet.")) : null),
+    h("div", { class: "q-act" }, btn));
+}
+function partyGoal(p, draw, tracksP) {
+  const sel = h("select", { "aria-label": t("Goal track"), disabled: true }, h("option", null, t("Loading…")));
+  const choose = async (track, btn) => {
+    btn.disabled = true;
+    const r = await lbPost("/api/party/goal", { track });
+    btn.disabled = false;
+    if (!r) return;
+    partyRefresh(r);
+    toast(track ? t("Your main quest now follows {track}.", { track: r.goal?.name || track }) : t("Back to the default goal."));
+    draw(r, { goal: true });
+  };
+  const set = h("button", { class: "btn small primary", type: "button", disabled: true, onclick: () => choose(sel.value, set) }, t("Set as goal"));
+  const sync = () => { set.disabled = sel.disabled || !sel.value || sel.value === p.goal?.id; };
+  sel.addEventListener("change", sync);
+  tracksP.then((r) => {
+    if (r.error) { sel.replaceChildren(h("option", null, t("Could not load: {error}", { error: r.error }))); return; }
+    sel.replaceChildren(...(p.goal ? [] : [h("option", { value: "", selected: true }, t("Choose a track…"))]),
+      ...(r.categories || []).map((c) => h("optgroup", { label: c.name },
+        c.tracks.map((tr) => h("option", { value: tr.id, selected: tr.id === p.goal?.id }, tr.name)))));
+    sel.disabled = false;
+    sync();
+  });
+  const reset = p.goal?.chosen ? h("button", { class: "btn small", type: "button", onclick: () => choose(null, reset) }, t("Back to the default")) : null;
+  const row = h("div", { class: "pq-goal-row" }, sel, set, reset);
+  if (!p.goal) { // no main quest yet: the picker is the main quest's card
+    return h("section", { class: "card pq-main pq-goal px-frame" },
+      h("div", { class: "pq-head" }, pxIcon("quest", 2),
+        h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, t("No main quest yet: pick a goal track")))),
+      h("p", { class: "muted" }, t("Pick the roadmap track you're working toward: its four milestones become your main quest, and Interlatch looks for evidence of each in your sessions.")),
+      row);
+  }
+  return h("section", { class: "card pq-goal" }, cardHead(t("Your goal"), { iconName: "pin" }),
+    h("p", { class: "muted" }, t("Pick the roadmap track you're working toward: its four milestones become your main quest. Until you pick one, it's the class of your highest-level agent.")),
+    row);
+}
+function partyQuests(p, draw, tracksP) {
+  const quests = p.quests || [], main = quests.filter((q) => q.main), side = [];
+  for (const q of quests.filter((x) => !x.main)) {
+    let g = side.find((x) => x.id === q.track);
+    if (!g) side.push(g = { id: q.track, name: q.track_name, quests: [] });
+    g.quests.push(q);
+  }
+  return [
+    p.goal ? null : partyGoal(p, draw, tracksP),
+    p.goal ? h("section", { class: "card pq-main px-frame" },
+      h("div", { class: "pq-head" }, pxIcon("quest", 2),
+        h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, p.goal.name),
+          h("div", { class: "muted small" }, p.goal?.chosen ? t("The goal you picked") : t("Your highest-level agent's class, until you pick a goal"))),
+        h("div", { class: "pq-progress" }, questTrack(main), h("span", null, questCounts(main)))),
+      main.length ? h("ol", { class: "quests" }, main.map((q) => partyQuest(q, draw))) : h("div", { class: "empty" }, t("No quests yet"))) : null,
+    side.length ? h("section", { class: "card pq-side" }, cardHead(t("Side quests"), { iconName: "branch", hint: t("From the classes of your other agents") }),
+      side.map((g) => h("div", { class: "pq-track" }, h("h3", null, g.name), h("ol", { class: "quests" }, g.quests.map((q) => partyQuest(q, draw)))))) : null,
+    p.goal ? partyGoal(p, draw, tracksP) : null,
+  ];
+}
+route(/^\/party\/quests$/, async () => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const tracksP = api("/api/party/tracks").catch((e) => ({ error: e.message, categories: [] }));
+  const body = h("div", { class: "pq" });
+  const draw = (payload, { sparkle = null, focus = null, goal = false } = {}) => { // redrawn from a POST's answer: focus stays put
+    body.replaceChildren(...partyQuests(payload, draw, tracksP).filter(Boolean));
+    const quest = (id) => [...body.querySelectorAll("[data-quest]")].find((li) => li.dataset.quest === id);
+    if (sparkle) partySparkle(quest(sparkle)?.querySelector(".q-icon canvas"));
+    if (focus) quest(focus)?.querySelector(".q-act button")?.focus();
+    if (goal) tracksP.then(() => body.querySelector(".pq-goal select")?.focus()); // after the picker has its tracks
+  };
+  draw(p);
+  return partyShell(t("Quests"), t("The main quest follows your goal on the roadmap. Interlatch finds evidence in your sessions; only you mark a quest done."), body);
+});
+
+// ------------------------------------------------------------------ #/party/journey: the timeline and the levels over time
+function weekOf(day) { const d0 = new Date(partyDay(day)); d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7)); return localDate(d0); }
+function partyEvent(ev, a) {
+  const who = h("b", null, a?.short || agentShort(ev.agent));
+  let text, sub = null;
+  if (ev.type === "join") text = tx("{agent} joined the party", { agent: who });
+  else if (ev.type === "level") text = tx("{agent} reached level {n}", { agent: who, n: String(ev.level) });
+  else if (ev.type === "skill") {
+    text = tx("{agent} reached {skill} Lv {n}", { agent: who, skill: h("b", null, ev.module_name || ev.module || ""), n: String(ev.level) });
+  } else if (ev.type === "class") text = tx("{agent}'s class is now {class}", { agent: who, class: h("b", null, ev.track_name || ev.track || "") });
+  else if (ev.type === "quest") text = [t("Quest complete: {text}", { text: ev.text || ev.track_name || "" })];
+  else text = [who];
+  if (ev.lesson?.title && (ev.type === "skill" || ev.type === "class")) { // the lesson that tipped it, opening its session
+    const title = ev.lesson.session_id ? h("a", { href: `#/session/${ev.lesson.session_id}` }, ev.lesson.title) : ev.lesson.title;
+    sub = tx("Lesson: {title}", { title });
+  }
+  const mark = ev.type === "quest" || !PARTY_AGENTS.includes(ev.agent) ? pxIcon("quest-done", 2)
+    : partySprite(ev.agent, { tier: ev.type === "level" ? tierOf(ev.level) : a?.tier, scale: 1, still: true, decorative: true });
+  return h("li", { class: `pj-ev pj-${ev.type}` }, h("span", { class: "pj-who" }, mark),
+    h("div", { class: "pj-text" }, h("div", null, text), sub ? h("div", { class: "pj-sub", title: ev.lesson.title }, sub) : null),
+    h("span", { class: "pj-when" }, fmtDate(partyDay(ev.at))));
+}
+function partyJourney(p) {
+  const evs = p.journey || [];
+  if (!evs.length) return h("section", { class: "card" }, emptyArt("clock", h("b", null, t("No journey yet")), h("div", { class: "muted" }, t("It starts with your agents' first lessons."))));
+  const byAgent = Object.fromEntries(p.agents.map((a) => [a.agent, a]));
+  const box = h("div", { class: "pj" });
+  let week = null, list = null;
+  const add = (from, to) => evs.slice(from, to).forEach((ev) => {
+    const wk = weekOf(ev.at);
+    if (wk !== week) {
+      week = wk;
+      list = h("ol", { class: "pj-list" });
+      box.append(h("div", { class: "pj-week" }, h("div", { class: "tl-head" }, h("b", null, t("Week of {date}", { date: fmtDateY(partyDay(wk)) }))), list));
+    }
+    list.append(partyEvent(ev, byAgent[ev.agent]));
+  });
+  add(0, PARTY_SHOWN_EVENTS);
+  const more = evs.length > PARTY_SHOWN_EVENTS ? h("button", { class: "btn small pj-more", type: "button", onclick: () => { add(PARTY_SHOWN_EVENTS, evs.length); more.remove(); } },
+    t("Show {n} more", { n: evs.length - PARTY_SHOWN_EVENTS })) : null;
+  return h("section", { class: "card" }, cardHead(t("Timeline"), { iconName: "history", hint: t("newest first") }), box, more);
+}
+function levelAt(series, week) { let pt = null; for (const x of series) { if (x[0] <= week) pt = x; else break; } return pt; }
+// one step line per agent: its level at the end of each week with lessons, carried on to today
+function partyStepChart(box, width, p, agents) {
+  const narrow = width < 520, height = 230, m = { l: 32, r: narrow ? 12 : 104, t: 12, b: 26 };
+  const iw = Math.max(40, width - m.l - m.r), ih = height - m.t - m.b;
+  const firsts = agents.map((a) => new Date(partyDay(p.series[a.agent][0][0])).getTime());
+  const t0 = Math.min(...firsts), t1 = Math.max(t0 + 14 * 86400000, Date.now());
+  const xAt = (ms) => ((ms - t0) / (t1 - t0)) * iw, x = (day) => xAt(new Date(partyDay(day)).getTime());
+  const ticks = niceTicks(Math.max(2, ...agents.map((a) => a.level)), 4), top = ticks[ticks.length - 1] || 1;
+  const y = (lv) => ih - (lv / top) * ih;
+  const svg = s("svg", { width, height, viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": t("Each agent's level over time") });
+  const g = s("g", { transform: `translate(${m.l},${m.t})` });
+  svg.append(g);
+  for (const v of ticks) {
+    g.append(s("line", { class: v === 0 ? "baseline" : "gridline", x1: 0, x2: iw, y1: Math.round(y(v)) + 0.5, y2: Math.round(y(v)) + 0.5 }));
+    g.append(s("text", { class: "chart-label tick-num", x: -8, y: y(v) + 3.5, "text-anchor": "end" }, String(v)));
+  }
+  const month = new Date(t0); month.setDate(1); month.setHours(12, 0, 0, 0); month.setMonth(month.getMonth() + 1);
+  for (let lastX = -99; month.getTime() < t1; month.setMonth(month.getMonth() + 1)) {
+    const mx = xAt(month.getTime());
+    if (mx - lastX < 44) continue;
+    lastX = mx;
+    g.append(s("line", { class: "baseline", x1: mx, x2: mx, y1: ih, y2: ih + 4 }));
+    g.append(s("text", { class: "chart-label", x: mx, y: ih + 17, "text-anchor": "middle" }, month.toLocaleString(LOCALE, { month: "short" })));
+  }
+  const ends = [];
+  for (const a of agents) {
+    const pts = p.series[a.agent], col = partyColor(a.agent);
+    let d = `M${x(pts[0][0]).toFixed(1)},${y(pts[0][1]).toFixed(1)}`;
+    for (const pt of pts.slice(1)) d += `H${x(pt[0]).toFixed(1)}V${y(pt[1]).toFixed(1)}`;
+    g.append(s("path", { class: "pchart-line", d: `${d}H${iw}`, stroke: col }));
+    for (const pt of pts) {
+      const dot = s("rect", { class: "pchart-dot", x: x(pt[0]) - 3, y: y(pt[1]) - 3, width: 6, height: 6, fill: col });
+      hoverable(dot, () => [t("Lv {n}", { n: pt[1] }), `${a.name} · ${t("Week of {date}", { date: fmtDate(partyDay(pt[0])) })}`, t("{n} XP", { n: fmtNum(pt[2]) })], { focusable: false });
+      g.append(dot);
+    }
+    ends.push({ a, y: y(pts[pts.length - 1][1]) });
+  }
+  if (!narrow) { // the names at the right end, nudged apart where levels meet
+    ends.sort((e1, e2) => e1.y - e2.y);
+    ends.forEach((e, i) => { if (i && e.y - ends[i - 1].y < 13) e.y = ends[i - 1].y + 13; });
+    ends.forEach((e) => g.append(s("text", { class: "pchart-end", x: iw + 8, y: e.y + 4 }, `${e.a.short} ${e.a.level}`)));
+  }
+  box.append(svg, h("div", { class: "pchart-legend" }, agents.map((a) => h("span", null, h("i", { style: { background: partyColor(a.agent) } }),
+    `${a.short} · ${t("Lv {n}", { n: a.level })}`))));
+}
+function partyLevelChart(p) {
+  const agents = p.agents.filter((a) => (p.series?.[a.agent] || []).length);
+  if (!agents.length) return null;
+  const weeks = [...new Set(agents.flatMap((a) => p.series[a.agent].map((pt) => pt[0])))].sort().reverse();
+  const table = () => ({ columns: [t("Week"), ...agents.map((a) => a.short)], num: [false, ...agents.map(() => true)],
+    rows: weeks.map((w) => [fmtDateY(partyDay(w)), ...agents.map((a) => { const pt = levelAt(p.series[a.agent], w); return pt ? String(pt[1]) : "–"; })]) });
+  return chartCard(t("Levels over time"), t("Each agent's level at the end of each week with lessons"), (box, w) => partyStepChart(box, w, p, agents), table, [], "status");
+}
+route(/^\/party\/journey$/, async () => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  return partyShell(t("Journey"), t("How your party grew, newest first."), partyLevelChart(p), partyJourney(p));
+});
+
+// ------------------------------------------------------------------ #/party/<agent>: one character
+function partySkillDetail(r) {
+  const lesson = (l) => h("li", null, kindChip(l.kind),
+    h("div", { class: "psl-main" }, l.session_id ? h("a", { href: `#/session/${l.session_id}` }, l.title) : h("span", null, l.title),
+      h("div", { class: "psl-meta" }, [STAGE_LABEL[l.stage || "provisional"] || l.stage, t("+{n} XP", { n: l.xp }),
+        l.created_at ? fmtDate(l.created_at) : null, l.project_name].filter(Boolean).join(" · "))));
+  const lessons = r.lessons || [];
+  return [
+    r.about?.length ? h("div", { class: "psd-block" }, h("span", { class: "px-label" }, t("What the module covers")),
+      h("ul", { class: "psd-study" }, r.about.map((x) => h("li", null, x)))) : null,
+    r.practice || r.gate ? h("div", { class: "psd-block psd-you" }, h("span", { class: "px-label" }, t("On the roadmap, for you")),
+      r.practice ? h("p", null, h("b", null, t("Practice")), " ", r.practice) : null,
+      r.gate ? h("p", null, h("b", null, t("Gate")), " ", r.gate) : null) : null,
+    h("div", { class: "psd-block" }, h("span", { class: "px-label" }, tn(lessons.length, "The lesson that earned it", "The {n} lessons that earned it", { n: fmtNum(lessons.length) })),
+      lessons.length ? capped(lessons, lesson, 8, "psl-list") : h("div", { class: "muted small" }, t("No lessons"))),
+  ];
+}
+function partySkillRow(a, sk) {
+  const id = `psd-${a.agent}-${sk.module}`.replace(/[^\w-]/g, "-");
+  const detail = h("div", { class: "ps-detail", id, hidden: true });
+  let loaded = false;
+  const btn = h("button", { type: "button", class: "ps-row", "aria-expanded": "false", "aria-controls": id, onclick: async () => {
+    const open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    detail.hidden = !open;
+    if (!open || loaded) return;
+    loaded = true;
+    detail.replaceChildren(h("div", { class: "muted small" }, t("Loading…")));
+    try {
+      const r = await api("/api/party/skill", { agent: a.agent, module: sk.module });
+      detail.replaceChildren(...partySkillDetail(r).filter(Boolean));
+    } catch (e) {
+      loaded = false;
+      if (!e.handled) detail.replaceChildren(h("div", { class: "warn-line" }, t("Could not load: {error}", { error: e.message })));
+    }
+  } },
+    h("span", { class: "ps-name", title: sk.name }, sk.name),
+    h("span", { class: "ps-lv" }, t("Lv {n}", { n: sk.level })),
+    xpBar(sk.xp, sk.level_xp, sk.next_xp, sk.level, { small: true }),
+    h("span", { class: "ps-n" }, tn(sk.lessons, "{n} lesson", "{n} lessons", { n: fmtNum(sk.lessons) })),
+    icon("chevron", "ps-chev"));
+  return h("li", null, btn, detail);
+}
+function partySkills(a, attrs) {
+  const groups = attrs.map((at) => [at, (a.skills || []).filter((sk) => sk.attr === at.id)]).filter(([, list]) => list.length);
+  return h("section", { class: "card" }, cardHead(t("Skills"), { iconName: "learning", hint: t("Open one to see the lessons that earned it") }),
+    groups.length ? groups.map(([at, list]) => h("div", { class: "ps-group" },
+      h("div", { class: "ps-attr" }, pxIcon(at.id, 1), h("b", null, at.name), h("span", { class: "muted small" }, tn(list.length, "{n} skill", "{n} skills"))),
+      h("ul", { class: "ps-list" }, list.map((sk) => partySkillRow(a, sk)))))
+      : emptyArt("book", h("b", null, t("No skills yet")), h("div", { class: "muted" }, t("A skill appears once one of this agent's lessons matches a module of the roadmap."))));
+}
+function trackPath(tr, agent) { // the track's modules in their suggested order, each lit by the agent's level there
+  return h("ol", { class: "px-path", "aria-label": t("{track}: its modules in order", { track: tr.name }) }, (tr.modules || []).map((m) => {
+    const lv = m.agents?.[agent]?.level || 0;
+    const note = [m.name, lv ? t("Lv {n}", { n: lv }) : t("not covered yet"), m.target ? t("target L{n}", { n: m.target }) : null,
+      m.critical ? t("critical gate") : null].filter(Boolean).join(" · ");
+    return h("li", { class: `pp-node${lv >= 5 ? " lit-3" : lv >= 3 ? " lit-2" : lv ? " lit-1" : ""}${m.critical ? " critical" : ""}`, title: note },
+      h("span", { class: "pp-tile", "aria-hidden": "true" }, lv ? String(lv) : ""),
+      h("span", { class: "pp-name", "aria-hidden": "true" }, m.name),
+      h("span", { class: "sr-only" }, note));
+  }));
+}
+function partyClasses(a) {
+  const row = (c, i) => {
+    const path = h("div", { class: "pcl-path" }, h("span", { class: "muted small" }, t("Loading…")));
+    api("/api/party/track", { id: c.id }).then((tr) => path.replaceChildren(trackPath(tr, a.agent)))
+      .catch((e) => { if (!e.handled) path.replaceChildren(h("span", { class: "muted small" }, t("Could not load: {error}", { error: e.message }))); });
+    return h("div", { class: "pcl" },
+      h("div", { class: "pcl-head" }, h("span", { class: "pcl-rank" }, String(i + 1)), h("b", null, c.name), h("span", { class: "pcl-cov" }, t("{pct} covered", { pct: pctOf(c.coverage) }))),
+      h("span", { class: "pa-bar pcl-bar", "aria-hidden": "true" }, h("i", { style: { width: pctOf(c.coverage) } })),
+      path);
+  };
+  return h("section", { class: "card" }, cardHead(a.class ? t("Top classes") : t("Tracks it leans towards"), { iconName: "map", hint: t("The roadmap tracks its lessons cover most") }),
+    a.classes?.length ? [h("div", { class: "pcl-list" }, a.classes.slice(0, 3).map(row)),
+      h("p", { class: "muted small pcl-legend" }, t("Each square is one of the track's modules, in the order the roadmap suggests, lit by {agent}'s skill level there: full at Lv 5. A gold corner marks a critical gate.", { agent: a.short }))]
+      : h("div", { class: "empty" }, t("No class yet: its lessons don't cover a roadmap track.")));
+}
+route(/^\/party\/([\w-]+)$/, async (params, agent) => {
+  const token = renderSeq; // this view's render: one that finishes after the person moved on names nothing
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const a = p.agents.find((x) => x.agent === agent);
+  if (!a) return partyShell(t("Party"), null, h("section", { class: "card empty" }, t("No such character in your party.")));
+  setCrumbs([[t("Party"), "#/party"], [a.name]], token);
+  const hero = h("section", { class: "card party-hero px-frame" },
+    h("div", { class: "ph-stage px-stage" }, partySprite(a.agent, { tier: a.tier, scale: 8, label: partyLabel(a) })),
+    h("div", { class: "ph-main" },
+      h("div", { class: "ph-title" }, h("h1", null, a.name), tierBadge(a.tier)),
+      h("div", { class: "ph-level" }, lvBadge(a.level, true), xpBar(a.xp, a.level_xp, a.next_xp, a.level)),
+      partyRecruit(a) ? h("div", { class: "ph-class muted" }, t("No lessons yet: a recruit levels up once its sessions produce lessons."))
+        : partyClassLine(a, { category: true }),
+      h("div", { class: "ph-facts" },
+        fact(t("sessions"), fmtNum(a.sessions)), fact(t("lessons"), fmtNum(a.lessons)), fact(t("earning XP"), fmtNum(a.counted)),
+        fact(t("since"), a.since ? fmtDateY(partyDay(a.since)) : "–"), fact(t("latest"), a.last ? fmtDateY(partyDay(a.last)) : "–"))));
+  const page = partyShell(null, null, hero,
+    h("div", { class: "ph-grid" },
+      h("section", { class: "card" }, cardHead(t("Attributes"), { iconName: "party", hint: t("The XP of the skills under each") }), attrBars(a, p.attrs, partyMax(p), { about: true })),
+      partySkills(a, p.attrs)),
+    partyClasses(a));
+  setStyle(page, { "--ac": partyColor(a.agent) });
+  return page;
+});
+async function partySidebar(box) {
+  const p = partyCache && Date.now() - partyCacheAt < 5000 ? partyCache : await partyLoad().catch(() => null);
+  const on = !!p?.signed_in;
+  const review = on ? (p.quests || []).filter((q) => q.main && q.status === "evidence").length : 0;
+  const agentRow = (a) => h("a", { class: "sb-row sb-party", href: `#/party/${a.agent}`, title: partyLabel(a), "data-route": `/party/${a.agent}`, "data-key": "", "data-val": "" },
+    agentIcon(a.agent), h("span", null, a.name), h("em", null, t("Lv {n}", { n: a.level })));
+  box.replaceChildren(h("div", { class: "sb-head" }, h("h2", null, t("Party"))),
+    h("div", { class: "sb-scroll" },
+      sbRow(t("Party"), "#/party", "party", null, ["/party"]),
+      sbRow(t("Quests"), "#/party/quests", "todo", review || null, ["/party/quests"]),
+      sbRow(t("Journey"), "#/party/journey", "history", null, ["/party/journey"]),
+      h("div", { class: "sb-group" }, t("Characters")),
+      on ? p.agents.map(agentRow) : h("div", { class: "sb-empty" }, t("Sign in to meet your party."))));
+}
+
+// =====================================================================================
 // Shell: rail, section sidebar, toolbar, status bar, command palette
 // =====================================================================================
 const SECTIONS = [
@@ -7211,14 +7759,15 @@ const SECTIONS = [
   { key: "artifacts", label: t("Artifacts"), href: "#/artifacts" },
   { key: "projects", label: t("Projects"), href: "#/projects" },
   { key: "suggestions", label: t("Suggestions"), href: "#/suggestions" },
+  { key: "party", label: t("Party"), href: "#/party" }, // a hub's people have theirs too
   { key: "leaderboard", label: t("Leaderboard"), href: "#/leaderboard", here: true }, // signing in keeps a credential: this computer only
   { key: "team", label: t("Team"), href: "#/team" }, // a hub's admins
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", leaderboard: "leaderboard", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", party: "party", partyquests: "party", partyjourney: "party", partyagent: "party", leaderboard: "leaderboard", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
-const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), appearance: t("Appearance") };
+const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), partyquests: t("Quests"), partyjourney: t("Journey"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), appearance: t("Appearance") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 
@@ -7450,6 +7999,7 @@ async function buildSidebar(section) {
     else if (section === "projects") await projectsSidebar(box);
     else if (section === "artifacts") await artifactsSidebar(box);
     else if (section === "suggestions") await suggestionsSidebar(box);
+    else if (section === "party") await partySidebar(box);
     else if (section === "leaderboard") leaderboardSidebar(box);
     else if (section === "team") teamSidebar(box);
     else settingsSidebar(box);
@@ -7555,6 +8105,7 @@ function paletteCommands() {
     nav(t("Glossary"), "#/glossary", "glossary"), nav(t("Map"), "#/map", "map"), nav(t("Projects"), "#/projects", "projects"), nav(t("Systems map"), "#/systems", "systems", t("every project, its parts and links")), nav(t("Artifacts"), "#/artifacts", "artifacts", t("what your agents made")),
     nav(t("Global playbook"), `#/project?path=${encodeURIComponent("__global__")}`, "playbook"), nav(t("Weekly reviews"), "#/reviews", "reviews"),
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
+    nav(t("Party"), "#/party", "party", t("your agents as characters")), nav(t("Quests"), "#/party/quests", "todo", t("Party")), nav(t("Journey"), "#/party/journey", "history", t("Party")),
     nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
@@ -7576,7 +8127,7 @@ function paletteCommands() {
     } },
   ].filter((x) => (!x.admin || canAdmin()) && (!x.hub || ME?.hub) && (!x.team || ME?.hub?.team)
     && !(dedicated() && (DEDICATED_HIDDEN_HREFS.has(x.href) || x.run === syncNow))
-    && (!limited() || !x.href || ["#/", "#/overview", "#/sessions", "#/knowledge/all", "#/learn", "#/projects"].includes(x.href)));
+    && (!limited() || !x.href || ["#/", "#/overview", "#/sessions", "#/knowledge/all", "#/learn", "#/projects", "#/party", "#/party/quests", "#/party/journey"].includes(x.href)));
 }
 async function paletteSearch(q) {
   const lq = q.toLowerCase();
@@ -7673,7 +8224,7 @@ function canAdmin() { return !ME || (ME.viewer?.role ?? "admin") === "admin"; }
 // someone limited to some projects of this hub: the server answers only Home, Sessions, Knowledge and Projects for
 // them, each session as its summary and project lessons (access.py); the rest of the dashboard is hidden
 function limited() { return Array.isArray(ME?.viewer?.projects) && ME.viewer.role !== "admin"; }
-const LIMITED_SECTIONS = new Set(["home", "teamhome", "sessions", "knowledge", "projects"]);
+const LIMITED_SECTIONS = new Set(["home", "teamhome", "sessions", "knowledge", "projects", "party"]); // the Party: their own log
 // A dedicated hub (`[hub] dedicated`, which the Docker image sets): a server for the team with no sessions of its own.
 // Team overview is its home, and what only a person's own computer needs (Sync, artifacts, suggestions, sources, MCP,
 // devices) is left out.

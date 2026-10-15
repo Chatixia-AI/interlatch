@@ -82,7 +82,11 @@ def cmd_leaderboard(args) -> int:
     cfg = load_cfg()
     console = new_console()
     try:
-        if args.action == "join":  # signing in is a browser's job: Google's page, then back to the dashboard
+        if args.action == "join" and lb.status(cfg)["signed_in"]:  # signed in already (for the Party): join from here
+            conn = open_archive(cfg)
+            lb.join(cfg, conn)
+            conn.close()
+        elif args.action == "join":  # signing in is a browser's job: Google's page, then back to the dashboard
             import webbrowser
 
             url = f"http://127.0.0.1:{cfg.server_port}/#/leaderboard"
@@ -96,17 +100,24 @@ def cmd_leaderboard(args) -> int:
             conn = open_archive(cfg)
             st = lb.send(cfg, conn, force=True)
             conn.close()
-            if st is None:
+            if not lb.on_board(st):
                 console.print("Not on the leaderboard: `interlatch leaderboard join`.", highlight=False)
                 return 1
         elif args.action == "leave":
+            was = lb.status(cfg)
             lb.leave(cfg)
-            console.print("Left the leaderboard: your row is deleted, and nothing more is sent.", highlight=False)
+            console.print("Left the leaderboard: your row is deleted, and nothing more is sent." if was["joined"] else
+                          "Signed out: this computer forgot the Google sign-in." if was["signed_in"] else
+                          "Not signed in.", highlight=False)
             return 0
     except lb.LeaderboardError as exc:
         console.print(f"[red]{exc}[/]", highlight=False)
         return 1
     st = lb.status(cfg)
+    if st["signed_in"] and not st["joined"]:
+        console.print(f"Signed in as [bold]{st['name']}[/] for the Party, not on the leaderboard: "
+                      "`interlatch leaderboard join` joins it.", highlight=False)
+        return 0
     if not st["joined"]:
         console.print("Not on the leaderboard. `interlatch leaderboard join` opens the dashboard's Leaderboard page, "
                       "where you sign in with Google.", highlight=False)
