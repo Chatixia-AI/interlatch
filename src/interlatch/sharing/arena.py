@@ -151,7 +151,9 @@ def board(me_uid: str | None, *, now=None) -> list[dict]:
         with _lock:
             _cache["standings"] = (key, table)
     rows = [{"uid": u, "name": s["name"], "photo": s["photo"], "wins": table[u]["wins"], "losses": table[u]["losses"],
-             "power": rules.power(s["agents"]), "champion": s["champion"], "me": u == me_uid} for u, s in got.items()]
+             "power": rules.power(s["agents"]), "champion": s["champion"], "me": u == me_uid,
+             "agents": {s["champion"]: s["agents"][s["champion"]]}}  # the champion's level and tier, for its sprite
+            for u, s in got.items()]
     rows.sort(key=lambda r: (-r["wins"], r["losses"], -r["power"], r["name"], r["uid"]))
     return [{"rank": i + 1, **r} for i, r in enumerate(rows)]
 

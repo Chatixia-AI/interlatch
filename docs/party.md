@@ -38,12 +38,13 @@ own computers' sessions only. A teammate's sessions never level up your agents.
 ## Quests and the journey
 
 The **main quest** is the four milestones of your goal track. It starts as your strongest agent's class, and you can
-pick another under **Quests**. Your other agents' classes add side quests. Interlatch marks a quest *possible evidence*
+pick another under **Quests**. Your agents' other classes add side quests. Interlatch marks a quest *possible evidence*
 when a pull request, commit, document or lesson matches it, but only you mark it done. The roadmap asks for a
 person's review before a milestone counts.
 
 **Journey** lists level-ups week by week: when each agent joined, reached a level, learned a skill or changed class,
-and when you completed a quest, with a chart of each agent's level over time.
+and when you completed a quest, with a chart of each agent's level over time. A lesson that lifted several skills at
+once is one line. Every join, level, class and quest stays on the list; of the skill-ups, the newest 120 do.
 
 ## The journey on Home
 
@@ -75,9 +76,10 @@ board leaves the arena too.
 
 ## Who's hiring
 
-Each class shows who's hiring for it. **Hiring** gives the open technical roles that fit the track and their share of
-all the postings, worldwide, and the count in Japan, marked a small sample while Japan has fewer than 500 postings in
-it. Under **Quests** you can sort the goal tracks by demand, each with its open roles. A character's top classes list
+Each class shows who's hiring for it. **Hiring** gives the open technical roles that fit the track, worldwide, and
+their share of demand: each company's postings count with less weight the more it has, so one big hirer can't swamp the
+share. The count in Japan shows once Japan has at least 500 postings in the sample; until then the note under the
+numbers says how many it has. Under **Quests** you can sort the goal tracks by demand, each with its open roles. A character's top classes list
 the modules employers ask for most, and a green corner marks them on the track.
 
 The numbers come from the public job boards of dozens of companies, read through the boards' official APIs. Only

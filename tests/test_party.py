@@ -282,6 +282,8 @@ def test_class_quests_and_evidence(home):
         _lesson(conn, copilot, "pytest sql query token deploy prompt", stage="canonical", agent="copilot")
     conn.execute("INSERT INTO artifacts(session_id, key, kind, title, url, ts) VALUES (?, 'pr:1', 'pr', "
                  "'PR #1 the migration', 'https://github.com/x/y/pull/1', '2026-09-02T00:00:00.000Z')", (sid,))
+    conn.execute("INSERT INTO artifacts(session_id, key, kind, title, url, ts) VALUES (?, 'commit:abc', 'commit', "
+                 "'PR #1  the Migration', NULL, '2026-09-03T00:00:00.000Z')", (sid,))  # its commit, newer: the PR stays, once
     conn.execute("INSERT INTO artifacts(session_id, key, kind, title, url, ts) VALUES (?, 'img', 'image', "
                  "'a migration picture', NULL, '2026-09-02T00:00:00.000Z')", (sid,))  # not a kind that shows work
     conn.commit()
@@ -307,6 +309,16 @@ def test_class_quests_and_evidence(home):
     assert q["backend-G2"]["status"] == "evidence" and q["backend-G2"]["evidence"][0]["kind"] == "lesson"
     assert q["backend-G3"]["status"] == "open" and q["backend-G3"]["evidence"] == []
     assert q["backend-G4"]["status"] == "evidence" and q["backend-G4"]["evidence"][0]["title"] == "a note"
+
+
+def test_a_skill_lists_its_lessons_up_to_the_cap_and_counts_them_all(home, monkeypatch):
+    conn = home["conn"]
+    sid = _session(conn)
+    for n in range(3):
+        _lesson(conn, sid, f"pytest {n}")
+    monkeypatch.setattr(party, "SKILL_LESSONS_MAX", 2)
+    sk = party.skill(conn, home["here"], None, "claude", "M-python")
+    assert len(sk["lessons"]) == 2 and sk["lessons_total"] == 3  # the row says 3 lessons: the panel says so too
 
 
 def test_names_follow_the_dashboard_language(home):
@@ -338,7 +350,9 @@ def test_the_journey_is_newest_first_capped_and_the_series_weekly(home, tmp_path
             _lesson(conn, sid, f"kw{i}", stage="canonical" if w else "established")
     data = party.compute(conn, home["here"])
     journey = data["journey"]
-    assert len(journey) == party.JOURNEY_MAX
+    assert sum(e["type"] == "skill" for e in journey) == party.JOURNEY_SKILLS  # the skill-ups are capped...
+    marked = sum(party._level_marked(lv) for lv in range(2, _agent(data)["level"] + 1))
+    assert journey[-1]["type"] == "join" and sum(e["type"] == "level" for e in journey) == marked  # ...the milestones aren't
     assert [e["at"] for e in journey] == sorted((e["at"] for e in journey), reverse=True)
     assert journey[0]["at"] == "2026-09-23" and journey[0]["week"] == "2026-W39"
     skill = next(e for e in journey if e["type"] == "skill")

@@ -49,7 +49,7 @@ TIERS = ((25, "master"), (12, "expert"), (5, "adept"), (1, "novice"))
 EVIDENCE_KINDS = ("pr", "commit", "doc", "page", "published", "deck", "diagram")
 EVIDENCE_MAX = 3
 SIDE_TRACKS = 3
-JOURNEY_MAX = 120
+JOURNEY_SKILLS = 120  # the journey keeps every join, level, class and quest, and this many of the newest skill-ups
 RECENT_DAYS = 7  # "recent": the counted lessons of today and the 6 days before (the journey's dates, in UTC)...
 RECENT_MAX = 60  # ...newest first, at most this many
 SKILL_LESSONS_MAX = 200
@@ -784,15 +784,26 @@ def _artifacts(conn: sqlite3.Connection, where: str, params: tuple) -> list[dict
 def _quest(cat: Catalog, ms_id: str, *, main: bool, done: dict, artifacts: list[dict], newest: list[Lesson]) -> dict:
     track, n, ms = cat.milestone[ms_id]
     evidence = []
+    titles: dict[str, int] = {}  # each title once: a commit and its pull request often share one, and the PR is kept
     for a in artifacts:
+        if not milestone_hits(cat, ms_id, a["title"]):  # an artifact: its title
+            continue
+        item = {"kind": "artifact", "id": a["id"], "title": a["title"], "artifact_kind": a["kind"],
+                "url": a["url"], "agent": a["agent"], "at": a["at"][:10] or None}
+        same = titles.get(key := " ".join(a["title"].split()).casefold())
+        if same is not None:
+            if a["kind"] == "pr" and evidence[same]["artifact_kind"] != "pr":
+                evidence[same] = item
+            continue
         if len(evidence) >= EVIDENCE_MAX:
-            break
-        if milestone_hits(cat, ms_id, a["title"]):  # an artifact: its title
-            evidence.append({"kind": "artifact", "id": a["id"], "title": a["title"], "artifact_kind": a["kind"],
-                             "url": a["url"], "agent": a["agent"], "at": a["at"][:10] or None})
+            continue  # later ones may still be a listed title's pull request
+        titles[key] = len(evidence)
+        evidence.append(item)
     for k in newest:
         if len(evidence) >= EVIDENCE_MAX:
             break
+        if " ".join(k.title.split()).casefold() in titles:
+            continue
         if _shows_milestone(cat, ms_id, k):
             evidence.append({"kind": "lesson", "id": k.id, "title": k.title, "agent": k.agent, "at": k.at[:10] or None,
                              "session_id": k.session_id})
@@ -803,8 +814,8 @@ def _quest(cat: Catalog, ms_id: str, *, main: bool, done: dict, artifacts: list[
 
 
 def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict], dict, int | None]:
-    """The story so far, newest first (at most JOURNEY_MAX events), each agent's level and XP week by week, and the
-    module of the newest skill event."""
+    """The story so far, newest first (every join, level, class and quest; the newest JOURNEY_SKILLS skill-ups), each
+    agent's level and XP week by week, and the module of the newest skill event."""
     tallies = {a: _Tally(len(cat.modules)) for a in CODING_AGENTS}
     level = dict.fromkeys(CODING_AGENTS, 1)
     cls: dict[str, int | None] = dict.fromkeys(CODING_AGENTS)
@@ -867,7 +878,14 @@ def _journey(cat: Catalog, lessons: list[Lesson], done: dict) -> tuple[list[dict
             track, _n, ms = cat.milestone[ms_id]
             event(mark["at"], wk[0], None, "quest", track=track, quest={"id": ms_id, "text": _t(ms, "text")})
     events.sort(key=lambda e: (e[0], e[1]), reverse=True)
-    return [e[2] for e in events[:JOURNEY_MAX]], series, newest_skill
+    out, skills = [], 0
+    for e in events:
+        if e[2]["type"] == "skill":
+            skills += 1
+            if skills > JOURNEY_SKILLS:
+                continue
+        out.append(e[2])
+    return out, series, newest_skill
 
 
 def _recent(cat: Catalog, lessons: list[Lesson], today: date) -> tuple[list[dict], dict]:
@@ -1015,6 +1033,7 @@ def skill(conn: sqlite3.Connection, here_id: str, viewer: dict | None, agent, mo
     return {"agent": agent, "module": module, "name": _t(m, "name"), "attr": m.get("attr"),
             "about": _t(m, "study") or [], "practice": _t(m, "practice"), "gate": _t(m, "gate"),
             "level": sl, "xp": xp, "level_xp": skill_threshold(sl) if sl else 0, "next_xp": skill_threshold(sl + 1),
+            "lessons_total": len(rows),  # all of them; `lessons` lists the first SKILL_LESSONS_MAX
             "lessons": [{"id": k.id, "title": k.title, "kind": k.kind, "stage": k.stage, "xp": k.xp,
                          "created_at": k.created_at, "session_id": k.session_id, "project_name": k.project_name}
                         for k in rows[:SKILL_LESSONS_MAX]]}
