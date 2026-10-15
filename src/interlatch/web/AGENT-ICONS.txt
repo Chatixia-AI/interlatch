@@ -1,8 +1,8 @@
 The agents' marks in agent-*.svg identify each coding agent; the names and logos are their owners' trademarks
-(Anthropic, OpenAI, GitHub, IBM, Google).
+(Anthropic, OpenAI, GitHub, IBM, Google, OpenCode).
 
-agent-claude.svg, agent-claude-ai.svg, agent-codex.svg, agent-copilot.svg, agent-antigravity.svg and
-agent-chatgpt.svg come from LobeHub Icons (https://github.com/lobehub/lobe-icons), under this license:
+agent-claude.svg, agent-claude-ai.svg, agent-codex.svg, agent-copilot.svg, agent-antigravity.svg,
+agent-chatgpt.svg and agent-opencode.svg come from LobeHub Icons (https://github.com/lobehub/lobe-icons), under this license:
 
 MIT License
 

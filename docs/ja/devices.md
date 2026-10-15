@@ -131,7 +131,7 @@ interlatch hub join https://pc.tail1234.ts.net --token …
 - `claude_dirs` の各フォルダーから `projects/`（トランスクリプト、サブエージェントのスレッド、メモリーのメモ）と `history.jsonl`。
   `codex_dirs` の各フォルダーから `sessions/`、`memories/`、Codex のセッション一覧。
 - `sources.exclude_projects` にあるプロジェクトは送りません。
-- GitHub Copilot、IBM Bob、Google Antigravity、Codex Cloud、チャットのエクスポートは送りません。これらはハブで接続または取り込みます。
+- GitHub Copilot、IBM Bob、Google Antigravity、OpenCode、Codex Cloud、チャットのエクスポートは送りません。これらはハブで接続または取り込みます。
 - ファイルは HTTPS（tailnet 内、またはハブの前に置いた HTTPS のプロキシ経由）で圧縮して送られ、到着時に SHA-256 で照合
   されます。送るのはハブにないファイルか、ハブのものが古いファイルだけです。各コンピューターは `~/.interlatch/hub-token`
   にあるトークンで認証します。このファイルはあなたのユーザーだけが読めます。トークンはハブの共有トークンか、招待で参加した
@@ -165,7 +165,7 @@ What this computer sends**）。そのコンピューターは単独の Interlat
 **すべてのフォルダー** を選びます。
 
 プロンプト、シェルのコマンド、ファイルのパス、トランスクリプト、あなた自身についてのナレッジ（全体のものと好み）は
-コンピューターから出ません。GitHub Copilot、IBM Bob、Google Antigravity のセッションも共有されます。取り込んだチャットは
+コンピューターから出ません。GitHub Copilot、IBM Bob、Google Antigravity、OpenCode のセッションも共有されます。取り込んだチャットは
 共有されません。
 
 ハブでは、これらのセッションもそのコンピューターのほかのセッションと同じように（git リモート、追加したフォルダー、

@@ -45,7 +45,7 @@ def clean_agent(a) -> dict:
 
 
 def sheet_agents(party: dict) -> dict:
-    """The five agents of a computed party (party.compute) as a sheet holds them: level, tier, class, attr levels."""
+    """The agents of a computed party (party.compute) as a sheet holds them: level, tier, class, attr levels."""
     by = {a["agent"]: a for a in party.get("agents") or []}
     out = {}
     for name in CODING_AGENTS:

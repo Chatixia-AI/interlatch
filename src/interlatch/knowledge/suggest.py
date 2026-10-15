@@ -170,7 +170,7 @@ def _friction_proposals(conn: sqlite3.Connection, cfg: Config, cause: dict,
     out = []
     cid = cause["id"]
     choice = instructions.chosen_scope(choices or {}, [f"cause:{cid}"])  # where you moved it, if you did
-    seen_agents = [a for a in cause["agents"] if a in ("claude", "codex", "copilot", "bob", "antigravity")]
+    seen_agents = [a for a in cause["agents"] if a in ("claude", "codex", "copilot", "bob", "antigravity", "opencode")]
     score = round(cause["sessions"] + 0.5 * len(cause["projects"]) + 0.25 * cause["immediate_repeats"], 3)
     base = {"origin": "friction", "cause_id": cid, "knowledge_id": None, "score": score}
     for fix in cause["fixes"]:

@@ -1,4 +1,4 @@
-/* Home's Journey strip: an idle game on one <canvas>. The five coding agents walk through a pixel landscape and fight
+/* Home's Journey strip: an idle game on one <canvas>. The six coding agents walk through a pixel landscape and fight
    the week's lessons, one monster per lesson; every name, number and date in it comes from GET /api/party (`recent`,
    `zone`, `journey`, `quests`, `agents`). The art is pixel maps, as in sprites.js: no images, styles only through the
    CSSOM, no eval. One timer serves every mounted strip, 30 frames a second, and stops when no strip is on screen or the
@@ -11,7 +11,7 @@
     skillUp: "{agent}: {skill} Lv {n}", boss: "Boss: {text}", bossHint: "Mark the quest done to defeat it",
     asleep: "Your party is asleep", quiet: "A quiet week: no new lessons",
     preview: "This week's lessons" };
-  const AGENT_ORDER = ["claude", "codex", "copilot", "bob", "antigravity"];
+  const AGENT_ORDER = ["claude", "codex", "copilot", "bob", "antigravity", "opencode"];
   const FONT = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
   const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -512,7 +512,7 @@
       L = Math.floor(canvas.height / P);
       ground = Math.round(L * 0.58); // the horizon: the wall above, the floor in perspective below
       SP = W >= 300 ? 22 : 18;
-      LX = Math.max(4 * SP + 6, Math.round(W * 0.32));
+      LX = Math.max((AGENT_ORDER.length - 1) * SP + 6, Math.round(W * 0.32));
       time = asleep() ? "night" : timeOfDay();
       theme = readTheme(biome());
       const names = BIOMES[biome()], seed = 1 + Object.keys(BIOMES).indexOf(biome()) * 101;
@@ -893,7 +893,7 @@
       const ty = feet() - (isBoss ? 30 : 14);
       const ranged = fighter === "claude" || fighter === "copilot" || fighter === "antigravity";
       const col = { claude: ["#ffd66b", "#ff9a3c"], copilot: ["#e9fbff", "#5cb8ff"], antigravity: ["#fbbc04", "#4285f4"],
-        codex: ["#eafff8", "#14b88c"], bob: ["#ffffff", "#78a9ff"] }[fighter] || ["#ffffff", "#cccccc"];
+        codex: ["#eafff8", "#14b88c"], bob: ["#ffffff", "#78a9ff"], opencode: ["#b8ffd9", "#d1497b"] }[fighter] || ["#ffffff", "#cccccc"];
       for (let k = 0; k < n; k++) {
         const d = st.u - (STEP_IN + k * HIT);
         if (ranged && d >= 0.03 && d < 0.15) { // a bolt with a glow and a trail
@@ -1207,7 +1207,8 @@
     special: "{agent}: {name}", summary: "{winner} won in {n} rounds", vs: "{left} vs {right}", level: "Lv {n}",
     tiers: { novice: "Novice", adept: "Adept", expert: "Expert", master: "Master" } };
   const STEP_MAX = 0.35, STEP_MIN = 0.16, REPLAY_MAX = 50; // seconds an event, and the longest a replay may run
-  const AGENT_NAMES = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity" };
+  const AGENT_NAMES = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity",
+    opencode: "OpenCode" };
 
   function mountBattle(host, opts = {}) {
     const labels = { ...BATTLE_LABELS, ...(opts.labels || {}) };

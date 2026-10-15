@@ -29,7 +29,7 @@
 | `interlatch suggest refresh` | Look at the latest sessions and knowledge for suggestions now (the background sync does this after each run) |
 | `interlatch forget <id> [--delete-transcript]` | Remove a session from the vault for good (it is never re-ingested) |
 | `interlatch sources` | Which agents are connected, and how |
-| `interlatch connect <agent>` / `disconnect <agent>` | Start/stop recording `claude`, `codex`, `codex-cloud`, `copilot`, `bob` or `antigravity` (data is kept) |
+| `interlatch connect <agent>` / `disconnect <agent>` | Start/stop recording `claude`, `codex`, `codex-cloud`, `copilot`, `bob`, `antigravity` or `opencode` (data is kept) |
 | `interlatch connect <client>` / `disconnect <client>` | Add or remove the MCP server in `claude-desktop`, `cursor`, `windsurf` or `gemini` |
 | `interlatch mcp [--print-config]` | Run the MCP server (clients start it), or print a config entry for any other MCP client |
 | `interlatch status` | Health: hooks, agents, MCP, queue, failures |

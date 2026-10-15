@@ -236,6 +236,7 @@ JA: dict[str, str] = {
     "MCP server in Copilot CLI": "Copilot CLI の MCP サーバー",
     "MCP server in Bob": "Bob の MCP サーバー",
     "MCP server in Antigravity": "Antigravity の MCP サーバー",
+    "MCP server in OpenCode": "OpenCode の MCP サーバー",
     "Claude sessions imported by Codex": "Codex が取り込んだ Claude のセッション",
     "Task list": "タスクの一覧",
     "Conversation": "会話",
@@ -245,6 +246,7 @@ JA: dict[str, str] = {
     "IDE chat history": "IDE のチャット履歴",
     "Conversation logs": "会話のログ",
     "Conversations without a log": "ログのない会話",
+    "Session database": "セッションのデータベース",
     "in the cloud": "クラウド上",
     "{where} · {n} on disk": "{where} · ディスク上に {n} 件",
     "scanned every sync": "同期のたびに読み込み",
@@ -286,6 +288,8 @@ JA: dict[str, str] = {
     "{n} kept only in Antigravity's own encrypted store; these cannot be read":
         "{n} 件は Antigravity 独自の暗号化されたストアにしかなく、読めません",
     "none: every conversation has a readable step log": "なし：すべての会話に読めるステップのログがあります",
+    "{where} · {n} sessions": "{where} · {n} 件のセッション",
+    "A subagent's session is recorded inside the session that started it": "サブエージェントのセッションは、それを始めたセッションの中に記録します",
     "Antigravity records tokens but no prices; sessions on Gemini models show no cost":
         "Antigravity はトークン数を記録しますが料金は記録しないため、Gemini モデルのセッションには費用が表示されません",
     "recording {where}": "{where} を記録します",

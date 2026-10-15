@@ -3,7 +3,7 @@
 <h1 align="center">Interlatch</h1>
 
 <p align="center"><b>エージェントが違っても、ナレッジは残る。</b><br>
-コーディングエージェントのための共有メモリー。Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity のセッションと
+コーディングエージェントのための共有メモリー。Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity、OpenCode のセッションと
 claude.ai・ChatGPT のチャットを自分のマシンの中で記録し、そこから得たナレッジを、元のセッションにつないだまま残します。</p>
 
 <p align="center">
@@ -105,6 +105,7 @@ macOS 13 以降と、セッションを分析するものが必要です。ロ�
 | GitHub Copilot | Copilot CLI とエージェントのセッション、VS Code の Copilot Chat ログ | 15 分ごと | ✅ VS Code と Copilot CLI |
 | IBM Bob | `~/.bob/db/bob.db`（読み取り専用） | 15 分ごと | ✅ |
 | Google Antigravity | `~/.gemini/antigravity` の会話ログ（読み取り専用） | 15 分ごと | ✅ |
+| OpenCode | `~/.local/share/opencode/opencode.db`（読み取り専用） | 15 分ごと | ✅ |
 | claude.ai、ChatGPT | データエクスポート：`interlatch import <zip>` | 取り込んだとき | – |
 
 すべて同じダッシュボード、ナレッジ、用語集、MCP ツールを共有します。分析は Claude Code と Codex のうち、選んだほうで行います。

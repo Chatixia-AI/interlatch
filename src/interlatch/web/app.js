@@ -287,8 +287,8 @@ const STATUS_LABEL = {
 const RUN_STATUS = { done: t("done"), error: t("Error"), running: t("analyzing…") }; // a row of a session's analysis runs
 const STATUS_ICON = { pending: "queued", stale: "queued", running: "running", error: "gotcha", skipped: "skipped", done: "completed" };
 
-const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "GitHub Copilot", bob: "IBM Bob", antigravity: "Google Antigravity", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
-const AGENT_SHORT = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
+const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "GitHub Copilot", bob: "IBM Bob", antigravity: "Google Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
+const AGENT_SHORT = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
 function agentShort(a) { return AGENT_SHORT[a] || a || "Claude"; }
 function agentName(a) { return AGENTS[a] || "Claude Code"; }
 // the agent that analyzes sessions (Status › Analysis): full name, and the short one for "… is writing"
@@ -296,7 +296,7 @@ function analyzer() { return lastStatus?.analysis?.label || "Claude Code"; }
 function analyzerShort() { return analyzer() === "Claude Code" ? "Claude" : analyzer(); }
 // an agent's own mark (web/agent-*.svg; codex-cloud is Codex's); the one-colour marks (Copilot, ChatGPT) are CSS masks
 // so they take the text colour in both themes. An agent without a mark keeps the colour dot.
-const AGENT_MONO = new Set(["copilot", "chatgpt"]);
+const AGENT_MONO = new Set(["copilot", "chatgpt", "opencode"]);
 function agentIcon(a) {
   a = a === "codex-cloud" ? "codex" : a || "claude";
   if (!AGENTS[a]) return h("span", { class: `src-dot a-${a}`, "aria-hidden": "true" });
@@ -7245,7 +7245,7 @@ function arenaRecord(r) { return t("{w}–{l}", { w: fmtNum(r.wins || 0), l: fmt
 function arenaHref(uid) { return `#/leaderboard/arena/${encodeURIComponent(uid)}`; }
 // What entering publishes, said exactly: the sheet (sharing/arena.py) and nothing else
 function arenaShares() {
-  return t("Entering the arena publishes your party's character sheet: for each of your five coding agents, its level, tier, class and six attribute levels, and which agent is your champion, with the name and picture you show on the board and the code that tells your computers apart (a hash, not a name). Nothing else: no lessons, projects, sessions, titles or prompts. Each sync sends it again, and leaving the arena deletes it.");
+  return t("Entering the arena publishes your party's character sheet: for each of your coding agents, its level, tier, class and six attribute levels, and which agent is your champion, with the name and picture you show on the board and the code that tells your computers apart (a hash, not a name). Nothing else: no lessons, projects, sessions, titles or prompts. Each sync sends it again, and leaving the arena deletes it.");
 }
 // The arena is champion against champion: each player's chosen agent, by default the highest-level one
 function arenaTop(agents) {
@@ -7267,7 +7267,7 @@ function champCell(c) {
     partySprite(c.agent, { tier: c.tier, scale: 1, still: true, decorative: true }),
     h("span", { class: "acc-name" }, agentShort(c.agent)), h("span", { class: "acc-lv" }, t("Lv {n}", { n: c.level })));
 }
-function arenaPicker(me) { // the five as tiles; the champion lit. The levels: the sheet's, else this computer's party
+function arenaPicker(me) { // the agents as tiles; the champion lit. The levels: the sheet's, else this computer's party
   const box = h("div", { class: "arena-pick" }, h("span", { class: "px-label" }, t("Your champion")));
   const fill = (agents) => {
     const cur = (typeof me.champion === "string" ? me.champion : me.champion?.agent) || arenaTop(agents);
@@ -7493,9 +7493,10 @@ route(/^\/leaderboard\/arena\/([\w-]+)$/, async (params, uid) => {
 // leaderboard's account) or is a signed-in hub person. A level says what the lessons cover, never the person's own.
 // The sprites and pixel icons come from sprites.js; without it, each agent shows its initial on its colour.
 // =====================================================================================
-const PARTY_AGENTS = ["claude", "codex", "copilot", "bob", "antigravity"];
+const PARTY_AGENTS = ["claude", "codex", "copilot", "bob", "antigravity", "opencode"];
 const PARTY_TIER = { novice: t("Novice"), adept: t("Adept"), expert: t("Expert"), master: t("Master") };
-const PARTY_COLOR = { claude: "#d97757", codex: "#14b88c", copilot: "#8b6cf0", bob: "#0f62fe", antigravity: "#e0a100" }; // until Sprites.color
+const PARTY_COLOR = { claude: "#d97757", codex: "#14b88c", copilot: "#8b6cf0", bob: "#0f62fe", antigravity: "#e0a100",
+  opencode: "#d1497b" }; // until Sprites.color
 // the line icon that stands in for each pixel icon while sprites.js is missing
 const PX_STANDIN = { craft: "tool", data: "data", ops: "cloud", guard: "shield", arcana: "sparkles", lore: "knowledge", quest: "ring",
   "quest-done": "completed", "quest-evidence": "partial", star: "sparkles", xp: "zap", lock: "shield", party: "party", journey: "history" };
@@ -7677,7 +7678,7 @@ function partyGate(p, seq = renderSeq) {
         p.error ? h("p", { class: "muted small" }, p.error) : null)));
 }
 
-// ------------------------------------------------------------------ #/party: the leader and the five characters
+// ------------------------------------------------------------------ #/party: the leader and the characters
 async function partySignout(p) {
   if (!confirm(p.who?.board ? t("Sign out of the Party? This also takes you off the leaderboard: your row there is deleted.")
     : t("Sign out of the Party? Your agents keep their levels: sign in again to see them."))) return;
@@ -8189,7 +8190,7 @@ function journeyPick(item) {
     if (PARTY_AGENTS.includes(id)) go(`#/party/${id}`);
   }
 }
-function journeyStill(p, height, width) { // scene.js is missing: the five on a still stage, as large as fits in one row
+function journeyStill(p, height, width) { // scene.js is missing: the party on a still stage, as large as fits in one row
   const tiers = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.tier]));
   const label = journeyPreview(p)?.recent?.length ? t("This week's lessons") : !p.signed_in ? t("Your party is asleep")
     : (p.recent || []).length ? null : t("A quiet week: no new lessons"); // the zone is in the head

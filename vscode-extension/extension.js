@@ -3,7 +3,7 @@
 // VS Code's own Node provides fetch.
 const vscode = require("vscode");
 
-const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "Copilot", bob: "IBM Bob", antigravity: "Antigravity", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
+const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "Copilot", bob: "IBM Bob", antigravity: "Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
 
 // The extension was called Chronicle through 0.2.0: its settings (chronicle.*) still count where the interlatch.* one
 // isn't set, and its id is how we spot it still installed.

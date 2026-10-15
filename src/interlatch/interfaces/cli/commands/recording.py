@@ -231,7 +231,7 @@ def cmd_connect(args) -> int:
     return 0
 
 
-CONNECT_NAMES = ["claude", "codex", "codex-cloud", "copilot", "bob", "antigravity",  # coding agents to record
+CONNECT_NAMES = ["claude", "codex", "codex-cloud", "copilot", "bob", "antigravity", "opencode",  # coding agents to record
                  "claude-desktop", "cursor", "windsurf", "gemini"]  # MCP clients: connect and disconnect take these
 
 
@@ -261,7 +261,7 @@ def add_sources(sub) -> None:
 
 
 def add_connect(sub) -> None:
-    s = sub.add_parser("connect", help="start recording an agent (claude, codex, codex-cloud, copilot, bob, antigravity), or give an MCP client "
+    s = sub.add_parser("connect", help="start recording an agent (claude, codex, codex-cloud, copilot, bob, antigravity, opencode), or give an MCP client "
                                        "(claude-desktop, cursor, windsurf, gemini) Interlatch's MCP server")
     s.add_argument("name", choices=CONNECT_NAMES)
     s.add_argument("--exe", help="command the agent should run for Interlatch's MCP server")

@@ -5,7 +5,7 @@
 ## テストとローカルへのインストール
 
 ```bash
-uv sync && uv run pytest -q        # ~300 tests, ~40 s: a fake `claude` binary and synthetic Codex, Copilot, Bob and Antigravity stores
+uv sync && uv run pytest -q        # ~300 tests, ~40 s: a fake `claude` binary and synthetic Codex, Copilot, Bob, Antigravity and OpenCode stores
 # redeploy: --reinstall picks up uncommitted edits too (uv rebuilds on its own only when pyproject.toml, the commit or a tag changes)
 uv tool install --force --reinstall --python 3.13 . && interlatch install   # install restarts the agents
 ```
@@ -122,7 +122,7 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `core/`：設定、セッションの記録、パス、翻訳、エージェント名、料金、伏せ字処理、このコンピューターの識別子、
   セッションが作ったものの見分け方
 - `storage/`：SQLite のアーカイブ（スキーマ、マイグレーション、接続）と、任意の Postgres ストア
-- `sources/`：各エージェントがファイルを置く場所（`discovery.py`）、エージェントごとの読み取り（`claude/`、`codex/`、`copilot.py`、`bob.py`、`antigravity.py`）と、
+- `sources/`：各エージェントがファイルを置く場所（`discovery.py`）、エージェントごとの読み取り（`claude/`、`codex/`、`copilot.py`、`bob.py`、`antigravity.py`、`opencode.py`）と、
   チャットのエクスポートごとの読み取り（`claude/export.py`、`chatgpt.py`）
 - `artifacts/`：セッションが作ったもの、その今の状態、開くこと
 - `ingestion/`：すべてのソースの同期（`service.py`）。生ファイルのアーカイブ、解析したセッションの保存、チャットの

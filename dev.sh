@@ -71,6 +71,7 @@ codex_dirs = ["$E"]
 copilot_dirs = ["$E"]
 bob_dirs = ["$E"]
 antigravity_dirs = ["$E"]
+opencode_dirs = ["$E"]
 codex_cloud = false
 import_history = false
 import_memory = false

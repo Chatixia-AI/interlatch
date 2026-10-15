@@ -1,5 +1,5 @@
 """Interlatch: shared memory for your coding agents, recorded locally from every session (Claude Code, Codex, Copilot,
-Bob, Antigravity), each lesson linked to the session it came from."""
+Bob, Antigravity, OpenCode), each lesson linked to the session it came from."""
 
 from importlib.metadata import PackageNotFoundError, version
 

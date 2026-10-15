@@ -61,7 +61,7 @@ that way (Codex sometimes does). So it misses:
 - **The same file in another git worktree or an old clone.** A session that ran in `../myapp-feature` recorded
   `../myapp-feature/src/app.py`, which is a different path from `myapp/src/app.py`.
 - **Files in remote windows** (SSH, containers, WSL). The list says Interlatch only knows files on this computer.
-- **Sessions not synced yet.** Claude Code sessions arrive as they end; Codex, Copilot, Bob and Antigravity sessions every 15
+- **Sessions not synced yet.** Claude Code sessions arrive as they end; Codex, Copilot, Bob, Antigravity and OpenCode sessions every 15
   minutes ([Sources](sources.md)).
 
 ## The endpoints

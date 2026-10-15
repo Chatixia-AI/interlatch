@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog=prog_name(),
         description="Record, archive and analyze every coding-agent session (Claude Code, Codex, GitHub Copilot, IBM Bob, "
-                    "Google Antigravity); extract reusable knowledge.",
+                    "Google Antigravity, OpenCode); extract reusable knowledge.",
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", metavar="<command>")

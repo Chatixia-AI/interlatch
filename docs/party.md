@@ -3,7 +3,7 @@
 [← Interlatch](../README.md) · [Docs index](README.md)
 
 **Party** turns your coding agents into pixel-art characters who grow as you work. Claude Code, Codex, GitHub
-Copilot, IBM Bob and Google Antigravity each level up from the lessons their sessions taught, matched to the modules
+Copilot, IBM Bob, Google Antigravity and OpenCode each level up from the lessons their sessions taught, matched to the modules
 of a technical career roadmap: 65 tracks, from AI product engineer to site reliability engineer, built from 70 learning
 modules, with four milestones each. Chats imported from claude.ai or ChatGPT don't take part.
 
@@ -48,7 +48,7 @@ once is one line. Every join, level, class and quest stays on the list; of the s
 
 ## The journey on Home
 
-Once you're signed in, the top of **Home** shows your party on the move, in the style of an idle game. The five
+Once you're signed in, the top of **Home** shows your party on the move, in the style of an idle game. The six
 characters walk across a blueprint landscape that matches the skill area they levelled most this week, and fight this
 week's lessons: each lesson is a monster (a fix is Glitch the bug, a gotcha is Mal's pot, and so on), beaten by the
 agent whose session taught it, for the XP it earned. The week replays wave by wave; when it passes one of your real
@@ -62,7 +62,7 @@ sleeps; point at one to see it, click it to open its session.
 
 People on the leaderboard can also put their parties in the **Arena**. Open **Leaderboard ›
 Arena** and choose **Enter the arena** (you join the board first). From then on each sync publishes your party's
-character sheet: for each of your five coding agents its level, tier, class and six attribute levels, and which agent
+character sheet: for each of your coding agents its level, tier, class and six attribute levels, and which agent
 is your champion, with the name and picture you show on the board and the code that tells your computers apart (a
 hash, not a name). No lessons, projects, sessions, titles or prompts go.
 

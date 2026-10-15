@@ -26,7 +26,7 @@ from ..projects.labels import project_labels
 SUPPORTED_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
 
 INSTRUCTIONS = (
-    "Interlatch is the user's local archive of every past coding-agent session (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity), "
+    "Interlatch is the user's local archive of every past coding-agent session (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode), "
     "plus chats imported from claude.ai and ChatGPT and tasks run in Codex Cloud, with AI-extracted knowledge "
     "(fixes, gotchas, decisions, project facts, commands, preferences), per-project knowledge bases, and the artifacts "
     "sessions made (documents, pages, diagrams, decks, published links, pull requests, commits). "

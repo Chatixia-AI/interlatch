@@ -29,7 +29,7 @@
 | `interlatch suggest refresh` | 最新のセッションとナレッジから今すぐ提案を探す（バックグラウンド同期も実行のたびに行います） |
 | `interlatch forget <id> [--delete-transcript]` | セッションを保管庫から完全に削除（再取り込みされません） |
 | `interlatch sources` | 接続中のエージェントと、その記録方法 |
-| `interlatch connect <agent>` / `disconnect <agent>` | `claude`、`codex`、`codex-cloud`、`copilot`、`bob`、`antigravity` の記録を開始／停止（データは残ります） |
+| `interlatch connect <agent>` / `disconnect <agent>` | `claude`、`codex`、`codex-cloud`、`copilot`、`bob`、`antigravity`、`opencode` の記録を開始／停止（データは残ります） |
 | `interlatch connect <client>` / `disconnect <client>` | `claude-desktop`、`cursor`、`windsurf`、`gemini` に MCP サーバーを追加／削除 |
 | `interlatch mcp [--print-config]` | MCP サーバーを実行（クライアントが起動します）、またはほかの MCP クライアント用の設定項目を出力 |
 | `interlatch status` | 状態確認：フック、エージェント、MCP、キュー、失敗 |

@@ -14,7 +14,7 @@ the session it came from, and gives it to all your agents through one [MCP serve
 lines for your instruction files, which it writes only when you approve them ([Suggestions](suggestions.md)).
 
 **Which agents does it record?** Claude Code, Codex, Codex Cloud, GitHub Copilot (the CLI and Copilot Chat in VS
-Code), IBM Bob and Google Antigravity, plus chats you import from claude.ai and ChatGPT ([Sources](sources.md)).
+Code), IBM Bob, Google Antigravity and OpenCode, plus chats you import from claude.ai and ChatGPT ([Sources](sources.md)).
 Claude Desktop, Cursor, Windsurf and Gemini CLI aren't recorded, but they can use Interlatch's tools
 ([MCP server](mcp.md#connecting-a-client)).
 

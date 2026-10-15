@@ -3,7 +3,7 @@
 [← Interlatch](../README.md) · [Docs index](README.md)
 
 Interlatch includes a [Model Context Protocol](https://modelcontextprotocol.io) server, so any MCP client can search
-your past sessions and knowledge: Claude Code, Codex, Copilot, Bob, Antigravity, Claude Desktop, Cursor, Windsurf, Gemini CLI, or
+your past sessions and knowledge: Claude Code, Codex, Copilot, Bob, Antigravity, OpenCode, Claude Desktop, Cursor, Windsurf, Gemini CLI, or
 anything else that speaks MCP. Ask things like *"have we hit this error before?"*, *"why did we put idempotency in
 Postgres?"* or *"how is billing-api deployed?"*.
 
@@ -40,6 +40,7 @@ All tools are marked read-only (`readOnlyHint`), so clients that honour the hint
 | GitHub Copilot | VS Code `User/mcp.json` and `~/.copilot/mcp-config.json` (`interlatch connect copilot`) |
 | IBM Bob (IDE and Bob Shell) | `~/.bob/settings/mcp.json` and `mcp_settings.json` (`interlatch connect bob`) |
 | Google Antigravity | `~/.gemini/config/mcp_config.json` (`interlatch connect antigravity`) |
+| OpenCode | `~/.config/opencode/opencode.json` (`interlatch connect opencode`) |
 
 **Other clients** only get the server. Interlatch doesn't record their sessions. Add one from **Settings › MCP › Other MCP
 clients**, or from the command line:

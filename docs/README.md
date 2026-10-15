@@ -5,7 +5,7 @@
 | Page | What's in it |
 | --- | --- |
 | [Install](install.md) | The desktop app and the command-line install, what each sets up, updating, uninstalling |
-| [Sources](sources.md) | Claude Code, Codex, Codex Cloud, GitHub Copilot, IBM Bob, Google Antigravity, and imported claude.ai and ChatGPT chats: what is read, how each is connected |
+| [Sources](sources.md) | Claude Code, Codex, Codex Cloud, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode, and imported claude.ai and ChatGPT chats: what is read, how each is connected |
 | [Dashboard, glossary and Map](dashboard.md) | The layout, keyboard shortcuts, every page, the glossary, the Map and themes |
 | [Command line](cli.md) | Every `interlatch` command and the Markdown vault |
 | [Suggestions and What goes wrong](suggestions.md) | Recurring failures across your sessions, and the fixes Interlatch proposes for your instruction files and config: what it reads and writes, approving, backups, undo |

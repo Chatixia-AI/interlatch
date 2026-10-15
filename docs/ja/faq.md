@@ -14,7 +14,7 @@
 あなたが承認したときだけです（[提案](suggestions.md)）。
 
 **どのエージェントを記録できる？** Claude Code、Codex、Codex Cloud、GitHub Copilot（CLI と VS Code の Copilot Chat）、IBM Bob、
-Google Antigravity と、claude.ai や ChatGPT から取り込んだチャットです（[ソース](sources.md)）。Claude Desktop、Cursor、
+Google Antigravity、OpenCode と、claude.ai や ChatGPT から取り込んだチャットです（[ソース](sources.md)）。Claude Desktop、Cursor、
 Windsurf、Gemini CLI は記録しませんが、Interlatch のツールは使えます（[MCP サーバー](mcp.md#クライアントを接続する)）。
 
 **Claude Code は必須？** いいえ。分析は Claude Code、Codex、IBM Bob のほか、あなた自身のキーでモデルプロバイダーの API でも行えます：

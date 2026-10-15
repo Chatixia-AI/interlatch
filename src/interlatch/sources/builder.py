@@ -1,5 +1,5 @@
-"""Building a ParsedSession from a source that is not a Claude Code transcript (Copilot, Bob, Antigravity, Codex
-Cloud, chat exports): times, paths, tool summaries, cost estimates, and the session's totals once it is read."""
+"""Building a ParsedSession from a source that is not a Claude Code transcript (Copilot, Bob, Antigravity, OpenCode,
+Codex Cloud, chat exports): times, paths, tool summaries, cost estimates, and the session's totals once it is read."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ _TERMINAL_TOOLS = {"run_in_terminal", "bash", "shell", "powershell", "run_comman
 _READ_TOOLS = {"read_file", "view", "read", "get_file", "open_file", "view_file"}
 _EDIT_TOOLS = {"replace_string_in_file", "multi_replace_string_in_file", "insert_edit_into_file", "edit", "str_replace",
                "apply_patch", "edit_file", "apply_diff", "search_and_replace", "insert_content", "edit_notebook_file",
-               "replace_file_content", "multi_replace_file_content"}
-_WRITE_TOOLS = {"create_file", "write_file", "create", "write_to_file"}
+               "replace_file_content", "multi_replace_file_content", "multiedit"}
+_WRITE_TOOLS = {"create_file", "write_file", "create", "write_to_file", "write"}
 
 
 def ms_to_iso(ms) -> str | None:
