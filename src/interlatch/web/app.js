@@ -171,6 +171,8 @@ ICONS.leaderboard = ["M6 9H4.5a2.5 2.5 0 0 1 0-5H6", "M18 9h1.5a2.5 2.5 0 0 0 0-
   "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", "M18 2H6v7a6 6 0 0 0 12 0V2Z"]; // a trophy
 ICONS.ring = [C10]; // an open quest
 ICONS.party = ["M14.5 17.5 3 6V3h3l11.5 11.5", "m13 19 6-6", "m16 16 4 4", "m19 21 2-2", "M14 3.5 17.5 2 21 3.5V7c0 2.4-3.5 4-3.5 4S14 9.4 14 7z"]; // a sword and a shield
+ICONS.hiring = ["M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", "M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z",
+  "M2 12.5c6.3 2.6 13.7 2.6 20 0", "M12 13h.01"]; // a briefcase: who's hiring
 function icon(name, cls = "") {
   return s("svg", { class: `icon ${cls}`, viewBox: "0 0 24 24", "aria-hidden": "true" },
     (ICONS[name] || ICONS.dot).map((p) => (typeof p === "string" ? s("path", { d: p }) : s(p[0], p[1]))));
@@ -7603,6 +7605,39 @@ function questCounts(qs) {
   return [t("{a} of {b} done", { a: done, b: qs.length }), found ? tn(found, "{n} with possible evidence", "{n} with possible evidence") : null].filter(Boolean).join(" · ");
 }
 
+// ------------------------------------------------------------------ who's hiring: job-market numbers beside the classes
+// (sharing/market.py): open technical roles per roadmap track on the job boards careers/ reads, worldwide and in Japan.
+// Public numbers, nothing about the person; each payload's `market` holds the tracks it shows, null when there are none.
+const MARKET_SMALL = 500; // fewer Japanese postings than this in the sample: Japan's numbers say it is a small sample
+function sharePct(v) { const pc = (v || 0) * 100; return pc >= 10 ? String(Math.round(pc)) : String(Math.round(pc * 10) / 10); } // 12, 3, 0.4
+function hiringText(c) {
+  return tn(c.global, "{n} open role · {share}% of postings", "{n} open roles · {share}% of postings", { n: fmtNum(c.global), share: sharePct(c.share_global) });
+}
+function hiringJapan(m, c) { // nothing when the sample has no Japanese postings at all
+  if (!m?.sample?.japan) return null;
+  return m.sample.japan < MARKET_SMALL ? t("Japan: {n} (small sample)", { n: fmtNum(c.japan) }) : t("Japan: {n}", { n: fmtNum(c.japan) });
+}
+// a class block's "Hiring" line; `compact`: one line, for a track in a list
+function partyHiring(m, id, { compact = false } = {}) {
+  const c = id ? m?.classes?.[id] : null;
+  if (!c) return null;
+  const ja = hiringJapan(m, c);
+  if (compact) return h("div", { class: "pcl-hire" }, icon("hiring"), h("span", null, [hiringText(c), ja].filter(Boolean).join(" · ")));
+  return h("div", { class: "pc-class pc-hire" }, h("span", { class: "px-label" }, t("Hiring")), h("span", null, hiringText(c)),
+    ja ? h("span", { class: "muted" }, ja) : null);
+}
+// where the numbers come from, how fresh they are, and whether a test run made them
+function marketNote(m) {
+  if (!m) return null;
+  const vars = { n: fmtNum(m.sample?.global), boards: fmtNum(m.sample?.boards), days: m.window_days, date: m.as_of ? fmtDateY(partyDay(m.as_of)) : "–" };
+  const small = m.sample?.japan && m.sample.japan < MARKET_SMALL ? t("Japan is a small sample: {n} postings.", { n: fmtNum(m.sample.japan) }) : null;
+  return h("p", { class: "party-market" }, icon("hiring"),
+    m.status === "test" ? h("span", { class: "px-test", title: t("A test run of the pipeline made these numbers: don't rely on them yet.") }, t("Test data")) : null,
+    h("span", null, [m.window_days ? t("Hiring numbers: {n} open technical roles on {boards} companies' job boards over the last {days} days, as of {date}.", vars)
+      : t("Hiring numbers: {n} open technical roles on {boards} companies' job boards, as of {date}.", vars),
+    small, m.source === "bundled" ? t("From the copy that came with Interlatch.") : null].filter(Boolean).join(LANG === "ja" ? "" : " ")));
+}
+
 // ------------------------------------------------------------------ the sign-in gate
 async function partySignin() { await openSignin("/api/party/signin"); }
 function partyGate(p, seq = renderSeq) {
@@ -7660,7 +7695,7 @@ function partyClassLine(a, { category = false } = {}) {
       : [h("b", null, t("No class yet")), lean ? h("span", { class: "muted" }, t("Leaning towards {track}", { track: lean.name })) : null]);
 }
 function partyRecruit(a) { return !a.counted; } // no lesson of its counts yet
-function partyCard(a, attrs, max) {
+function partyCard(a, attrs, max, market) {
   const recruit = partyRecruit(a);
   return h("a", { class: `party-card px-frame${recruit ? " recruit" : ""}`, href: `#/party/${a.agent}`, style: { "--ac": partyColor(a.agent) },
     "aria-label": [partyLabel(a), a.class?.name].filter(Boolean).join(" · ") }, // the whole card would make a long name
@@ -7668,7 +7703,7 @@ function partyCard(a, attrs, max) {
     h("div", { class: "pc-head" }, h("b", { class: "pc-name" }, a.name), lvBadge(a.level)),
     xpBar(a.xp, a.level_xp, a.next_xp, a.level),
     recruit ? h("div", { class: "pc-recruit" }, h("b", null, t("No lessons yet")), h("span", null, t("A recruit: it levels up once its sessions produce lessons.")))
-      : [partyClassLine(a),
+      : [partyClassLine(a), partyHiring(market, a.class?.id),
         attrBars(a, attrs, max),
         a.skills?.length ? h("div", { class: "pc-top" }, h("span", { class: "px-label" }, t("Top skills")),
           h("ol", { class: "pc-skills" }, a.skills.slice(0, 3).map((sk) => h("li", null, h("span", null, sk.name), h("b", null, t("Lv {n}", { n: sk.level })))))) : null]);
@@ -7678,7 +7713,7 @@ route(/^\/party$/, async () => {
   const p = await partyGet();
   if (!p.signed_in) return partyGate(p, token);
   return partyShell(t("Party"), t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
-    partyLeader(p), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p)))));
+    partyLeader(p), marketNote(p.market), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))));
 });
 
 // ------------------------------------------------------------------ #/party/quests: the quest log and the goal
@@ -7727,26 +7762,41 @@ function partyGoal(p, draw, tracksP) {
   const set = h("button", { class: "btn small primary", type: "button", disabled: true, onclick: () => choose(sel.value, set) }, t("Set as goal"));
   const sync = () => { set.disabled = sel.disabled || !sel.value || sel.value === p.goal?.id; };
   sel.addEventListener("change", sync);
+  // signed in, each track comes with its open roles: sorted by category (the roadmap's order) or by demand
+  const sort = h("select", { class: "pq-sort", "aria-label": t("Sort tracks"), hidden: true },
+    h("option", { value: "category" }, t("By category")), h("option", { value: "demand" }, t("By demand")));
+  const label = (tr) => (tr.global == null ? tr.name
+    : tn(tr.global, "{track} · {n} open role", "{track} · {n} open roles", { track: tr.name, n: fmtNum(tr.global) }));
+  let filled = false;
+  const fill = (r) => { // the choice so far stays chosen
+    const keep = filled ? sel.value : p.goal?.id || "", option = (tr) => h("option", { value: tr.id, selected: tr.id === keep }, label(tr));
+    const cats = r.categories || [];
+    sel.replaceChildren(...(keep ? [] : [h("option", { value: "", selected: true }, t("Choose a track…"))]),
+      ...(sort.value === "demand"
+        ? cats.flatMap((c) => c.tracks).sort((a, b) => (b.global ?? -1) - (a.global ?? -1) || a.name.localeCompare(b.name, LOCALE)).map(option)
+        : cats.map((c) => h("optgroup", { label: c.name }, c.tracks.map(option)))));
+    filled = true;
+  };
   tracksP.then((r) => {
     if (r.error) { sel.replaceChildren(h("option", null, t("Could not load: {error}", { error: r.error }))); return; }
-    sel.replaceChildren(...(p.goal ? [] : [h("option", { value: "", selected: true }, t("Choose a track…"))]),
-      ...(r.categories || []).map((c) => h("optgroup", { label: c.name },
-        c.tracks.map((tr) => h("option", { value: tr.id, selected: tr.id === p.goal?.id }, tr.name)))));
+    sort.hidden = !(r.categories || []).some((c) => c.tracks.some((tr) => tr.global != null));
+    sort.addEventListener("change", () => { fill(r); sync(); });
+    fill(r);
     sel.disabled = false;
     sync();
   });
   const reset = p.goal?.chosen ? h("button", { class: "btn small", type: "button", onclick: () => choose(null, reset) }, t("Back to the default")) : null;
-  const row = h("div", { class: "pq-goal-row" }, sel, set, reset);
+  const row = h("div", { class: "pq-goal-row" }, sel, sort, set, reset);
   if (!p.goal) { // no main quest yet: the picker is the main quest's card
     return h("section", { class: "card pq-main pq-goal px-frame" },
       h("div", { class: "pq-head" }, pxIcon("quest", 2),
         h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, t("No main quest yet: pick a goal track")))),
       h("p", { class: "muted" }, t("Pick the roadmap track you're working toward: its four milestones become your main quest, and Interlatch looks for evidence of each in your sessions.")),
-      row);
+      row, marketNote(p.market));
   }
   return h("section", { class: "card pq-goal" }, cardHead(t("Your goal"), { iconName: "pin" }),
     h("p", { class: "muted" }, t("Pick the roadmap track you're working toward: its four milestones become your main quest. Until you pick one, it's the class of your highest-level agent.")),
-    row);
+    row, marketNote(p.market));
 }
 function partyQuests(p, draw, tracksP) {
   const quests = p.quests || [], main = quests.filter((q) => q.main), side = [];
@@ -7760,11 +7810,13 @@ function partyQuests(p, draw, tracksP) {
     p.goal ? h("section", { class: "card pq-main px-frame" },
       h("div", { class: "pq-head" }, pxIcon("quest", 2),
         h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, p.goal.name),
-          h("div", { class: "muted small" }, p.goal?.chosen ? t("The goal you picked") : t("Your highest-level agent's class, until you pick a goal"))),
+          h("div", { class: "muted small" }, p.goal?.chosen ? t("The goal you picked") : t("Your highest-level agent's class, until you pick a goal")),
+          partyHiring(p.market, p.goal.id, { compact: true })),
         h("div", { class: "pq-progress" }, questTrack(main), h("span", null, questCounts(main)))),
       main.length ? h("ol", { class: "quests" }, main.map((q) => partyQuest(q, draw))) : h("div", { class: "empty" }, t("No quests yet"))) : null,
     side.length ? h("section", { class: "card pq-side" }, cardHead(t("Side quests"), { iconName: "branch", hint: t("From the classes of your other agents") }),
-      side.map((g) => h("div", { class: "pq-track" }, h("h3", null, g.name), h("ol", { class: "quests" }, g.quests.map((q) => partyQuest(q, draw)))))) : null,
+      side.map((g) => h("div", { class: "pq-track" }, h("h3", null, g.name), partyHiring(p.market, g.id, { compact: true }),
+        h("ol", { class: "quests" }, g.quests.map((q) => partyQuest(q, draw)))))) : null,
     p.goal ? partyGoal(p, draw, tracksP) : null,
   ];
 }
@@ -7939,30 +7991,40 @@ function partySkills(a, attrs) {
       h("ul", { class: "ps-list" }, list.map((sk) => partySkillRow(a, sk)))))
       : emptyArt("book", h("b", null, t("No skills yet")), h("div", { class: "muted" }, t("A skill appears once one of this agent's lessons matches a module of the roadmap."))));
 }
-function trackPath(tr, agent) { // the track's modules in their suggested order, each lit by the agent's level there
+// the track's modules in their suggested order, each lit by the agent's level there; `asked`: the modules employers ask for
+function trackPath(tr, agent, asked = new Set()) {
   return h("ol", { class: "px-path", "aria-label": t("{track}: its modules in order", { track: tr.name }) }, (tr.modules || []).map((m) => {
-    const lv = m.agents?.[agent]?.level || 0;
+    const lv = m.agents?.[agent]?.level || 0, ask = asked.has(m.module);
     const note = [m.name, lv ? t("Lv {n}", { n: lv }) : t("not covered yet"), m.target ? t("target L{n}", { n: m.target }) : null,
-      m.critical ? t("critical gate") : null].filter(Boolean).join(" · ");
-    return h("li", { class: `pp-node${lv >= 5 ? " lit-3" : lv >= 3 ? " lit-2" : lv ? " lit-1" : ""}${m.critical ? " critical" : ""}`, title: note },
+      m.critical ? t("critical gate") : null, ask ? t("employers ask for it") : null].filter(Boolean).join(" · ");
+    return h("li", { class: `pp-node${lv >= 5 ? " lit-3" : lv >= 3 ? " lit-2" : lv ? " lit-1" : ""}${m.critical ? " critical" : ""}${ask ? " asked" : ""}`, title: note },
       h("span", { class: "pp-tile", "aria-hidden": "true" }, lv ? String(lv) : ""),
       h("span", { class: "pp-name", "aria-hidden": "true" }, m.name),
       h("span", { class: "sr-only" }, note));
   }));
 }
-function partyClasses(a) {
+function partyAsks(tops) { // the modules employers ask for most in a track's postings
+  return h("div", { class: "pcl-asks" }, h("span", { class: "px-label" }, t("Employers ask for")),
+    h("ul", null, tops.map((m) => h("li", null, pxIcon(m.attr, 1), h("span", null, m.name)))));
+}
+function partyClasses(a, market) {
   const row = (c, i) => {
     const path = h("div", { class: "pcl-path" }, h("span", { class: "muted small" }, t("Loading…")));
-    api("/api/party/track", { id: c.id }).then((tr) => path.replaceChildren(trackPath(tr, a.agent)))
-      .catch((e) => { if (!e.handled) path.replaceChildren(h("span", { class: "muted small" }, t("Could not load: {error}", { error: e.message }))); });
+    api("/api/party/track", { id: c.id }).then((tr) => {
+      const tops = tr.market?.classes?.[tr.id]?.top_modules || [];
+      path.replaceChildren(trackPath(tr, a.agent, new Set(tops.map((m) => m.module))), tops.length ? partyAsks(tops) : "");
+    }).catch((e) => { if (!e.handled) path.replaceChildren(h("span", { class: "muted small" }, t("Could not load: {error}", { error: e.message }))); });
     return h("div", { class: "pcl" },
       h("div", { class: "pcl-head" }, h("span", { class: "pcl-rank" }, String(i + 1)), h("b", null, c.name), h("span", { class: "pcl-cov" }, t("{pct} covered", { pct: pctOf(c.coverage) }))),
       h("span", { class: "pa-bar pcl-bar", "aria-hidden": "true" }, h("i", { style: { width: pctOf(c.coverage) } })),
+      partyHiring(market, c.id, { compact: true }),
       path);
   };
   return h("section", { class: "card" }, cardHead(a.class ? t("Top classes") : t("Tracks it leans towards"), { iconName: "map", hint: t("The roadmap tracks its lessons cover most") }),
     a.classes?.length ? [h("div", { class: "pcl-list" }, a.classes.slice(0, 3).map(row)),
-      h("p", { class: "muted small pcl-legend" }, t("Each square is one of the track's modules, in the order the roadmap suggests, lit by {agent}'s skill level there: full at Lv 5. A gold corner marks a critical gate.", { agent: a.short }))]
+      h("p", { class: "muted small pcl-legend" }, t("Each square is one of the track's modules, in the order the roadmap suggests, lit by {agent}'s skill level there: full at Lv 5. A gold corner marks a critical gate.", { agent: a.short }),
+        a.classes.slice(0, 3).some((c) => market?.classes?.[c.id]?.top_modules?.length) ? ` ${t("A green corner marks a module employers ask for.")}` : null),
+      marketNote(market)]
       : h("div", { class: "empty" }, t("No class yet: its lessons don't cover a roadmap track.")));
 }
 route(/^\/party\/([\w-]+)$/, async (params, agent) => {
@@ -7978,7 +8040,7 @@ route(/^\/party\/([\w-]+)$/, async (params, agent) => {
       h("div", { class: "ph-title" }, h("h1", null, a.name), tierBadge(a.tier)),
       h("div", { class: "ph-level" }, lvBadge(a.level, true), xpBar(a.xp, a.level_xp, a.next_xp, a.level)),
       partyRecruit(a) ? h("div", { class: "ph-class muted" }, t("No lessons yet: a recruit levels up once its sessions produce lessons."))
-        : partyClassLine(a, { category: true }),
+        : [partyClassLine(a, { category: true }), partyHiring(p.market, a.class?.id)],
       h("div", { class: "ph-facts" },
         fact(t("sessions"), fmtNum(a.sessions)), fact(t("lessons"), fmtNum(a.lessons)), fact(t("earning XP"), fmtNum(a.counted)),
         fact(t("since"), a.since ? fmtDateY(partyDay(a.since)) : "–"), fact(t("latest"), a.last ? fmtDateY(partyDay(a.last)) : "–"))));
@@ -7986,7 +8048,7 @@ route(/^\/party\/([\w-]+)$/, async (params, agent) => {
     h("div", { class: "ph-grid" },
       h("section", { class: "card" }, cardHead(t("Attributes"), { iconName: "party", hint: t("The XP of the skills under each") }), attrBars(a, p.attrs, partyMax(p), { about: true })),
       partySkills(a, p.attrs)),
-    partyClasses(a));
+    partyClasses(a, p.market));
   setStyle(page, { "--ac": partyColor(a.agent) });
   return page;
 });

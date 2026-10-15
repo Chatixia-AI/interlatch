@@ -1,0 +1,1123 @@
+{
+ "status": "test",
+ "as_of": "2026-10-15",
+ "window_days": 90,
+ "catalog_version": 3,
+ "history_since": "2026-10-15",
+ "sample": {
+  "boards": 75,
+  "global": 9200,
+  "japan": 179
+ },
+ "classes": {
+  "ai-product": {
+   "global": 77,
+   "japan": 1,
+   "new_global": 43,
+   "new_japan": 0,
+   "share_global": 0.0109,
+   "share_japan": 0.0088,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-llm",
+    "M-swe",
+    "M-agents",
+    "M-eval",
+    "M-product"
+   ]
+  },
+  "agent-systems": {
+   "global": 142,
+   "japan": 0,
+   "new_global": 89,
+   "new_japan": 0,
+   "share_global": 0.0222,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-agents",
+    "M-llm",
+    "M-swe",
+    "M-eval",
+    "M-systems"
+   ]
+  },
+  "fde": {
+   "global": 349,
+   "japan": 14,
+   "new_global": 182,
+   "new_japan": 10,
+   "share_global": 0.0381,
+   "share_japan": 0.0864,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-customer",
+    "M-llm",
+    "M-swe",
+    "M-product",
+    "M-data"
+   ]
+  },
+  "solutions-architect": {
+   "global": 537,
+   "japan": 28,
+   "new_global": 355,
+   "new_japan": 19,
+   "share_global": 0.0635,
+   "share_japan": 0.1943,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-customer",
+    "M-architecture",
+    "M-commercial",
+    "M-llm",
+    "M-product"
+   ]
+  },
+  "predictive-ml": {
+   "global": 84,
+   "japan": 4,
+   "new_global": 53,
+   "new_japan": 0,
+   "share_global": 0.0113,
+   "share_japan": 0.013,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-ml",
+    "M-stats",
+    "M-python",
+    "M-torch",
+    "M-data"
+   ]
+  },
+  "decision-science": {
+   "global": 142,
+   "japan": 1,
+   "new_global": 77,
+   "new_japan": 1,
+   "share_global": 0.0169,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-stats",
+    "M-experiments",
+    "M-sql",
+    "M-decision",
+    "M-python"
+   ]
+  },
+  "retrieval-search": {
+   "global": 90,
+   "japan": 0,
+   "new_global": 64,
+   "new_japan": 0,
+   "share_global": 0.0099,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-retrieval",
+    "M-systems",
+    "M-swe",
+    "M-g-performance",
+    "M-ml"
+   ]
+  },
+  "recommender": {
+   "global": 19,
+   "japan": 0,
+   "new_global": 10,
+   "new_japan": 0,
+   "share_global": 0.0033,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-recommender",
+    "M-ml",
+    "M-experiments",
+    "M-python",
+    "M-llm"
+   ]
+  },
+  "knowledge-data": {
+   "global": 40,
+   "japan": 1,
+   "new_global": 26,
+   "new_japan": 0,
+   "share_global": 0.0055,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-data",
+    "M-swe",
+    "M-g-datapipelines",
+    "M-g-webapi",
+    "M-python"
+   ]
+  },
+  "mlops": {
+   "global": 101,
+   "japan": 3,
+   "new_global": 50,
+   "new_japan": 0,
+   "share_global": 0.0109,
+   "share_japan": 0.0077,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-ops",
+    "M-llm",
+    "M-swe",
+    "M-distributed",
+    "M-systems"
+   ]
+  },
+  "inference": {
+   "global": 46,
+   "japan": 0,
+   "new_global": 11,
+   "new_japan": 0,
+   "share_global": 0.0054,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-gpu",
+    "M-distributed",
+    "M-systems",
+    "M-llm",
+    "M-g-performance"
+   ]
+  },
+  "training-infra": {
+   "global": 24,
+   "japan": 0,
+   "new_global": 7,
+   "new_japan": 0,
+   "share_global": 0.0029,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-distributed",
+    "M-gpu",
+    "M-python",
+    "M-torch",
+    "M-ops"
+   ]
+  },
+  "devtools": {
+   "global": 68,
+   "japan": 0,
+   "new_global": 45,
+   "new_japan": 0,
+   "share_global": 0.0094,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-devtools",
+    "M-swe",
+    "M-agents",
+    "M-g-webapi",
+    "M-g-developerprod"
+   ]
+  },
+  "eval-engineer": {
+   "global": 41,
+   "japan": 1,
+   "new_global": 26,
+   "new_japan": 0,
+   "share_global": 0.0049,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-eval",
+    "M-llm",
+    "M-agents",
+    "M-python",
+    "M-swe"
+   ]
+  },
+  "ai-security": {
+   "global": 43,
+   "japan": 2,
+   "new_global": 25,
+   "new_japan": 2,
+   "share_global": 0.0059,
+   "share_japan": 0.0215,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-security",
+    "M-g-appsec",
+    "M-llm",
+    "M-agents",
+    "M-swe"
+   ]
+  },
+  "governance-engineer": {
+   "global": 28,
+   "japan": 1,
+   "new_global": 15,
+   "new_japan": 1,
+   "share_global": 0.0031,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-governance",
+    "M-g-cybergovernance",
+    "M-swe",
+    "M-eval",
+    "M-g-quality"
+   ]
+  },
+  "posttraining": {
+   "global": 34,
+   "japan": 1,
+   "new_global": 13,
+   "new_japan": 0,
+   "share_global": 0.0049,
+   "share_japan": 0.0057,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-posttrain",
+    "M-eval",
+    "M-llm",
+    "M-torch",
+    "M-research"
+   ]
+  },
+  "research-engineer": {
+   "global": 70,
+   "japan": 1,
+   "new_global": 40,
+   "new_japan": 1,
+   "share_global": 0.0075,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-research",
+    "M-python",
+    "M-torch",
+    "M-eval",
+    "M-llm"
+   ]
+  },
+  "research-scientist": {
+   "global": 61,
+   "japan": 0,
+   "new_global": 32,
+   "new_japan": 0,
+   "share_global": 0.0069,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-research",
+    "M-llm",
+    "M-torch",
+    "M-posttrain",
+    "M-eval"
+   ]
+  },
+  "multimodal": {
+   "global": 19,
+   "japan": 2,
+   "new_global": 9,
+   "new_japan": 2,
+   "share_global": 0.0021,
+   "share_japan": 0.0051,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-multimodal",
+    "M-python",
+    "M-torch",
+    "M-ml",
+    "M-llm"
+   ]
+  },
+  "speech-ai": {
+   "global": 3,
+   "japan": 0,
+   "new_global": 2,
+   "new_japan": 0,
+   "share_global": 0.0005,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-speech",
+    "M-agents",
+    "M-g-webapi",
+    "M-swe",
+    "M-customer"
+   ]
+  },
+  "robotics-ai": {
+   "global": 223,
+   "japan": 3,
+   "new_global": 110,
+   "new_japan": 1,
+   "share_global": 0.0091,
+   "share_japan": 0.0077,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-robotics",
+    "M-systems",
+    "M-swe",
+    "M-stats",
+    "M-python"
+   ]
+  },
+  "edge-ai": {
+   "global": 39,
+   "japan": 0,
+   "new_global": 24,
+   "new_japan": 0,
+   "share_global": 0.0029,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-edge",
+    "M-systems",
+    "M-g-embedded",
+    "M-g-performance",
+    "M-g-lowlevel"
+   ]
+  },
+  "technical-pm": {
+   "global": 52,
+   "japan": 4,
+   "new_global": 39,
+   "new_japan": 3,
+   "share_global": 0.0077,
+   "share_japan": 0.0103,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-product",
+    "M-commercial",
+    "M-customer",
+    "M-leadership",
+    "M-security"
+   ]
+  },
+  "developer-advocate": {
+   "global": 53,
+   "japan": 3,
+   "new_global": 45,
+   "new_japan": 3,
+   "share_global": 0.0082,
+   "share_japan": 0.0179,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-devrel",
+    "M-llm",
+    "M-customer",
+    "M-product",
+    "M-swe"
+   ]
+  },
+  "appsec": {
+   "global": 113,
+   "japan": 0,
+   "new_global": 78,
+   "new_japan": 0,
+   "share_global": 0.011,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-appsec",
+    "M-security",
+    "M-g-cryptography",
+    "M-swe",
+    "M-g-offensivesec"
+   ]
+  },
+  "cloud-security": {
+   "global": 70,
+   "japan": 1,
+   "new_global": 42,
+   "new_japan": 1,
+   "share_global": 0.0104,
+   "share_japan": 0.0034,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-cloudsec",
+    "M-g-containers",
+    "M-g-iac",
+    "M-security",
+    "M-cloud"
+   ]
+  },
+  "iam": {
+   "global": 110,
+   "japan": 1,
+   "new_global": 79,
+   "new_japan": 0,
+   "share_global": 0.0158,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-identity",
+    "M-swe",
+    "M-security",
+    "M-cloud",
+    "M-g-webapi"
+   ]
+  },
+  "detection": {
+   "global": 76,
+   "japan": 1,
+   "new_global": 47,
+   "new_japan": 0,
+   "share_global": 0.0109,
+   "share_japan": 0.0108,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-detection",
+    "M-g-incidentresponse",
+    "M-security",
+    "M-python",
+    "M-swe"
+   ]
+  },
+  "soc": {
+   "global": 32,
+   "japan": 2,
+   "new_global": 16,
+   "new_japan": 1,
+   "share_global": 0.004,
+   "share_japan": 0.0187,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-incidentresponse",
+    "M-g-detection",
+    "M-python",
+    "M-g-cloudsec",
+    "M-security"
+   ]
+  },
+  "incident-response": {
+   "global": 19,
+   "japan": 1,
+   "new_global": 12,
+   "new_japan": 1,
+   "share_global": 0.0022,
+   "share_japan": 0.0035,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-incidentresponse",
+    "M-python",
+    "M-g-detection",
+    "M-security",
+    "M-agents"
+   ]
+  },
+  "penetration-testing": {
+   "global": 29,
+   "japan": 0,
+   "new_global": 22,
+   "new_japan": 0,
+   "share_global": 0.0036,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-offensivesec",
+    "M-g-appsec",
+    "M-security",
+    "M-llm",
+    "M-g-cloudsec"
+   ]
+  },
+  "security-architect": {
+   "global": 31,
+   "japan": 0,
+   "new_global": 16,
+   "new_japan": 0,
+   "share_global": 0.0031,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-security",
+    "M-systems",
+    "M-architecture",
+    "M-g-cryptography",
+    "M-g-identity"
+   ]
+  },
+  "cyber-risk": {
+   "global": 25,
+   "japan": 1,
+   "new_global": 16,
+   "new_japan": 0,
+   "share_global": 0.0021,
+   "share_japan": 0.0035,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-cybergovernance",
+    "M-governance",
+    "M-security",
+    "M-g-cloudsec",
+    "M-systems"
+   ]
+  },
+  "cloud-infra": {
+   "global": 63,
+   "japan": 2,
+   "new_global": 33,
+   "new_japan": 1,
+   "share_global": 0.0089,
+   "share_japan": 0.007,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-cloud",
+    "M-g-iac",
+    "M-systems",
+    "M-g-reliability",
+    "M-g-containers"
+   ]
+  },
+  "devops": {
+   "global": 63,
+   "japan": 1,
+   "new_global": 35,
+   "new_japan": 1,
+   "share_global": 0.0081,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-cicd",
+    "M-g-iac",
+    "M-g-containers",
+    "M-g-reliability",
+    "M-swe"
+   ]
+  },
+  "platform": {
+   "global": 159,
+   "japan": 1,
+   "new_global": 88,
+   "new_japan": 0,
+   "share_global": 0.0206,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-systems",
+    "M-swe",
+    "M-g-containers",
+    "M-cloud",
+    "M-g-reliability"
+   ]
+  },
+  "sre": {
+   "global": 238,
+   "japan": 2,
+   "new_global": 115,
+   "new_japan": 0,
+   "share_global": 0.027,
+   "share_japan": 0.0092,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-reliability",
+    "M-g-containers",
+    "M-systems",
+    "M-cloud",
+    "M-g-iac"
+   ]
+  },
+  "network-engineer": {
+   "global": 125,
+   "japan": 0,
+   "new_global": 83,
+   "new_japan": 0,
+   "share_global": 0.0098,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-networking",
+    "M-systems",
+    "M-g-reliability",
+    "M-cloud",
+    "M-g-iac"
+   ]
+  },
+  "linux-platform": {
+   "global": 22,
+   "japan": 0,
+   "new_global": 15,
+   "new_japan": 0,
+   "share_global": 0.002,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-linux",
+    "M-g-networking",
+    "M-g-iac",
+    "M-g-storage",
+    "M-python"
+   ]
+  },
+  "kubernetes": {
+   "global": 45,
+   "japan": 1,
+   "new_global": 18,
+   "new_japan": 0,
+   "share_global": 0.0055,
+   "share_japan": 0.0035,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-containers",
+    "M-g-iac",
+    "M-swe",
+    "M-g-reliability",
+    "M-cloud"
+   ]
+  },
+  "finops": {
+   "global": 20,
+   "japan": 0,
+   "new_global": 13,
+   "new_japan": 0,
+   "share_global": 0.0026,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-finops",
+    "M-cost",
+    "M-leadership",
+    "M-sql",
+    "M-g-datapipelines"
+   ]
+  },
+  "backend": {
+   "global": 743,
+   "japan": 5,
+   "new_global": 424,
+   "new_japan": 0,
+   "share_global": 0.1041,
+   "share_japan": 0.0165,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-swe",
+    "M-systems",
+    "M-g-webapi",
+    "M-g-storage",
+    "M-leadership"
+   ]
+  },
+  "frontend": {
+   "global": 127,
+   "japan": 2,
+   "new_global": 77,
+   "new_japan": 1,
+   "share_global": 0.0189,
+   "share_japan": 0.0061,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-frontend",
+    "M-swe",
+    "M-g-webapi",
+    "M-product",
+    "M-leadership"
+   ]
+  },
+  "fullstack": {
+   "global": 382,
+   "japan": 2,
+   "new_global": 250,
+   "new_japan": 0,
+   "share_global": 0.0505,
+   "share_japan": 0.0176,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-swe",
+    "M-g-webapi",
+    "M-frontend",
+    "M-systems",
+    "M-product"
+   ]
+  },
+  "mobile": {
+   "global": 67,
+   "japan": 0,
+   "new_global": 42,
+   "new_japan": 0,
+   "share_global": 0.0116,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-mobile",
+    "M-swe",
+    "M-frontend",
+    "M-leadership",
+    "M-g-webapi"
+   ]
+  },
+  "game-simulation": {
+   "global": 65,
+   "japan": 1,
+   "new_global": 47,
+   "new_japan": 1,
+   "share_global": 0.0087,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-gamedev",
+    "M-swe",
+    "M-g-performance",
+    "M-g-lowlevel",
+    "M-systems"
+   ]
+  },
+  "data-engineer": {
+   "global": 125,
+   "japan": 1,
+   "new_global": 83,
+   "new_japan": 0,
+   "share_global": 0.016,
+   "share_japan": 0.0026,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-datapipelines",
+    "M-sql",
+    "M-data",
+    "M-streaming",
+    "M-python"
+   ]
+  },
+  "analytics-engineer": {
+   "global": 80,
+   "japan": 0,
+   "new_global": 56,
+   "new_japan": 0,
+   "share_global": 0.01,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-sql",
+    "M-g-analyticmodeling",
+    "M-data",
+    "M-stats",
+    "M-g-datapipelines"
+   ]
+  },
+  "database-engineer": {
+   "global": 61,
+   "japan": 2,
+   "new_global": 40,
+   "new_japan": 1,
+   "share_global": 0.0086,
+   "share_japan": 0.0069,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-dbops",
+    "M-g-storage",
+    "M-systems",
+    "M-sql",
+    "M-swe"
+   ]
+  },
+  "data-platform": {
+   "global": 89,
+   "japan": 3,
+   "new_global": 47,
+   "new_japan": 0,
+   "share_global": 0.0131,
+   "share_japan": 0.0086,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-datapipelines",
+    "M-data",
+    "M-systems",
+    "M-streaming",
+    "M-sql"
+   ]
+  },
+  "integration-engineer": {
+   "global": 41,
+   "japan": 0,
+   "new_global": 32,
+   "new_japan": 0,
+   "share_global": 0.006,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-integration",
+    "M-swe",
+    "M-g-webapi",
+    "M-g-processautomation",
+    "M-agents"
+   ]
+  },
+  "business-automation": {
+   "global": 39,
+   "japan": 0,
+   "new_global": 25,
+   "new_japan": 0,
+   "share_global": 0.0047,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-processautomation",
+    "M-g-integration",
+    "M-python",
+    "M-sql",
+    "M-agents"
+   ]
+  },
+  "enterprise-apps": {
+   "global": 98,
+   "japan": 0,
+   "new_global": 75,
+   "new_japan": 0,
+   "share_global": 0.0129,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-integration",
+    "M-swe",
+    "M-g-processautomation",
+    "M-g-webapi",
+    "M-sql"
+   ]
+  },
+  "qa-engineer": {
+   "global": 364,
+   "japan": 5,
+   "new_global": 241,
+   "new_japan": 2,
+   "share_global": 0.0226,
+   "share_japan": 0.0179,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-quality",
+    "M-python",
+    "M-g-embedded",
+    "M-stats",
+    "M-systems"
+   ]
+  },
+  "performance-engineer": {
+   "global": 52,
+   "japan": 0,
+   "new_global": 32,
+   "new_japan": 0,
+   "share_global": 0.0059,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-performance",
+    "M-systems",
+    "M-distributed",
+    "M-g-lowlevel",
+    "M-gpu"
+   ]
+  },
+  "systems-software": {
+   "global": 311,
+   "japan": 0,
+   "new_global": 177,
+   "new_japan": 0,
+   "share_global": 0.0325,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-lowlevel",
+    "M-systems",
+    "M-swe",
+    "M-g-performance",
+    "M-g-networking"
+   ]
+  },
+  "embedded-firmware": {
+   "global": 397,
+   "japan": 4,
+   "new_global": 249,
+   "new_japan": 2,
+   "share_global": 0.0188,
+   "share_japan": 0.0103,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-embedded",
+    "M-systems",
+    "M-g-lowlevel",
+    "M-g-quality",
+    "M-python"
+   ]
+  },
+  "developer-productivity": {
+   "global": 112,
+   "japan": 0,
+   "new_global": 60,
+   "new_japan": 0,
+   "share_global": 0.0123,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-developerprod",
+    "M-g-cicd",
+    "M-swe",
+    "M-python",
+    "M-systems"
+   ]
+  },
+  "technical-program": {
+   "global": 351,
+   "japan": 2,
+   "new_global": 226,
+   "new_japan": 1,
+   "share_global": 0.0318,
+   "share_japan": 0.0083,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-g-projectdelivery",
+    "M-leadership",
+    "M-systems",
+    "M-customer",
+    "M-commercial"
+   ]
+  },
+  "technical-consulting": {
+   "global": 175,
+   "japan": 11,
+   "new_global": 105,
+   "new_japan": 7,
+   "share_global": 0.0222,
+   "share_japan": 0.0644,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-customer",
+    "M-product",
+    "M-systems",
+    "M-cloud",
+    "M-architecture"
+   ]
+  },
+  "cloud-architect": {
+   "global": 12,
+   "japan": 0,
+   "new_global": 10,
+   "new_japan": 0,
+   "share_global": 0.0018,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-cloud",
+    "M-architecture",
+    "M-customer",
+    "M-systems",
+    "M-g-iac"
+   ]
+  },
+  "enterprise-architect": {
+   "global": 33,
+   "japan": 0,
+   "new_global": 20,
+   "new_japan": 0,
+   "share_global": 0.0048,
+   "share_japan": 0.0,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-architecture",
+    "M-agents",
+    "M-cloud",
+    "M-commercial",
+    "M-customer"
+   ]
+  },
+  "technical-support": {
+   "global": 233,
+   "japan": 20,
+   "new_global": 162,
+   "new_japan": 14,
+   "share_global": 0.0313,
+   "share_japan": 0.1411,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-customer",
+    "M-python",
+    "M-g-linux",
+    "M-llm",
+    "M-g-webapi"
+   ]
+  },
+  "customer-engineer": {
+   "global": 510,
+   "japan": 36,
+   "new_global": 376,
+   "new_japan": 26,
+   "share_global": 0.0701,
+   "share_japan": 0.2329,
+   "trend_global": null,
+   "trend_japan": null,
+   "top_modules": [
+    "M-customer",
+    "M-commercial",
+    "M-product",
+    "M-architecture",
+    "M-security"
+   ]
+  }
+ },
+ "unmatched": {
+  "global": 0.0595,
+  "japan": 0.0057
+ }
+}

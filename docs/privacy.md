@@ -15,7 +15,9 @@ If you sign in to the **Leaderboard** with Google, each sync sends Interlatch's 
 last 7, 30 and 90 days (active hours, sessions, tokens) with the name and picture you show: no email, project,
 prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
 Signing in with Google for the [Party](party.md) page alone sends nothing: your characters are worked out on your
-computer, and only **Join the board** on the Leaderboard page starts sending totals.
+computer, and only **Join the board** on the Leaderboard page starts sending totals. Once signed in, the Party reads
+public job-market numbers (open roles per roadmap track) from Interlatch's Firebase project, at most every six hours.
+That request carries the project's public web key and nothing about you, not even your sign-in.
 If you also **Enter the arena** on the Leaderboard page, each sync publishes your party's character sheet to the same
 Firebase project, readable by anyone: for each of your five coding agents its level, tier, class and six attribute
 levels, and which agent is your champion, with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
