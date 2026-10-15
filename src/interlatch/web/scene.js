@@ -1152,5 +1152,458 @@
     };
   }
 
-  window.Scene = Object.freeze({ mount });
+  // =====================================================================================
+  // The arena: two parties face each other on the blueprint floor and a battle's log is replayed event by event
+  // (knowledge/arena.py computes it; nothing here decides anything)
+  // =====================================================================================
+  const BATTLE_LABELS = { victory: "Victory!", defeat: "Defeat", round: "Round {n}", crit: "Crit!", ko: "KO",
+    special: "{agent}: {name}", summary: "{winner} won in {n} rounds", vs: "{left} vs {right}", level: "Lv {n}",
+    tiers: { novice: "Novice", adept: "Adept", expert: "Expert", master: "Master" } };
+  const STEP_MAX = 0.35, STEP_MIN = 0.16, REPLAY_MAX = 50; // seconds an event, and the longest a replay may run
+  const AGENT_NAMES = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity" };
+
+  function mountBattle(host, opts = {}) {
+    const labels = { ...BATTLE_LABELS, ...(opts.labels || {}) };
+    labels.tiers = { ...BATTLE_LABELS.tiers, ...((opts.labels && opts.labels.tiers) || {}) };
+    const onEnd = typeof opts.onEnd === "function" ? opts.onEnd : () => {};
+    const cssH = Math.max(120, Number(opts.height) || 240);
+    // `at` (seconds into the replay) pins a still frame, for previews and tests; reduced motion shows the end
+    const pinned = Number.isFinite(opts.at) ? opts.at : null;
+    const still = !!opts.reducedMotion || pinned != null;
+    const result = opts.result || { winner: "a", rounds: 0, log: [], units: {} };
+    // the viewer's party is on the left; `leftSide` says which side of the log that is ("a" unless told)
+    const leftSide = opts.leftSide === "b" ? "b" : "a", rightSide = leftSide === "a" ? "b" : "a";
+    const sideName = { [leftSide]: (opts.left && opts.left.name) || "", [rightSide]: (opts.right && opts.right.name) || "" };
+    const log = (Array.isArray(result.log) ? result.log : []).slice(0, 400);
+    const units = Object.entries(result.units || {}).map(([key, u]) => ({ key, side: key.split(":")[0], agent: key.split(":")[1],
+      max: Math.max(1, Number(u.hp) || 1), tier: u.tier || "novice", level: u.level || 1 }));
+    const unitOf = new Map(units.map((u) => [u.key, u]));
+    const step = clamp(REPLAY_MAX / Math.max(1, log.length), STEP_MIN, STEP_MAX);
+    // hp after each event, and when each unit fell, worked out once
+    const hpAfter = [], koAt = new Map();
+    {
+      const hp = new Map(units.map((u) => [u.key, u.max]));
+      log.forEach((ev, i) => {
+        if (ev.dst && unitOf.has(ev.dst) && Number.isFinite(ev.hp)) hp.set(ev.dst, Math.max(0, ev.hp));
+        if (ev.t === "ko" && ev.dst) koAt.set(ev.dst, i);
+        hpAfter.push(new Map(hp));
+      });
+    }
+    const total = log.length * step;
+    // champion against champion: one unit a side is staged as a duel, big, with an intro
+    const duel = units.length === 2 && units[0].side !== units[1].side;
+    const INTRO = duel ? 1.4 : 0;
+    // where each unit really ended: a log cut at 400 events can stop before the fight does, so the result's final HP
+    // (units[id].end_hp, or a map on the "end" event) wins over the log's last word
+    const finalHp = new Map(hpAfter.length ? hpAfter[hpAfter.length - 1] : units.map((u) => [u.key, u.max]));
+    {
+      const endEv = log.find((ev) => ev.t === "end") || {};
+      const endMap = [endEv.end_hp, endEv.units, endEv.hp].find((v) => v && typeof v === "object") || {};
+      for (const u of units) {
+        const own = (result.units || {})[u.key] || {}, e = endMap[u.key];
+        const v = Number.isFinite(own.end_hp) ? own.end_hp : Number.isFinite(e) ? e : e && Number.isFinite(e.hp) ? e.hp : null;
+        if (v != null) finalHp.set(u.key, clamp(v, 0, u.max));
+      }
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.style.display = "block";
+    canvas.style.width = "100%";
+    canvas.style.height = cssH + "px";
+    canvas.style.imageRendering = "pixelated";
+    canvas.setAttribute("role", "img");
+    host.appendChild(canvas);
+    const ctx = canvas.getContext("2d");
+    let W = 0, L = 0, P = 1, dpr = 1, horizon = 0, theme = null, floor = null, wall = null, barW = 20;
+    let t = 0, animT = 0, lastNow = 0, visible = true, alive = true, ended = false;
+    const art = new Map(), slot = new Map();
+    const self = { canvas };
+
+    function measure() {
+      dpr = window.devicePixelRatio || 1;
+      const cssW = Math.max(160, host.clientWidth || canvas.clientWidth || 600);
+      P = Math.max(1, Math.round((cssH >= 140 ? 2 : 1) * dpr));
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+      W = Math.ceil(canvas.width / P);
+      L = Math.floor(canvas.height / P);
+      horizon = Math.round(L * 0.42);
+      theme = readTheme("guard");
+      wall = wallTile(theme, horizon, P);
+      floor = floorLayer(theme, W, horizon, L, P);
+      // the floor's lines toward a vanishing point, and a gold ring in the middle: the arena (drawn once, nothing scrolls)
+      const g = floor.getContext("2d"), vx = W / 2, vy = horizon - L, fh = L - horizon;
+      g.fillStyle = theme.floorLine;
+      for (let xf = -W; xf < 2 * W; xf += 20) {
+        for (let y = 1; y <= fh; y++) {
+          const x = Math.round(vx + ((xf - vx) * (horizon + y - vy)) / (L - vy));
+          if (x >= 0 && x < W) g.fillRect(x * P, y * P, P, P);
+        }
+      }
+      const cy = Math.round(fh * 0.55), rx = Math.min(W * 0.36, 150), ry = fh * 0.32;
+      g.fillStyle = glow(theme.mark, 0.6);
+      for (let i = 0; i < 160; i++) {
+        const a = (i / 160) * Math.PI * 2;
+        g.fillRect(Math.round(vx + Math.cos(a) * rx) * P, Math.round(cy + Math.sin(a) * ry) * P, P, P);
+      }
+      layout();
+      art.clear();
+    }
+    // two rows a side: the three highest levels in front, the others behind; the right side mirrors the left
+    function layout() {
+      if (duel) { // the two champions big, facing each other in the middle of the floor
+        const k = L >= 110 && W >= 300 ? 3 : 2, gap = W >= 300 ? Math.round(W * 0.05) : 0, cx = W / 2;
+        for (const u of units) {
+          const left = u.side === leftSide;
+          slot.set(u.key, { x: Math.round(left ? cx - gap - 28 * k : cx + gap - 4 * k), feet: L - 3, flip: !left, row: 0, k });
+        }
+        return;
+      }
+      const cx = W / 2, gap = W >= 300 ? Math.round(W * 0.06) : 2;
+      const room = W / 2 - gap - 2, stepX = Math.min(52, Math.max(16, Math.floor((room - 30) / 2.4)));
+      barW = Math.min(20, stepX - 3);
+      const front = L - 10, back = L - Math.round((L - horizon) * 0.5);
+      for (const side of [leftSide, rightSide]) {
+        const mine = units.filter((u) => u.side === side).sort((p, q) => q.level - p.level || AGENT_ORDER.indexOf(p.agent) - AGENT_ORDER.indexOf(q.agent));
+        const dir = side === leftSide ? -1 : 1;
+        mine.forEach((u, i) => {
+          const row = i < 3 ? 0 : 1, k = row ? i - 3 + 0.5 : i;
+          const off = gap + 16 + k * stepX;
+          slot.set(u.key, { x: Math.round(cx + dir * off - 16), feet: row ? back : front, flip: side === rightSide, row, k: 1 });
+          if (row) slot.get(u.key).x += dir * Math.round(stepX * 0.15); // the back row sits a little wider, so heads don't stack
+        });
+      }
+    }
+
+    // ---- art: a sprite (mirrored on the right), its white flash, its grey KO copy
+    function sprite(u, frame, kind) {
+      const s = slot.get(u.key), key = `${u.key}|${frame}|${kind}`;
+      if (!art.has(key)) {
+        const base = blank(1, 1);
+        window.Sprites.draw(base, { agent: u.agent, tier: u.tier, frame, scale: P * s.k });
+        const c = blank(base.width, base.height), g = c.getContext("2d");
+        if (s.flip) { g.translate(c.width, 0); g.scale(-1, 1); }
+        g.drawImage(base, 0, 0);
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        if (kind === "flash") { g.globalCompositeOperation = "source-atop"; g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height); }
+        if (kind === "ko") {
+          const d = g.getImageData(0, 0, c.width, c.height);
+          for (let i = 0; i < d.data.length; i += 4) {
+            const v = d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15;
+            d.data[i] = v * 0.8 + 30; d.data[i + 1] = v * 0.82 + 34; d.data[i + 2] = v * 0.9 + 46;
+          }
+          g.putImageData(d, 0, 0);
+        }
+        art.set(key, c);
+      }
+      return art.get(key);
+    }
+    const put = (img, x, y) => ctx.drawImage(img, Math.round(x) * P, Math.round(y) * P);
+    function text(str, x, y, { size = 11, color = null, align = "center", panel = false, alpha = 1, weight = 700, max = 0 } = {}) {
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha, 0, 1);
+      ctx.font = `${weight} ${Math.round(size * dpr)}px ${FONT}`;
+      ctx.textBaseline = "middle";
+      let s = String(str);
+      if (max && ctx.measureText(s).width > max * P) {
+        while (s.length > 1 && ctx.measureText(s + "…").width > max * P) s = s.slice(0, -1);
+        s += "…";
+      }
+      const w = Math.ceil(ctx.measureText(s).width / P) + 6, h = Math.ceil((size * dpr * 1.25) / P) + 2;
+      const left = clamp(align === "center" ? Math.round(x - w / 2) : align === "right" ? Math.round(x - w) : Math.round(x), 1, Math.max(1, W - w - 1));
+      const top = Math.round(y - h / 2);
+      if (panel) {
+        ctx.fillStyle = theme.panelRim;
+        ctx.fillRect((left + 1) * P, top * P, (w - 2) * P, h * P);
+        ctx.fillRect(left * P, (top + 1) * P, w * P, (h - 2) * P);
+        ctx.fillStyle = theme.panel;
+        ctx.fillRect((left + 1) * P, (top + 1) * P, (w - 2) * P, (h - 2) * P);
+      } else {
+        ctx.lineWidth = Math.max(2, Math.round(3 * dpr));
+        ctx.strokeStyle = theme.dark ? "rgba(6, 14, 32, 0.9)" : "rgba(255, 255, 255, 0.95)";
+        ctx.lineJoin = "round";
+        ctx.strokeText(s, (left + 3) * P, (top + h / 2) * P);
+      }
+      ctx.fillStyle = color || theme.panelInk;
+      ctx.fillText(s, (left + 3) * P, (top + h / 2) * P);
+      ctx.restore();
+      return { x: left, y: top, w, h };
+    }
+    const gold = () => (theme.dark ? "#ffd27a" : "#9a5a08");
+    const green = () => (theme.dark ? "#7dffb0" : "#0c7c50");
+    const red = () => (theme.dark ? "#ff8a8a" : "#c0392b");
+    const name = (key) => { const u = unitOf.get(key); return u ? AGENT_NAMES[u.agent] || u.agent : ""; };
+    function hpBar(x, y, w, frac, ghost) {
+      px(ctx, P, theme.dark ? "rgba(4, 10, 24, 0.85)" : "rgba(20, 40, 70, 0.55)", x - 1, y - 1, w + 2, 4);
+      if (ghost > frac) px(ctx, P, theme.dark ? "#ffe9b0" : "#f6d27a", x, y, Math.round(w * ghost), 2);
+      const c = frac > 0.5 ? "#4fd88a" : frac > 0.25 ? "#f6c445" : "#ff6b6b";
+      if (frac > 0) px(ctx, P, c, x, y, Math.max(1, Math.round(w * frac)), 2);
+    }
+
+    // ---- one frame at replay time tt (the duel's intro first, then the log)
+    function draw(tt, a) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let x = 0; x < W; x += 32) put(wall, x, 0);
+      const lt = tt - INTRO, intro = lt < 0;
+      const i = log.length && !intro ? clamp(Math.floor(lt / step), 0, log.length - 1) : -1, u = lt - Math.max(0, i) * step;
+      const done = lt >= total && !intro;
+      const cur = i >= 0 ? log[i] : null, full = new Map(units.map((x) => [x.key, x.max]));
+      const hpNow = done ? finalHp : i >= 0 ? hpAfter[i] : full;
+      const hpBefore = i > 0 ? hpAfter[i - 1] : full;
+      // a crit (or an Overdrive) shakes the floor in a duel
+      let sh = 0;
+      if (duel && cur && !done && !still && ((cur.t === "crit" && u >= 0.08 && u < 0.24) || (cur.t === "special" && u < 0.2))) sh = Math.floor(u * 60) % 2 ? 2 : -2;
+      ctx.save();
+      ctx.translate(sh * P, 0);
+      put(floor, 0, horizon);
+      // the blow being struck: the striker lunges at its target, which flashes and is knocked back
+      const lunge = new Map(), flash = new Set(), knock = new Map();
+      if (cur && !done && (cur.t === "hit" || cur.t === "crit") && slot.has(cur.src) && slot.has(cur.dst)) {
+        const s = slot.get(cur.src), d = slot.get(cur.dst), k = u < 0.1 ? u / 0.1 : u < 0.28 ? 1 - (u - 0.1) / 0.18 : 0;
+        lunge.set(cur.src, [Math.round((d.x - s.x) * 0.35 * k), Math.round((d.feet - s.feet) * 0.35 * k)]);
+        if (u >= 0.08 && u < 0.16) flash.add(cur.dst);
+        const push = (cur.t === "crit" ? 4 : 2) * (duel ? 2.5 : 1);
+        if (u >= 0.08 && u < 0.3) knock.set(cur.dst, Math.round((d.flip ? 1 : -1) * push * (1 - (u - 0.08) / 0.22)));
+      }
+      if (cur && !done && cur.t === "special" && slot.has(cur.src) && u < 0.2) flash.add(cur.src);
+      // back row first, then the front
+      const order = units.slice().sort((p, q) => (slot.get(p.key).feet - slot.get(q.key).feet) || (slot.get(p.key).x - slot.get(q.key).x));
+      for (const un of order) {
+        const s = slot.get(un.key), k = s.k, ko = done ? finalHp.get(un.key) <= 0
+          : koAt.has(un.key) && koAt.get(un.key) <= i && (koAt.get(un.key) < i || u > 0.15);
+        const [lx, ly] = lunge.get(un.key) || [0, 0], kx = knock.get(un.key) || 0;
+        const x = s.x + lx + kx, top = s.feet - 31 * k + ly;
+        // a soft shadow on the floor
+        px(ctx, P, theme.shadow, x + 8 * k, s.feet - 1, 16 * k, 1);
+        px(ctx, P, theme.shadow, x + 9 * k, s.feet, 14 * k, 1);
+        if (ko) { // greyed and sat down: sunk into the floor, cut at the feet
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, canvas.width, (s.feet + 1) * P);
+          ctx.clip();
+          put(sprite(un, 0, "ko"), x, top + 5 * k);
+          ctx.restore();
+          text(labels.ko, x + 16 * k, top + 6 * k, { size: duel ? 14 : 9, color: red(), alpha: 0.9 });
+          continue;
+        }
+        const frame = still || intro ? 0 : Math.floor(a * 2 + AGENT_ORDER.indexOf(un.agent)) % 4;
+        put(sprite(un, frame, flash.has(un.key) ? "flash" : "base"), x, top);
+        if (duel) continue; // a duel's HP bars are the wide ones at the top
+        // its HP bar, the lost part fading a moment later
+        const now = hpNow.get(un.key), before = hpBefore.get(un.key), lag = done || u > 0.3 ? now : before;
+        hpBar(x + 16 - Math.round(barW / 2), top - 2, barW, now / un.max, Math.max(now, lag) / un.max);
+      }
+      // what the event says: numbers, heals, specials
+      if (cur && !done) drawEvent(cur, u, hpNow);
+      ctx.restore();
+      if (duel) drawDuelHud(cur, done, hpNow, hpBefore, u);
+      else drawHud(cur, done, hpNow);
+      if (intro) drawIntro(tt);
+      if (done) drawEnd(lt - total, a);
+    }
+    function drawEvent(ev, u, hpNow) {
+      const d = slot.get(ev.dst), s = slot.get(ev.src), big = duel ? 1.5 : 1;
+      const at = (sl) => [sl.x + 16 * sl.k, sl.feet - 31 * sl.k]; // a unit's centre line and head
+      if ((ev.t === "hit" || ev.t === "crit") && d && u >= 0.08) {
+        const [cx, head] = at(d), rise = ease((u - 0.08) / 0.5) * 10 * big, crit = ev.t === "crit";
+        const ny = Math.max(duel ? 34 : 14, head - 5 * big - rise);
+        if (crit) text(labels.crit, cx, ny + 10 * big, { size: Math.round(9 * big), color: gold() });
+        text(String(ev.n), cx, ny, { size: Math.round((crit ? 15 : 12) * big), color: crit ? gold() : theme.panelInk });
+        if (u < 0.16) { // an impact star
+          const cy = d.feet - 16 * d.k, r = Math.round((crit ? 5 : 3) * (duel ? 2 : 1));
+          for (let k = -r; k <= r; k++) {
+            const c = Math.abs(k) > r - 2 ? gold() : "#ffffff";
+            px(ctx, P, c, cx + k, cy); px(ctx, P, c, cx, cy + k);
+          }
+          if (crit && duel) for (const [dx, dy] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) px(ctx, P, "#fff7c2", cx + dx, cy + dy, 2, 2);
+        }
+      }
+      if (ev.t === "heal" && d) {
+        const [cx, head] = at(d), rise = ease(u / 0.5) * 10 * big;
+        text("+" + ev.n, cx, Math.max(duel ? 34 : 14, head - 5 * big - rise), { size: Math.round(12 * big), color: green() });
+        for (let k = 0; k < (duel ? 10 : 6); k++) { // little green crosses rising
+          const yy = d.feet - 6 - ((u * 40 + k * 5) % (26 * d.k)), xx = d.x + 6 * d.k + ((k * 7) % (20 * d.k));
+          px(ctx, P, green(), xx, yy - 1, 1, 3); px(ctx, P, green(), xx - 1, yy, 3, 1);
+        }
+      }
+      if (ev.t === "special" && s) {
+        // a pillar of light on the one who used it
+        const [cx] = at(s), w = Math.round(12 * s.k * (1 - (u / STEP_MAX) * 0.6));
+        ctx.save();
+        ctx.globalAlpha = 0.4 * (1 - u / STEP_MAX);
+        px(ctx, P, theme.cta, cx - w, 0, w * 2, s.feet + 2);
+        ctx.restore();
+        if (d && Number.isFinite(ev.n) && ev.n > 0) {
+          const [dx, head] = at(d);
+          text((s.flip === d.flip ? "+" : "") + ev.n, dx, Math.max(duel ? 34 : 14, head - 7 * big), { size: Math.round(12 * big), color: s.flip === d.flip ? green() : gold() });
+        }
+      }
+    }
+    function lastSpecial(i) {
+      for (let k = i; k >= 0 && k > i - 4; k--) if (log[k].t === "special") return [log[k], (i - k) * step];
+      return null;
+    }
+    function drawHud(cur, done, hpNow) {
+      // each side: its name and its party's health
+      const team = (side) => {
+        let h = 0, m = 0;
+        for (const un of units) if (un.side === side) { h += hpNow.get(un.key) || 0; m += un.max; }
+        return m ? h / m : 0;
+      };
+      const half = Math.floor(W / 2) - 10;
+      const l = text(sideName[leftSide], 4, 8, { size: 11, align: "left", panel: true, weight: 600, max: half - 8 });
+      const r = text(sideName[rightSide], W - 4, 8, { size: 11, align: "right", panel: true, weight: 600, max: half - 8 });
+      hpBar(l.x + 1, l.y + l.h + 2, Math.min(half - 4, 60), team(leftSide), team(leftSide));
+      hpBar(r.x + r.w - 1 - Math.min(half - 4, 60), r.y + r.h + 2, Math.min(half - 4, 60), team(rightSide), team(rightSide));
+      if (cur && !done && W >= 300) text(fill(labels.round, { n: cur.r || 1 }), W / 2, 8, { size: 10, color: gold(), weight: 600 });
+      const i = log.indexOf(cur), sp = !done && cur ? lastSpecial(i) : null;
+      if (sp && sp[1] < 1.4) {
+        const [ev] = sp, s = slot.get(ev.src), side = ev.src.split(":")[0];
+        const msg = fill(labels.special, { agent: name(ev.src), name: ev.name || "" });
+        const bw = text(msg, W / 2, 26, { size: 12, color: side === leftSide ? gold() : red(), panel: true });
+        if (s) px(ctx, P, side === leftSide ? theme.cta : red(), bw.x + 1, bw.y + bw.h, bw.w - 2, 1);
+      }
+    }
+    // a duel's HUD, as in a fighting game: each champion's owner and name, level and tier, and a wide HP bar
+    function drawDuelHud(cur, done, hpNow, hpBefore, u) {
+      const barWide = Math.max(40, Math.floor(W / 2) - 14), narrow = W < 300;
+      for (const un of units) {
+        const left = un.side === leftSide, x = left ? 4 : W - 4, align = left ? "left" : "right";
+        const owner = sideName[un.side], who = name(un.key);
+        // the name, then level and tier on the same row (toward the middle); the bar under them
+        const n = text(owner ? `${owner} · ${who}` : who, x, 8, { size: narrow ? 10 : 12, align, panel: true, weight: 700, max: Math.max(30, barWide - (narrow ? 0 : 70)) });
+        if (!narrow) {
+          const tierColor = { master: gold(), expert: theme.accent, adept: green(), novice: theme.panelInk }[un.tier] || theme.panelInk;
+          const lv = text(fill(labels.level, { n: un.level }), left ? n.x + n.w + 3 : n.x - 3, 8, { size: 10, align, panel: true, weight: 600 });
+          text(labels.tiers[un.tier] || un.tier, left ? lv.x + lv.w + 3 : lv.x - 3, 8, { size: 10, align, panel: true, weight: 700, color: tierColor });
+        }
+        const now = hpNow.get(un.key), before = hpBefore.get(un.key), lag = done || u > 0.3 ? now : before;
+        const bx = left ? 4 : W - 4 - barWide, by = n.y + n.h + 3, frac = now / un.max, ghost = Math.max(now, lag) / un.max;
+        px(ctx, P, theme.dark ? "rgba(4, 10, 24, 0.85)" : "rgba(20, 40, 70, 0.55)", bx - 1, by - 1, barWide + 2, 6);
+        const fillW = (f) => Math.max(f > 0 ? 1 : 0, Math.round(barWide * f));
+        if (ghost > frac) px(ctx, P, theme.dark ? "#ffe9b0" : "#f6d27a", left ? bx : bx + barWide - fillW(ghost), by, fillW(ghost), 4);
+        const c = frac > 0.5 ? "#4fd88a" : frac > 0.25 ? "#f6c445" : "#ff6b6b";
+        if (frac > 0) {
+          px(ctx, P, c, left ? bx : bx + barWide - fillW(frac), by, fillW(frac), 4);
+          px(ctx, P, glow("#ffffff", 0.35), left ? bx : bx + barWide - fillW(frac), by, fillW(frac), 1);
+        }
+        if (narrow) { // no room on the name row: level and tier under the bar
+          const tierColor = { master: gold(), expert: theme.accent, adept: green(), novice: theme.panelInk }[un.tier] || theme.panelInk;
+          text(`${fill(labels.level, { n: un.level })} · ${labels.tiers[un.tier] || un.tier}`, left ? 4 : W - 4, by + 11, { size: 9, align, panel: true, weight: 600, color: tierColor });
+        }
+      }
+      if (cur && !done && !narrow) text(fill(labels.round, { n: cur.r || 1 }), W / 2, 8, { size: 11, color: gold(), weight: 700 });
+      // a special: a band across the whole arena with its name
+      const i = log.indexOf(cur), sp = !done && cur ? lastSpecial(i) : null;
+      if (sp && sp[1] < 1.2) {
+        const [ev, since] = sp, side = ev.src.split(":")[0], mine = side === leftSide;
+        const k = still ? 1 : ease(Math.min(1, (since + (cur === ev ? u : 0)) / 0.2)), y = Math.round(L * 0.42), h = 22;
+        const w = Math.round(W * k), x = mine ? 0 : W - w;
+        px(ctx, P, mine ? theme.cta : red(), x, y - 1, w, h + 2);
+        px(ctx, P, theme.dark ? "#0b1a33" : "#ffffff", x, y + 1, w, h - 2);
+        if (k > 0.6) text(fill(labels.special, { agent: name(ev.src), name: ev.name || "" }), W / 2, y + h / 2, { size: narrow ? 13 : 16, color: mine ? gold() : red() });
+      }
+    }
+    // the duel's opening: "Claude vs Codex"
+    function drawIntro(tt) {
+      const [l, r] = [units.find((x) => x.side === leftSide), units.find((x) => x.side === rightSide)];
+      const k = ease(tt / 0.35), fade = tt > INTRO - 0.3 ? (INTRO - tt) / 0.3 : 1;
+      const y = Math.round(L * 0.42), h = 26;
+      ctx.save();
+      ctx.globalAlpha = clamp(fade, 0, 1);
+      px(ctx, P, theme.dark ? "rgba(6, 14, 32, 0.8)" : "rgba(255, 255, 255, 0.88)", 0, y, W, h);
+      px(ctx, P, theme.cta, 0, y, Math.round(W * k), 1);
+      px(ctx, P, theme.cta, W - Math.round(W * k), y + h - 1, Math.round(W * k), 1);
+      ctx.restore();
+      if (fade > 0.1) text(fill(labels.vs, { left: l ? name(l.key) : "", right: r ? name(r.key) : "" }), W / 2, y + h / 2,
+        { size: W < 300 ? 15 : 20, color: gold(), alpha: fade, max: W - 10 });
+    }
+    function drawEnd(since, a) {
+      const won = result.winner === leftSide;
+      const slide = still ? 1 : ease(since / 0.3), y = Math.round(L * 0.3 - 8 + 8 * slide);
+      ctx.save();
+      ctx.font = `700 ${Math.round(18 * dpr)}px ${FONT}`;
+      const msg = won ? labels.victory : labels.defeat, w = Math.ceil(ctx.measureText(msg).width / P) + 24, h = 20, x = Math.round(W / 2 - w / 2);
+      ctx.fillStyle = won ? theme.cta : theme.panelRim;
+      ctx.fillRect((x + 1) * P, (y - 1) * P, (w - 2) * P, (h + 2) * P);
+      ctx.fillRect(x * P, y * P, w * P, h * P);
+      ctx.fillStyle = theme.dark ? (won ? "#2a1c0c" : "#0b1a33") : "#ffffff";
+      ctx.fillRect((x + 1) * P, (y + 1) * P, (w - 2) * P, (h - 2) * P);
+      ctx.fillStyle = won ? gold() : theme.panelInk;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(msg, (x + w / 2) * P, (y + h / 2 + 0.5) * P);
+      ctx.restore();
+      if (won && !still) for (let k = 0; k < 14; k++) { // confetti
+        const r = rng(k * 17 + 3), uu = Math.min(1.6, since * 0.8), cx = x + r() * w, cy = y + h + uu * (10 + r() * 30) - 6;
+        px(ctx, P, ["#f6c445", "#ffffff", "#e5484d", "#5cb8ff", "#7bd389"][k % 5], Math.round(cx), Math.round(cy));
+      }
+      const winnerName = sideName[result.winner] || "";
+      text(fill(labels.summary, { winner: winnerName, n: result.rounds || 0 }), W / 2, y + h + 9, { size: 10, panel: true, weight: 600, max: W - 10 });
+    }
+
+    function render() {
+      if (!alive || !theme) return;
+      draw(pinned != null ? pinned : still ? INTRO + total + 1 : t, pinned != null ? pinned : animT);
+    }
+    self.running = () => alive && !still && visible && !document.hidden && !ended;
+    self.frame = (now) => {
+      const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
+      lastNow = now;
+      animT += dt;
+      t += dt;
+      draw(t, animT);
+      if (t >= INTRO + total + 2.2) { ended = true; onEnd(result); } // the result held; the timer may rest
+    };
+    let io = null, ro = null, mo = null, scheme = null;
+    self.retheme = () => { if (alive) { measure(); render(); } };
+    self.destroy = () => {
+      if (!alive) return;
+      alive = false;
+      scenes.delete(self);
+      io && io.disconnect();
+      ro && ro.disconnect();
+      mo && mo.disconnect();
+      scheme && scheme.removeEventListener && scheme.removeEventListener("change", self.retheme);
+      canvas.remove();
+      art.clear();
+    };
+    measure();
+    canvas.setAttribute("aria-label", fill(labels.summary, { winner: sideName[result.winner] || "", n: result.rounds || 0 }));
+    io = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
+      for (const en of entries) visible = en.isIntersecting;
+      if (!canvas.isConnected) { self.destroy(); return; }
+      if (visible) { lastNow = 0; kick(); }
+    }) : null;
+    io && io.observe(canvas);
+    let width = host.clientWidth;
+    ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+      if (!alive || host.clientWidth === width) return;
+      width = host.clientWidth;
+      measure();
+      render();
+    }) : null;
+    ro && ro.observe(host);
+    mo = typeof MutationObserver === "function" ? new MutationObserver(self.retheme) : null;
+    mo && mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    scheme = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+    scheme && scheme.addEventListener && scheme.addEventListener("change", self.retheme);
+    if (document.fonts && document.fonts.load) document.fonts.load(`700 11px ${FONT}`).then(() => render(), () => {});
+    scenes.add(self);
+    render();
+    if (still && pinned == null) onEnd(result);
+    kick();
+    return {
+      replay() {
+        if (!alive) return;
+        t = 0; lastNow = 0; ended = false;
+        if (still) { render(); return; }
+        kick();
+      },
+      destroy: self.destroy,
+    };
+  }
+
+  window.Scene = Object.freeze({ mount, mountBattle });
 })();

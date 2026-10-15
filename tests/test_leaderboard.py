@@ -214,8 +214,10 @@ def test_leaving_deletes_the_row_and_the_sign_in(home, net):
     cfg = home["cfg"]
     _joined(cfg)
     net.on("DELETE", lb.FIRESTORE + "/players/uid1", {})
+    net.on("DELETE", lb.FIRESTORE + "/arena/uid1", {})
     lb.leave(cfg)
-    assert any(c["method"] == "DELETE" for c in net.calls)
+    assert [c["url"] for c in net.calls if c["method"] == "DELETE"] == [lb.FIRESTORE + "/players/uid1",
+                                                                       lb.FIRESTORE + "/arena/uid1"]  # the arena too
     assert not lb.state_path(cfg).exists() and lb.status(cfg)["joined"] is False
 
 
@@ -286,3 +288,23 @@ def test_the_dashboard_api_is_for_this_computer_only(hubweb, net):  # noqa: F811
         assert _http(url, path, body, headers=TAILNET)[0] == 403, path
     assert lb.read_state(cfg)["name"] == "Ada"  # another device's leave or rename did nothing
     assert not [c for c in net.calls if c["method"] != "POST" or ":runQuery" not in c["url"]]
+
+
+def test_an_error_firestore_answers_as_a_list_is_still_a_leaderboard_error(monkeypatch):
+    """runQuery reports a refusal as `[{"error": {...}}]`, not an object: it must read as the refusal it is."""
+    import io
+    from urllib.error import HTTPError
+
+    body = json.dumps([{"error": {"code": 403, "message": "Missing or insufficient permissions."}}]).encode()
+
+    def refuse(req, timeout=None):
+        raise HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(lb, "urlopen", refuse)
+    with pytest.raises(lb.LeaderboardError, match="403 Missing or insufficient permissions"):
+        lb._call("POST", lb.FIRESTORE + ":runQuery", body={})
+    for odd in (b"[]", b"7", b'"x"'):
+        monkeypatch.setattr(lb, "urlopen", lambda req, timeout=None, b=odd: (_ for _ in ()).throw(
+            HTTPError(req.full_url, 500, "Server Error", {}, io.BytesIO(b))))
+        with pytest.raises(lb.LeaderboardError, match="500"):
+            lb._call("GET", lb.FIRESTORE + "/players/x")

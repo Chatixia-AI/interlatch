@@ -116,6 +116,10 @@ def _call(method: str, url: str, *, body=None, form: dict | None = None, token: 
             err = json.loads(e.read() or b"{}")
         except ValueError:
             err = {}
+        if isinstance(err, list):  # runQuery answers an error as a list of one: [{"error": {...}}]
+            err = err[0] if err else {}
+        if not isinstance(err, dict):
+            err = {}
         msg = err.get("error")
         msg = msg.get("message") if isinstance(msg, dict) else msg or err.get("error_description")
         raise LeaderboardError(f"{e.code} {msg or e.reason}") from None
@@ -233,10 +237,14 @@ def sign_in(cfg: Config, refresh_token: str, *, board: bool | None = True) -> di
              "last_sent": None, "error": None, "paused": None}
     if not state["uid"]:
         raise LeaderboardError("Firebase didn't say who you are")
+    before = read_state(cfg)
+    same = before is not None and before.get("uid") == state["uid"]
     if board is None:
-        before = read_state(cfg)
-        board = on_board(before) and before.get("uid") == state["uid"]
+        board = on_board(before) and same
     state["board"] = bool(board)
+    state["arena"] = bool(board and same and on_board(before) and before.get("arena"))  # an opt-in kept, never made
+    if same and before.get("champion"):
+        state["champion"] = before["champion"]
     write_state(cfg, state)
     return state
 
@@ -250,6 +258,10 @@ def _id_token(cfg: Config, state: dict) -> str:
 
 # ------------------------------------------------------------------ Firestore values
 def _value(v) -> dict:
+    if v is None:
+        return {"nullValue": None}
+    if isinstance(v, dict):
+        return {"mapValue": {"fields": {k: _value(x) for k, x in v.items()}}}
     if isinstance(v, bool):
         return {"booleanValue": v}
     if isinstance(v, int):
@@ -268,6 +280,10 @@ def _plain(fields: dict) -> dict:
             out[k] = float(v["doubleValue"])
         elif "timestampValue" in v:
             out[k] = v["timestampValue"]
+        elif "mapValue" in v:
+            out[k] = _plain((v["mapValue"] or {}).get("fields"))
+        elif "nullValue" in v:
+            out[k] = None
         else:
             out[k] = next(iter(v.values()), None)
     return out
@@ -299,9 +315,18 @@ def send(cfg: Config, conn, *, force: bool = False) -> dict | None:
                 return _update_state(cfg, paused="another computer reports for this account now", error=None)
         fields = {"provider": state["provider"], "pid": state["pid"], "name": state["name"], "photo": state.get("photo") or "",
                   "machine": tag, **totals(conn, cfg)}
-        _call("POST", f"{FIRESTORE}:commit", token=token, body={"writes": [{
-            "update": {"name": f"{DB}/players/{state['uid']}", "fields": {k: _value(v) for k, v in fields.items()}},
-            "updateTransforms": [{"fieldPath": "at", "setToServerValue": "REQUEST_TIME"}]}]})
+        writes = [{"update": {"name": f"{DB}/players/{state['uid']}", "fields": {k: _value(v) for k, v in fields.items()}},
+                   "updateTransforms": [{"fieldPath": "at", "setToServerValue": "REQUEST_TIME"}]}]
+        from . import arena
+
+        sheet = arena.write(cfg, conn, state) if arena.in_arena(state) else None  # opted in: the sheet goes too
+        # the person may have left (the arena, the board, or signed out) while this was being made: as they are now
+        now = read_state(cfg)
+        if now is None or not on_board(now) or now.get("uid") != state["uid"] or now.get("paused"):
+            return now
+        # out of the arena, the commit deletes the sheet: none survives from before, or from another computer
+        writes.append(sheet if sheet and arena.in_arena(now) else {"delete": f"{DB}/{arena.COLLECTION}/{state['uid']}"})
+        _call("POST", f"{FIRESTORE}:commit", token=token, body={"writes": writes})
     except LeaderboardError as e:
         return _update_state(cfg, error=str(e)[:300])
     _clear_board()
@@ -340,8 +365,9 @@ def join(cfg: Config, conn) -> dict:
 
 
 def leave(cfg: Config) -> None:
-    """Forget the sign-in, deleting this account's row from the board first when it is on the board (the row goes even
-    if this computer had stopped sending). Signed in for the Party only, nothing is sent: there is no row of its own."""
+    """Forget the sign-in, deleting this account's row from the board (and its arena sheet) first when it is on the
+    board (the row goes even if this computer had stopped sending). Signed in for the Party only, nothing is sent:
+    there is no row of its own."""
     state = read_state(cfg)
     if state is None:
         return
@@ -352,6 +378,9 @@ def leave(cfg: Config) -> None:
         except LeaderboardError as e:
             if not str(e).startswith("404"):
                 raise
+        from . import arena
+
+        arena.leave(cfg, state)  # leaving the board leaves the arena: its sheet goes too
     state_path(cfg).unlink(missing_ok=True)
     _clear_board()
 
@@ -363,7 +392,8 @@ def status(cfg: Config) -> dict:
         return {"signed_in": False, "joined": False}
     return {"signed_in": True, "joined": on_board(state), "uid": state.get("uid"), "name": state.get("name"),
             "photo": bool(state.get("photo")), "provider": state.get("provider"), "joined_at": state.get("joined_at"),
-            "last_sent": state.get("last_sent"), "error": state.get("error"), "paused": state.get("paused")}
+            "last_sent": state.get("last_sent"), "error": state.get("error"), "paused": state.get("paused"),
+            "arena": bool(on_board(state) and state.get("arena"))}
 
 
 # ------------------------------------------------------------------ the board

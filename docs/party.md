@@ -56,6 +56,22 @@ beat until you mark the quest done. Point at a monster to see its lesson, click 
 strip away with the button in its corner. It pauses when it's out of sight, and stays still when animations are off
 (**Settings › Appearance**).
 
+## The arena
+
+People on the leaderboard can also put their parties in the **Arena**. Open **Leaderboard ›
+Arena** and choose **Enter the arena** (you join the board first). From then on each sync publishes your party's
+character sheet: for each of your five coding agents its level, tier, class and six attribute levels, and which agent
+is your champion, with the name and picture you show on the board and the code that tells your computers apart (a
+hash, not a name). No lessons, projects, sessions, titles or prompts go.
+
+The arena is champion against champion. Your champion is your highest-level agent until you pick another from the
+tiles on your arena card. Every week it duels every other player's champion once, and the Arena board ranks you by
+wins, with each player's champion and level. Click a rival to watch the duel: your champion on the left, theirs on
+the right, round by round, with the same fight written out as a log underneath and both full parties below. Each battle is worked out on your own
+computer from the two published sheets and the week, so both players see the same result. The numbers are
+self-reported: it's a game, not a record. **Leave the arena** deletes your sheet; you stay on the board. Leaving the
+board leaves the arena too.
+
 !!! note "Your agents' level, not yours"
     Levels show what your agents' lessons cover on the roadmap. They aren't your own level: the roadmap keeps that
     separate, and only a check of your own work can show it.

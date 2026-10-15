@@ -11,12 +11,23 @@ from ..context import Context
 def leaderboard(ctx: Context, q: dict) -> dict:
     from ....sharing import leaderboard as lb
 
-    by = q.get("by") if q.get("by") in lb.METRICS else "hours"
+    by = q.get("by") if q.get("by") in (*lb.METRICS, "arena") else "hours"
     days = int(q["days"]) if q.get("days") in {str(d) for d in lb.WINDOWS} else 30
     me = lb.status(ctx.cfg)
     mine = lb.totals(ctx.conn, ctx.cfg)
     out = {"by": by, "days": days, "me": me, "rows": [], "error": None, "signing_in": _lb_pending(ctx) is not None,
            "mine": {"hours": mine[f"h{days}"], "sessions": mine[f"s{days}"], "tokens": mine[f"t{days}"]}}
+    if by == "arena":  # this week's battles, every arena party against every other, fought here from their sheets
+        from ....sharing import arena
+
+        try:
+            out["rows"] = arena.board(me.get("uid") if me.get("arena") else None)
+            out["week"] = arena.week()
+            if me.get("signed_in"):  # who this computer fields (picked, or the highest level)
+                out["me"] = {**me, "champion": arena.champion(ctx.cfg, ctx.conn, lb.read_state(ctx.cfg))}
+        except lb.LeaderboardError as e:
+            out["error"] = str(e)
+        return out
     try:
         rows = sorted(lb.board(by, days), key=lambda r: r[by], reverse=True)
     except lb.LeaderboardError as e:
@@ -62,6 +73,41 @@ def action_leaderboard_finish(ctx: Context, body: dict) -> dict:
 
 def action_leaderboard_cancel(ctx: Context) -> None:
     ctx.state.leaderboard_signin = None
+
+
+def arena_battle(ctx: Context, q: dict) -> tuple[dict, int]:
+    """This week's battle between this computer's person and a rival, both in the arena."""
+    from ....core.i18n import tr
+    from ....sharing import arena
+    from ....sharing import leaderboard as lb
+
+    me = lb.status(ctx.cfg)
+    try:
+        got = arena.fight(me["uid"], str(q.get("uid") or "")) if me.get("arena") else None
+    except lb.LeaderboardError as e:  # Firestore out of reach: as the board says it
+        return {"error": str(e)}, 502
+    return (got, 200) if got else ({"error": tr("not found")}, 404)
+
+
+def action_arena(ctx: Context, which: str) -> dict:
+    """Enter the arena (on the board only: the sheet is sent now) or leave it (the sheet is deleted)."""
+    from ....sharing import arena
+    from ....sharing import leaderboard as lb
+
+    if which == "join":
+        arena.join(ctx.cfg, ctx.conn)
+    else:
+        arena.leave(ctx.cfg)
+    return lb.status(ctx.cfg)
+
+
+def action_arena_champion(ctx: Context, body: dict) -> dict:
+    """Field another champion: one of the five coding agents; sent now when in the arena."""
+    from ....sharing import arena
+    from ....sharing import leaderboard as lb
+
+    arena.pick(ctx.cfg, ctx.conn, body.get("agent"))
+    return {**lb.status(ctx.cfg), "champion": arena.champion(ctx.cfg, ctx.conn, lb.read_state(ctx.cfg))}
 
 
 def action_leaderboard_join(ctx: Context) -> dict:

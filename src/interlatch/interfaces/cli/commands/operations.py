@@ -122,7 +122,9 @@ def cmd_leaderboard(args) -> int:
         console.print("Not on the leaderboard. `interlatch leaderboard join` opens the dashboard's Leaderboard page, "
                       "where you sign in with Google.", highlight=False)
         return 0
-    console.print(f"On the leaderboard as [bold]{st['name']}[/] · last sent {st['last_sent'] or 'not yet'}", highlight=False)
+    arena = " · in the arena" if st.get("arena") else ""
+    console.print(f"On the leaderboard as [bold]{st['name']}[/]{arena} · last sent {st['last_sent'] or 'not yet'}",
+                  highlight=False)
     for problem in (st.get("paused"), st.get("error")):
         if problem:
             console.print(f"  [yellow]{problem}[/]", highlight=False)
