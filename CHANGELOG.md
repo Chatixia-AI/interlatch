@@ -3,6 +3,14 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.24.1 (2026-10-15)
+
+- **OpenCode is a source:** `interlatch connect opencode` (or the Sources page) records OpenCode sessions, from the
+  terminal or the desktop app, 1.x and 2.x, out of `~/.local/share/opencode/opencode.db`, read-only, on the 15-minute
+  sync: prompts, replies, reasoning, tool calls, file edits, tokens and cost, with each subagent's session inside the
+  session that started it. Connecting also gives OpenCode the MCP server, and OpenCode joins the Party as a sixth
+  character ([Sources](docs/sources.md)).
+
 ## 0.24.0 (2026-10-15)
 
 - **Party:** your coding agents become pixel-art characters who level up from the lessons their sessions taught,
