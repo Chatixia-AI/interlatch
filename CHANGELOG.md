@@ -3,6 +3,15 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.25.0 (2026-10-15)
+
+- **Innerlatch:** the Party, the Leaderboard, the Arena and their Google sign-in moved out of the dashboard into
+  Innerlatch, an area of its own drawn in violet. The door icon at the bottom of the rail brings up a large door: click
+  it to go through, or, signed out, sign in with Google and it opens by itself. Leaving, it shuts behind you. The
+  Journey strip leads the Party page instead of Home, the Arena is a page of its own, and old `#/party` and
+  `#/leaderboard` links still open. **Settings › Appearance › The door** hides the icon
+  ([Party](docs/party.md#getting-there)).
+
 ## 0.24.1 (2026-10-15)
 
 - **OpenCode is a source:** `interlatch connect opencode` (or the Sources page) records OpenCode sessions, from the
