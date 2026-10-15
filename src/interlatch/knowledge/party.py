@@ -1043,3 +1043,59 @@ def tracks(*, catalog: Catalog | None = None) -> dict:
     order = list(cat.categories) + [c for c in by if c not in cat.categories]
     return {"categories": [{"id": c, "name": _t(cat.categories.get(c), "name") or c, "tracks": by[c]}
                            for c in order if c in by]}
+
+
+# ------------------------------------------------------------------ who's hiring (sharing/market.py)
+# Job-market numbers per track, beside the Party's own: public, derived numbers read from Interlatch's Firebase project
+# (or the copy bundled with the package), nothing about the person. Only for a signed-in Party: the API adds them.
+def _market() -> dict | None:
+    from ..sharing import market
+
+    return market.current()
+
+
+def _market_head(m: dict) -> dict:
+    return {"status": m.get("status"), "as_of": m.get("as_of"), "source": m.get("source"),
+            "window_days": m.get("window_days"), "sample": m.get("sample")}
+
+
+def _market_class(cat: Catalog, entry: dict) -> dict:
+    """One track's numbers, the modules employers ask for named in the dashboard's language (unknown ones left out)."""
+    return {**{k: v for k, v in entry.items() if k != "top_modules"},
+            "top_modules": [{"module": mid, "name": _t(cat.module[mid], "name"), "attr": cat.module[mid].get("attr")}
+                            for mid in entry.get("top_modules") or [] if mid in cat.module]}
+
+
+def payload_tracks(data: dict) -> list[str]:
+    """The tracks a compute() payload names: the agents' classes and the tracks they lean to, the goal, the quests'."""
+    ids = [x["id"] for a in data.get("agents") or [] for x in ([a["class"]] if a.get("class") else []) + (a.get("classes") or [])]
+    ids += [data["goal"]["id"]] if data.get("goal") else []
+    ids += [q["track"] for q in data.get("quests") or []]
+    return list(dict.fromkeys(ids))
+
+
+def market_block(track_ids, *, catalog: Catalog | None = None) -> dict | None:
+    """{status, as_of, source, window_days, sample, classes: {track id: its numbers}} for the tracks asked about (those
+    the market has); None when there are no numbers at all."""
+    m = _market()
+    if m is None:
+        return None
+    cat = catalog or load_catalog()
+    classes = m.get("classes") or {}
+    return {**_market_head(m), "classes": {i: _market_class(cat, classes[i]) for i in track_ids if i in classes}}
+
+
+def market_tracks(data: dict) -> dict:
+    """tracks() with each track's open roles worldwide and in Japan and its share of postings, and the market's
+    status, date and sample (`market`, None without numbers): for sorting the goal picker by demand."""
+    m = _market()
+    if m is None:
+        return {**data, "market": None}
+    classes = m.get("classes") or {}
+
+    def numbers(tr: dict) -> dict:
+        c = classes.get(tr["id"]) or {}
+        return {**tr, "global": c.get("global"), "japan": c.get("japan"), "share_global": c.get("share_global")}
+
+    return {"categories": [{**c, "tracks": [numbers(tr) for tr in c["tracks"]]} for c in data["categories"]],
+            "market": _market_head(m)}

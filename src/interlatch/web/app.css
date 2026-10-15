@@ -2740,6 +2740,26 @@ td.pg-cell { width: 1%; text-align: right; }
 .pchart-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
 .pchart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .pchart-legend i { width: 10px; height: 10px; }
+/* who's hiring: job-market numbers beside a class, the modules employers ask for, where the numbers come from */
+.pc-hire span:not(.px-label) { font-variant-numeric: tabular-nums; }
+.pcl-hire { display: flex; align-items: center; gap: 6px; margin: -4px 0 10px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pcl-hire .icon { flex: none; width: 13px; height: 13px; color: var(--good-ink); }
+.pq-title .pcl-hire, .pq-track .pcl-hire { margin: 4px 0 0; }
+.pq-track .pcl-hire + .quests { margin-top: 4px; }
+.pcl-asks { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; margin-top: 12px; }
+.pcl-asks ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pcl-asks li { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px 1px 5px; font-size: 12px; color: var(--ink-2);
+  background: color-mix(in srgb, var(--good) 10%, var(--surface)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 40%, transparent); }
+.pp-node.asked .pp-tile::before { content: ""; position: absolute; bottom: -6px; left: -6px; width: 8px; height: 8px; background: var(--good); box-shadow: 0 0 0 2px var(--good-ink); }
+.pq-goal-row .pq-sort { flex: 0 0 auto; }
+.party-market { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; max-width: 104ch; margin: 18px 0 0; font-size: 12.5px; color: var(--muted); }
+.party-leader + .party-market { margin-top: 14px; }
+.party-market > span:not(.px-test) { flex: 1 1 260px; min-width: 0; }
+.party-market .icon { flex: none; width: 15px; height: 15px; margin-top: 2px; color: var(--good-ink); }
+.card .party-market { margin-top: 14px; }
+.px-test { flex: none; margin: 1px 2px; padding: 0 6px; font: 600 10.5px/1.6 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
+  color: var(--warning-ink); background: color-mix(in srgb, var(--warning) 16%, var(--surface)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 55%, transparent); }
+:lang(ja) .px-test { letter-spacing: 0.02em; }
 /* the roadmap's caveat, on every Party page */
 .party-foot { display: flex; align-items: flex-start; gap: 8px; max-width: 82ch; margin: 22px 0 0; font-size: 12.5px; color: var(--muted); }
 .party-foot .icon { width: 15px; height: 15px; margin-top: 2px; }

@@ -22,6 +22,21 @@ rules_version = '2';
 // No email or other private data: the documents are public. Totals are self-reported: the rules bound them, not prove
 // them.
 //
+// The Party's market numbers (careers/pipeline.py writes them; the dashboard reads market/current with the web key).
+// Only the operator's account writes them. Derived data only: no posting's title, link or description.
+//
+// Collection: market
+// Document ID: 'current', or the month 'YYYY-MM' (that month's last run)
+// Fields (all required, no others): status ('test' | 'live'), as_of and history_since (YYYY-MM-DD), window_days (int),
+//   catalog_version (int), sample (map: boards, global, japan - ints), classes (map: class id -> its counts, shares,
+//   trends and top modules), unmatched (map: global, japan - the share no class fits, 0-1)
+//
+// Collection: careers_postings (the pipeline's history; only the operator reads it)
+// Document ID: sha256("provider:token:posting id"), first 24 hex characters; the same as the id field
+// Fields (all required, no others): id, company, region ('global' | 'japan'), first_seen and last_seen (YYYY-MM-DD),
+//   open (bool), cls and cls2 (class ids), fit ('good' | 'partial' | 'none'), modules (<= 6 module ids), industry,
+//   seniority, mapped_by, catalog_version - the mapping fields are null until the posting is mapped
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -156,6 +171,73 @@ service cloud.firestore {
       allow create, update: if isOwner(userId) && isPlayerAccount() && isValidArena(request.resource.data);
       // leaving the arena (or the board)
       allow delete: if isOwner(userId);
+    }
+
+    // ===============================================================
+    // The Party's market numbers
+    // ===============================================================
+
+    function isMarketOperator() {
+      // a Firebase account id: it names the operator, it grants nothing on its own
+      return isAuthenticated() && request.auth.uid == 'fHIQKiPC6tbZIuzjBivyXkEcJm83'; // gitleaks:allow
+    }
+
+    function isDay(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isNullOrText(v, max) {
+      return v == null || (v is string && v.size() >= 1 && v.size() <= max);
+    }
+
+    function isValidMarket(data) {
+      let fields = ['status', 'as_of', 'window_days', 'catalog_version', 'history_since', 'sample', 'classes',
+                    'unmatched'];
+      return hasOnlyAllowedFields(fields) && hasRequiredFields(fields)
+        && data.status in ['test', 'live']
+        && isDay(data.as_of) && isDay(data.history_since)
+        && isCount(data.window_days, 366) && data.window_days >= 1
+        && isCount(data.catalog_version, 1000)
+        && data.sample is map && data.sample.keys().hasOnly(['boards', 'global', 'japan'])
+        && data.sample.keys().hasAll(['boards', 'global', 'japan'])
+        && isCount(data.sample.boards, 10000) && isCount(data.sample['global'], 10000000)
+        && isCount(data.sample['japan'], 10000000)
+        && data.classes is map && data.classes.size() <= 500
+        && data.unmatched is map && data.unmatched.keys().hasOnly(['global', 'japan'])
+        && data.unmatched.keys().hasAll(['global', 'japan'])
+        && inRange(data.unmatched['global'], 1) && inRange(data.unmatched['japan'], 1);
+    }
+
+    function isValidPosting(id, data) {
+      let fields = ['id', 'company', 'region', 'first_seen', 'last_seen', 'open', 'cls', 'cls2', 'fit', 'modules',
+                    'industry', 'seniority', 'mapped_by', 'catalog_version'];
+      return hasOnlyAllowedFields(fields) && hasRequiredFields(fields)
+        && id.matches('^[0-9a-f]{24}$') && data.id == id
+        && data.company is string && data.company.size() >= 1 && data.company.size() <= 100
+        && data.region in ['global', 'japan']
+        && isDay(data.first_seen) && isDay(data.last_seen)
+        && data.open is bool
+        && isNullOrText(data.cls, 64) && isNullOrText(data.cls2, 64)
+        && (data.fit == null || data.fit in ['good', 'partial', 'none'])
+        && data.modules is list && data.modules.size() <= 6
+        && isNullOrText(data.industry, 60)
+        && (data.seniority == null || data.seniority in ['junior', 'mid', 'senior', 'staff+', 'manager'])
+        && isNullOrText(data.mapped_by, 80)
+        && (data.catalog_version == null || isCount(data.catalog_version, 1000));
+    }
+
+    match /market/{doc} {
+      // public: the dashboard reads it with the web key alone, and it says nothing about anyone
+      allow get, list: if true;
+      allow create, update: if isMarketOperator() && (doc == 'current' || doc.matches('^[0-9]{4}-[0-9]{2}$'))
+        && isValidMarket(request.resource.data);
+      allow delete: if isMarketOperator();
+    }
+
+    match /careers_postings/{id} {
+      allow read: if isMarketOperator();
+      allow create, update: if isMarketOperator() && isValidPosting(id, request.resource.data);
+      allow delete: if isMarketOperator();
     }
 
     match /{document=**} {

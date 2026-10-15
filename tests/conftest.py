@@ -285,6 +285,24 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", Popen)
 
 
+@pytest.fixture(autouse=True)
+def no_real_market(tmp_path_factory, monkeypatch):
+    """No test reads the Party's job-market numbers from Firebase, nor the copy bundled with the package: a signed-in
+    Party has none (market None) unless a test gives it some (test_market.py)."""
+    from interlatch.sharing import leaderboard, market
+
+    def offline():
+        raise leaderboard.LeaderboardError("no connection: tests never read the market")
+
+    monkeypatch.setattr(market, "read_live", offline)
+    monkeypatch.setattr(market, "BUNDLED_PATH", tmp_path_factory.mktemp("market") / "market.json")
+    market.clear_cache()
+    yield
+    if market._reader is not None:  # a read still running would fill the next test's cache
+        market._reader.join(5)
+    market.clear_cache()
+
+
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
     home = tmp_path / "chronicle"

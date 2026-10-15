@@ -165,7 +165,7 @@ GET: list[Route] = [
     Route("/api/party", PARTY, lambda h, ctx, m, q: h._json(api.party.party(ctx, h.viewer, here=h._from_here()))),
     Route("/api/party/skill", PARTY, lambda h, ctx, m, q: h._json(*api.party.skill(ctx, h.viewer, q))),
     Route("/api/party/track", PARTY, lambda h, ctx, m, q: h._json(*api.party.track(ctx, h.viewer, q))),
-    Route("/api/party/tracks", PARTY, lambda h, ctx, m, q: h._json(api.party.tracks(ctx))),
+    Route("/api/party/tracks", PARTY, lambda h, ctx, m, q: h._json(api.party.tracks(ctx, h.viewer))),
     Route("/api/team/who", ANYONE, lambda h, ctx, m, q: h._json(api.team.who_options(ctx))),
     Route("/api/team", ANYONE, lambda h, ctx, m, q: h._json(api.team.team(
         ctx, q, scope=people.projects_of(h.viewer), admin=h._can_admin(), viewer=h.viewer))),

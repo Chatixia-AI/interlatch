@@ -72,6 +72,19 @@ computer from the two published sheets and the week, so both players see the sam
 self-reported: it's a game, not a record. **Leave the arena** deletes your sheet; you stay on the board. Leaving the
 board leaves the arena too.
 
+## Who's hiring
+
+Each class shows who's hiring for it. **Hiring** gives the open technical roles that fit the track and their share of
+all the postings, worldwide, and the count in Japan, marked a small sample while Japan has fewer than 500 postings in
+it. Under **Quests** you can sort the goal tracks by demand, each with its open roles. A character's top classes list
+the modules employers ask for most, and a green corner marks them on the track.
+
+The numbers come from the public job boards of dozens of companies, read through the boards' official APIs. Only
+counts are kept: no posting's title, link or text. They are a sample of postings, not the whole market. Once you're
+signed in to the Party, Interlatch reads them from its Firebase project, at most every six hours, and until then, or
+offline, shows the copy that came with your version. The date under them says when they were counted, and a
+**Test data** badge marks numbers from a test run. Reading them sends nothing about you ([Data and privacy](privacy.md)).
+
 !!! note "Your agents' level, not yours"
     Levels show what your agents' lessons cover on the roadmap. They aren't your own level: the roadmap keeps that
     separate, and only a check of your own work can show it.

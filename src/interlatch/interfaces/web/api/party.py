@@ -45,7 +45,9 @@ def party(ctx: Context, viewer: dict | None, *, here: bool) -> dict:
     me = who(ctx, viewer)
     if me is None:
         return {"signed_in": False, **gate}
-    return {"signed_in": True, **gate, "who": me, **pt.compute(ctx.conn, _here_id(ctx), viewer)}
+    data = pt.compute(ctx.conn, _here_id(ctx), viewer)
+    # who's hiring for the classes it shows: read from Firebase only now, signed in (the numbers are public)
+    return {"signed_in": True, **gate, "who": me, **data, "market": pt.market_block(pt.payload_tracks(data))}
 
 
 def _refused() -> tuple[dict, int]:
@@ -67,14 +69,16 @@ def track(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
     if who(ctx, viewer) is None:
         return _refused()
     got = pt.track(ctx.conn, _here_id(ctx), viewer, q.get("id"))
-    return (got, 200) if got else ({"error": tr("not found")}, 404)
+    return ({**got, "market": pt.market_block([got["id"]])}, 200) if got else ({"error": tr("not found")}, 404)
 
 
-def tracks(ctx: Context) -> dict:
-    """Every track by category, for the goal picker: the catalog's own content, nobody's data."""
+def tracks(ctx: Context, viewer: dict | None) -> dict:
+    """Every track by category, for the goal picker: the catalog's own content, nobody's data. Signed in, with each
+    track's hiring numbers too (only then is the market read)."""
     from ....knowledge import party as pt
 
-    return pt.tracks()
+    data = pt.tracks()
+    return data if who(ctx, viewer) is None else pt.market_tracks(data)
 
 
 def action_party_quest(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
