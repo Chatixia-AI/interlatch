@@ -3,6 +3,28 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.24.0 (2026-10-15)
+
+- **Party:** your coding agents become pixel-art characters who level up from the lessons their sessions taught,
+  matched to a 65-track technical career roadmap: skills, six attributes, a class, quests you mark done and a journey
+  of level-ups week by week. Sign in with Google to meet them; it sends nothing and doesn't join the leaderboard
+  ([Party](docs/party.md)).
+- **Party on Home:** once you're signed in to the Party, the top of Home shows your coding agents as Chatixia-style
+  pixel characters battling through the week: each of this week's lessons is a monster beaten by the agent that
+  taught it, main-quest milestones wait as bosses until you mark them done, and level-ups flash as they happen
+  ([Party](docs/party.md#the-journey-on-home)).
+- **Arena:** people on the leaderboard can enter their Party in a weekly arena: each player's champion, the agent they
+  pick, duels every other player's champion once, the new Arena board ranks them by wins, and any duel replays round by
+  round with the pixel characters. Entering publishes only each agent's level, tier, class and attribute levels and
+  which one is your champion, with your board name and picture ([The arena](docs/party.md#the-arena)).
+- **Who's hiring, in the Party:** each class shows how many open technical roles match it on public company job
+  boards (worldwide; Japan's own count shows once its sample is big enough), the goal picker can sort tracks by demand, and a track lists
+  the skills employers ask for. The numbers are read from Interlatch's Firebase project, which sends nothing about
+  you; a copy ships with Interlatch for when it can't be reached ([Party](docs/party.md)).
+- **Party on Home before signing in:** the Journey strip on Home now shows this week's lessons while your party sleeps;
+  point at one to read it, click it to open its session, and sign in with Google to send your party after them
+  ([Party](docs/party.md#the-journey-on-home)).
+
 ## 0.23.4 (2026-10-14)
 
 - **What goes wrong:** the projects and agents a cause hit equally often are listed by name, in the same order every
