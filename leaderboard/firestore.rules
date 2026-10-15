@@ -96,6 +96,42 @@ service cloud.firestore {
         && data.at == request.time;
     }
 
+    // The arena: a party's sheet (src/interlatch/sharing/arena.py writes it). Fields (all required, no others):
+    //   name, photo, machine: as for players; v: int, the sheet format (2);
+    //   agents: a map of exactly the five coding agents, each {level: int 1-200, tier: novice|adept|expert|master,
+    //           cls: null or a track id, attrs: {craft, data, ops, guard, arcana, lore: int 0-100}};
+    //   champion: which of the five fights for the party;
+    //   at: timestamp, the server time of the upload (request.time). No lessons, projects or titles.
+    function isValidArenaAgent(a) {
+      let keys = ['level', 'tier', 'cls', 'attrs'];
+      let attrs = ['craft', 'data', 'ops', 'guard', 'arcana', 'lore'];
+      return a is map && a.keys().hasOnly(keys) && a.keys().hasAll(keys)
+        && a.level is int && a.level >= 1 && a.level <= 200
+        && a.tier in ['novice', 'adept', 'expert', 'master']
+        && (a.cls == null || (a.cls is string && a.cls.matches('^[a-z0-9-]{1,64}$')))
+        && a.attrs is map && a.attrs.keys().hasOnly(attrs) && a.attrs.keys().hasAll(attrs)
+        && isCount(a.attrs.craft, 100) && isCount(a.attrs.data, 100) && isCount(a.attrs.ops, 100)
+        && isCount(a.attrs.guard, 100) && isCount(a.attrs.arcana, 100) && isCount(a.attrs.lore, 100);
+    }
+
+    function isValidArena(data) {
+      let fields = ['name', 'photo', 'machine', 'v', 'agents', 'champion', 'at'];
+      let agents = ['claude', 'codex', 'copilot', 'bob', 'antigravity'];
+      return hasOnlyAllowedFields(fields) && hasRequiredFields(fields)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 64
+        && data.photo is string && data.photo.size() <= 500
+        && (data.photo == ''
+            || data.photo.matches('^https://(lh3[.]googleusercontent[.]com|avatars[.]githubusercontent[.]com)/[^\\s]+$'))
+        && data.machine is string && data.machine.matches('^[A-Za-z0-9-]{8,64}$')
+        && data.v == 2
+        && data.champion in agents
+        && data.agents is map && data.agents.keys().hasOnly(agents) && data.agents.keys().hasAll(agents)
+        && isValidArenaAgent(data.agents.claude) && isValidArenaAgent(data.agents.codex)
+        && isValidArenaAgent(data.agents.copilot) && isValidArenaAgent(data.agents.bob)
+        && isValidArenaAgent(data.agents.antigravity)
+        && data.at == request.time;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -110,6 +146,15 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isPlayerAccount() && isValidPlayer(request.resource.data)
         && request.resource.data.provider == resource.data.provider && request.resource.data.pid == resource.data.pid;
       // leaving the board
+      allow delete: if isOwner(userId);
+    }
+
+    match /arena/{userId} {
+      // Public like the board: anyone in the arena fights every other party, on their own computer.
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
+      allow create, update: if isOwner(userId) && isPlayerAccount() && isValidArena(request.resource.data);
+      // leaving the arena (or the board)
       allow delete: if isOwner(userId);
     }
 

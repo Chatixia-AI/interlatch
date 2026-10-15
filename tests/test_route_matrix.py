@@ -141,6 +141,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     # the computer itself: a person's own leaderboard
     ("GET", "/api/leaderboard"): HERE,
     ("GET", "/api/leaderboard/avatar/{id}"): HERE.ok(404),  # no picture
+    ("GET", "/api/leaderboard/arena/battle"): HERE,
     # the Party: this computer, or any person signed in to the hub, limited people too (their projects' lessons);
     # behind a Google sign-in here, which the matrix's hub hasn't made: it answers only that it's locked
     ("GET", "/api/party"): LIMITED_OK,
@@ -225,6 +226,9 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/leaderboard/name"): POST_HERE,
     ("POST", "/api/leaderboard/leave"): POST_HERE,
     ("POST", "/api/leaderboard/join"): POST_HERE,
+    ("POST", "/api/leaderboard/arena/join"): POST_HERE,
+    ("POST", "/api/leaderboard/arena/leave"): POST_HERE,
+    ("POST", "/api/leaderboard/arena/champion"): POST_HERE,
     ("POST", "/api/party/signin"): POST_HERE,
     ("POST", "/api/party/signout"): POST_HERE,
     # the hub API: computers, by token
@@ -283,7 +287,7 @@ STUBS = {
     "action_leaderboard_signin": {"stub": True}, "action_leaderboard_finish": {"stub": True},
     "action_leaderboard_send": {"stub": True}, "action_leaderboard_name": {"stub": True},
     "action_leaderboard_leave": {"stub": True}, "leaderboard": {"stub": True}, "action_leaderboard_join": {"stub": True},
-    "action_party_signout": {"stub": True},
+    "action_party_signout": {"stub": True}, "action_arena": {"stub": True}, "action_arena_champion": {"stub": True}, "arena_battle": ({"stub": True}, 200),
     "action_team_store_test": {"stub": True}, "action_mirror_test": {"stub": True},
     "action_update": {"stub": True}, "action_menu_bar": {"stub": True},
     "action_provider_test": {"stub": True}, "provider_models": {"stub": True},

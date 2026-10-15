@@ -16,6 +16,11 @@ last 7, 30 and 90 days (active hours, sessions, tokens) with the name and pictur
 prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
 Signing in with Google for the [Party](party.md) page alone sends nothing: your characters are worked out on your
 computer, and only **Join the board** on the Leaderboard page starts sending totals.
+If you also **Enter the arena** on the Leaderboard page, each sync publishes your party's character sheet to the same
+Firebase project, readable by anyone: for each of your five coding agents its level, tier, class and six attribute
+levels, and which agent is your champion, with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
+titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving
+the board) deletes your sheet ([The arena](party.md#the-arena)).
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is

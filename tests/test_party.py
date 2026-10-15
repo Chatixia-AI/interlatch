@@ -519,9 +519,10 @@ def test_signing_in_for_the_party_keeps_the_sign_in_off_the_board(hubweb, catalo
     status, r = _http(url, "/api/leaderboard/join", {})
     assert status == 200 and r["joined"] is True and len(net.commits()) == 1 and lb.read_state(cfg)["board"] is True
     net.on("DELETE", lb.FIRESTORE + "/players/uid1", {})
-    status, r = _http(url, "/api/party/signout", {})  # on the board: signing out is leaving it
+    net.on("DELETE", lb.FIRESTORE + "/arena/uid1", {})
+    status, r = _http(url, "/api/party/signout", {})  # on the board: signing out is leaving it (and the arena)
     assert status == 200 and r == {"signed_in": False, "signing_in": False, "can_sign_in": True}
-    assert [c["method"] for c in net.calls].count("DELETE") == 1 and lb.read_state(cfg) is None
+    assert [c["method"] for c in net.calls].count("DELETE") == 2 and lb.read_state(cfg) is None
     assert _http(url, "/api/leaderboard/join", {})[0] == 502  # nobody signed in to join with
 
 
