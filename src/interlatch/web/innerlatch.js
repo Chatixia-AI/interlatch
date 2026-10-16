@@ -1033,7 +1033,11 @@ route(/^\/innerlatch\/agent\/([\w-]+)$/, async (params, agent) => {
         fact(t("since"), a.since ? fmtDateY(partyDay(a.since)) : "–"), fact(t("latest"), a.last ? fmtDateY(partyDay(a.last)) : "–"))),
     h("div", { class: "ph-attrs" }, h("span", { class: "px-label" }, t("Attributes")), attrBars(a, p.attrs, partyMax(p), { big: true }),
       h("p", { class: "muted small ph-attrs-note" }, t("An attribute's level comes from all its skills' XP together, so it can pass its best skill."))));
-  const page = partyShell(null, null, hero, partySkills(a, p.attrs, partySkillMax(p)), partyClasses(a, p.market));
+  const [bag] = await Promise.all([bagLoad(true).catch(() => null), mapLoad().catch(() => null)]); // gear: battle numbers only (the map: the modules' names)
+  const gearCard = bag ? h("section", { class: "card gear-card" }, cardHead(t("Gear"), { iconName: "tool",
+    hint: t("Worn in Adventure battles only: gear never changes a level") }), gearSlots(bag, a.agent),
+    h("a", { class: "link-arrow small", href: "#/innerlatch/adventure/bag" }, t("Open your bag"), icon("arrow"))) : null;
+  const page = partyShell(null, null, hero, gearCard, partySkills(a, p.attrs, partySkillMax(p)), partyClasses(a, p.market));
   setStyle(page, { "--ac": partyColor(a.agent) });
   return page;
 });
@@ -1093,6 +1097,10 @@ async function adventureSidebar(box) {
   box.replaceChildren(head, h("div", { class: "sb-scroll" },
     sbRow(t("World map"), "#/innerlatch/adventure", "map", null, ["/innerlatch/adventure", "view", ""]),
     sbRow(t("Encounter list"), "#/innerlatch/adventure?view=list", "todo", tally.total - tally.cleared, ["/innerlatch/adventure", "view", "list"]),
+    Object.assign(sbRow(t("Bag"), "#/innerlatch/adventure/bag", "artifacts", m.gold || 0, ["/innerlatch/adventure/bag"]),
+      { title: t("{n} gold", { n: fmtNum(m.gold || 0) }) }),
+    h("div", { class: "sb-group" }, t("Towns")),
+    (m.regions || []).map((r) => sbRow(townName(m, r.id), `#/innerlatch/adventure/town/${r.id}`, "home", null, [`/innerlatch/adventure/town/${r.id}`])),
     h("div", { class: "sb-group" }, t("Regions")),
     (m.regions || []).map((r) => {
       const x = tally.by[r.id] || { total: 0, cleared: 0 };
@@ -1139,7 +1147,8 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
     h("div", null, h("h1", null, t("Adventure")),
       h("div", { class: "sub" }, tally.total ? t("Every lesson your agents learned is out there. {n} of {total} cleared.", { n: fmtNum(tally.cleared), total: fmtNum(tally.total) })
         : t("No lessons on the roadmap yet: the world is still under fog.")))),
-    h("div", { class: "head-actions" }, segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
+    h("div", { class: "head-actions" }, goldChip(m.gold), h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Bag")),
+      segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
       (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure"))));
   if (list) return h("div", { class: "party-page adv-page" }, head, advList(m, params));
   const host = h("div", { class: "adv-world" }); // the engine names its own canvas (labels.map)
@@ -1162,6 +1171,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
               : t("{n} of {total} cleared", { n: fmtNum(mod.cleared || 0), total: fmtNum(mod.total) }));
           } else if (item.type === "region") showTip(where, item.region.name, item.region.about || null);
           else if (item.type === "party") showTip(where, t("Your party"), t("Where the newest lesson was learned"));
+          else if (item.type === "town") showTip(where, item.town?.name || item.region.name, item.region.name, t("A shop: gear for this region's skills, and supplies"));
           else hideTip();
         },
         onPick: (item) => {
@@ -1170,6 +1180,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
             if (done().has(item.lesson.id)) openLesson(item.lesson.id);
             else go(`#/innerlatch/adventure/battle/${item.lesson.id}`);
           } else if (item?.type === "boss") go(`#/innerlatch/adventure/boss/${item.boss.n}`);
+          else if (item?.type === "town") go(`#/innerlatch/adventure/town/${item.region.id}`);
         } });
     } catch (e) { host.replaceChildren(h("div", { class: "card empty" }, t("Could not load: {error}", { error: e.message }))); return; }
     if (params.lesson) world.focusLesson?.(Number(params.lesson));
@@ -1251,7 +1262,24 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "move.boss.scope": t("{monster} creeps the scope!"),
     "move.boss.meeting": t("{monster} calls a meeting and recovers."),
     "move.boss.charge": t("{monster} gathers the whole milestone…"),
-    "move.boss.unleash": t("{monster} unleashes the milestone!") };
+    "move.boss.unleash": t("{monster} unleashes the milestone!"),
+    "item": t("Item"), "skillGear": t("+{n} gear"), "itemCount": t("×{n}"), "itemTarget": t("→ {hero}"),
+    "itemNone": t("The bag is empty."), "itemNoTarget": t("Nobody is knocked out."),
+    "hint.c:potion": t("Heals 40% HP"), "hint.c:ether": t("Restores 50% MP"),
+    "hint.c:phoenix": t("Revives a fallen hero"), "hint.c:smoke": t("A sure escape"),
+    "hint.l:patch": t("Heals everyone 25% HP"), "hint.l:sign": t("40% less damage, 2 turns"),
+    "hint.l:adr": t("The monster loses a turn"), "hint.l:insight": t("Everyone recovers 30% MP"),
+    "hint.l:template": t("Next blow ×1.6"), "hint.l:script": t("Hits for 25% of its HP"),
+    "lineItem": t("{hero} uses {item}."), "lineItemHeal": t("{target} recovers {n} HP."),
+    "lineItemMp": t("{target} recovers {n} MP."), "lineRevive": t("{target} is back on their feet ({n} HP)."),
+    "lineSmoke": t("Smoke fills the field: the party escapes."),
+    "lineWard": t("The party braces: less damage for {n} turns."),
+    "lineSkipNext": t("{monster} will lose its next turn."),
+    "lineSkipped": t("{monster} is still rethinking and loses its turn."),
+    "lineTemplate": t("The next blow will hit ×1.6."), "lineScript": t("{item} hits {monster} for {n} damage!"),
+    "lineNoItem": t("No {item} left."), "rewardWait": t("Counting the spoils…"), "rewardGold": t("+{n} gold"),
+    "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
+    "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map.") };
 }
 async function advBattlePage(build, back, crumbs, token) {
   setCrumbs(crumbs, token);
@@ -1268,12 +1296,14 @@ async function advBattlePage(build, back, crumbs, token) {
     fight = Battle.mount(host, { ...enc, attempt, labels: advBattleLabels(), reducedMotion: stillMotion(),
       formatDate: (at) => fmtDateY(partyDay(at)) });
   };
-  const enc = await build({
-    onLose: () => { attempt++; start(enc); }, // Retry: new dice, the same lesson
+  const cb = {
+    onLose: async () => { attempt++; enc = await build(cb); if (enc) start(enc); }, // Retry: new dice, and the bag as it is now
     onRun: () => go(back), onExit: () => go(back),
     onReadLesson: (id) => openLesson(id),
     onQuests: () => go("#/innerlatch/quests"), // no sessionHref: the lesson opens in the modal, inside Innerlatch
-  });
+    onUseItem: async (id) => { const r = await lbPost("/api/party/use", { id }); if (r?.bag) bagKeep(r.bag); },
+  };
+  let enc = await build(cb);
   if (!enc) return page;
   whenShown(host, () => start(enc));
   const gone = new MutationObserver(() => { if (!host.isConnected) { gone.disconnect(); try { fight?.destroy?.(); } catch (e) { /* gone */ } } });
@@ -1292,12 +1322,18 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
       h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
   }
   const back = `#/innerlatch/adventure?lesson=${id}`;
-  return advBattlePage(async (cb) => ({ encounter, ...cb,
-    onWin: async () => {
-      const r = await lbPost("/api/party/cleared", { id: Number(id), cleared: true });
-      if (r) mapCleared(r.cleared);
-      if (sbSection === "adventure") buildSidebar("adventure");
-    } }), back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [plainTitle(encounter.lesson.title)]], token);
+  const onWin = async () => { // the battle shows the reward: gold and loot on a first clear, nothing on a second
+    const r = await lbPost("/api/party/cleared", { id: Number(id), cleared: true });
+    if (r) { mapCleared(r.cleared); if (r.bag) bagKeep(r.bag); }
+    if (sbSection === "adventure") buildSidebar("adventure");
+    return r ? r.reward || null : false; // false: the win wasn't saved (the battle says so)
+  };
+  let first = encounter; // a retry asks again: the items used in the lost fight are gone
+  return advBattlePage(async (cb) => {
+    const enc = first || await api("/api/party/encounter", { id }).catch(() => ({ ...encounter, items: [] })); // never the old counts
+    first = null;
+    return { encounter: enc, ...cb, onWin };
+  }, back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [plainTitle(encounter.lesson.title)]], token);
 });
 route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
   const token = renderSeq;
@@ -1306,8 +1342,132 @@ route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
   const m = await mapLoad();
   const boss = (m.bosses || []).find((b) => String(b.n) === n);
   if (!boss) return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("No such boss on your main quest."), " ", h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
-  return advBattlePage(async (cb) => ({ encounter: { boss, party: m.agents }, ...cb, onWin: () => {} }), "#/innerlatch/adventure",
+  return advBattlePage(async (cb) => { // a boss fight brings the party's gear and supplies too, as they are at each try
+    const bag = await bagLoad(true).catch(() => null);
+    const party = (m.agents || []).map((a) => ({ ...a, gear: bag?.gear?.[a.agent] }));
+    const items = (bag?.items || []).filter((x) => x.kind !== "gear" && x.count > 0);
+    return { encounter: { boss, party, items }, ...cb, onWin: () => undefined };
+  }, "#/innerlatch/adventure",
     [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [boss.text]], token);
+});
+
+// ------------------------------------------------------------------ Town & gear: gold from first wins, a shop in each
+// region's town whose gear unlocks with the party's real skill levels there, three slots per agent, supplies and loot
+// for battles (knowledge/bag.py). It's a game economy: gear changes battle numbers only, never a level or XP.
+let bagCache = null;
+async function bagLoad(fresh = false) { if (!fresh && bagCache) return bagCache; return bagKeep(await api("/api/party/bag")); }
+function bagKeep(b) { bagCache = b; if (mapCache && Number.isFinite(b?.gold)) mapCache.gold = b.gold; return b; }
+function goldChip(n) { return h("span", { class: "adv-gold", title: t("Gold: earned by a lesson's first win, spent in towns") }, h("i", { "aria-hidden": "true" }), t("{n} gold", { n: fmtNum(n || 0) })); }
+function townName(m, attr) { return (m?.towns || []).find((x) => x.attr === attr)?.name || (m?.regions || []).find((r) => r.id === attr)?.name || attr; }
+const SLOT_ICON = { weapon: "tool", armor: "shield", charm: "sparkles" };
+const SLOT_LABEL = { weapon: t("Weapon"), armor: t("Armor"), charm: t("Charm") };
+const TIER_LABEL = { 1: "I", 2: "II", 3: "III" };
+function itemStats(x) { // what it does in battle, in a line
+  const st = x.stats || {}, mod = x.module ? (mapCache?.regions || []).flatMap((r) => r.modules).find((md) => md.id === x.module)?.name || x.module : null;
+  const out = [st.atk ? t("+{n} attack", { n: st.atk }) : null, st.hp ? t("+{n} HP", { n: st.hp }) : null, st.mp ? t("+{n} MP", { n: st.mp }) : null,
+    st.def ? t("−{n}% damage taken", { n: Math.round(st.def * 100) }) : null, st.skill && mod ? t("+{n} gear on {skill} (battles)", { n: st.skill, skill: mod }) : null];
+  return out.filter(Boolean).join(" · ") || x.about || "";
+}
+function itemIcon(x) { return x.kind === "gear" ? icon(SLOT_ICON[x.slot] || "tool") : x.kind === "loot" ? pxIcon("star", 1) : pxIcon("xp", 1); }
+function itemRow(x, ...actions) {
+  return h("li", { class: `bag-row${x.locked ? " locked" : ""}` }, h("span", { class: "bag-ic" }, itemIcon(x)),
+    h("div", { class: "bag-main" }, h("b", null, x.name, x.tier ? h("span", { class: "bag-tier" }, TIER_LABEL[x.tier]) : null,
+      x.count > 1 ? h("span", { class: "bag-count" }, `×${x.count}`) : null),
+      h("div", { class: "muted small" }, x.locked ? x.unlock : itemStats(x))),
+    h("div", { class: "bag-acts" }, ...actions.filter(Boolean)));
+}
+async function bagAct(path, body, done, btn = null) {
+  if (btn) btn.disabled = true; // one purchase per click, however fast the second comes
+  const r = await lbPost(path, body);
+  if (!r?.bag) { if (btn) btn.disabled = false; return; }
+  bagKeep(r.bag);
+  if (done) toast(done);
+  if (sbSection === "adventure") buildSidebar("adventure");
+  render();
+}
+route(/^\/innerlatch\/adventure\/town\/(\w+)$/, async (params, attr) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const [shop, m] = await Promise.all([api("/api/party/shop", { region: attr }), mapLoad()]);
+  const name = townName(m, attr);
+  setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [name]], token);
+  const bag = await bagLoad(true).catch(() => null);
+  const owned = new Map((bag?.items || []).map((x) => [x.id, x.count]));
+  const buy = (x) => x.locked ? h("span", { class: "muted small" }, icon("shield"), t("Locked"))
+    : h("button", { class: "btn small primary", type: "button", disabled: (shop.gold ?? 0) < x.price,
+      title: (shop.gold ?? 0) < x.price ? t("Not enough gold") : null,
+      onclick: (e) => bagAct("/api/party/buy", { id: x.id }, t("Bought {item}", { item: x.name }), e.currentTarget) }, t("Buy · {n} gold", { n: fmtNum(x.price) }));
+  const byModule = new Map();
+  for (const x of shop.gear || []) { if (!byModule.has(x.module)) byModule.set(x.module, []); byModule.get(x.module).push(x); }
+  const mods = new Map((m.regions || []).flatMap((r) => r.modules).map((md) => [md.id, md.name]));
+  const open = (shop.gear || []).filter((x) => !x.locked).length;
+  return partyShell(name, shop.region?.about || null,
+    h("div", { class: "town-bar" }, goldChip(shop.gold), h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Open your bag")),
+      h("a", { class: "btn small", href: `#/innerlatch/adventure?view=map&region=${attr}` }, icon("map"), t("Back to the map"))),
+    h("section", { class: "card town-card" }, cardHead(t("Supplies"), { iconName: "zap", hint: t("For battles: use them from the Item command") }),
+      h("ul", { class: "bag-rows" }, (shop.consumables || []).map((x) => itemRow({ ...x, count: owned.get(x.id) || 0 },
+        owned.get(x.id) ? h("span", { class: "adv-flag" }, t("In your bag ×{n}", { n: owned.get(x.id) })) : null, buy(x))))),
+    h("section", { class: "card town-card" }, cardHead(t("Gear"), { iconName: "tool",
+      hint: t("{n} of {total} pieces open. A piece opens when one of your agents reaches its level in that skill: Lv 1, 3 or 5.", { n: fmtNum(open), total: fmtNum((shop.gear || []).length) }) }),
+      [...byModule].map(([mod, xs]) => h("details", { class: `town-mod${xs.every((x) => x.locked) ? " all-locked" : ""}`, open: xs.some((x) => !x.locked) },
+        h("summary", { class: "px-label" }, mods.get(mod) || mod, h("span", { class: "muted" }, ` · ${t("{n}/{total} open", { n: xs.filter((x) => !x.locked).length, total: xs.length })}`)),
+        h("ul", { class: "bag-rows" }, xs.map((x) => itemRow({ ...x, count: owned.get(x.id) || 0 },
+          owned.get(x.id) ? h("span", { class: "adv-flag" }, t("In your bag")) : null, buy(x))))))),
+    h("p", { class: "muted small" }, t("Gear only changes battle numbers. Levels and XP still come from lessons alone.")));
+});
+function gearSlots(bag, agent, { compact = false } = {}) { // the three slots of one agent, each with what it can wear
+  const worn = bag?.equipped?.[agent] || {};
+  const owned = (bag?.items || []).filter((x) => x.kind === "gear");
+  const wearers = new Map(); // a piece's id: who wears its copies, so moving one says from whom
+  for (const [who, s] of Object.entries(bag?.equipped || {})) for (const x of Object.values(s || {})) if (x) wearers.set(x.id, [...(wearers.get(x.id) || []), who]);
+  const optLabel = (x) => {
+    const others = (wearers.get(x.id) || []).filter((w) => w !== agent);
+    const free = x.count - (wearers.get(x.id) || []).length;
+    return others.length && free <= 0 && worn[x.slot]?.id !== x.id ? t("{item} (worn by {agent})", { item: x.name, agent: others.map(agentShort).join(", ") }) : x.name;
+  };
+  return h("div", { class: `gear-slots${compact ? " compact" : ""}` }, ["weapon", "armor", "charm"].map((slot) => {
+    const cur = worn[slot];
+    const pick = h("select", { "aria-label": t("{slot} for {agent}", { slot: SLOT_LABEL[slot], agent: agentShort(agent) }),
+      onchange: (e) => bagAct("/api/party/equip", { agent, slot, id: e.target.value || null }) },
+      h("option", { value: "" }, cur ? t("Take it off") : t("Empty")),
+      owned.filter((x) => x.slot === slot).map((x) => h("option", { value: x.id, selected: cur?.id === x.id }, optLabel(x))));
+    return h("div", { class: "gear-slot" }, h("span", { class: "gear-ic" }, icon(SLOT_ICON[slot])),
+      h("div", { class: "gear-main" }, h("span", { class: "px-label" }, SLOT_LABEL[slot]),
+        compact ? null : h("b", null, cur ? cur.name : t("Empty")), cur && !compact ? h("div", { class: "muted small" }, itemStats(cur)) : null),
+      pick);
+  }));
+}
+route(/^\/innerlatch\/adventure\/bag$/, async () => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const [bag, m] = await Promise.all([bagLoad(true), mapLoad()]);
+  setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [t("Bag")]], token);
+  const wornN = new Map(); // how many copies of each piece are worn: only a spare one can be sold
+  for (const s of Object.values(bag.equipped || {})) for (const x of Object.values(s || {})) if (x) wornN.set(x.id, (wornN.get(x.id) || 0) + 1);
+  const worn = new Set(wornN.keys());
+  const sell = (x) => {
+    const spare = x.count - (wornN.get(x.id) || 0) > 0;
+    return h("button", { class: "btn small", type: "button", disabled: !spare, title: spare ? null : t("Take it off first"),
+      onclick: (e) => bagAct("/api/party/sell", { id: x.id }, t("Sold {item} for {n} gold", { item: x.name, n: fmtNum(x.sell) }), e.currentTarget) },
+      t("Sell · {n} gold", { n: fmtNum(x.sell) }));
+  };
+  const gear = (bag.items || []).filter((x) => x.kind === "gear"), rest = (bag.items || []).filter((x) => x.kind !== "gear");
+  const agents = (p.agents || []).filter((a) => a.level > 0);
+  return partyShell(t("Bag"), t("What your party carries and wears. Gear only changes battle numbers."),
+    h("div", { class: "town-bar" }, goldChip(bag.gold),
+      (m.regions || []).map((r) => h("a", { class: "btn small", href: `#/innerlatch/adventure/town/${r.id}` }, pxIcon(r.id, 1), townName(m, r.id)))),
+    h("section", { class: "card" }, cardHead(t("Equipped"), { iconName: "party" }),
+      agents.length ? h("div", { class: "gear-grid" }, agents.map((a) => h("div", { class: "gear-agent" },
+        h("a", { class: "gear-who", href: `#/innerlatch/agent/${a.agent}` }, partySprite(a.agent, { tier: a.tier, scale: 2, decorative: true }), h("b", null, a.name)),
+        gearSlots(bag, a.agent, { compact: true })))) : h("div", { class: "empty" }, t("No one in the party yet."))),
+    h("section", { class: "card" }, cardHead(t("Gear"), { iconName: "tool" }),
+      gear.length ? h("ul", { class: "bag-rows" }, gear.map((x) => itemRow(x, worn.has(x.id) ? h("span", { class: "adv-flag" }, t("Worn")) : null, sell(x))))
+        : h("div", { class: "empty" }, t("No gear yet. Win battles for gold, then visit a town."))),
+    h("section", { class: "card" }, cardHead(t("Supplies and loot"), { iconName: "zap" }),
+      rest.length ? h("ul", { class: "bag-rows" }, rest.map((x) => itemRow(x, sell(x))))
+        : h("div", { class: "empty" }, t("Nothing yet. Towns sell supplies, and lessons drop loot when you first beat them."))));
 });
 
 // =====================================================================================

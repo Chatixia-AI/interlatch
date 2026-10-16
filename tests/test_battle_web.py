@@ -39,10 +39,17 @@ function lesson(i) {
 }
 const boss = (i, n, status = 'open') => ({boss: {id: `T-x-G${n}`, n, text: 'Ship it', track: 'T-x', track_name: 'Backend',
   attr: ATTRS[i % 6], status}, party: lesson(i).party.map(({attr_levels, skills, ...m}) => m)});
+// gear for every hero: tier T of the lesson's first module (weapon + armor + charm, as the shop sells them)
+const geared = (e, T) => ({...e, party: e.party.map((m) => ({...m, gear: {atk: 3 * T, hp: 12 * T, mp: 6 * T, def: 0.05 * T,
+  skills: {[e.lesson.modules[0].id]: 2 * T}}}))});
+const ALL_ITEMS = R.ITEMS.map((id) => ({id, name: id, kind: id.startsWith('l:') ? 'loot' : 'consumable', count: 3}));
+// a player that uses an item whenever it can, then fights
+const itemsFirst = (s) => { const o = R.itemOptions(s).find((x) => x.usable && x.id !== 'c:smoke'); return o ? {type: 'item', id: o.id} : R.policy(s); };
 // every number in a state is finite
 function finite(state) {
   const nums = [state.round, state.foe.hp, state.foe.maxHp, state.foe.power, state.foe.d];
   for (const h of state.heroes) nums.push(h.hp, h.maxHp, h.mp, h.maxMp, h.atk, h.level, ...Object.values(h.skills));
+  for (const it of state.items || []) nums.push(it.count);
   nums.forEach((v) => assert.ok(Number.isFinite(v), 'not a number: ' + JSON.stringify(state.heroes)));
 }
 '''
@@ -171,6 +178,8 @@ for (const k of KINDS) assert.ok('monster.' + k in B.LABELS);
 const states = [];
 for (let i = 0; i < 200; i++) states.push(R.simulate(lesson(i), i % 4, (s) => (s.round % 4 === 2 ? {type: 'defend'} : R.policy(s))));
 for (let i = 0; i < 40; i++) states.push(R.simulate(boss(i, 1 + (i % 4)), 0));
+for (let i = 0; i < 60; i++) states.push(R.simulate({...geared(lesson(i), 1 + (i % 3)), items: ALL_ITEMS}, 0, itemsFirst));
+for (let i = 0; i < 20; i++) states.push(R.simulate({...boss(i, 1 + (i % 4)), items: ALL_ITEMS}, 0, itemsFirst));
 for (const s of states) {
   for (const line of s.log) {
     const text = line.key ? B.format(B.LABELS[line.key], line.vars) : line.vars.text;
@@ -209,3 +218,237 @@ assert.ok(R.excerpt('word '.repeat(200), 50).endsWith('…'));
 assert.equal(B.format('{monster}を倒した！', {monster: 'グリッチ'}), 'グリッチを倒した！');
 assert.equal(B.format('{hero}はどうする？', {hero: 'Claude'}), 'Claudeはどうする？');
 ''')
+
+
+def test_gear_adds_to_battle_numbers_only_and_an_ungeared_party_is_unchanged():
+    check(r"""
+const m = {agent: 'claude', level: 10, attr_levels: {craft: 4}};
+const bare = R.heroStats(m, 'craft');
+assert.deepEqual(bare, {hp: 36 + 30 + 20, mp: 14 + 5 + 6, atk: 8 + 6 + Math.round(4.8), def: 0});
+const g = R.heroStats({...m, gear: {atk: 9, hp: 36, mp: 18, def: 0.15, skills: {}}}, 'craft');
+assert.deepEqual(g, {hp: bare.hp + 36, mp: bare.mp + 18, atk: bare.atk + 9, def: 0.15});
+assert.equal(R.heroStats({...m, gear: {def: 5}}, 'craft').def, 0.6);            // capped
+assert.deepEqual(R.heroStats({...m, gear: {atk: 'x', hp: null}}, 'craft'), bare); // junk is nothing
+// an empty gear object is the same fight as none
+for (let i = 0; i < 30; i++) {
+  const e = lesson(i), e0 = {...e, party: e.party.map((p) => ({...p, gear: {atk: 0, hp: 0, mp: 0, def: 0, skills: {}}}))};
+  assert.deepEqual(R.simulate(e, 1).log, R.simulate(e0, 1).log);
+}
+// gear's skill levels add to the module's skill in battle, shown apart; the hero's level doesn't move
+const e = geared(lesson(5), 3), s = R.setup(e, 0), h = s.heroes[0], mod = e.lesson.modules[0].id;
+const opt = R.skillOptions(s, 0).find((o) => o.id === mod);
+assert.equal(opt.gear, 6);
+assert.equal(opt.own, lesson(5).party.find((p) => p.agent === h.agent).skills[mod] || 0);
+assert.equal(opt.level, opt.own + 6);
+assert.equal(h.level, Math.max(0, lesson(5).party.find((p) => p.agent === h.agent).level));
+// armour cuts the damage taken: the same dice, less damage with def
+const hit = (def) => { const st = R.setup({...lesson(7), party: lesson(7).party.map((p) => ({...p, gear: {def}}))}, 0);
+  st.phase = 'monster'; R.monsterTurn(st); return st.heroes.reduce((t, x) => t + (x.maxHp - x.hp), 0); };
+assert.ok(hit(0.3) < hit(0) * 0.8 && hit(0.3) > 0, `${hit(0.3)} vs ${hit(0)}`);
+// the monster is sized to the bare party plus half the gear
+const m0 = R.stats(lesson(9)).foe.maxHp, m3 = R.stats(geared(lesson(9), 3)).foe.maxHp;
+assert.ok(m3 > m0 && m3 < m0 * 1.6, `${m0} -> ${m3}`);
+""")
+
+
+def test_a_tier_three_party_wins_comfortably_but_not_instantly():
+    check(r"""
+for (const [T, need, lo, hi] of [[0, 180, 3, 6], [3, 195, 2, 4]]) {
+  let won = 0, first = 0, rounds = [];
+  for (let i = 0; i < 200; i++) {
+    const s = R.simulate(T ? geared(lesson(i), T) : lesson(i), 0, R.policy, 12);
+    finite(s);
+    if (s.phase === 'won') { won++; rounds.push(s.round); if (s.round === 1) first++; }
+  }
+  rounds.sort((a, b) => a - b);
+  const median = rounds[rounds.length >> 1];
+  assert.ok(won >= need, `tier ${T}: won ${won}`);
+  assert.ok(median >= lo && median <= hi, `tier ${T}: median ${median}`);
+  assert.ok(first <= 10, `tier ${T}: ${first} fights over in the first round`);
+}
+""")
+
+
+def test_each_item_does_what_it_says():
+    check(r"""
+const fresh = (items, e = lesson(4)) => { const s = R.setup({...e, items}, 0); return s; };
+const one = (id, n = 1) => [{id, name: id.toUpperCase(), kind: 'consumable', count: n}];
+// Potion: 40% of the active hero's max HP
+let s = fresh(one('c:potion')), h = s.heroes[0];
+h.hp = 1;
+R.heroAction(s, {type: 'item', id: 'c:potion'});
+assert.equal(h.hp, 1 + Math.ceil(h.maxHp * 0.4));
+assert.equal(s.items[0].count, 0);
+assert.equal(s.active, s.heroes.length > 1 ? 1 : 0);  // it used the turn
+// Ether: 50% MP
+s = fresh(one('c:ether')); h = s.heroes[0]; h.mp = 0;
+R.heroAction(s, {type: 'item', id: 'c:ether'});
+assert.equal(h.mp, Math.ceil(h.maxMp * 0.5));
+// Phoenix Down: not usable with nobody down; raises the first one down at 30%
+s = fresh(one('c:phoenix'));
+assert.equal(R.itemOptions(s)[0].usable, false);
+assert.deepEqual(R.heroAction(s, {type: 'item', id: 'c:phoenix'}).filter((e) => e.t !== 'say'), []);
+assert.equal(s.items[0].count, 1);
+const e3 = lesson(4); assert.ok(R.pickParty(e3).length >= 2, 'needs a party of two');
+s = fresh(one('c:phoenix')); s.heroes[1].ko = true; s.heroes[1].hp = 0;
+assert.equal(R.itemOptions(s)[0].target, 1);
+R.heroAction(s, {type: 'item', id: 'c:phoenix'});
+assert.equal(s.heroes[1].ko, false);
+assert.equal(s.heroes[1].hp, Math.ceil(s.heroes[1].maxHp * 0.3));
+// Smoke Bomb: a sure escape
+s = fresh(one('c:smoke')); R.heroAction(s, {type: 'item', id: 'c:smoke'}); assert.equal(s.phase, 'ran');
+// Patch: 25% HP to everyone standing
+s = fresh(one('l:patch')); s.heroes.forEach((x) => { x.hp = 1; });
+R.heroAction(s, {type: 'item', id: 'l:patch'});
+s.heroes.forEach((x) => assert.equal(x.hp, 1 + Math.ceil(x.maxHp * 0.25)));
+// Insight: 30% MP to everyone
+s = fresh(one('l:insight')); s.heroes.forEach((x) => { x.mp = 0; });
+R.heroAction(s, {type: 'item', id: 'l:insight'});
+s.heroes.forEach((x) => assert.equal(x.mp, Math.ceil(x.maxMp * 0.3)));
+// Warning Sign: 40% less damage for two monster turns, then back to normal (same dice with and without)
+const taken = (withSign) => {
+  const t = fresh(withSign ? one('l:sign') : []);
+  if (withSign) t.ward = 2;
+  const out = [];
+  for (let k = 0; k < 3; k++) { t.heroes.forEach((x) => { x.hp = x.maxHp; x.ko = false; x.guard = false; }); t.phase = 'monster'; R.monsterTurn(t);
+    out.push(t.heroes.reduce((a, x) => a + (x.maxHp - x.hp), 0)); }
+  return out;
+};
+const [a, b] = [taken(false), taken(true)];
+for (const k of [0, 1]) assert.ok(b[k] <= Math.ceil(a[k] * 0.6) + s.heroes.length, `turn ${k}: ${b[k]} vs ${a[k]}`);
+assert.equal(b[2], a[2]);
+s = fresh(one('l:sign')); R.heroAction(s, {type: 'item', id: 'l:sign'}); assert.equal(s.ward, 2);
+// ADR Scroll: the monster loses its next turn
+s = fresh(one('l:adr')); R.heroAction(s, {type: 'item', id: 'l:adr'});
+while (s.phase === 'hero') R.heroAction(s, {type: 'defend'});
+const hp0 = s.heroes.map((x) => x.hp);
+const evs = R.monsterTurn(s);
+assert.ok(evs.some((e) => e.t === 'skip'));
+assert.deepEqual(s.heroes.map((x) => x.hp), hp0);
+assert.equal(s.phase, 'hero');
+// Template: the next blow ×1.6 (same dice)
+const blow = (tpl) => { const t = fresh([]); t.template = tpl; return R.heroAction(t, {type: 'attack'}).find((e) => e.t === 'strike').n; };
+assert.ok(Math.abs(blow(true) - blow(false) * 1.6) <= 2, `${blow(true)} vs ${blow(false)}`);
+s = fresh(one('l:template')); R.heroAction(s, {type: 'item', id: 'l:template'}); assert.equal(s.template, true);
+// Script: 25% of the monster's max HP
+s = fresh(one('l:script')); R.heroAction(s, {type: 'item', id: 'l:script'});
+assert.equal(s.foe.maxHp - s.foe.hp, Math.round(s.foe.maxHp * 0.25));
+// a Script can finish a monster off
+s = fresh(one('l:script')); s.foe.hp = 2; R.heroAction(s, {type: 'item', id: 'l:script'}); assert.equal(s.phase, 'won');
+// no item left: nothing happens
+s = fresh(one('c:potion', 0)); assert.deepEqual(R.itemOptions(s), []);
+assert.deepEqual(R.heroAction(s, {type: 'item', id: 'c:potion'}), []);
+""")
+
+
+def test_a_boss_holds_at_one_hp_against_scripts_and_counts_never_go_negative():
+    check(r"""
+for (let i = 0; i < 40; i++) for (const n of [1, 2, 3, 4]) {
+  const s = R.setup({...boss(i, n), items: [{id: 'l:script', name: 'Script', kind: 'loot', count: 99}]}, 0);
+  s.foe.hp = Math.max(2, Math.round(s.foe.maxHp * 0.15));
+  for (let k = 0; k < 300 && s.phase !== 'held' && s.phase !== 'lost'; k++) {
+    if (s.phase === 'hero') R.heroAction(s, {type: 'item', id: 'l:script'});
+    else R.monsterTurn(s);
+    assert.ok(s.foe.hp >= 1, 'boss at ' + s.foe.hp);
+  }
+  assert.equal(s.phase, 'held');
+  assert.equal(s.foe.hp, 1);
+}
+// whatever is pressed, as often as it is pressed, no count drops below zero and nothing breaks
+const r = R.rng(5);
+for (let i = 0; i < 60; i++) {
+  const s = R.setup({...lesson(i), items: ALL_ITEMS.map((it) => ({...it, count: 1 + (i % 2)}))}, 0);
+  for (let k = 0; k < 400 && (s.phase === 'hero' || s.phase === 'monster'); k++) {
+    if (s.phase === 'monster') { R.monsterTurn(s); continue; }
+    const pick = R.ITEMS[Math.floor(r() * R.ITEMS.length)];
+    if (r() < 0.7) R.heroAction(s, {type: 'item', id: pick}); else R.heroAction(s, {type: 'attack'});
+    s.items.forEach((it) => assert.ok(it.count >= 0 && it.count <= 99));
+  }
+  finite(s);
+}
+// counts from the payload are clamped and cleaned: 0 or junk counts are left out, unknown ids are ignored
+const s = R.setup({...lesson(1), items: [{id: 'c:potion', count: 500}, {id: 'c:ether', count: -3}, {id: 'g:x:weapon:1', count: 1},
+  {id: 'c:smoke', count: 'many'}]}, 0);
+assert.deepEqual(s.items.map((x) => [x.id, x.count]), [['c:potion', 99]]);
+""")
+
+
+def test_fights_with_items_are_deterministic():
+    check(r"""
+for (let i = 0; i < 40; i++) {
+  const e = {...geared(lesson(i), 1 + (i % 3)), items: ALL_ITEMS};
+  const a = R.simulate(e, 3, itemsFirst), b = R.simulate(e, 3, itemsFirst);
+  assert.deepEqual(a.log, b.log);
+  assert.deepEqual(a.items, b.items);
+  // the encounter's own counts are never touched: the battle counts down its copy
+  assert.ok(e.items.every((it) => it.count === 3));
+}
+""")
+
+
+def test_items_go_to_who_needs_them_and_are_never_spent_for_nothing():
+    check(r"""
+const one = (id, n = 2) => [{id, name: id, kind: id.startsWith('l:') ? 'loot' : 'consumable', count: n}];
+const fresh = (items) => R.setup({...lesson(4), items}, 0);
+assert.ok(R.pickParty(lesson(4)).length >= 3, 'needs a party of three');
+// at full HP and MP nothing is offered: Potion, Ether, Patch and Insight are disabled with a reason, and using one
+// anyway spends nothing and passes no turn
+for (const [id, why] of [['c:potion', 'itemFullHp'], ['c:ether', 'itemFullMp'], ['l:patch', 'itemFullHp'], ['l:insight', 'itemFullMp']]) {
+  const s = fresh(one(id)), o = R.itemOptions(s)[0];
+  assert.equal(o.usable, false, id);
+  assert.equal(o.why, why, id);
+  const evs = R.heroAction(s, {type: 'item', id});
+  assert.ok(evs.every((e) => e.t === 'say'), id + ' did something');
+  assert.equal(evs[0].key, why);
+  assert.equal(s.items[0].count, 2, id + ' was spent');
+  assert.equal(s.active, 0, id + ' used the turn');
+  assert.equal(s.phase, 'hero');
+}
+// Phoenix Down with nobody down: the same
+{ const s = fresh(one('c:phoenix')); assert.equal(R.itemOptions(s)[0].why, 'itemNoTarget'); R.heroAction(s, {type: 'item', id: 'c:phoenix'});
+  assert.equal(s.items[0].count, 2); }
+// a Potion goes to the standing hero lowest on HP by share of their max, not to the one using it
+{ const s = fresh(one('c:potion'));
+  s.heroes[1].hp = Math.ceil(s.heroes[1].maxHp * 0.5); s.heroes[2].hp = Math.ceil(s.heroes[2].maxHp * 0.2);
+  assert.equal(R.itemOptions(s)[0].target, 2);
+  const before = s.heroes[2].hp;
+  R.heroAction(s, {type: 'item', id: 'c:potion'});
+  assert.equal(s.heroes[2].hp, before + Math.ceil(s.heroes[2].maxHp * 0.4));
+  assert.equal(s.items[0].count, 1);
+  // a knocked-out hero is no Potion target
+  const t = fresh(one('c:potion')); t.heroes[2].ko = true; t.heroes[2].hp = 0; t.heroes[1].hp = t.heroes[1].maxHp - 1;
+  assert.equal(R.itemOptions(t)[0].target, 1); }
+// an Ether to the one lowest on MP; a target given that is already full is replaced by the one who needs it
+{ const s = fresh(one('c:ether')); s.heroes[1].mp = 0;
+  assert.equal(R.itemOptions(s)[0].target, 1);
+  R.heroAction(s, {type: 'item', id: 'c:ether', target: 0});
+  assert.equal(s.heroes[1].mp, Math.ceil(s.heroes[1].maxMp * 0.5));
+  assert.equal(s.heroes[0].mp, s.heroes[0].maxMp); }
+// Patch and Insight come alive when one hero is short
+{ const s = fresh(one('l:patch')); s.heroes[2].hp -= 1; assert.equal(R.itemOptions(s)[0].usable, true); }
+{ const s = fresh(one('l:insight')); s.heroes[0].mp -= 1; assert.equal(R.itemOptions(s)[0].usable, true); }
+""")
+
+
+def test_boss_script_hint_reward_lines_and_counts_start_fresh_each_fight():
+    check(r"""
+assert.match(B.LABELS['hint.l:script.boss'], /10%/);
+assert.match(B.LABELS['hint.l:script'], /25%/);
+assert.deepEqual(B.LABEL_VARS['hint.l:script.boss'], []);
+for (const k of ['itemFullHp', 'itemFullMp', 'rewardFailed', 'more']) assert.ok(k in B.LABELS && k in B.LABEL_VARS, k);
+// what onWin's promise resolves to, as the win screen words it
+assert.deepEqual(R.rewardLines({gold: 32, loot: [{id: 'l:patch', name: 'Patch'}]}).map((x) => [x.kind, x.text]),
+  [['gold', '+32 gold'], ['loot', 'Found: Patch']]);
+assert.deepEqual(R.rewardLines(null).map((x) => x.kind), ['none']);
+assert.match(R.rewardLines(null)[0].text, /Already cleared before/);
+assert.deepEqual(R.rewardLines(false).map((x) => [x.kind, x.text]), [['failed', "The win wasn't saved: try it again from the map."]]);
+assert.deepEqual(R.rewardLines(undefined), []);
+assert.deepEqual(R.rewardLines({gold: 0, loot: []}), []);
+assert.equal(R.rewardLines(false, {rewardFailed: 'X'})[0].text, 'X');
+// a fight's counts start from encounter.items every time (a retry is a new fight with the counts it was given)
+const e = {...lesson(3), items: ALL_ITEMS};
+const a = R.simulate(e, 0, itemsFirst);
+assert.ok(a.items.some((it) => it.count < 3), 'the first fight used nothing');
+const b = R.setup(e, 1);
+assert.deepEqual(b.items.map((it) => it.count), ALL_ITEMS.map(() => 3));
+""")

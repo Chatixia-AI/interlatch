@@ -690,7 +690,7 @@
 .bt-deck { display: grid; grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); gap: 10px; align-items: stretch; }
 .bt-menu { order: -1; padding: 8px 6px 8px; }
 .bt-over .bt-deck { grid-template-columns: minmax(0, 1fr); }
-.bt-party { display: grid; gap: 2px; padding: 7px 8px; }
+.bt-party { display: grid; gap: 2px; align-content: space-evenly; padding: 7px 8px; } /* as tall as the menu; the rows keep their size */
 .bt-hero { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(0, 1.5fr) minmax(0, 1.1fr); align-items: center; gap: 4px 16px;
   padding: 6px 8px; transition: background-color 0.2s steps(2); }
 .bt-hero-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -727,7 +727,20 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :lang(ja) .bt-menu-head { letter-spacing: 0.02em; text-transform: none; }
 .bt-cmds { display: grid; gap: 2px; }
-.bt-cmd { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-width: 0; min-height: 38px;
+/* a submenu (skills, items): its rows scroll by whole rows inside the main menu's height (battle.js sets the list's
+   max-height), Back stays pinned under them, and a fade with "▼ more" shows while rows are hidden below or above */
+.bt-subwrap { position: relative; min-height: 0; }
+.bt-sublist { display: grid; gap: 2px; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory; scrollbar-width: thin; }
+.bt-sublist > * { scroll-snap-align: start; }
+.bt-more-cue { display: block; visibility: hidden; padding: 2px 10px 1px; text-align: center; pointer-events: none;
+  font: 600 10.5px/1.3 var(--mono); letter-spacing: 0.06em; color: var(--gold); } /* its own strip: it never covers a row */
+:lang(ja) .bt-more-cue { letter-spacing: 0; }
+.bt-subwrap.bt-more .bt-more-cue { visibility: visible; }
+.bt-subwrap.bt-more .bt-sublist { box-shadow: inset 0 -7px 6px -6px color-mix(in srgb, var(--ink) 22%, transparent); }
+.bt-subwrap.bt-less::before { content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: 1; height: 12px; pointer-events: none;
+  background: linear-gradient(var(--surface), transparent); }
+.bt-cmds.bt-sub > .bt-back { margin-top: 2px; box-shadow: 0 -1px 0 0 var(--grid); }
+.bt-cmd { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-width: 0; min-height: 36px;
   margin: 0; padding: 6px 10px 6px 28px; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: 600 14.5px/1.2 var(--mono);
   text-align: left; cursor: pointer; }
 .bt-cmd::before { content: ""; position: absolute; left: 10px; top: 50%; margin-top: -6px; border-style: solid; border-width: 6px 0 6px 8px;
@@ -747,7 +760,17 @@
 .bt-cmd-meta { display: flex; flex: none; gap: 8px; font: 600 11px var(--mono); color: var(--muted); white-space: nowrap; }
 .bt-cmd-lv { color: var(--gold); }
 .bt-cmd-lv.bt-none { color: var(--muted); font-weight: 500; }
+.bt-cmd-gear { color: var(--accent-ink); font-weight: 500; }
 .bt-back { color: var(--ink-2); font-size: 13px; }
+.bt-dim { color: var(--muted); }
+/* an item: its name and what it does, how many are left, who a Phoenix Down would raise */
+.bt-itemrow .bt-cmd-name { display: grid; gap: 1px; -webkit-line-clamp: unset; }
+.bt-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-item-hint { white-space: normal; overflow-wrap: anywhere; font: 500 11px/1.3 var(--sans); color: var(--muted); } /* wraps, never cut */
+.bt-item-hint.bt-why { font-style: italic; }
+.bt-cmd-count { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bt-cmd-target { color: var(--good-ink); }
+.bt-empty { margin: 4px 12px 8px; font: 500 12.5px/1.4 var(--mono); color: var(--muted); }
 
 /* ---- the end screens */
 .bt-result { position: absolute; inset: 0; z-index: 3; display: grid; place-items: end center; overflow: auto; padding: 16px 16px 12px;
@@ -759,6 +782,15 @@
 .bt-held .bt-card-title { color: var(--critical-ink); }
 .bt-card-text { margin: 0 0 12px; max-width: 62ch; color: var(--ink-2); line-height: 1.5; }
 .bt-quote { margin: 4px 0 16px; padding: 10px 14px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+/* the spoils of a first win: gold in gold, each piece of loot; or why there is none this time */
+.bt-reward { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 12px; }
+.bt-reward p { margin: 0; padding: 2px 9px; font: 600 13px/1.5 var(--mono);
+  box-shadow: 0 -2px 0 0 var(--border-strong), 0 2px 0 0 var(--border-strong), -2px 0 0 0 var(--border-strong), 2px 0 0 0 var(--border-strong); }
+.bt-reward .bt-reward-gold { color: var(--gold); background: color-mix(in srgb, var(--cta) 22%, var(--surface));
+  box-shadow: 0 -2px 0 0 var(--gold), 0 2px 0 0 var(--gold), -2px 0 0 0 var(--gold), 2px 0 0 0 var(--gold); }
+.bt-reward .bt-reward-loot { color: var(--ink); background: var(--surface-2); }
+.bt-reward p.bt-reward-failed { color: var(--critical-ink); }
+.bt-reward .bt-reward-none, .bt-reward.bt-wait p { color: var(--muted); background: transparent; box-shadow: none; padding: 0; font-weight: 500; }
 .bt-quote figcaption { font: 600 10.5px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
 :lang(ja) .bt-quote figcaption { letter-spacing: 0.04em; }
 .bt-quote blockquote { max-height: 10.5em; overflow: auto; margin: 5px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
@@ -796,3 +828,45 @@
 @keyframes bt-pop { from { transform: scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
 .bt-still *, .bt-still *::before, :root[data-motion="off"] .bt *, :root[data-motion="off"] .bt *::before { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .bt *, .bt *::before { animation: none !important; transition: none !important; } }
+
+/* ------------------------------------------------------------------ Town & gear: gold, the shops, the bag, the slots */
+.adv-gold { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 600 12.5px var(--mono);
+  color: var(--warning-ink); background: color-mix(in srgb, var(--cta) 18%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cta) 55%, transparent); }
+.adv-gold i { width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe7b5, #ffb45e 50%, #a8651a); box-shadow: 0 0 0 1px rgba(120, 70, 10, 0.4); }
+.adv-head .head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.adv-head .head-actions .btn .icon, .town-bar .btn .icon { width: 15px; height: 15px; }
+.town-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+.town-bar .btn { display: inline-flex; align-items: center; gap: 6px; }
+.town-card { margin-bottom: 16px; }
+.town-mod { margin-top: 14px; }
+.town-mod.all-locked { opacity: 0.72; }
+.town-mod > summary { display: flex; align-items: baseline; gap: 4px; cursor: pointer; margin-bottom: 4px; list-style-position: inside; }
+.town-mod > summary .muted { text-transform: none; letter-spacing: 0; font-family: var(--sans); }
+.bag-rows { list-style: none; margin: 0; padding: 0; }
+.bag-row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-top: 1px solid var(--grid); }
+.bag-row:first-child { border-top: 0; }
+.bag-row.locked .bag-main b { color: var(--muted); }
+.bag-ic { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: var(--surface-2); color: var(--accent-ink); }
+.bag-ic .icon { width: 16px; height: 16px; }
+.bag-main { flex: 1; min-width: 0; }
+.bag-main b { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bag-tier { padding: 0 5px; border-radius: 3px; font: 600 10.5px/1.5 var(--mono); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.bag-count { font: 500 11.5px var(--mono); color: var(--muted); }
+.bag-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.bag-acts .icon { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.gear-card { margin-bottom: 16px; }
+.gear-card .link-arrow { display: inline-flex; margin-top: 10px; }
+.gear-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.gear-slot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: start; padding: 10px; border-radius: 6px;
+  background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.gear-slot select { grid-column: 1 / -1; width: 100%; }
+.gear-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: var(--accent-wash); color: var(--accent-ink); }
+.gear-ic .icon { width: 15px; height: 15px; }
+.gear-main b { display: block; font-size: 13px; line-height: 1.3; }
+.gear-grid { display: grid; gap: 14px; }
+.gear-agent { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: center; }
+.gear-who { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.gear-who canvas { image-rendering: pixelated; }
+.gear-slots.compact .gear-slot { padding: 8px; }
+@media (max-width: 760px) { .gear-slots { grid-template-columns: minmax(0, 1fr); } .gear-agent { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .bag-row { flex-wrap: wrap; } .bag-acts { width: 100%; justify-content: flex-end; } }

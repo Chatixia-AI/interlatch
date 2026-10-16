@@ -81,6 +81,20 @@ cleared: it becomes a flag on the map, kept in your archive for this party. Lose
 Battles never change levels or XP: those come only from the lessons. A boss can be fought, but it only falls when you
 mark its milestone done under **Quests**.
 
+## Towns and gear
+
+Each region has a **town** on the map (also listed in the Adventure sidebar). Its shop sells **gear** for that region's
+roadmap modules: a weapon, an armor and a charm for each module, in three tiers. A piece opens in the shop when one of
+your agents reaches its level in that skill: Lv 1 for tier I, Lv 3 for tier II, Lv 5 for tier III. So what you can buy
+follows what your agents' lessons actually cover. Every town also sells **supplies** for battles: Potion, Ether,
+Phoenix Down and Smoke Bomb.
+
+**Gold** comes from the first win over each lesson (more for an established or canonical one; never again for the same
+lesson, and bosses pay none). A first win can also drop **loot** of the lesson's kind, such as a Patch from a fix or an
+ADR Scroll from a decision. Use supplies and loot from the **Item** command in a battle. Each agent wears three slots
+(weapon, armor, charm): change them on the agent's page or in the **Bag**, where you can also sell what you don't need.
+Gear only changes battle numbers: levels and XP still come from lessons alone.
+
 ## The arena
 
 People on the leaderboard can also put their parties in the **Arena**, a page of its own in Innerlatch. Open

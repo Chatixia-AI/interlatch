@@ -105,15 +105,59 @@ def encounter(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
 
 
 def action_party_cleared(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
-    """Mark a lesson's encounter cleared or not, in the viewer's own log; answers the log."""
+    """Mark a lesson's encounter cleared or not, in the viewer's own log; answers the log, what the win paid (null
+    when nothing: not a first clear) and the bag."""
+    from ....knowledge import bag
     from ....knowledge import party as pt
 
     if who(ctx, viewer) is None:
         return _refused()
     try:
-        return {"cleared": pt.set_cleared(ctx.conn, _here_id(ctx), viewer, body.get("id"), bool(body.get("cleared")))}, 200
+        log, reward = pt.clear(ctx.conn, _here_id(ctx), viewer, body.get("id"), bool(body.get("cleared")))
     except pt.PartyError as exc:
         return {"error": tr(str(exc))}, 400
+    return {"cleared": log, "reward": reward, "bag": bag.bag(ctx.conn, viewer)}, 200
+
+
+# ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
+def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
+    """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""
+    from ....knowledge import bag as bg
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    return bg.bag(ctx.conn, viewer), 200
+
+
+def shop(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
+    """GET /api/party/shop?region=<attr>: a region's town; 404 for a region the roadmap doesn't have."""
+    from ....knowledge import bag as bg
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    got = bg.shop(ctx.conn, _here_id(ctx), viewer, q.get("region"))
+    return (got, 200) if got else ({"error": tr("not found")}, 404)
+
+
+def action_party_bag(ctx: Context, viewer: dict | None, what: str, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/buy, sell, equip, use: one change to the viewer's own bag; answers the bag."""
+    from ....knowledge import bag as bg
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    try:
+        if what == "buy":
+            got = bg.buy(ctx.conn, _here_id(ctx), viewer, body.get("id"), body.get("n"), body.get("region"))
+        elif what == "sell":
+            got = bg.sell(ctx.conn, viewer, body.get("id"), body.get("n"))
+        elif what == "equip":
+            got = bg.equip(ctx.conn, viewer, body.get("agent"), body.get("slot"), body.get("id"))
+        else:
+            got = bg.use(ctx.conn, viewer, body.get("id"))
+    except pt.PartyError as exc:
+        return {"error": tr(str(exc))}, 400
+    return {"bag": got}, 200
 
 
 def action_party_quest(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:

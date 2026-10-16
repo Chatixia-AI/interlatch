@@ -38,7 +38,7 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     _lesson(conn, old, "a note that names no module")  # not counted: not on the map
     last = _lesson(conn, new, "deploy it", agent="codex", project="/Users/test/Projects/other-app")
     data = party.adventure_map(conn, here)
-    assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents"}
+    assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents", "gold", "towns"}
     assert [r["id"] for r in data["regions"]] == list(ATTRS)
     craft = data["regions"][0]
     assert {k: craft[k] for k in ("name", "about")} == {"name": "Craft", "about": "about craft"}
@@ -103,7 +103,7 @@ def test_an_encounter_is_one_lesson_with_its_case_and_the_party_that_meets_it(ho
     conn.execute("UPDATE knowledge SET case_json = ? WHERE id = ?", (json.dumps(case), lid))
     conn.commit()
     got = party.encounter(conn, here, None, lid)
-    assert set(got) == {"lesson", "party", "cleared"} and got["cleared"] is False
+    assert set(got) == {"lesson", "party", "cleared", "items"} and got["cleared"] is False and got["items"] == []
     k = got["lesson"]
     assert {x: k[x] for x in ("id", "title", "kind", "stage", "agent", "at", "xp", "session_id", "project")} == {
         "id": lid, "title": "pytest and a token", "kind": "gotcha", "stage": "established", "agent": "claude",
@@ -114,7 +114,7 @@ def test_an_encounter_is_one_lesson_with_its_case_and_the_party_that_meets_it(ho
                             {"id": "M-auth", "name": "Auth", "attr": "guard"}]
     assert [p["agent"] for p in got["party"]] == list(CODING_AGENTS)
     claude, codex = got["party"][0], got["party"][1]
-    assert set(claude) == {"agent", "name", "short", "level", "tier", "attr_levels", "skills"}
+    assert set(claude) == {"agent", "name", "short", "level", "tier", "attr_levels", "skills", "gear"}
     assert claude["skills"] == {"M-python": party.skill_level(18 + 3), "M-auth": party.skill_level(3)}
     assert claude["attr_levels"]["craft"] == party.skill_level(21) and set(claude["attr_levels"]) == set(ATTRS)
     assert codex["skills"] == {"M-python": 0, "M-auth": 0} and codex["level"] == 1
@@ -205,13 +205,15 @@ def test_the_adventure_is_behind_the_partys_sign_in(hubweb, catalog):  # noqa: F
     for q in ("999999", "abc", ""):
         assert _http(url, f"/api/party/encounter?id={q}")[0] == 404, q
     assert _http(url, "/api/party/encounter")[0] == 404
-    assert _http(url, "/api/party/cleared", {"id": lid, "cleared": True}) == (200, {"cleared": [lid]})
+    status, r = _http(url, "/api/party/cleared", {"id": lid, "cleared": True})
+    assert status == 200 and r["cleared"] == [lid] and r["reward"]["gold"] == 12 and r["bag"]["gold"] == 12
     assert _http(url, "/api/party/map")[1]["cleared"] == [lid]  # at once
     assert _http(url, f"/api/party/encounter?id={lid}")[1]["cleared"] is True
     status, r = _http(url, "/api/party/cleared", {"id": 999999, "cleared": True})
     assert status == 400 and r["error"] == "no such lesson"
     assert _http(url, "/api/party/cleared", {"id": str(lid), "cleared": True})[0] == 400
-    assert _http(url, "/api/party/cleared", {"id": lid, "cleared": False}) == (200, {"cleared": []})
+    status, r = _http(url, "/api/party/cleared", {"id": lid, "cleared": False})
+    assert status == 200 and r["cleared"] == [] and r["reward"] is None and r["bag"]["gold"] == 12
 
 
 def test_each_hub_person_keeps_their_own_cleared_log(team, catalog):  # noqa: F811
@@ -227,9 +229,9 @@ def test_each_hub_person_keeps_their_own_cleared_log(team, catalog):  # noqa: F8
     assert _http(url, f"/api/party/encounter?id={here}", headers=_as(s["Bob"]))[0] == 404  # not one of Bob's
     assert _http(url, "/api/party/cleared", {"id": here, "cleared": True}, _as(s["Bob"]))[0] == 400
     # a member POSTs their own log (not only admins may)
-    assert _http(url, "/api/party/cleared", {"id": bobs, "cleared": True}, _as(s["Bob"])) == (200, {"cleared": [bobs]})
+    assert _http(url, "/api/party/cleared", {"id": bobs, "cleared": True}, _as(s["Bob"]))[1]["cleared"] == [bobs]
     assert json.loads(kv_get(conn, f"party.cleared:person:{bob['id']}")) == [bobs]
     assert _http(url, "/api/party/map")[1]["cleared"] == []  # this computer's log is its own
-    assert _http(url, "/api/party/cleared", {"id": here, "cleared": True}) == (200, {"cleared": [here]})
+    assert _http(url, "/api/party/cleared", {"id": here, "cleared": True})[1]["cleared"] == [here]
     assert _http(url, "/api/party/map", headers=_as(s["Bob"]))[1]["cleared"] == [bobs]
     assert _http(url, "/api/party/cleared", {"id": bobs, "cleared": True}, _as(s["Vic"]))[0] == 400  # Vic's own scope

@@ -19,6 +19,7 @@
        opts.onPick(item)   click, tap or Enter on a lesson, a boss or the party
        opts.height         css pixels (otherwise the map fills its host, 320 at least)
        opts.seed           the layout's seed (1)
+       opts.onReady()      the land is fully painted (a soft preview shows until then); again after a theme change
      layout(data, seed = 1) -> the world, pure and deterministic (no DOM): see layout() below
      LABELS                the English defaults
    } */
@@ -34,6 +35,7 @@
        boss          the tag over a boss: {text} (the milestone)
        bossAsleep, bossAwake, bossDefeated   a boss's state, read out with its tag
        party         the party, read out when focused
+       town          a region's town, its name on the map (and read out when focused): {name}
        lesson        a lesson, read out when focused: {title}, {kind}, {agent}
        cleared       added to a lesson read out when it has been beaten
        zoomIn, zoomOut, home, fit   the map's buttons (home: back to the party; fit: the whole map)
@@ -51,6 +53,7 @@
     bossAwake: "awake: evidence found",
     bossDefeated: "defeated",
     party: "Your party",
+    town: "{name}",
     lesson: "{title}",
     cleared: "cleared",
     zoomIn: "Zoom in",
@@ -75,6 +78,7 @@
   const SEA = 84, ASPECT = 1.6, ROW_SHIFT = 40;
   const GATE = { w: 168, d: 52 };      // the gate's yard: the arch and up to four bosses
   const BANNER = { w: 196, h: 30 };    // the region's banner
+  const TOWN = { w: 66, h: 38, gap: 12, pad: MIN_DIST }; // the region's town, by the banner; no encounter within `pad`
   const BOSS_SLOTS = [36, -36, 72, -72];
   const BUCKETS = (() => { const b = []; for (let v = 4; v < 1e7; v = Math.ceil(v * 1.3)) b.push(v); return b; })();
   const bucket = (n) => { if (n <= 0) return 0; for (const v of BUCKETS) if (v >= n) return v; return n; };
@@ -263,7 +267,8 @@
   // =====================================================================================
   // The layout: pure, no DOM. layout(data, seed) returns
   //   { seed, width, height, minDist, land: [rects of the rows], boundary (y between the rows, or null),
-  //     regions: [{id, name, index, row, col, rect, gate, arch, banner, reserve: [rects], plazas: [{kind, site, weight, poly}],
+  //     regions: [{id, name, index, row, col, rect, gate, arch, banner, town: {x, y, w, h, feet: {x, y}, name}, reserve: [rects],
+  //                plazas: [{kind: "gate"|"banner"|"town", site, weight, poly}],
   //                modules: [ids], lessons}]  (plazas: the gate's yard and the banner's square, no one's territory)
   //     territories: [{id, name, attr, region, index, lessons, count, fog, poly, center, hole: {x, y, w, h} | null, site, weight, area}],
   //     lessons: [{id, x, y, module, attr, territory, index}]  (x, y: the encounter's feet, integers)
@@ -274,6 +279,9 @@
     const s0 = (Math.round(Number(seed)) >>> 0) || 1;
     const rand = rng(mixInt(s0, 0x51ed));
     const regionsIn = Array.isArray(data && data.regions) ? data.regions : [];
+    // each region's town name (data.towns: [{attr, name}]); the region's own name when the payload has none
+    const towns = new Map((Array.isArray(data && data.towns) ? data.towns : []).filter((t) => t && t.attr != null && t.name)
+      .map((t) => [t.attr, String(t.name)]));
     const lessonsIn = Array.isArray(data && data.lessons) ? data.lessons : [];
     // whose territory each module is (the first region to name it), and how many lessons stand in it
     const home = new Map();
@@ -287,7 +295,8 @@
         const target = count > 0 ? (Math.sqrt(bucket(count) * LESSON_AREA + HOLE.w * HOLE.h * 1.5) + 2 * MARGIN) ** 2 : fog ? FOG_AREA : EMPTY_AREA;
         return { id: m.id, name: m.name || String(m.id), attr: r.id, lessons, count, fog, target };
       });
-      const need = Math.max(MIN_REGION, 1.12 * (terrs.reduce((a, t) => a + t.target, 0) + GATE.w * GATE.d + BANNER.w * BANNER.h));
+      const town = (TOWN.w + 2 * TOWN.pad) * (TOWN.h + 2 * TOWN.pad);
+      const need = Math.max(MIN_REGION, 1.12 * (terrs.reduce((a, t) => a + t.target, 0) + GATE.w * GATE.d + BANNER.w * BANNER.h + town));
       return { id: r.id, name: r.name || String(r.id), index, terrs, need };
     });
     const out = { seed: s0, width: 2 * SEA + 240, height: 2 * SEA + 160, minDist: MIN_DIST, land: [], boundary: null,
@@ -303,7 +312,7 @@
     const shift = rowsN > 1 ? Math.round((rand() - 0.5) * 2 * ROW_SHIFT) : 0, x0 = SEA + Math.max(0, -shift);
     let y = SEA;
     rows.forEach((row, k) => {
-      const rowNeed = row.reduce((a, r) => a + r.need, 0), h = Math.max(120, Math.round(rowNeed / Wl)), rx = x0 + (k ? shift : 0);
+      const rowNeed = row.reduce((a, r) => a + r.need, 0), h = Math.max(220, Math.round(rowNeed / Wl)), rx = x0 + (k ? shift : 0);
       let acc = 0;
       row.forEach((r, i) => {
         const xa = Math.round(rx + (Wl * acc) / rowNeed);
@@ -327,12 +336,18 @@
       const bw = Math.min(BANNER.w, R.w - 2 * MARGIN), by = down ? R.y + R.h - 4 - BANNER.h : R.y + 4;
       reserve.push({ x: cx - bw / 2, y: by, w: bw, h: BANNER.h });
       r.banner = { x: cx, y: by + BANNER.h / 2 };
+      // the town stands just inside the banner; its yard keeps every encounter TOWN.pad away
+      const feet = down ? by - TOWN.gap : by + BANNER.h + TOWN.gap + TOWN.h;
+      const named = towns.get(r.id);
+      r.town = { x: cx - TOWN.w / 2, y: feet - TOWN.h, w: TOWN.w, h: TOWN.h, feet: { x: cx, y: feet }, name: named || r.name };
+      reserve.push({ x: r.town.x - TOWN.pad, y: r.town.y - TOWN.pad, w: TOWN.w + 2 * TOWN.pad, h: TOWN.h + 2 * TOWN.pad });
       r.reserve = reserve;
       // cut the region; a territory the gate, the banner or its own clearing leaves too little room is given more and
       // the region cut again (the same seed each time, so the result stays deterministic)
       const targets = r.terrs.map((t) => t.target);
       const pins = [{ kind: "gate", site: [cx, down ? edge + GATE.d * 0.45 : edge - GATE.d * 0.45], target: GATE.w * GATE.d * 0.75 },
-        { kind: "banner", site: [cx, by + BANNER.h / 2], target: bw * BANNER.h * 0.8 }];
+        { kind: "banner", site: [cx, by + BANNER.h / 2], target: bw * BANNER.h * 0.8 },
+        { kind: "town", site: [cx, r.town.y + TOWN.h / 2], target: TOWN.w * TOWN.h * 1.6 }];
       let cells = null, holes = null;
       for (let pass = 0; pass < 5; pass++) {
         const cut = treemap(R, targets, rng(mixInt(s0, strHash(r.id))), pins);
@@ -430,7 +445,7 @@
       out.party = { x: Math.round(h.x), y: Math.round(h.y + (h.h || HOLE.h) / 2 - 1), module: t.id, territory: t.index, lesson: newest.id };
     }
     out.regions = regions.map((r) => ({ id: r.id, name: r.name, index: r.index, row: r.row, col: r.col, rect: r.rect, gate: r.gate,
-      arch: r.arch, banner: r.banner, reserve: r.reserve, plazas: r.plazas || [], modules: r.terrs.map((t) => t.id),
+      arch: r.arch, banner: r.banner, town: r.town, reserve: r.reserve, plazas: r.plazas || [], modules: r.terrs.map((t) => t.id),
       lessons: r.terrs.reduce((a, t) => a + t.count, 0) }));
     for (const t of out.territories) delete t.target;
     return out;
@@ -614,6 +629,21 @@
     return c;
   }
 
+  // a region's town: a walled square, two houses and the hall with the shop's gold sign, roofs and flag in the
+  // region's colour, walls in its stone (drawn twice the size, at runtime, so it can be hovered and focused)
+  const TOWN_ROWS = ["...............pff.............", "...............pfff............", "...............p...............",
+    "..............RRR..............", ".............RRRRR.............", ".....rrr....RRRRRRR....rrr.....", "....rrrrr..RRRRRRRRR..rrrrr....",
+    "...rrrrrrrRRRRRRRRRRRrrrrrrr...", "T.Twwwwwww.wwwwwwwww.wwwwwwwT.T", "TTTwywwwyw.wywgggwyw.wywwwywTTT", "TkTwwwdwww.wwwgkgwww.wwwdwwwTkT",
+    "TTTwwwdwww.wwwgggwww.wwwdwwwTTT", "TTTS.S.S.S.wwwwdwwww.S.S.S.STTT", "TTTSSSSSSSSSSwdddwSSSSSSSSSSTTT", "TTTssssssssss.....ssssssssssTTT",
+    "TTTssssssssss.....ssssssssssTTT", "TTTssssssssss.....ssssssssssTTT"];
+  const TOWN_STONE = { craft: "#b98a6a", data: "#c3d2cc", ops: "#9c9fa6", guard: "#aaa395", arcana: "#b7a7d6", lore: "#a88d62" };
+  const TOWN_SIGN = [15, 10]; // the gold sign, in art pixels: it glints now and then
+  function townPal(region, bio) {
+    const stone = TOWN_STONE[region.id] || "#aaa395";
+    return { p: "#c9c2b4", f: bio.hue, R: bio.hue, r: mix(bio.hue, "#3a2020", 0.35), w: "#efe3c8", y: "=#ffd66b", d: "#6a4428",
+      g: "*#f6c445", k: "=#5a3a10", T: mix(stone, "#ffffff", 0.08), S: mix(stone, "#ffffff", 0.22), s: stone };
+  }
+
   // =====================================================================================
   // Painting the land, once per theme: sea, coast, ground, rivers, lakes, borders, roads, props, night, fog
   // =====================================================================================
@@ -624,7 +654,9 @@
   // q > 1 it paints a quick preview, one pixel every q world pixels, without roads, props or lakes.
   function* paintSteps(L, theme, seed, q = 1) {
     const W = L.width, H = L.height, full = q === 1, Wq = Math.ceil(W / q), Hq = Math.ceil(H / q), N = Wq * Hq;
-    const cv = blank(Wq, Hq), g = cv.getContext("2d");
+    // painted on a canvas kept for reading back, then copied once into an ordinary one for the screen
+    const cv = blank(Wq, Hq), g = cv.getContext("2d", { willReadFrequently: true });
+    const shown = () => { const v = blank(Wq, Hq); v.getContext("2d").drawImage(cv, 0, 0); return v; };
     const img = g.createImageData(Wq, Hq), buf = new Uint32Array(img.data.buffer);
     const terr = new Int16Array(N).fill(-1), bd = new Uint8Array(N), occ = new Uint8Array(N);
     const r = rng(mixInt(seed, 0xa11));
@@ -675,7 +707,9 @@
 
     // ---- night (the land multiplied by the page's paper) and the fog of war, in one pass over the pixels
     function* finish(g) {
-      const out = g.getImageData(0, 0, Wq, Hq), px = new Uint32Array(out.data.buffer);
+      // in bands of rows, so no single step reads or writes the whole canvas
+      const BAND = full ? 48 : Hq;
+      let band = null, px = null, b0 = 0;
       const [tr, tg, tb] = rgbOf(theme.tint), [fr, fg, fb] = rgbOf(theme.fog.base), [hr, hg, hb] = rgbOf(theme.fog.hi);
       const fogOf = new Uint8Array(L.territories.length);
       L.territories.forEach((t) => { fogOf[t.index] = t.fog ? 1 : 0; });
@@ -683,12 +717,17 @@
       const plazaFog = L.regions.map((reg) => L.territories.filter((t) => t.region === reg.index).every((t) => t.fog));
       const cloud = noise(mixInt(seed, 9), 22), puff = noise(mixInt(seed, 10), 8);
       for (let yq = 0; yq < Hq; yq++) {
-        if (full && yq % 40 === 39) yield;
-        const y = yq * q;
+        if (yq % BAND === 0) {
+          if (band) { g.putImageData(band, 0, b0); if (full) yield; }
+          b0 = yq;
+          band = g.getImageData(0, b0, Wq, Math.min(BAND, Hq - b0));
+          px = new Uint32Array(band.data.buffer);
+        }
+        const y = yq * q, off = b0 * Wq;
         for (let xq = 0, i = yq * Wq; xq < Wq; xq++, i++) {
           const o = occ[i];
           if (o & SEA_BIT) continue;
-          const v = px[i];
+          const v = px[i - off];
           let R = v & 255, G = (v >>> 8) & 255, B = (v >>> 16) & 255;
           if (!(o & WATER) || (o & ROAD)) { R = (R * tr) / 255; G = (G * tg) / 255; B = (B * tb) / 255; }
           const ti = terr[i];
@@ -700,10 +739,10 @@
             const cr = fr + (hr - fr) * hi, cg = fg + (hg - fg) * hi, cb = fb + (hb - fb) * hi;
             R += (cr - R) * a; G += (cg - G) * a; B += (cb - B) * a;
           }
-          px[i] = ((255 << 24) | (Math.round(B) << 16) | (Math.round(G) << 8) | Math.round(R)) >>> 0;
+          px[i - off] = ((255 << 24) | (Math.round(B) << 16) | (Math.round(G) << 8) | Math.round(R)) >>> 0;
         }
       }
-      g.putImageData(out, 0, 0);
+      if (band) g.putImageData(band, 0, b0);
       return fogOf;
     }
 
@@ -817,7 +856,8 @@
             break;
           }
         }
-        if (!water && plaza === "gate" && dT > 1.2 && c >= 3.4) col = (x + (y & 1) * 2) % 4 === 0 || y % 3 === 0 ? C.cobbleDark : C.cobble;
+        if (!water && (plaza === "gate" || (plaza === "town" && Math.abs(x - R.reg.town.feet.x) < TOWN.w / 2 + 8
+          && y > R.reg.town.y - 4 && y < R.reg.town.feet.y + 8)) && dT > 1.2 && c >= 3.4) col = (x + (y & 1) * 2) % 4 === 0 || y % 3 === 0 ? C.cobbleDark : C.cobble;
         if (!water && dT < 3.2 && dCol > 3) {
           const style = R.bio.border;
           if (style === "lane" && dT < 2.1) col = dT > 1.4 ? C.cobbleDark : (x + (y & 1) * 2) % 3 === 0 ? C.cobbleDark : C.cobble;
@@ -839,7 +879,7 @@
     if (!full) { // the preview: just the land, lit and fogged
       g.putImageData(img, 0, 0);
       yield* finish(g);
-      return { canvas: cv, k: 1 / q, anims: [], glints: [], ships: [] };
+      return { canvas: shown(), k: 1 / q, anims: [], glints: [], ships: [] };
     }
     // ---- roads: the highway between the rows, a trail from each gate to its explored territories; bridges over water
     const roadCols = { fill: pack("#c8a46a"), light: pack("#d6b880"), edge: pack("#9a7a4c"), plank: pack("#a8794a"), plank2: pack("#8a5e36"), rail: pack("#5e4028") };
@@ -876,7 +916,7 @@
       const a = reg.arch, edge = reg.gate.y;
       if (two) road([[a.x, edge], [a.x, a.y]], 1.6, 2.7, 2);
       // trails: the shortest network joining the gate to every explored territory's clearing (Prim's tree)
-      const nodes = [[a.x, a.y + (reg.row === 1 && two ? -2 : -12)]].concat(L.territories
+      const nodes = [[a.x, a.y + (reg.row === 1 && two ? -2 : -12)], [reg.town.feet.x, reg.town.feet.y + 4]].concat(L.territories
         .filter((t) => t.region === reg.index && t.hole).map((t) => [t.hole.x, t.hole.y + t.hole.h / 2 - 2]));
       const inTree = [0], rest = nodes.map((nd, i) => i).slice(1);
       while (rest.length) {
@@ -922,6 +962,7 @@
       props.push({ a, x: at.x - Math.floor(a.w / 2), y: at.y - a.h + 1, foot: at.y, type: "arch", ti: -1, bio: R.bio });
     }
     for (const R of regs) { // the landmark: the roomiest spot, an explored territory first
+      yield;
       const a = artFor(R.bio.landmark, R.bio, 0, 2), rect = R.reg.rect, spots = []; // landmarks stand twice the size
       for (let y = rect.y + a.h + 4; y < rect.y + rect.h - 4; y += 5) for (let x = rect.x + a.w; x < rect.x + rect.w - a.w; x += 5) spots.push([x, y]);
       const mid = [rect.x + rect.w / 2, rect.y + rect.h / 2];
@@ -951,7 +992,8 @@
     for (const R of regs) { // the biome's props, scattered on a jittered grid
       yield;
       const rect = R.reg.rect, sp = R.bio.spacing, total = R.bio.deco.reduce((a, d) => a + d[1], 0);
-      for (let gy = rect.y - 10; gy < rect.y + rect.h + 14; gy += sp) {
+      for (let gy = rect.y - 10, row = 0; gy < rect.y + rect.h + 14; gy += sp, row++) {
+        if (row % 6 === 5) yield;
         for (let gx = rect.x - 10; gx < rect.x + rect.w + 10; gx += sp) {
           const x = Math.round(gx + (r() - 0.5) * sp * 0.9), y = Math.round(gy + (r() - 0.5) * sp * 0.9);
           if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
@@ -1014,7 +1056,7 @@
       ships.push({ x: Math.round(x), y: Math.round(y), ph: r() * 6, dir: r() < 0.5 ? -1 : 1 });
       made++;
     }
-    return { canvas: cv, k: 1, anims, glints, ships };
+    return { canvas: shown(), k: 1, anims, glints, ships };
   }
   // run a painter in slices of `budget` ms between the page's other work; returns a cancel function
   function runSlices(gen, done, budget = 10) {
@@ -1027,9 +1069,16 @@
         if (r.done) { live = false; done(r.value); return; }
         if (performance.now() >= end) break;
       }
-      setTimeout(slice, 0);
+      next();
     };
-    setTimeout(slice, 0);
+    // a message runs right after the page's pending work, without the clamp nested timeouts get
+    let next = () => setTimeout(slice, 0);
+    if (typeof MessageChannel === "function") {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = slice;
+      next = () => ch.port2.postMessage(0);
+    }
+    next();
     return () => { live = false; };
   }
   // drain a painter at once (the quick preview)
@@ -1060,6 +1109,7 @@
     const labels = { ...LABELS, ...given, regions: { ...(given.regions || {}) }, modules: { ...(given.modules || {}) } };
     const onHover = typeof opts.onHover === "function" ? opts.onHover : () => {};
     const onPick = typeof opts.onPick === "function" ? opts.onPick : () => {};
+    const onReady = typeof opts.onReady === "function" ? opts.onReady : () => {};
     const reduced = !!opts.reducedMotion;
     const seed = Number.isFinite(opts.seed) ? opts.seed : 1;
     const data = opts.data || {};
@@ -1167,7 +1217,7 @@
       dirty = true;
     }
     // the theme: read the page's tokens; the land is painted again only when they really changed. A quick preview
-    // (a pixel every 4) shows at once; the full painting follows in slices between the page's other work.
+    // (a pixel every 6) shows at once; the full painting follows in slices between the page's other work.
     function retheme(force) {
       if (!alive) return;
       if (!wrap.isConnected) { destroy(); return; }
@@ -1177,12 +1227,13 @@
       themeKey = key;
       drawIcons();
       if (cancelPaint) cancelPaint();
-      world = runNow(paintSteps(L, theme, seed, 4));
+      world = runNow(paintSteps(L, theme, seed, 6));
       buildMini();
       cancelPaint = runSlices(paintSteps(L, theme, seed, 1), (w) => {
         cancelPaint = null;
         if (!alive) return;
         world = w;
+        try { onReady(); } catch (e) { /* the page's own */ }
         buildMini();
         invalidate();
       });
@@ -1308,6 +1359,30 @@
         art.set(key, cv);
       }
       return art.get(key);
+    }
+    function townImg(r) {
+      const key = `t|${r.id}`;
+      if (!art.has(key)) art.set(key, paintArt(TOWN_ROWS, townPal(r, biomeOf(r)), false, 2));
+      return art.get(key);
+    }
+    function townItem(r) {
+      const region = { ...(regionOf.get(r.id) || { id: r.id }), name: regionName(r) };
+      return { type: "town", region, town: { attr: r.id, name: r.town.name } };
+    }
+    function drawTowns(t) {
+      for (const r of L.regions) {
+        const T = r.town, key = "town:" + r.id;
+        if (!T || X(T.x + T.w) < -20 || X(T.x) > canvas.width + 20 || Y(T.y + T.h) < -20 || Y(T.y) > canvas.height + 40) continue;
+        const a = townImg(r), lift = hover === key || focus === key ? 1 : 0;
+        rect(T.x + 4, T.feet.y - 1, T.w - 8, 2, theme.shadow);
+        if (lift) ring(T.feet.x, T.feet.y, T.w / 2 + 4, theme.cta, 6);
+        ctx.drawImage(a.cv, Math.round(X(T.x)), Math.round(Y(T.y - lift)), Math.round(T.w * S), Math.round(T.h * S));
+        if (!reduced) { // the shop's sign glints
+          const u = (t * 0.45 + r.index * 0.37) % 2.6, sx = T.x + (TOWN_SIGN[0] + a.pad) * a.k + 1, sy = T.y + (TOWN_SIGN[1] + a.pad) * a.k - lift;
+          if (u < 0.3) for (let k = -2; k <= 2; k++) { rect(sx + k, sy, 1, 1, "#fff7c2"); rect(sx, sy + k, 1, 1, "#fff7c2"); }
+        }
+        hits.push({ key, x: T.feet.x, y: T.feet.y, box: [T.x, T.y, T.w, T.h], item: () => townItem(r) });
+      }
     }
     function propImg(type, bio) {
       const key = `p|${type}|${bio.hue}`;
@@ -1440,6 +1515,7 @@
       }
       // the party's ring and the gates' bosses' auras go under everything that stands
       drawGroundMarks(t);
+      drawTowns(t);
       // encounters, back to front
       const far = S < 0.5;
       ctx.imageSmoothingEnabled = S < 1;
@@ -1581,6 +1657,24 @@
             boxes.push(sb);
           }
         }
+      }
+      // the towns' names, under each town (or over it), never on the party or a boss
+      for (const h of hits) if (h.key.startsWith("town:")) shield(h);
+      if (z >= 0.9) for (const r of L.regions) {
+        const T = r.town;
+        if (!T) continue;
+        ctx.font = `700 ${Math.round(11 * dpr)}px ${FONT}`;
+        const name = fill(labels.town, { name: T.name }), w = Math.min(220 * dpr, ctx.measureText(name).width) + 8 * dpr, h = 16 * dpr;
+        const cx = X(T.feet.x);
+        if (cx < -w || cx > canvas.width + w) continue;
+        let placed = null;
+        for (const y of [Y(T.y + T.h) + 2 * dpr, Y(T.y) - h - 6 * dpr]) {
+          const c = { x: cx - w / 2, y, w, h };
+          if (c.y > -h && c.y < canvas.height && slide(c) && !hit(c)) { placed = c; break; }
+        }
+        if (!placed) continue;
+        text(name, placed.x + w / 2, placed.y + h / 2, { size: 11, weight: 700, color: theme.dark ? "#ffe2a0" : "#5a3a06", max: w - 4 * dpr });
+        boxes.push(placed);
       }
       // the bosses' tags: one panel under each gate, a line a boss
       if (z >= 1.1) for (const r of L.regions) {
@@ -1732,6 +1826,7 @@
       mctx.strokeRect(x0 + lw / 2, y0 + lw / 2, Math.max(2, x1 - x0 - lw), Math.max(2, y1 - y0 - lw));
       const dot = (x, y, c, s) => { mctx.fillStyle = c; mctx.fillRect(Math.round(x * k - s / 2), Math.round(y * k - s / 2), s, s); };
       for (const b of bosses) if (b.status !== "done") dot(b.x, b.y - 8, b.status === "evidence" ? "#ff5a5a" : "#b06060", Math.round(3 * dpr));
+      for (const r of L.regions) if (r.town) { dot(r.town.feet.x, r.town.feet.y - 10, "#ffffff", Math.round(5 * dpr)); dot(r.town.feet.x, r.town.feet.y - 10, biomeOf(r).hue, Math.round(3 * dpr)); }
       if (L.party) { dot(L.party.x, L.party.y - 8, "#ffffff", Math.round(5 * dpr)); dot(L.party.x, L.party.y - 8, theme.cta, Math.round(3 * dpr)); }
     }
 
@@ -1903,6 +1998,7 @@
       }
       if (item.type === "boss") return `${fill(labels.boss, { text: item.boss.text || "" })} (${labels[STATUS[item.boss.status] || "bossAsleep"]})`;
       if (item.type === "party") return labels.party;
+      if (item.type === "town") return fill(labels.town, { name: item.town.name });
       return "";
     }
     function onBlur() {
