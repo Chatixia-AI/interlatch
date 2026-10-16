@@ -95,18 +95,29 @@ ADR Scroll from a decision. Use supplies and loot from the **Item** command in a
 (weapon, armor, charm): change them on the agent's page or in the **Bag**, where you can also sell what you don't need.
 Gear only changes battle numbers: levels and XP still come from lessons alone.
 
+## Formations
+
+On the Party page, **Formation** builds **decks**: teams of one to three of your agents, in the order they fight
+(lead, middle, anchor). Keep up to five, each with a name of your choice. Add an agent from the **Bench** below the
+slots, reorder with the arrows or by dragging, and drag a bench agent onto a slot to swap it in. Until you change
+anything, your party has one deck: your three highest-level agents (or, if you picked a champion before decks
+existed, that agent and then the two highest). One deck is the one the Arena fields: pick it with **Field in the
+Arena**, here or on the Arena page. A deck changes who fights and in what order, never a level.
+
 ## The arena
 
 People on the leaderboard can also put their parties in the **Arena**, a page of its own in Innerlatch. Open
 **Arena** in Innerlatch's rail and choose **Enter the arena** (you join the board first). From then on each sync publishes your party's
-character sheet: for each of your coding agents its level, tier, class and six attribute levels, and which agent
-is your champion, with the name and picture you show on the board and the code that tells your computers apart (a
+character sheet: for each of your coding agents its level, tier, class and six attribute levels, and the team you
+field (which agents, in what order), with the name and picture you show on the board and the code that tells your computers apart (a
 hash, not a name). No lessons, projects, sessions, titles or prompts go.
 
-The arena is champion against champion. Your champion is your highest-level agent until you pick another from the
-tiles on your arena card. Every week it duels every other player's champion once, and the Arena page ranks you by
-wins, with each player's champion and level. Click a rival to watch the duel: your champion on the left, theirs on
-the right, round by round, with the same fight written out as a log underneath and both full parties below. Each battle is worked out on your own
+The arena is team against team, in a relay. Your team is the deck you field ([Formations](#formations)). Every
+week it fights every other player's team once: the two leads fight one on one, round by round; whoever wins the bout
+stays on, with the HP it has left, against the other side's next agent; a bout still going after 40 rounds puts out
+the one with less of its HP left. The team that runs out of agents loses. A deck of one against a deck of one is a
+plain duel. The Arena page ranks you by wins, with each player's team. Click a rival to watch the battle: your team on
+the left, theirs on the right, with the same fight written out as a log underneath and both full parties below. Each battle is worked out on your own
 computer from the two published sheets and the week, so both players see the same result. The numbers are
 self-reported: it's a game, not a record. **Leave the arena** deletes your sheet; you stay on the board. Leaving the
 board leaves the arena too.

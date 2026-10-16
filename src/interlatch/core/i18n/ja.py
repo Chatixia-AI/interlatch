@@ -373,6 +373,11 @@ JA: dict[str, str] = {
     "that doesn't go in this slot": "それはこの装備欄には付けられません",
     "only consumables and loot can be used": "使えるのは消耗品と戦利品だけです",
     "none left": "もう残っていません",
+    # ---- formations (formation.py)
+    "no such deck": "そのデッキはありません",
+    "a party holds at most 5 decks": "デッキは 5 つまでです",
+    "a party keeps at least one deck": "デッキは最低 1 つ必要です",
+    "a deck holds one to three of your agents, each once": "デッキには 1〜3 人のエージェントを、重複なしで入れてください",
     "{tier} {noun} of {module}": "{tier}の{noun}（{module}）",
     "+{atk} attack, and +{skill} to the {module} skill, in battle only": "攻撃 +{atk}、{module} のスキル +{skill}（戦闘中のみ）",
     "+{hp} HP, and {cut}% less damage taken, in battle only": "HP +{hp}、受けるダメージ {cut}% 減（戦闘中のみ）",

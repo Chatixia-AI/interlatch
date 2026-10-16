@@ -23,8 +23,8 @@ def leaderboard(ctx: Context, q: dict) -> dict:
         try:
             out["rows"] = arena.board(me.get("uid") if me.get("arena") else None)
             out["week"] = arena.week()
-            if me.get("signed_in"):  # who this computer fields (picked, or the highest level)
-                out["me"] = {**me, "champion": arena.champion(ctx.cfg, ctx.conn, lb.read_state(ctx.cfg))}
+            if me.get("signed_in"):  # the team this computer fields, and the decks it can pick from
+                out["me"] = {**me, **_fielding(ctx)}
         except lb.LeaderboardError as e:
             out["error"] = str(e)
         return out
@@ -101,13 +101,20 @@ def action_arena(ctx: Context, which: str) -> dict:
     return lb.status(ctx.cfg)
 
 
-def action_arena_champion(ctx: Context, body: dict) -> dict:
-    """Field another champion: one of the five coding agents; sent now when in the arena."""
+def _fielding(ctx: Context) -> dict:
     from ....sharing import arena
     from ....sharing import leaderboard as lb
 
-    arena.pick(ctx.cfg, ctx.conn, body.get("agent"))
-    return {**lb.status(ctx.cfg), "champion": arena.champion(ctx.cfg, ctx.conn, lb.read_state(ctx.cfg))}
+    return arena.fielding(ctx.cfg, ctx.conn, lb.read_state(ctx.cfg))
+
+
+def action_arena_deck(ctx: Context, body: dict) -> dict:
+    """Field another of this computer's decks; sent now when in the arena."""
+    from ....sharing import arena
+    from ....sharing import leaderboard as lb
+
+    arena.pick(ctx.cfg, ctx.conn, body.get("deck"))
+    return {**lb.status(ctx.cfg), **_fielding(ctx)}
 
 
 def action_leaderboard_join(ctx: Context) -> dict:

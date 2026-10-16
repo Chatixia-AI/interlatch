@@ -166,6 +166,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/party/sell"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/equip"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/use"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/deck"): POST_SIGNED_IN.ok(400).but(here=403),  # no such deck
     # POST: admins (the hub computer, or an admin person)
     ("POST", "/api/import"): POST_ADMIN,
     ("POST", "/api/sync"): POST_ADMIN,
@@ -240,7 +241,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/leaderboard/join"): POST_HERE,
     ("POST", "/api/leaderboard/arena/join"): POST_HERE,
     ("POST", "/api/leaderboard/arena/leave"): POST_HERE,
-    ("POST", "/api/leaderboard/arena/champion"): POST_HERE,
+    ("POST", "/api/leaderboard/arena/deck"): POST_HERE,
     ("POST", "/api/party/signin"): POST_HERE,
     ("POST", "/api/party/signout"): POST_HERE,
     # the hub API: computers, by token
@@ -295,6 +296,7 @@ BODY = {
     "/api/party/sell": {"id": "c:nothing"},
     "/api/party/equip": {"agent": "claude", "slot": "weapon", "id": "g:nothing"},
     "/api/party/use": {"id": "c:nothing"},
+    "/api/party/deck": {"id": "d99", "name": "x"},
 }
 PARAMS = {"{id}": SID, "{n}": "999999"}
 PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connectors/{id}/disconnect": {"{id}": "claude"},
@@ -309,7 +311,7 @@ STUBS = {
     "action_leaderboard_signin": {"stub": True}, "action_leaderboard_finish": {"stub": True},
     "action_leaderboard_send": {"stub": True}, "action_leaderboard_name": {"stub": True},
     "action_leaderboard_leave": {"stub": True}, "leaderboard": {"stub": True}, "action_leaderboard_join": {"stub": True},
-    "action_party_signout": {"stub": True}, "action_arena": {"stub": True}, "action_arena_champion": {"stub": True}, "arena_battle": ({"stub": True}, 200),
+    "action_party_signout": {"stub": True}, "action_arena": {"stub": True}, "action_arena_deck": {"stub": True}, "arena_battle": ({"stub": True}, 200),
     "action_team_store_test": {"stub": True}, "action_mirror_test": {"stub": True},
     "action_update": {"stub": True}, "action_menu_bar": {"stub": True},
     "action_provider_test": {"stub": True}, "provider_models": {"stub": True},

@@ -262,6 +262,8 @@ def _value(v) -> dict:
         return {"nullValue": None}
     if isinstance(v, dict):
         return {"mapValue": {"fields": {k: _value(x) for k, x in v.items()}}}
+    if isinstance(v, list):
+        return {"arrayValue": {"values": [_value(x) for x in v]}}
     if isinstance(v, bool):
         return {"booleanValue": v}
     if isinstance(v, int):
@@ -272,21 +274,23 @@ def _value(v) -> dict:
 
 
 def _plain(fields: dict) -> dict:
-    out = {}
-    for k, v in (fields or {}).items():
-        if "integerValue" in v:
-            out[k] = int(v["integerValue"])
-        elif "doubleValue" in v:
-            out[k] = float(v["doubleValue"])
-        elif "timestampValue" in v:
-            out[k] = v["timestampValue"]
-        elif "mapValue" in v:
-            out[k] = _plain((v["mapValue"] or {}).get("fields"))
-        elif "nullValue" in v:
-            out[k] = None
-        else:
-            out[k] = next(iter(v.values()), None)
-    return out
+    return {k: _plain_value(v) for k, v in (fields or {}).items()}
+
+
+def _plain_value(v: dict):
+    if "integerValue" in v:
+        return int(v["integerValue"])
+    if "doubleValue" in v:
+        return float(v["doubleValue"])
+    if "timestampValue" in v:
+        return v["timestampValue"]
+    if "mapValue" in v:
+        return _plain((v["mapValue"] or {}).get("fields"))
+    if "arrayValue" in v:  # an empty array comes without "values"
+        return [_plain_value(x) for x in (v["arrayValue"] or {}).get("values") or [] if isinstance(x, dict)]
+    if "nullValue" in v:
+        return None
+    return next(iter(v.values()), None)
 
 
 # ------------------------------------------------------------------ sending, renaming and leaving
