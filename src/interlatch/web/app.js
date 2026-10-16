@@ -906,8 +906,10 @@ function loadRealm() {
   const add = (el) => new Promise((resolve, reject) => { el.onload = resolve; el.onerror = () => reject(new Error(`${el.src || el.href} did not load`)); document.head.append(el); });
   const script = (src) => add(Object.assign(document.createElement("script"), { src, async: false }));
   const style = add(Object.assign(document.createElement("link"), { rel: "stylesheet", href: "innerlatch.css" })).catch(() => {}); // unstyled beats none
-  // the art first: without it the pages draw initials on a still stage, so only innerlatch.js itself must load
-  realmLoading ||= Promise.all([script("sprites.js").catch(() => {}), script("scene.js").catch(() => {}), script("innerlatch.js"), style])
+  // the art and the Adventure's engines first: without them the pages fall back (initials on a still stage, the
+  // encounters as a list), so only innerlatch.js itself must load
+  realmLoading ||= Promise.all([script("sprites.js").catch(() => {}), script("scene.js").catch(() => {}),
+    script("adventure.js").catch(() => {}), script("battle.js").catch(() => {}), script("innerlatch.js"), style])
     .finally(() => { if (!window.Innerlatch) realmLoading = null; }); // a failed load is tried again on the next visit
   return realmLoading;
 }
@@ -3439,7 +3441,12 @@ route(/^\/search$/, async (params) => {
 // =====================================================================================
 // Glossary: term linking everywhere + the A–Z page
 // =====================================================================================
-let glossaryTerms = null, glossaryRes = [], glossaryIndex = {}, glossaryLoaded = 0;
+let glossaryTerms = null, glossaryIndex = {}, glossaryLoaded = 0;
+// The terms' patterns, filed under the first word of each name (lowercased), and the CJK ones (no words to file them by).
+// One regex of every term (some 1,500) can't skip ahead with the i and u flags: it tried each at every position and took
+// seconds per lesson, long enough to crash a tab. A text tries only the terms whose first word it contains.
+let glossaryByWord = new Map(), glossaryCjk = [], glossaryReCache = new Map();
+const GLOSS_WORD = /[\p{L}\p{N}_]+/gu;
 const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 async function loadGlossary(force) {
   if (glossaryTerms && !force && Date.now() - glossaryLoaded < 300000) return;
@@ -3447,7 +3454,7 @@ async function loadGlossary(force) {
   else try { glossaryTerms = await api("/api/glossary/terms"); } catch (e) { glossaryTerms = []; }
   glossaryLoaded = Date.now();
   glossaryIndex = {};
-  const insensitive = [], sensitive = [];
+  glossaryByWord = new Map(); glossaryCjk = []; glossaryReCache = new Map();
   const cjk = /[぀-ヿ㐀-鿿가-힯]/;
   for (const t of glossaryTerms) {
     for (const name of [t.term, ...(t.aliases || [])]) {
@@ -3463,17 +3470,32 @@ async function loadGlossary(force) {
       const isCjk = cjk.test(name);
       const pattern = isCjk ? escRe(name) : `(?<![\\p{L}\\p{N}_])${escRe(name)}(?![\\p{L}\\p{N}_])`;
       // single words match as written (so "Storage" never underlines "storage"); phrases and identifiers ignore case
-      (!isCjk && /^[\p{L}\p{N}]+$/u.test(name) ? sensitive : insensitive).push([name.length, pattern]);
+      const alt = { len: name.length, pattern, sensitive: !isCjk && /^[\p{L}\p{N}]+$/u.test(name) };
+      const word = isCjk ? null : name.toLowerCase().match(GLOSS_WORD)?.[0];
+      if (!word) glossaryCjk.push(alt);
+      else if (glossaryByWord.has(word)) glossaryByWord.get(word).push(alt);
+      else glossaryByWord.set(word, [alt]);
     }
   }
-  const build = (alts, flags) => {
-    alts.sort((a, b) => b[0] - a[0]);
-    return alts.length ? new RegExp(alts.map((a) => a[1]).join("|"), flags) : null;
-  };
-  glossaryRes = [build(insensitive, "giu"), build(sensitive, "gu")].filter(Boolean);
+}
+// the regexes for the terms that may appear in `text`: phrases and identifiers ignore case, single words match as written
+function glossaryRegexes(text) {
+  const alts = [...glossaryCjk];
+  for (const w of new Set(text.toLowerCase().match(GLOSS_WORD) || [])) alts.push(...(glossaryByWord.get(w) || []));
+  if (!alts.length) return [];
+  alts.sort((a, b) => b.len - a.len);
+  return [[alts.filter((a) => !a.sensitive), "giu"], [alts.filter((a) => a.sensitive), "gu"]].filter(([a]) => a.length).map(([a, flags]) => {
+    const src = a.map((x) => x.pattern).join("|"), key = flags + src;
+    let re = glossaryReCache.get(key);
+    if (!re) {
+      if (glossaryReCache.size > 500) glossaryReCache.clear();
+      glossaryReCache.set(key, (re = new RegExp(src, flags)));
+    }
+    return re;
+  });
 }
 function glossify(root, max = 12) {
-  if (!glossaryRes.length || !root) return;
+  if ((!glossaryByWord.size && !glossaryCjk.length) || !root) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (n.parentElement.closest("code, pre, a, button, select, input, textarea, .gterm, .who, .kfoot, .tag")
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
@@ -3486,7 +3508,7 @@ function glossify(root, max = 12) {
     if (count >= max) break;
     const text = node.nodeValue;
     const found = [];
-    for (const re of glossaryRes) {
+    for (const re of glossaryRegexes(text)) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(text))) found.push({ index: m.index, text: m[0] });

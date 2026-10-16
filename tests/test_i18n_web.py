@@ -211,7 +211,7 @@ def test_scripts_load_in_order():
 def test_innerlatch_loads_only_through_the_door():
     """The dashboard carries none of Innerlatch until someone walks in: app.js loads its files then, the page never."""
     html, app = (WEB / "index.html").read_text(), (WEB / "app.js").read_text()
-    for name in ("innerlatch.js", "innerlatch.css", "sprites.js", "scene.js"):
+    for name in ("innerlatch.js", "innerlatch.css", "sprites.js", "scene.js", "adventure.js", "battle.js"):
         assert name not in html
         assert f'"{name}"' in app
 
@@ -220,7 +220,7 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(not NODE, reason="node is not installed")
-@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js", "innerlatch.js"])
+@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js", "innerlatch.js", "adventure.js", "battle.js"])
 def test_scripts_parse(name):
     proc = subprocess.run([NODE, "--check", str(WEB / name)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr

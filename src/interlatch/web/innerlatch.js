@@ -596,7 +596,6 @@ function partyGate(p, seq = renderSeq) {
     partyPoll = setTimeout(() => { if (seq === renderSeq && inRealm(parseHash().path)) render(); }, 3000);
   }
   return partyShell(t("Party"), t("Your coding agents, as a party of characters."),
-    journeyPreview(p) ? journeyStrip(p) : null,
     h("section", { class: "card party-gate px-frame" },
       h("div", { class: "pg-stage px-stage" },
         h("div", { class: "pg-sleepers", "aria-hidden": "true" }, PARTY_AGENTS.map((a) => partySprite(a, { scale: 3, locked: true, decorative: true }))),
@@ -663,7 +662,7 @@ route(/^\/innerlatch$/, async () => {
   const p = await partyGet();
   if (!p.signed_in) return partyGate(p, token);
   return partyShell(t("Party"), t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
-    journeyStrip(p), partyLeader(p), marketNote(p.market), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))),
+    partyLeader(p), marketNote(p.market), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))),
     h("p", { class: "muted small party-levels" }, t("Three kinds of level: a character's comes from all its XP, an attribute's from the XP of the skills under it, and a skill's from one roadmap module.")));
 });
 
@@ -676,7 +675,7 @@ function partyEvidence(e) {
       u ? h("a", { href: u, target: "_blank", rel: "noopener", title: e.title || u }, e.title || u) : h("span", { title: e.title }, e.title), meta);
   }
   return h("li", null, icon("learning"),
-    e.session_id ? h("a", { href: `#/session/${e.session_id}`, title: e.title }, e.title) : h("span", { title: e.title }, e.title), meta);
+    e.id ? lessonLink(e.id, e.title, { title: e.title }) : h("span", { title: e.title }, e.title), meta);
 }
 function partyQuest(q, draw, next = false) { // `next`: the main quest's first one with evidence, the one button in colour
   const [ic, label] = { done: ["quest-done", t("Done")], evidence: ["quest-evidence", t("Possible evidence")] }[q.status] || ["quest", tc("quest", "Open")];
@@ -810,7 +809,7 @@ function partyEvent(ev, a) {
   else if (ev.type === "quest") text = [t("Quest complete: {text}", { text: ev.text || ev.track_name || "" })];
   else text = [who];
   if (ev.lesson?.title && (ev.type === "skill" || ev.type === "class")) { // the lesson that tipped it, opening its session
-    const title = ev.lesson.session_id ? h("a", { href: `#/session/${ev.lesson.session_id}` }, ev.lesson.title) : ev.lesson.title;
+    const title = ev.lesson.id ? lessonLink(ev.lesson.id, ev.lesson.title) : ev.lesson.title;
     sub = tx("Lesson: {title}", { title });
   }
   const mark = ev.type === "quest" || !PARTY_AGENTS.includes(ev.agent) ? pxIcon("quest-done", 2)
@@ -918,7 +917,7 @@ route(/^\/innerlatch\/journey$/, async () => {
 // ------------------------------------------------------------------ #/innerlatch/agent/<agent>: one character
 function partySkillDetail(r) {
   const lesson = (l) => h("li", null, kindChip(l.kind),
-    h("div", { class: "psl-main" }, l.session_id ? h("a", { href: `#/session/${l.session_id}` }, l.title) : h("span", null, l.title),
+    h("div", { class: "psl-main" }, l.id ? lessonLink(l.id, l.title) : h("span", null, l.title),
       h("div", { class: "psl-meta" }, [STAGE_LABEL[l.stage || "provisional"] || l.stage, t("+{n} XP", { n: l.xp }),
         l.created_at ? fmtDate(l.created_at) : null, l.project_name].filter(Boolean).join(" · "))));
   const lessons = r.lessons || [];
@@ -1054,130 +1053,324 @@ async function partySidebar(box) {
       on ? p.agents.map(agentRow) : h("div", { class: "sb-empty" }, t("Sign in to meet your party."))));
 }
 
-// ------------------------------------------------------------------ the Journey strip, atop the Party: the party walks
-// through this week's lessons and fights them (scene.js draws it, from the Party's own payload: nothing in it is made
-// up). Signed out, this week's lessons in grey. Folded, it mounts no canvas. Without scene.js, a still stage.
-const JOURNEY_KEY = "interlatch.home.journey"; // "0": folded (named from when the strip was on Home: a fold carries over)
-function journeyOpen() { try { return localStorage.getItem(JOURNEY_KEY) !== "0"; } catch (e) { return true; } }
-function setJourneyOpen(open) {
-  try { if (open) localStorage.removeItem(JOURNEY_KEY); else localStorage.setItem(JOURNEY_KEY, "0"); } catch (e) { /* this tab only */ }
+// =====================================================================================
+// Adventure: every lesson your agents learned as an encounter on a pixel overworld (adventure.js), one region per
+// attribute and one territory per roadmap module, fogged where no lesson reached yet; the main quest's milestones guard
+// the gates as bosses. An encounter opens a turn-based battle (battle.js). A win only marks it cleared: levels and XP
+// come from the lessons alone. Without the engines, the encounters as a list.
+// =====================================================================================
+let mapCache = null, mapCacheAt = 0;
+async function mapLoad(fresh = false) {
+  if (!fresh && mapCache && Date.now() - mapCacheAt < 60000) return mapCache;
+  mapCache = await api("/api/party/map");
+  mapCacheAt = Date.now();
+  return mapCache;
 }
-function sceneLabels() { // the scene fills the {placeholders}
-  return { wave: tc("journey", "Lesson {n} of {total}"), xp: t("+{xp} XP · {skill}"), levelUp: t("{agent} reached level {n}!"),
-    skillUp: t("{agent}: {skill} Lv {n}"), boss: t("Boss: {text}"), bossHint: t("Mark the quest done to defeat it"),
-    asleep: t("Your party is asleep"), quiet: t("A quiet week: no new lessons"),
-    preview: t("This week's lessons") };
-}
-// signed out on this computer: the strip shows this week's lessons (the engine's `preview`), waiting for the party
-function journeyPreview(p) { return !p.signed_in && p.can_sign_in && p.preview ? p.preview : null; }
-function zoneLabel(p) {
-  const z = p.signed_in ? p.zone : null;
-  if (!z) return null;
-  return t("{attr} · {module}", { attr: p.attrs?.find((a) => a.id === z.attr)?.name || z.attr, module: z.module_name || z.module });
-}
-function journeySummary(p) { // what the strip shows, in words, for a screen reader
-  const pre = journeyPreview(p);
-  if (pre) {
-    const by = new Map(Object.entries(pre.week?.by_agent || {}).filter(([, n]) => n > 0));
-    if (!pre.week) for (const l of pre.recent || []) by.set(l.agent, (by.get(l.agent) || 0) + 1);
-    const taught = [...by.entries()].sort((x, y) => y[1] - x[1])
-      .map(([a, n]) => tn(n, "{agent} taught {n} lesson", "{agent} taught {n} lessons", { agent: agentShort(a) }));
-    return [taught.length ? t("This week: {list}", { list: taught.join(LANG === "ja" ? "、" : ", ") }) : t("A quiet week: no new lessons"),
-      t("Your party is asleep")].join("; ");
+function mapCleared(ids) { if (mapCache) mapCache.cleared = ids; }
+function advTally(m) {
+  const done = new Set(m.cleared || []);
+  const by = Object.fromEntries((m.regions || []).map((r) => [r.id, { total: 0, cleared: 0 }]));
+  const territory = Object.fromEntries((m.regions || []).flatMap((r) => r.modules.map((x) => [x.id, r.id])));
+  for (const l of m.lessons || []) {
+    const r = by[territory[l.modules[0]]];
+    if (!r) continue;
+    r.total++;
+    if (done.has(l.id)) r.cleared++;
   }
-  if (!p.signed_in) return t("Your party is asleep");
-  const names = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.short || agentShort(a.agent)]));
-  const by = new Map(Object.entries(p.week?.by_agent || {}).filter(([, n]) => n > 0)); // the whole week: `recent` stops at 60
-  if (!p.week) for (const l of p.recent || []) by.set(l.agent, (by.get(l.agent) || 0) + 1);
-  const beat = [...by.entries()].sort((x, y) => y[1] - x[1])
-    .map(([a, n]) => tn(n, "{agent} beat {n} lesson", "{agent} beat {n} lessons", { agent: names[a] || agentShort(a) }));
-  const bosses = (p.quests || []).filter((q) => q.main && q.status === "evidence")
-    .map((q) => t("main quest boss: {text}", { text: String(q.text || "").replace(/[.。]\s*$/, "") }));
-  return [beat.length ? t("This week: {list}", { list: beat.join(LANG === "ja" ? "、" : ", ") }) : t("A quiet week: no new lessons"), ...bosses].join("; ");
+  return { by, total: (m.lessons || []).length, cleared: (m.lessons || []).filter((l) => done.has(l.id)).length };
 }
-function journeyTip(p, item, at) {
-  if (!item) { hideTip(); return; }
-  const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 };
-  if (item.type === "lesson" && item.lesson && journeyPreview(p)) { // before signing in: no XP or skills, just the lesson
-    const l = item.lesson;
-    showTip(where, l.title, [kindLabel(l.kind), agentName(l.agent)].join(" · "), l.at ? fmtDateY(partyDay(l.at)) : null);
-  } else if (item.type === "lesson" && item.lesson) {
-    const l = item.lesson;
-    showTip(where, l.title, [kindLabel(l.kind), agentName(l.agent), t("+{n} XP", { n: l.xp })].join(" · "),
-      (l.modules || []).map((m) => m.name).join(", ") || null);
-  } else if (item.type === "boss" && item.quest) {
-    const q = item.quest;
-    showTip(where, q.text, t("Main quest boss · {track}", { track: q.track_name || p.goal?.name || "" }),
-      q.status === "done" ? t("Defeated: the quest is done") : t("Mark the quest done to defeat it"));
-  } else if (item.type === "agent") {
-    const id = item.agent?.agent || item.agent, a = (p.agents || []).find((x) => x.agent === id);
-    if (!a) { hideTip(); return; }
-    showTip(where, a.name, `${t("Lv {n}", { n: a.level })} · ${tierLabel(a.tier)}`, a.class?.name || null);
-  } else hideTip();
+const ADV_KIND_NAME = { fix: t("Glitch"), gotcha: t("Mal"), decision: t("Breaker"), learning: t("Wisp"), pattern: t("Gearling"), command: t("Scrollkin") };
+function advLessonTip(l, where, cleared) {
+  showTip(where, plainTitle(l.title), [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),
+    cleared ? t("Cleared · click to read it") : t("Click to battle it"));
 }
-function journeyPick(item) {
-  hideTip();
-  if (item?.type === "lesson" && item.lesson?.session_id) go(`#/session/${item.lesson.session_id}`);
-  else if (item?.type === "boss") go("#/innerlatch/quests");
-  else if (item?.type === "agent") {
-    const id = item.agent?.agent || item.agent;
-    if (PARTY_AGENTS.includes(id)) go(`#/innerlatch/agent/${id}`);
+async function adventureSidebar(box) {
+  let m = null;
+  try { m = await mapLoad(); } catch (e) { /* the page says why */ }
+  const head = h("div", { class: "sb-head" }, h("h2", null, t("Adventure")));
+  if (!m) { box.replaceChildren(head, h("div", { class: "sb-empty" }, t("Sign in to meet your party."))); return; }
+  const tally = advTally(m);
+  box.replaceChildren(head, h("div", { class: "sb-scroll" },
+    sbRow(t("World map"), "#/innerlatch/adventure", "map", null, ["/innerlatch/adventure", "view", ""]),
+    sbRow(t("Encounter list"), "#/innerlatch/adventure?view=list", "todo", tally.total - tally.cleared, ["/innerlatch/adventure", "view", "list"]),
+    h("div", { class: "sb-group" }, t("Regions")),
+    (m.regions || []).map((r) => {
+      const x = tally.by[r.id] || { total: 0, cleared: 0 };
+      return h("a", { class: "sb-row sb-region", href: `#/innerlatch/adventure?view=map&region=${r.id}`, title: r.about || r.name,
+        "data-route": "/innerlatch/adventure", "data-key": "region", "data-val": r.id },
+        pxIcon(r.id, 1), h("span", null, r.name), h("em", null, t("{n}/{total}", { n: fmtNum(x.cleared), total: fmtNum(x.total) })));
+    })));
+}
+function advList(m, params) {
+  const done = new Set(m.cleared || []);
+  const territory = Object.fromEntries((m.regions || []).flatMap((r) => r.modules.map((x) => [x.id, { region: r, module: x }])));
+  const want = { region: params.region || "", kind: params.kind || "", agent: params.agent || "", show: params.show || "open" };
+  const rows = (m.lessons || []).filter((l) => (!want.region || territory[l.modules[0]]?.region.id === want.region)
+    && (!want.kind || l.kind === want.kind) && (!want.agent || l.agent === want.agent)
+    && (want.show === "all" || (want.show === "cleared") === done.has(l.id))).slice().reverse();
+  const set = (k, v) => go(`#/innerlatch/adventure?${new URLSearchParams(Object.entries({ ...want, view: "list", [k]: v }).filter(([, x]) => x)).toString()}`);
+  const pick = (label, k, opts) => h("select", { "aria-label": label, onchange: (e) => set(k, e.target.value) },
+    opts.map(([v, l]) => h("option", { value: v, selected: v === want[k] }, l)));
+  const shown = rows.slice(0, 300);
+  return h("section", { class: "card adv-list" },
+    h("div", { class: "adv-filters" },
+      pick(t("Region"), "region", [["", t("All regions")], ...(m.regions || []).map((r) => [r.id, r.name])]),
+      pick(t("Kind"), "kind", [["", t("All kinds")], ...Object.keys(ADV_KIND_NAME).map((k) => [k, kindLabel(k)])]),
+      pick(t("Agent"), "agent", [["", t("All agents")], ...PARTY_AGENTS.map((a) => [a, agentName(a)])]),
+      segControl([["open", t("Not cleared")], ["cleared", t("Cleared")], ["all", t("All")]], want.show, (v) => set("show", v))),
+    rows.length ? h("ul", { class: "adv-rows" }, shown.map((l) => {
+      const where = territory[l.modules[0]];
+      return h("li", { class: done.has(l.id) ? "cleared" : "" }, kindChip(l.kind),
+        h("div", { class: "adv-row-main" }, lessonLink(l.id, l.title),
+          h("div", { class: "muted small" }, [where?.region.name, where?.module.name, agentShort(l.agent), l.at ? fmtDate(partyDay(l.at)) : null].filter(Boolean).join(" · "))),
+        done.has(l.id) ? h("span", { class: "adv-flag" }, pxIcon("quest-done", 1), t("Cleared"))
+          : h("a", { class: "btn small", href: `#/innerlatch/adventure/battle/${l.id}` }, t("Battle")));
+    })) : h("div", { class: "empty" }, t("No encounters match.")),
+    rows.length > shown.length ? h("p", { class: "muted small" }, t("Showing the newest {n} of {total}.", { n: fmtNum(shown.length), total: fmtNum(rows.length) })) : null);
+}
+route(/^\/innerlatch\/adventure$/, async (params) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const m = await mapLoad(true);
+  const tally = advTally(m);
+  const list = params.view === "list" || !window.Adventure || typeof window.Adventure.mountMap !== "function";
+  const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon("journey", 3),
+    h("div", null, h("h1", null, t("Adventure")),
+      h("div", { class: "sub" }, tally.total ? t("Every lesson your agents learned is out there. {n} of {total} cleared.", { n: fmtNum(tally.cleared), total: fmtNum(tally.total) })
+        : t("No lessons on the roadmap yet: the world is still under fog.")))),
+    h("div", { class: "head-actions" }, segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
+      (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure"))));
+  if (list) return h("div", { class: "party-page adv-page" }, head, advList(m, params));
+  const host = h("div", { class: "adv-world" }); // the engine names its own canvas (labels.map)
+  const page = h("div", { class: "party-page adv-page map" }, head, host,
+    h("p", { class: "muted small adv-note" }, t("Battles don't change levels: an agent's XP comes from its lessons. A win marks the encounter cleared.")));
+  const done = () => new Set((mapCache || m).cleared || []);
+  whenShown(host, () => {
+    let world;
+    try {
+      world = Adventure.mountMap(host, { data: m, reducedMotion: stillMotion(), labels: advMapLabels(),
+        onHover: (item, at) => {
+          if (!item) { hideTip(); return; }
+          const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 };
+          if (item.type === "lesson") advLessonTip(item.lesson, where, done().has(item.lesson.id));
+          else if (item.type === "boss") showTip(where, item.boss.text, t("Main quest boss · {track}", { track: item.boss.track_name || "" }),
+            item.boss.status === "done" ? t("Defeated: the quest is done") : t("Mark the quest done to defeat it"));
+          else if (item.type === "region" && item.module) { // a territory: its module, and how much of it is cleared
+            const mod = item.module;
+            showTip(where, mod.name, item.region.name, mod.fog || !mod.total ? t("Unexplored")
+              : t("{n} of {total} cleared", { n: fmtNum(mod.cleared || 0), total: fmtNum(mod.total) }));
+          } else if (item.type === "region") showTip(where, item.region.name, item.region.about || null);
+          else if (item.type === "party") showTip(where, t("Your party"), t("Where the newest lesson was learned"));
+          else hideTip();
+        },
+        onPick: (item) => {
+          hideTip();
+          if (item?.type === "lesson") {
+            if (done().has(item.lesson.id)) openLesson(item.lesson.id);
+            else go(`#/innerlatch/adventure/battle/${item.lesson.id}`);
+          } else if (item?.type === "boss") go(`#/innerlatch/adventure/boss/${item.boss.n}`);
+        } });
+    } catch (e) { host.replaceChildren(h("div", { class: "card empty" }, t("Could not load: {error}", { error: e.message }))); return; }
+    if (params.lesson) world.focusLesson?.(Number(params.lesson));
+    else if (params.region) world.focusRegion?.(params.region);
+    const gone = new MutationObserver(() => { if (!host.isConnected) { gone.disconnect(); try { world.destroy?.(); } catch (e) { /* gone */ } } });
+    gone.observe(document.querySelector("#app"), { childList: true });
+  });
+  return page;
+});
+function advMapLabels() { // the map engine's words (adventure.js LABELS), in the page's language
+  return {
+    "map": t("Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the encounters on screen and Enter opens one."),
+    "regionStats": t("{cleared}/{lessons} cleared"), "fog": t("Unexplored"), "progress": t("{cleared}/{lessons}"),
+    "boss": t("Boss: {text}"), "bossAsleep": t("asleep"), "bossAwake": t("awake: evidence found"),
+    "bossDefeated": t("defeated"), "party": t("Your party"), "cleared": t("cleared"), "zoomIn": t("Zoom in"),
+    "zoomOut": t("Zoom out"), "home": t("Back to the party"), "fit": t("Show the whole map"),
+    "empty": t("No lessons yet: every lesson your agents learn will stand here as an encounter") };
+}
+function advBattleLabels() { // the battle engine's words (battle.js LABELS); the regions' names from the map's payload
+  const attrs = Object.fromEntries((mapCache?.regions || []).map((r) => [`attr.${r.id}`, r.name]));
+  return { ...attrs,
+    "region": t("Battle: {monster}"), "scene": t("{monster} faces {heroes}"), "epithet": t("«{title}»"),
+    "bossEpithet": t("Milestone {n}: {text}"), "round": t("Round {n}"), "level": t("Lv {n}"), "hp": t("HP"),
+    "mp": t("MP"), "hpValue": t("{hp}/{max}"), "taught": t("Taught it"), "prompt": t("What will {hero} do?"),
+    "log": t("Battle log"), "commands": t("Commands"), "attack": t("Attack"), "skill": t("Skill"),
+    "defend": t("Defend"), "run": t("Run"), "back": t("Back"), "skillLevel": t("Lv {n}"),
+    "skillNone": t("untrained"), "skillCost": t("{n} MP"), "attrSkill": t("{attr} lore"),
+    "intro": t("A wild {monster} appears: «{title}»"), "introBoss": t("{monster} bars the way: «{text}»"),
+    "lineAttack": t("{hero} attacks: {n} damage."), "lineCrit": t("{hero} lands a critical hit: {n} damage!"),
+    "lineSkill": t("{hero} uses {skill} (Lv {lv}): {n} damage!"),
+    "lineSkillWeak": t("{hero} tries {skill} untrained: {n} damage."),
+    "lineDefend": t("{hero} defends and steadies (+{mp} MP)."), "lineDefendFull": t("{hero} defends."),
+    "lineNoMp": t("{hero} doesn't have the MP for {skill}."), "lineRun": t("The party slips away."),
+    "lineHit": t("{hero} takes {n} damage."), "lineGuarded": t("{hero} blocks: only {n} damage."),
+    "lineDodge": t("{hero} dodges!"), "lineDrain": t("{hero} loses {mp} MP."),
+    "lineHeal": t("{monster} recovers {n} HP."), "lineKo": t("{hero} is knocked out!"),
+    "lineCharged": t("{monster} is gathering strength. Defend!"), "lineWin": t("{monster} is beaten!"),
+    "lineLose": t("The party falls back."), "lineHold": t("{monster} holds at 1 HP: only you can defeat this boss."),
+    "win": t("{monster} is beaten!"),
+    "winText": t("{agent} learned this on {date}: +{xp} XP then. Battles don't change levels."),
+    "winAnswer": t("The answer"), "winExcerpt": t("From the lesson"), "readLesson": t("Read the lesson"),
+    "openSession": t("Open the session"), "backToMap": t("Back to the map"), "lose": t("The party falls back"),
+    "loseText": t("Nothing is lost: battles don't change levels. Retry rolls new dice."), "retry": t("Retry"),
+    "hold": t("{monster} holds at 1 HP"),
+    "holdText": t("Only you can defeat this boss: mark the milestone done on the Quests page."),
+    "openQuests": t("Open Quests"), "bossDone": t("{monster} is already defeated"),
+    "bossDoneText": t("You marked this milestone done: «{text}»."), "monster.fix": t("Glitch"),
+    "monster.gotcha": t("Mal"), "monster.decision": t("Breaker"), "monster.learning": t("Wisp"),
+    "monster.pattern": t("Gearling"), "monster.command": t("Scrollkin"), "boss.1": t("Giant Glitch"),
+    "boss.2": t("Mal the Masked"), "boss.3": t("Firewall Titan"), "boss.4": t("Great Breaker"),
+    "move.fix.bite": t("{monster} chews through a test!"),
+    "move.fix.swarm": t("{monster} multiplies across the codebase!"),
+    "move.fix.heisen": t("{monster} flickers like a Heisenbug!"),
+    "move.fix.charge": t("{monster} burrows into the stack…"), "move.fix.crash": t("{monster} crashes the build!"),
+    "move.gotcha.trap": t("{monster} springs a trap!"),
+    "move.gotcha.edge": t("{monster} finds an edge case nobody checked!"),
+    "move.gotcha.silent": t("{monster} fails silently…"),
+    "move.gotcha.charge": t("{monster} hides behind a default…"),
+    "move.gotcha.default": t("{monster}'s hidden default goes off!"),
+    "move.decision.fork": t("{monster} forks the road!"),
+    "move.decision.tradeoff": t("{monster} forces a trade-off!"),
+    "move.decision.bikeshed": t("{monster} starts a bikeshed and catches its breath."),
+    "move.decision.charge": t("{monster} weighs its options…"),
+    "move.decision.flip": t("{monster} flips the switch!"),
+    "move.learning.glare": t("{monster} shines a blinding insight!"),
+    "move.learning.rabbit": t("{monster} leads everyone down a rabbit hole!"),
+    "move.learning.fog": t("{monster} spreads a fog of jargon…"),
+    "move.learning.charge": t("{monster} gathers light…"),
+    "move.learning.epiphany": t("{monster} bursts into an epiphany!"),
+    "move.pattern.copy": t("{monster} copy-pastes itself!"), "move.pattern.grind": t("{monster} grinds its gears!"),
+    "move.pattern.boiler": t("{monster} buries the party in boilerplate!"),
+    "move.pattern.charge": t("{monster} spins up…"),
+    "move.pattern.repeat": t("{monster} repeats itself at full speed!"),
+    "move.command.flag": t("{monster} passes the wrong flag!"),
+    "move.command.pipe": t("{monster} pipes everything into everything!"),
+    "move.command.sudo": t("{monster} runs it again with sudo!"),
+    "move.command.charge": t("{monster} types rm -rf…"), "move.command.enter": t("{monster} hits Enter!"),
+    "move.boss.deadline": t("{monster} pulls the deadline closer!"),
+    "move.boss.scope": t("{monster} creeps the scope!"),
+    "move.boss.meeting": t("{monster} calls a meeting and recovers."),
+    "move.boss.charge": t("{monster} gathers the whole milestone…"),
+    "move.boss.unleash": t("{monster} unleashes the milestone!") };
+}
+async function advBattlePage(build, back, crumbs, token) {
+  setCrumbs(crumbs, token);
+  const host = h("div", { class: "adv-battle" });
+  const page = h("div", { class: "party-page adv-page battle" }, host);
+  if (!window.Battle || typeof window.Battle.mount !== "function") {
+    host.append(h("div", { class: "card empty" }, t("The battle screen didn't load."), " ", h("a", { href: back }, t("Back to the map"))));
+    return page;
   }
-}
-function journeyStill(p, height, width) { // scene.js is missing: the party on a still stage, as large as fits in one row
-  const tiers = Object.fromEntries((p.agents || []).map((a) => [a.agent, a.tier]));
-  const label = journeyPreview(p)?.recent?.length ? t("This week's lessons") : !p.signed_in ? t("Your party is asleep")
-    : (p.recent || []).length ? null : t("A quiet week: no new lessons"); // the zone is in the head
-  return h("div", { class: "hj-still px-stage", style: { height: `${height}px` } },
-    h("div", { class: "hj-still-row" }, PARTY_AGENTS.map((a) => partySprite(a, { tier: tiers[a], scale: height >= 170 && width >= 560 ? 3 : width >= 380 ? 2 : 1, locked: !p.signed_in, still: true, decorative: true }))),
-    label ? h("span", { class: "hj-still-label", "aria-hidden": "true" }, label) : null); // the summary says it
-}
-function journeyStrip(p) {
-  const box = h("div");
-  let scene = null;
-  const narrow = matchMedia("(max-width: 600px)");
-  const draw = ({ focus = false } = {}) => {
-    try { scene?.destroy?.(); } catch (e) { /* gone already */ }
-    scene = null;
-    const open = journeyOpen(), height = narrow.matches ? 140 : 200;
-    const pre = journeyPreview(p);
-    const zone = zoneLabel(p), weekN = pre ? pre.week?.lessons ?? (pre.recent || []).length : p.week?.lessons ?? (p.recent || []).length;
-    const fold = h("button", { class: "icon-btn hj-fold", type: "button", "aria-expanded": String(open), "aria-controls": "hj-body",
-      "aria-label": open ? t("Hide the journey") : t("Show the journey"), title: open ? t("Hide the journey") : t("Show the journey"),
-      onclick: () => { setJourneyOpen(!open); draw({ focus: true }); } }, icon("chevron"));
-    const host = h("div", { class: "hj-scene", style: { height: `${height}px` } });
-    box.replaceChildren(h("section", { class: `card hj px-frame${open ? "" : " folded"}` },
-      h("div", { class: "hj-head" },
-        h("div", { class: "card-title" }, icon("party"), h("h2", null, t("Journey"))),
-        h("div", { class: "hj-meta" },
-          zone ? h("span", { class: "hj-zone" }, pxIcon(p.zone.attr, 1), zone) : null,
-          p.signed_in || pre ? h("span", null, tn(weekN, "This week: {n} lesson", "This week: {n} lessons", { n: fmtNum(weekN) }),
-            weekN > ((pre || p).recent || []).length ? ` · ${t("the newest {n} on the trail", { n: fmtNum(((pre || p).recent || []).length) })}` : null) : null),
-        fold),
-      open ? h("div", { class: "hj-body", id: "hj-body" }, h("p", { class: "sr-only", id: "hj-summary" }, journeySummary(p)), host) : null));
-    if (focus) fold.focus();
-    if (!open) return;
-    const S = window.Scene;
-    if (S && typeof S.mount === "function") {
-      try {
-        scene = S.mount(host, { party: p, labels: sceneLabels(), height, reducedMotion: stillMotion(),
-          onHover: (item, at) => journeyTip(p, item, at), onPick: journeyPick });
-        const cv = host.querySelector("canvas");
-        if (cv) {
-          cv.setAttribute("role", "img");
-          cv.setAttribute("aria-label", t("Journey: use ← and → to move between characters and monsters, Enter to open one"));
-          cv.setAttribute("aria-describedby", "hj-summary");
-        }
-        return;
-      } catch (e) { scene = null; host.replaceChildren(); } // the still stage instead
-    }
-    host.append(journeyStill(p, height, host.clientWidth));
+  let fight = null, attempt = 0;
+  const start = (enc) => {
+    try { fight?.destroy?.(); } catch (e) { /* gone */ }
+    host.replaceChildren();
+    fight = Battle.mount(host, { ...enc, attempt, labels: advBattleLabels(), reducedMotion: stillMotion(),
+      formatDate: (at) => fmtDateY(partyDay(at)) });
   };
-  const refit = () => { if (!box.isConnected) narrow.removeEventListener("change", refit); else draw(); };
-  narrow.addEventListener("change", refit); // crossing the phone width redraws at the other height
-  whenShown(box, () => draw()); // once the page is on screen: the scene measures its width
-  return box;
+  const enc = await build({
+    onLose: () => { attempt++; start(enc); }, // Retry: new dice, the same lesson
+    onRun: () => go(back), onExit: () => go(back),
+    onReadLesson: (id) => openLesson(id),
+    onQuests: () => go("#/innerlatch/quests"), // no sessionHref: the lesson opens in the modal, inside Innerlatch
+  });
+  if (!enc) return page;
+  whenShown(host, () => start(enc));
+  const gone = new MutationObserver(() => { if (!host.isConnected) { gone.disconnect(); try { fight?.destroy?.(); } catch (e) { /* gone */ } } });
+  whenShown(host, () => gone.observe(document.querySelector("#app"), { childList: true }));
+  return page;
 }
+route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  let encounter;
+  try { encounter = await api("/api/party/encounter", { id }); } catch (e) {
+    if (e.handled || e.status !== 404) throw e;
+    setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [t("Battle")]], token);
+    return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("This lesson isn't in your party's archive."), " ",
+      h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+  }
+  const back = `#/innerlatch/adventure?lesson=${id}`;
+  return advBattlePage(async (cb) => ({ encounter, ...cb,
+    onWin: async () => {
+      const r = await lbPost("/api/party/cleared", { id: Number(id), cleared: true });
+      if (r) mapCleared(r.cleared);
+      if (sbSection === "adventure") buildSidebar("adventure");
+    } }), back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [plainTitle(encounter.lesson.title)]], token);
+});
+route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const m = await mapLoad();
+  const boss = (m.bosses || []).find((b) => String(b.n) === n);
+  if (!boss) return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("No such boss on your main quest."), " ", h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+  return advBattlePage(async (cb) => ({ encounter: { boss, party: m.agents }, ...cb, onWin: () => {} }), "#/innerlatch/adventure",
+    [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [boss.text]], token);
+});
+
+// =====================================================================================
+// A lesson, in a modal over the page: every lesson link in Innerlatch opens here instead of leaving for the dashboard's
+// session page (GET /api/party/encounter: the lesson, its case and its roadmap modules). The session stays one link away.
+// #/innerlatch/lesson/<id> opens it too (a link opened in a new tab), over the Party.
+// =====================================================================================
+function plainTitle(title) { return String(title || "").replace(/`([^`\n]+)`/g, "$1"); } // `code` in a title, as plain text
+function lessonLink(id, title, attrs = {}) {
+  return h("a", { ...attrs, href: `#/innerlatch/lesson/${id}`, html: codeSpans(title), onclick: (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; // a new tab: the address opens it there
+    e.preventDefault();
+    openLesson(id);
+  } });
+}
+let lessonDialog = null;
+async function openLesson(id) {
+  lessonDialog?.close();
+  const body = h("div", { class: "lm-body" }, h("div", { class: "lm-loading muted" }, t("Loading…")));
+  const close = h("button", { class: "icon-btn lm-close", type: "button", "aria-label": t("Close"), title: t("Close") }, icon("x"));
+  const dlg = h("dialog", { class: "lesson-modal px-frame", "aria-labelledby": "lm-title" }, close, body);
+  close.addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); }); // the backdrop
+  dlg.addEventListener("close", () => { dlg.remove(); if (lessonDialog === dlg) lessonDialog = null; });
+  lessonDialog = dlg;
+  document.body.append(dlg);
+  dlg.showModal();
+  let r;
+  try { r = await api("/api/party/encounter", { id }); } catch (e) {
+    if (e.handled || !dlg.open) return;
+    body.replaceChildren(h("h2", { id: "lm-title" }, t("Lesson")), h("p", { class: "muted" }, e.status === 404 ? t("This lesson isn't in your party's archive.") : t("Could not load: {error}", { error: e.message })));
+    return;
+  }
+  if (!dlg.open) return;
+  const l = r.lesson, a = (r.party || []).find((x) => x.agent === l.agent);
+  const c = l.case && l.case.scene && l.case.question && l.case.answer ? l.case : null;
+  const meta = [agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null, STAGE_LABEL[l.stage || "provisional"] || l.stage,
+    l.xp ? t("+{n} XP", { n: l.xp }) : null, l.project].filter(Boolean).join(" · ");
+  const counted = (l.modules || []).length > 0;
+  body.replaceChildren(...[ // replaceChildren prints a null: the parts a lesson doesn't have are left out
+    h("div", { class: "lm-head" }, PARTY_AGENTS.includes(l.agent) ? partySprite(l.agent, { tier: a?.tier, scale: 2, decorative: true }) : agentIcon(l.agent),
+      h("div", null, kindChip(l.kind), h("h2", { id: "lm-title", html: codeSpans(l.title) }), h("div", { class: "muted small" }, meta))),
+    counted ? h("div", { class: "lm-modules" }, h("span", { class: "px-label" }, t("On the roadmap")),
+      l.modules.map((m) => h("span", { class: "lm-module" }, pxIcon(m.attr, 1), m.name,
+        a?.skills?.[m.id] ? h("b", null, t("Lv {n}", { n: a.skills[m.id] })) : null)))
+      : h("p", { class: "muted small" }, t("This lesson doesn't count toward the roadmap: it matched none of its modules.")),
+    c ? h("div", { class: "lm-case" }, h("span", { class: "px-label" }, t("The scene")), mdEl(c.scene),
+      h("span", { class: "px-label" }, t("The question")), mdEl(c.question),
+      h("details", null, h("summary", null, t("The answer")), mdEl(c.answer))) : null,
+    l.body ? mdEl(l.body, "lm-text") : null,
+    h("div", { class: "lm-actions" },
+      counted ? h("a", { class: "btn small primary", href: r.cleared ? `#/innerlatch/adventure?lesson=${l.id}` : `#/innerlatch/adventure/battle/${l.id}`,
+        onclick: () => dlg.close() }, icon("map"), r.cleared ? t("Find it on the map") : t("Battle it")) : null,
+      l.session_id ? h("a", { class: "btn small", href: `#/session/${l.session_id}`, onclick: () => dlg.close(), title: t("Leaves Innerlatch for the dashboard's session page") },
+        icon("door"), t("Open the session in Interlatch")) : null)].filter(Boolean));
+  body.querySelectorAll(".gloss").forEach((el) => glossify(el));
+}
+route(/^\/innerlatch\/lesson\/(\d+)$/, async (params, id) => {
+  history.replaceState(null, "", "#/innerlatch");
+  lastHash = location.hash;
+  setTimeout(() => openLesson(Number(id)), 0);
+  return routes.find(([rx]) => rx.test("/innerlatch"))[1](params); // the Party, with the lesson over it
+});
 
 // =====================================================================================
 // The door: Innerlatch opens to someone who walks through it signed in, with Google on the computer that runs
@@ -1328,10 +1521,12 @@ async function threshold(to) {
 function realmHere() { return ME?.viewer?.here !== false && !dedicated() && !limited(); }
 const REALM_SECTIONS = [
   { key: "party", label: t("Party"), href: "#/innerlatch", icon: "party" }, // a hub's people have theirs too
+  { key: "adventure", label: t("Adventure"), href: "#/innerlatch/adventure", icon: "map" },
   { key: "leaderboard", label: t("Leaderboard"), href: "#/innerlatch/leaderboard", icon: "leaderboard", here: true },
   { key: "arena", label: t("Arena"), href: "#/innerlatch/arena", icon: "arena", here: true },
 ];
 function realmSectionOf(path) {
+  if (path.startsWith("/innerlatch/adventure")) return "adventure";
   if (path.startsWith("/innerlatch/leaderboard")) return "leaderboard";
   if (path.startsWith("/innerlatch/arena")) return "arena";
   return "party";
@@ -1340,6 +1535,7 @@ function realmCrumbs(path) {
   const home = ["Innerlatch", "#/innerlatch"], party = [t("Party"), "#/innerlatch"];
   if (path === "/innerlatch/quests") return [home, party, [t("Quests")]];
   if (path === "/innerlatch/journey") return [home, party, [t("Journey")]];
+  if (path === "/innerlatch/adventure") return [home, [t("Adventure")]];
   if (path === "/innerlatch/leaderboard") return [home, [t("Leaderboard")]];
   if (path === "/innerlatch/arena") return [home, [t("Arena")]];
   if (path === "/innerlatch") return [home, [t("Party")]];
@@ -1352,8 +1548,9 @@ window.Innerlatch = Object.freeze({
   sectionOf: realmSectionOf,
   crumbs: realmCrumbs,
   owns: (section) => REALM_SECTIONS.some((x) => x.key === section),
-  sidebar: (section, box) => (section === "party" ? partySidebar(box) : competeSidebar(box)),
+  sidebar: (section, box) => (section === "party" ? partySidebar(box) : section === "adventure" ? adventureSidebar(box) : competeSidebar(box)),
   commands: (nav) => [nav(t("Party"), "#/innerlatch", "party", t("your agents as characters")),
     nav(t("Quests"), "#/innerlatch/quests", "todo", t("Party")), nav(t("Journey"), "#/innerlatch/journey", "history", t("Party")),
+    nav(t("Adventure"), "#/innerlatch/adventure", "map", t("every lesson as a world to explore")),
     ...(realmHere() ? [nav(t("Leaderboard"), "#/innerlatch/leaderboard", "leaderboard"), nav(t("Arena"), "#/innerlatch/arena", "arena", t("Leaderboard"))] : [])],
 });

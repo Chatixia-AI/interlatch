@@ -356,6 +356,7 @@ JA: dict[str, str] = {
     "sign in to see your party": "パーティーを見るにはサインインしてください",
     "no such quest": "そのクエストはありません",
     "no such track": "そのトラックはありません",
+    "no such lesson": "その教訓はありません",
     "this computer is not a hub": "このコンピューターはハブではありません",
     "Could not sign in": "サインインできませんでした",
     "Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "

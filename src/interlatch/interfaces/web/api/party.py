@@ -81,6 +81,41 @@ def tracks(ctx: Context, viewer: dict | None) -> dict:
     return data if who(ctx, viewer) is None else pt.market_tracks(data)
 
 
+def adventure_map(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
+    """GET /api/party/map: the Adventure's world (knowledge/party.py adventure_map)."""
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    return pt.adventure_map(ctx.conn, _here_id(ctx), viewer), 200
+
+
+def encounter(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
+    """GET /api/party/encounter?id=<lesson id>: one of the viewer's lessons as an encounter; 404 for any other."""
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    try:
+        lesson_id = int(q.get("id") or "")
+    except ValueError:
+        return {"error": tr("not found")}, 404
+    got = pt.encounter(ctx.conn, _here_id(ctx), viewer, lesson_id)
+    return (got, 200) if got else ({"error": tr("not found")}, 404)
+
+
+def action_party_cleared(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """Mark a lesson's encounter cleared or not, in the viewer's own log; answers the log."""
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    try:
+        return {"cleared": pt.set_cleared(ctx.conn, _here_id(ctx), viewer, body.get("id"), bool(body.get("cleared")))}, 200
+    except pt.PartyError as exc:
+        return {"error": tr(str(exc))}, 400
+
+
 def action_party_quest(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
     """Mark a quest done or not, in the viewer's own log; answers the party as it is now."""
     from ....knowledge import party as pt
