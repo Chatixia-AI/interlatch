@@ -3,6 +3,14 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.1 (2026-10-16)
+
+- **IBM Bob as the analyzer:** a key that is only in your shell (`BOB_API_KEY`, or a provider's `*_API_KEY`) used to
+  leave sessions unanalyzed in the background while `interlatch install` called it ready; install now offers to save
+  it, and `interlatch status` says when background analysis can't see it. Bob is told it has no tools and a call that
+  reaches for one is tried once more, and failed knowledge bases are named by project instead of a cut-off path
+  ([Analysis](docs/analysis.md)).
+
 ## 0.27.0 (2026-10-16)
 
 - **Formations:** the Party page builds decks, teams of one to three agents in the order they fight, up to five
