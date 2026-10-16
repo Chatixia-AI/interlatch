@@ -20,7 +20,9 @@ goal kept for that scope, the catalog and the language.
 
 The Adventure (adventure_map, encounter, set_cleared) lays the same lessons out as encounters on a map; battles change
 no level or XP, they only mark a lesson cleared in the viewer's own log. A first clear also pays gold and maybe loot
-into the viewer's bag (bag.py: a game economy that changes only battle numbers, never a level).
+into the viewer's bag (bag.py: a game economy that changes only battle numbers, never a level). A lesson with a case
+file can be diagnosed in its battle: its question, with its answer among wrong ones (diagnosis_options). The person's
+first pick in each is kept (record_diagnosis) on their own computer only, never on a hub, and changes no level either.
 """
 
 from __future__ import annotations
@@ -61,6 +63,9 @@ GOAL_KEY = "party.goal:"  # + scope key: the track the person picked
 QUESTS_KEY = "party.quests:"  # + scope key: {milestone id: {"at": iso}}, the milestones the person marked done
 CLEARED_KEY = "party.cleared:"  # + scope key: [lesson id, ...], the Adventure's encounters the person has beaten
 CLEARED_MAX = 100_000
+DIAGNOSES_KEY = "party.diagnoses:"  # + scope key: [{"id", "on", "right"}], the person's first pick in each Diagnose
+DIAGNOSES_MAX = 20_000
+DIAGNOSE_OPTIONS = 3  # a case's Diagnose offers its answer and two wrong ones: its own ruled-out leads first
 MAP_TITLE_MAX = 140  # the Adventure map's lesson titles are cut to this; an encounter has the whole title
 ENCOUNTER_BODY_MAX = 4000
 
@@ -1157,15 +1162,17 @@ def _boss_attr(cat: Catalog, track_id: str) -> str | None:
 def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, *,
                   catalog: Catalog | None = None, today: date | None = None) -> dict:
     """GET /api/party/map: the regions (every attr, every module of it, how many counted lessons stand there: those
-    whose best module it is, and their XP), every counted lesson oldest first, the lessons cleared, the bosses (the
-    main quest's milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag
-    and a town per region (bag.py)."""
+    whose best module it is, and their XP), every counted lesson oldest first (`case`: it has a case file to
+    diagnose), the lessons cleared, those diagnosed (the newest first pick right), the bosses (the main quest's
+    milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag and a town per
+    region (bag.py)."""
     from . import bag
 
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
     data = _computed(conn, cat, sc, today or utcnow().date())
     counted = [k for k in lessons_in(conn, cat, sc) if k.modules]
+    cases = _cases(conn, [k.id for k in counted])
     there: dict[int, list[int]] = {}  # module index: [lessons, xp] of the lessons that stand in it
     for k in counted:
         got = there.setdefault(k.modules[0], [0, 0])
@@ -1180,8 +1187,9 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "regions": regions,
         "lessons": [{"id": k.id, "title": k.title[:MAP_TITLE_MAX], "kind": k.kind, "stage": k.stage, "agent": k.agent,
                      "at": k.at[:10], "xp": k.xp * len(k.modules), "modules": [cat.modules[i]["id"] for i in k.modules],
-                     "session_id": k.session_id, "project": k.project_name} for k in counted],
+                     "session_id": k.session_id, "project": k.project_name, "case": k.id in cases} for k in counted],
         "cleared": cleared_of(conn, sc.key),
+        "diagnosed": diagnosed(diagnoses_of(conn, sc.key)),
         "bosses": [{"id": q["id"], "n": q["n"], "text": q["text"], "track": q["track"], "track_name": q["track_name"],
                     "attr": _boss_attr(cat, q["track"]), "status": q["status"]}
                    for q in data["quests"] if q["main"]],
@@ -1201,10 +1209,109 @@ def _case(raw) -> dict | None:
     return case if all(isinstance(v, str) and v.strip() for v in case.values()) else None
 
 
+def _cases(conn: sqlite3.Connection, ids) -> dict[int, dict]:
+    """The whole case files (_case) among these lessons, by id."""
+    want = set(ids)
+    if not want:
+        return {}
+    rows = conn.execute("SELECT id, case_json FROM knowledge WHERE case_json IS NOT NULL")
+    return {r["id"]: c for r in rows if r["id"] in want and (c := _case(r["case_json"])) is not None}
+
+
+def _ruled_out(raw) -> list[dict]:
+    """A case file's ruled-out leads, each {lead, why} (why None when it has none), those with a lead."""
+    got = loads(raw, None)
+    leads = got.get("ruled_out") if isinstance(got, dict) else None
+    clean = lambda v: v.strip() if isinstance(v, str) and v.strip() else None  # noqa: E731
+    return [{"lead": x["lead"].strip(), "why": clean(x.get("why"))}
+            for x in leads if isinstance(x, dict) and clean(x.get("lead"))] if isinstance(leads, list) else []
+
+
+def _same(text: str) -> str:
+    """A text as two options compare: case, spacing and a closing full stop don't make another answer."""
+    return " ".join(text.casefold().split()).rstrip(".。")
+
+
+def _region(cat: Catalog, k: Lesson) -> str | None:
+    return cat.modules[k.modules[0]].get("attr") if k.modules else None
+
+
+def diagnosis_options(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lesson: Lesson, raw) -> list[dict]:
+    """A case's Diagnose: its answer ({text, right: True}) and up to DIAGNOSE_OPTIONS - 1 wrong ones, the leads its
+    own session ruled out first (each with `why`), then other cases' answers (each with `from`: the title of the
+    lesson it does answer). Another case's answer comes from a lesson of another session that counts toward none of
+    this one's modules, so it isn't a second answer to the same problem: the same kind first, then the same project,
+    then the same region, then the nearest in time. [] without a case file, or with nothing wrong to set beside the
+    answer. The battle shuffles them."""
+    case = _case(raw)
+    if case is None:
+        return []
+    out = [{"text": case["answer"].strip(), "right": True}]
+    seen = {_same(out[0]["text"])}
+
+    def add(text: str, more: dict) -> None:
+        if len(out) < DIAGNOSE_OPTIONS and _same(text) not in seen:
+            seen.add(_same(text))
+            out.append({"text": text, "right": False, **more})
+
+    for x in _ruled_out(raw):
+        add(x["lead"], {"why": x["why"]})
+    if len(out) < DIAGNOSE_OPTIONS:
+        mine, region = set(lesson.modules), _region(cat, lesson)
+        others = {k.id: k for k in lessons_in(conn, cat, sc) if k.id != lesson.id and not mine & set(k.modules)
+                  and not (lesson.session_id and k.session_id == lesson.session_id)}
+        answers = _cases(conn, others)
+        near = sorted(answers, key=lambda i: (others[i].kind != lesson.kind, others[i].project_name != lesson.project_name,
+                                              region is None or _region(cat, others[i]) != region, abs(i - lesson.id), i))
+        for i in near:
+            add(answers[i]["answer"].strip(), {"from": others[i].title[:MAP_TITLE_MAX]})
+    return out if len(out) > 1 else []
+
+
+def diagnoses_of(conn: sqlite3.Connection, key: str) -> list[dict]:
+    """The scope `key`'s first picks in Diagnoses, oldest first: {"id": lesson id, "on": "YYYY-MM-DD", "right": bool}."""
+    got = loads(kv_get(conn, DIAGNOSES_KEY + key), [])
+    return [x for x in got if isinstance(x, dict) and isinstance(x.get("id"), int) and not isinstance(x["id"], bool)
+            and isinstance(x.get("on"), str) and isinstance(x.get("right"), bool)] if isinstance(got, list) else []
+
+
+def diagnosed(log: list[dict]) -> list[int]:
+    """The lessons whose newest first pick was right, in the order first diagnosed."""
+    last: dict[int, bool] = {}
+    for x in log:
+        last[x["id"]] = x["right"]
+    return [i for i, right in last.items() if right]
+
+
+def record_diagnosis(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, right: bool, *,
+                     catalog: Catalog | None = None, today: date | None = None) -> bool:
+    """Keep the person's first pick in a lesson's Diagnose: the lesson, the day, right or not; True when it was kept.
+    The lesson must be one of the viewer's, with a case file. Kept only on the person's own computer: for a person
+    signed in to a hub nothing is (per-person learning data stays on that person's computer: docs/design/learning.md).
+    One a day per lesson: another fight on the same day is no longer recall. Changes no level or XP."""
+    cat = catalog or load_catalog()
+    sc = _scope_of(conn, here_id, viewer)
+    valid = isinstance(lesson_id, int) and not isinstance(lesson_id, bool)
+    lesson = next((k for k in lessons_in(conn, cat, sc) if k.id == lesson_id), None) if valid else None
+    row = conn.execute("SELECT case_json FROM knowledge WHERE id = ?", (lesson_id,)).fetchone() if lesson else None
+    if lesson is None or _case(row["case_json"] if row else None) is None:
+        raise PartyError("no such lesson")
+    if viewer is not None:
+        return False
+    on = (today or utcnow().date()).isoformat()
+    with kv_transaction(conn):  # two quick POSTs: the second sees the first
+        log = diagnoses_of(conn, sc.key)
+        if any(x["id"] == lesson_id and x["on"] == on for x in log):
+            return False
+        kv_set(conn, DIAGNOSES_KEY + sc.key, json.dumps((log + [{"id": lesson_id, "on": on, "right": bool(right)}])[-DIAGNOSES_MAX:]))
+    return True
+
+
 def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, *,
               catalog: Catalog | None = None, today: date | None = None) -> dict | None:
-    """GET /api/party/encounter: one of the viewer's lessons (counted or not) with its body and case file, the party
-    that meets it (each agent's level, attrs and skill in the lesson's modules, and the battle stats its gear adds),
+    """GET /api/party/encounter: one of the viewer's lessons (counted or not) with its body and case file (with its
+    Diagnose's `options`: diagnosis_options), the party that meets it (each agent's level, attrs and skill in the
+    lesson's modules, and the battle stats its gear adds),
     whether it's cleared, and the consumables and loot the viewer's bag holds (bag.py). None for a lesson that isn't
     the viewer's."""
     from . import bag
@@ -1219,6 +1326,10 @@ def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesso
     mids = [cat.modules[i]["id"] for i in k.modules]
     held = bag.load(conn, sc.key)
     gear = bag.gear_of(cat, held)
+    raw = row["case_json"] if row else None
+    case = _case(raw)
+    if case is not None:
+        case["options"] = diagnosis_options(conn, cat, sc, k, raw)
     party_ = []
     for a in data["agents"]:
         levels = {s["module"]: s["level"] for s in a["skills"]}
@@ -1228,7 +1339,7 @@ def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesso
     return {
         "lesson": {"id": k.id, "title": k.title, "kind": k.kind, "stage": k.stage, "agent": k.agent, "at": k.at[:10],
                    "xp": k.xp * len(k.modules), "session_id": k.session_id, "project": k.project_name,
-                   "body": k.body[:ENCOUNTER_BODY_MAX], "case": _case(row["case_json"] if row else None),
+                   "body": k.body[:ENCOUNTER_BODY_MAX], "case": case,
                    "modules": [{"id": cat.modules[i]["id"], "name": _t(cat.modules[i], "name"),
                                 "attr": cat.modules[i].get("attr")} for i in k.modules]},
         "party": party_,

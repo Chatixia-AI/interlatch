@@ -137,6 +137,20 @@ def action_party_cleared(ctx: Context, viewer: dict | None, body: dict, *, here:
     return {"cleared": log, "reward": reward, "bag": bag.bag(ctx.conn, viewer)}, 200
 
 
+def action_party_diagnosis(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """The person's first pick in a lesson's Diagnose ({"id", "right"}), kept on this computer only (a hub person's
+    isn't kept anywhere); answers whether it was kept and the lessons diagnosed."""
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    try:
+        kept = pt.record_diagnosis(ctx.conn, _here_id(ctx), viewer, body.get("id"), body.get("right") is True)
+    except pt.PartyError as exc:
+        return {"error": tr(str(exc))}, 400
+    return {"recorded": kept, "diagnosed": pt.diagnosed(pt.diagnoses_of(ctx.conn, pt.scope_key(viewer)))}, 200
+
+
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
 def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
     """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""

@@ -1224,8 +1224,15 @@ function advTally(m) {
 }
 const ADV_KIND_NAME = { fix: t("Glitch"), gotcha: t("Mal"), decision: t("Breaker"), learning: t("Wisp"), pattern: t("Gearling"), command: t("Scrollkin") };
 function advLessonTip(l, where, cleared) {
-  showTip(where, plainTitle(l.title), [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),
+  const diagnosed = l.case && (mapCache?.diagnosed || []).includes(l.id);
+  showTip(where, plainTitle(l.title), [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null,
+    l.case ? (diagnosed ? t("Diagnosed") : t("A case to diagnose")) : null].filter(Boolean).join(" · "),
     cleared ? t("Cleared · click to read it") : t("Click to battle it"));
+}
+// the cases still to diagnose: lessons with a case file whose newest first pick wasn't right (or never made)
+function advCasesOpen(m) {
+  const done = new Set(m.diagnosed || []);
+  return (m.lessons || []).filter((l) => l.case && !done.has(l.id)).length;
 }
 async function adventureSidebar(box) {
   let m = null;
@@ -1236,6 +1243,8 @@ async function adventureSidebar(box) {
   box.replaceChildren(head, h("div", { class: "sb-scroll" },
     sbRow(t("World map"), "#/innerlatch/adventure", "map", null, ["/innerlatch/adventure", "view", ""]),
     sbRow(t("Encounter list"), "#/innerlatch/adventure?view=list", "todo", tally.total - tally.cleared, ["/innerlatch/adventure", "view", "list"]),
+    (m.lessons || []).some((l) => l.case)
+      ? sbRow(t("Cases to diagnose"), "#/innerlatch/adventure?view=cases&show=all", "search", advCasesOpen(m), ["/innerlatch/adventure", "view", "cases"]) : null,
     Object.assign(sbRow(t("Bag"), "#/innerlatch/adventure/bag", "artifacts", m.gold || 0, ["/innerlatch/adventure/bag"]),
       { title: t("{n} gold", { n: fmtNum(m.gold || 0) }) }),
     h("div", { class: "sb-group" }, t("Towns")),
@@ -1251,11 +1260,17 @@ async function adventureSidebar(box) {
 function advList(m, params) {
   const done = new Set(m.cleared || []);
   const territory = Object.fromEntries((m.regions || []).flatMap((r) => r.modules.map((x) => [x.id, { region: r, module: x }])));
-  const want = { region: params.region || "", kind: params.kind || "", agent: params.agent || "", show: params.show || "open" };
+  const diagnosed = new Set(m.diagnosed || []);
+  // view=cases: the list of lessons with a case to diagnose (its own sidebar row); the Cases filter moves between the two
+  const want = { region: params.region || "", kind: params.kind || "", agent: params.agent || "",
+    case: params.view === "cases" || params.case === "1" ? "1" : "", show: params.show || "open" };
   const rows = (m.lessons || []).filter((l) => (!want.region || territory[l.modules[0]]?.region.id === want.region)
-    && (!want.kind || l.kind === want.kind) && (!want.agent || l.agent === want.agent)
+    && (!want.kind || l.kind === want.kind) && (!want.agent || l.agent === want.agent) && (!want.case || l.case)
     && (want.show === "all" || (want.show === "cleared") === done.has(l.id))).slice().reverse();
-  const set = (k, v) => go(`#/innerlatch/adventure?${new URLSearchParams(Object.entries({ ...want, view: "list", [k]: v }).filter(([, x]) => x)).toString()}`);
+  const set = (k, v) => {
+    const { case: cases, ...rest } = { ...want, [k]: v };
+    go(`#/innerlatch/adventure?${new URLSearchParams(Object.entries({ view: cases ? "cases" : "list", ...rest }).filter(([, x]) => x)).toString()}`);
+  };
   const pick = (label, k, opts) => h("select", { "aria-label": label, onchange: (e) => set(k, e.target.value) },
     opts.map(([v, l]) => h("option", { value: v, selected: v === want[k] }, l)));
   const shown = rows.slice(0, 300);
@@ -1264,12 +1279,14 @@ function advList(m, params) {
       pick(t("Region"), "region", [["", t("All regions")], ...(m.regions || []).map((r) => [r.id, r.name])]),
       pick(t("Kind"), "kind", [["", t("All kinds")], ...Object.keys(ADV_KIND_NAME).map((k) => [k, kindLabel(k)])]),
       pick(t("Agent"), "agent", [["", t("All agents")], ...PARTY_AGENTS.map((a) => [a, agentName(a)])]),
+      pick(t("Cases"), "case", [["", t("All encounters")], ["1", t("Cases to diagnose")]]),
       segControl([["open", t("Not cleared")], ["cleared", t("Cleared")], ["all", t("All")]], want.show, (v) => set("show", v))),
     rows.length ? h("ul", { class: "adv-rows" }, shown.map((l) => {
       const where = territory[l.modules[0]];
       return h("li", { class: done.has(l.id) ? "cleared" : "" }, kindChip(l.kind),
         h("div", { class: "adv-row-main" }, lessonLink(l.id, l.title),
-          h("div", { class: "muted small" }, [where?.region.name, where?.module.name, agentShort(l.agent), l.at ? fmtDate(partyDay(l.at)) : null].filter(Boolean).join(" · "))),
+          h("div", { class: "muted small" }, [where?.region.name, where?.module.name, agentShort(l.agent), l.at ? fmtDate(partyDay(l.at)) : null].filter(Boolean).join(" · "),
+            l.case ? h("span", { class: "adv-case" + (diagnosed.has(l.id) ? " done" : "") }, diagnosed.has(l.id) ? t("Diagnosed") : t("Case")) : null)),
         done.has(l.id) ? h("span", { class: "adv-flag" }, pxIcon("quest-done", 1), t("Cleared"))
           : h("a", { class: "btn small", href: `#/innerlatch/adventure/battle/${l.id}` }, t("Battle")));
     })) : h("div", { class: "empty" }, t("No encounters match.")),
@@ -1281,7 +1298,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
   if (!p.signed_in) return partyGate(p, token);
   const m = await mapLoad(true);
   const tally = advTally(m);
-  const list = params.view === "list" || !window.Adventure || typeof window.Adventure.mountMap !== "function";
+  const list = params.view === "list" || params.view === "cases" || !window.Adventure || typeof window.Adventure.mountMap !== "function";
   const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon("journey", 3),
     h("div", null, h("h1", null, t("Adventure")),
       h("div", { class: "sub" }, tally.total ? t("Every lesson your agents learned is out there. {n} of {total} cleared.", { n: fmtNum(tally.cleared), total: fmtNum(tally.total) })
@@ -1418,7 +1435,13 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "lineTemplate": t("The next blow will hit ×1.6."), "lineScript": t("{item} hits {monster} for {n} damage!"),
     "lineNoItem": t("No {item} left."), "rewardWait": t("Counting the spoils…"), "rewardGold": t("+{n} gold"),
     "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
-    "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map.") };
+    "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map."),
+    "diagnose": t("Diagnose"), "caseAsk": t("The case: {question} Diagnose it to find its weak spot."),
+    "diagTried": t("ruled out"), "weakTag": t("weak spot"), "lineDiagnose": t("{hero} names it: «{text}»"),
+    "lineRight": t("That's it! {monster}'s weak spot is exposed: {n} damage."), "lineBreak": t("{monster}'s charge breaks."),
+    "lineWrong": t("Not it."), "lineRuledOut": t("Ruled out in the session: {why}"),
+    "lineOtherCase": t("That answers another case: «{title}»."), "diagFirst": t("Diagnosed on the first pick."),
+    "diagLater": t("Diagnosed on pick {n}."), "diagNone": t("Won without a diagnosis: the case is still open.") };
 }
 async function advBattlePage(build, back, crumbs, token) {
   setCrumbs(crumbs, token);
@@ -1467,11 +1490,16 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     if (sbSection === "adventure") buildSidebar("adventure");
     return r ? r.reward || null : false; // false: the win wasn't saved (the battle says so)
   };
+  const onDiagnose = async (lessonId, right) => { // the first pick in the Diagnose: kept on this computer only
+    const r = await lbPost("/api/party/diagnosis", { id: Number(id), right: right === true });
+    if (r && mapCache) mapCache.diagnosed = r.diagnosed;
+    if (r && sbSection === "adventure") buildSidebar("adventure");
+  };
   let first = encounter; // a retry asks again: the items used in the lost fight are gone
   return advBattlePage(async (cb) => {
     const enc = first || await api("/api/party/encounter", { id }).catch(() => ({ ...encounter, items: [] })); // never the old counts
     first = null;
-    return { encounter: enc, ...cb, onWin };
+    return { encounter: enc, ...cb, onWin, onDiagnose };
   }, back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [plainTitle(encounter.lesson.title)]], token);
 });
 route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {

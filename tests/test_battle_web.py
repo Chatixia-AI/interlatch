@@ -452,3 +452,118 @@ assert.ok(a.items.some((it) => it.count < 3), 'the first fight used nothing');
 const b = R.setup(e, 1);
 assert.deepEqual(b.items.map((it) => it.count), ALL_ITEMS.map(() => 3));
 """)
+
+
+DIAGNOSE = r'''
+const OPTS = [{text: 'Because.', right: true}, {text: 'The cache', right: false, why: 'It was cleared.'},
+  {text: 'An index', right: false, from: 'Another lesson'}];
+const withOptions = (i, opts = OPTS) => { const e = lesson(i); e.lesson.case = {scene: 'A scene.', question: 'Why?', answer: 'Because.', options: opts}; return e; };
+const rightOf = (s) => s.diag.options.findIndex((o) => o.right);
+const wrongOf = (s, kind) => s.diag.options.findIndex((o, i) => !o.right && !s.diag.tried.includes(i) && (!kind || o[kind]));
+// a player who diagnoses first (right away, or after one wrong pick), then fights as the bot does
+const diagFirst = (s) => (s.diag && !s.diag.solved ? {type: 'diagnose', pick: rightOf(s)} : R.policy(s));
+const missFirst = (s) => (!s.diag || s.diag.solved ? R.policy(s) : {type: 'diagnose', pick: s.diag.tried.length ? rightOf(s) : wrongOf(s)});
+const toHero = (s) => { while (s.phase === 'monster') R.monsterTurn(s); };
+'''
+
+
+def test_a_diagnose_needs_a_question_and_options_and_never_moves_the_dice():
+    check(DIAGNOSE + '''
+assert.equal(R.setup(lesson(0), 0).diag, null);  // a case without options
+assert.equal(R.setup(withOptions(1, [OPTS[0]]), 0).diag, null);  // only the answer
+assert.equal(R.setup(withOptions(1, [OPTS[1], OPTS[2]]), 0).diag, null);  // no right one
+assert.equal(R.setup(withOptions(1, [OPTS[0], {...OPTS[1], right: true}]), 0).diag, null);  // two right ones
+assert.equal(R.setup(boss(1, 1), 0).diag, null);
+const e = withOptions(3), s = R.setup(e, 0);
+assert.deepEqual(s.diag.options.map((o) => o.text).sort(), OPTS.map((o) => o.text).sort());
+assert.deepEqual(R.setup(e, 0).diag.options, s.diag.options);  // the seed's order
+let moved = 0;
+for (let i = 0; i < 30; i++) if (R.setup(withOptions(i), 0).diag.options[0].text !== 'Because.') moved++;
+assert.ok(moved >= 10, 'the answer is nearly always first: ' + moved);
+// the question is asked after the intro; the options never say which is right
+assert.deepEqual(s.log.map((l) => l.key), [null, 'intro', 'caseAsk']);
+assert.equal(s.log[2].vars.question, 'Why?');
+assert.ok(R.diagnoseOptions(s).every((o) => !('right' in o) && o.usable && !o.tried));
+// the same fight with or without a Diagnose, when nobody diagnoses: the shuffle has dice of its own
+for (let i = 0; i < 40; i++) {
+  const a = R.simulate(withOptions(i), 1), b = R.simulate({...withOptions(i), lesson: {...withOptions(i).lesson, case: null}}, 1);
+  assert.equal(a.phase, b.phase);
+  assert.deepEqual(a.log.filter((l) => l.key && l.key !== 'caseAsk'), b.log.filter((l) => l.key));
+}
+''')
+
+
+def test_a_right_pick_is_the_best_move_and_a_wrong_one_costs_the_turn():
+    check(DIAGNOSE + '''
+// a wrong pick: no damage, the turn goes, it says why; picking it again does nothing
+const s = R.setup(withOptions(3), 0), hp = s.foe.hp, lead = s.active;
+const lead1 = wrongOf(s, 'why');
+const ev = R.heroAction(s, {type: 'diagnose', pick: lead1});
+assert.equal(s.foe.hp, hp);
+assert.deepEqual(ev.find((x) => x.t === 'diagnosis'), {t: 'diagnosis', right: false, first: true});
+assert.ok(s.active !== lead || s.phase === 'monster');
+assert.deepEqual(s.log.slice(-3).map((l) => l.key), ['lineDiagnose', 'lineWrong', 'lineRuledOut']);
+assert.equal(s.log[s.log.length - 1].vars.why, 'It was cleared.');
+toHero(s);
+assert.deepEqual(R.heroAction(s, {type: 'diagnose', pick: lead1}), []);
+assert.ok(R.diagnoseOptions(s).find((o) => o.i === lead1).tried);
+for (const bad of [-1, 3, 'x', null]) assert.deepEqual(R.heroAction(s, {type: 'diagnose', pick: bad}), []);
+// another case's answer says whose it is
+R.heroAction(s, {type: 'diagnose', pick: wrongOf(s, 'from')});
+assert.equal(s.log[s.log.length - 1].key, 'lineOtherCase');
+assert.equal(s.log[s.log.length - 1].vars.title, 'Another lesson');
+// right after wrong ones: a smaller share, and it isn't the first pick
+toHero(s);
+const before = s.foe.hp, ev2 = R.heroAction(s, {type: 'diagnose', pick: rightOf(s)});
+assert.deepEqual(ev2.find((x) => x.t === 'diagnosis'), {t: 'diagnosis', right: true, first: false});
+assert.equal(before - s.foe.hp, Math.min(before, Math.round(s.foe.maxHp * R.DIAG_HIT[1])));
+assert.equal(s.weak, R.DIAG_WEAK[1]);
+assert.deepEqual(R.diagnoseOptions(s), []);  // diagnosed: the command goes
+// right first: the bigger share, a charge broken, every later blow harder
+const t = R.setup(withOptions(5), 0);
+t.foe.charged = true;
+R.heroAction(t, {type: 'diagnose', pick: rightOf(t)});
+assert.equal(t.foe.maxHp - t.foe.hp, Math.round(t.foe.maxHp * R.DIAG_HIT[0]));
+assert.ok(!t.foe.charged && t.log.some((l) => l.key === 'lineBreak'));
+assert.equal(t.weak, R.DIAG_WEAK[0]);
+const u = R.setup(withOptions(5), 0);
+R.heroAction(u, {type: 'defend'});  // the same hero's turn spent, without the diagnosis
+const half = () => 0.5;
+const hit = (st) => { R.heroAction(st, {type: 'attack'}, half); return st.log[st.log.length - 1].vars.n; };
+assert.ok(t.phase === 'hero' && u.phase === 'hero' && t.active === u.active && t.active > 0);  // the next hero, both
+const a = hit(t), b = hit(u);
+assert.ok(a > b && Math.abs(a - Math.round(b * R.DIAG_WEAK[0])) <= 1, a + ' vs ' + b);
+// over 200 fights: diagnosing first wins every one and in about half the rounds; after a miss, still faster
+let plain = 0, quick = 0, slow = 0, won = 0;
+for (let i = 0; i < 200; i++) {
+  plain += R.simulate(withOptions(i), 0).round;
+  const q = R.simulate(withOptions(i), 0, diagFirst);
+  quick += q.round; won += q.phase === 'won' ? 1 : 0;
+  slow += R.simulate(withOptions(i), 0, missFirst).round;
+}
+assert.equal(won, 200);
+assert.ok(quick < plain * 0.65 && slow < plain && quick < slow, [plain, quick, slow].join(' '));
+''')
+
+
+def test_the_end_screen_says_how_the_diagnose_went_and_every_line_fills():
+    check(DIAGNOSE + '''
+const won = R.simulate(withOptions(2), 0, diagFirst);
+assert.equal(won.phase, 'won');
+assert.equal(R.summary(won).note, 'Diagnosed on the first pick.');
+assert.equal(R.summary(R.simulate(withOptions(2), 0, missFirst)).note, 'Diagnosed on pick 2.');
+assert.equal(R.summary(R.simulate(withOptions(2), 0)).note, 'Won without a diagnosis: the case is still open.');
+assert.equal(R.summary(R.simulate(lesson(2), 0)).note, '');  // no Diagnose
+const ran = R.setup(withOptions(2), 0);
+R.heroAction(ran, {type: 'run'});
+assert.equal(R.summary(ran).note, '');
+for (let i = 0; i < 120; i++) {
+  const s = R.simulate(withOptions(i), i % 3, i % 2 ? diagFirst : missFirst);
+  for (const line of s.log) {
+    const text = line.key ? B.format(B.LABELS[line.key], line.vars) : line.vars.text;
+    assert.ok(line.key == null || line.key in B.LABELS, 'no label ' + line.key);
+    assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(text), 'unfilled: ' + text);
+  }
+  for (const t of Object.values(R.summary(s))) assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(t), 'unfilled: ' + t);
+}
+''')

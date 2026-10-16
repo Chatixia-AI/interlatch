@@ -81,6 +81,22 @@ cleared: it becomes a flag on the map, kept in your archive for this party. Lose
 Battles never change levels or XP: those come only from the lessons. A boss can be fought, but it only falls when you
 mark its milestone done under **Quests**.
 
+### Diagnose
+
+A lesson with a [case file](analysis.md#case-files) (a fix, gotcha or decision told as a scene, a question and an
+answer) asks its question when the fight starts, and its battle has one more command: **Diagnose**. It lists the answer
+with two wrong ones: first the leads its own session tried and ruled out, then, when there are fewer than two, the
+answers of other cases (from other sessions, about other modules, so none of them is a second right answer). Pick the
+right one and it's the best move in the fight: a large share of the monster's HP at once, a charge broken, and every
+later blow harder. A wrong pick costs that hero's turn and tells you why it's wrong (what showed it in the session, or
+which case it does answer); the right one still works after it, for less. Nothing makes you diagnose: Attack and the
+rest still win the fight. The end screen says how it went.
+
+Interlatch keeps your first pick in each Diagnose (the lesson, the day, right or not), one a day per lesson, so you can
+see later what you still remembered. It's kept on your own computer only: signed in to a hub, you can diagnose, but
+nothing is kept there. **Cases to diagnose** in the sidebar, the list's **Cases** filter and the map's tooltips show
+which lessons have one, and which you diagnosed. Like everything in battles, it changes no level or XP.
+
 ## Towns and gear
 
 Each region has a **town** on the map (also listed in the Adventure sidebar). Its shop sells **gear** for that region's

@@ -1,11 +1,13 @@
-"""The Adventure (knowledge/party.py adventure_map, encounter, set_cleared; GET /api/party/map, GET /api/party/encounter,
-POST /api/party/cleared): the map's regions, lessons and bosses, one lesson as an encounter, and the log of cleared
-encounters each viewer keeps for themselves, all behind the Party's sign-in and in the viewer's scope. The small
-catalog of test_party.py stands in for roadmap.json."""
+"""The Adventure (knowledge/party.py adventure_map, encounter, set_cleared, record_diagnosis; GET /api/party/map,
+GET /api/party/encounter, POST /api/party/cleared, POST /api/party/diagnosis): the map's regions, lessons and bosses,
+one lesson as an encounter (with its Diagnose's options), the log of cleared encounters each viewer keeps for
+themselves and the first picks in Diagnoses kept on this computer only, all behind the Party's sign-in and in the
+viewer's scope. The small catalog of test_party.py stands in for roadmap.json."""
 
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import pytest
 
@@ -15,13 +17,13 @@ from interlatch.knowledge import party
 from interlatch.sharing import people
 from interlatch.storage.kv import kv_get
 
-from conftest import SID
+from conftest import CWD, SID
 from test_leaderboard import _joined
 from test_party import ATTRS, BOB_PC, TEAMMATE_PC, _lesson, _session, catalog, home  # noqa: F401  (the fixtures)
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
-LESSON_KEYS = {"id", "title", "kind", "stage", "agent", "at", "xp", "modules", "session_id", "project"}
+LESSON_KEYS = {"id", "title", "kind", "stage", "agent", "at", "xp", "modules", "session_id", "project", "case"}
 
 
 def _counts(data):
@@ -38,7 +40,7 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     _lesson(conn, old, "a note that names no module")  # not counted: not on the map
     last = _lesson(conn, new, "deploy it", agent="codex", project="/Users/test/Projects/other-app")
     data = party.adventure_map(conn, here)
-    assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents", "gold", "towns"}
+    assert set(data) == {"regions", "lessons", "cleared", "diagnosed", "bosses", "newest", "agents", "gold", "towns"}
     assert [r["id"] for r in data["regions"]] == list(ATTRS)
     craft = data["regions"][0]
     assert {k: craft[k] for k in ("name", "about")} == {"name": "Craft", "about": "about craft"}
@@ -49,7 +51,7 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     k = data["lessons"][0]
     assert set(k) == LESSON_KEYS and k == {
         "id": first, "title": "pytest and SQL query", "kind": "fix", "stage": "established", "agent": "claude",
-        "at": "2026-09-01", "xp": 6, "modules": ["M-sql", "M-python"], "session_id": old, "project": "demo-app"}
+        "at": "2026-09-01", "xp": 6, "modules": ["M-sql", "M-python"], "session_id": old, "project": "demo-app", "case": False}
     assert len(data["lessons"][1]["title"]) == party.MAP_TITLE_MAX and data["lessons"][2]["project"] == "other-app"
     assert data["newest"] == last and data["cleared"] == []
     assert [a["agent"] for a in data["agents"]] == list(CODING_AGENTS)
@@ -109,7 +111,8 @@ def test_an_encounter_is_one_lesson_with_its_case_and_the_party_that_meets_it(ho
         "id": lid, "title": "pytest and a token", "kind": "gotcha", "stage": "established", "agent": "claude",
         "at": "2026-10-14", "xp": 6, "session_id": sid, "project": "demo-app"}
     assert len(k["body"]) == party.ENCOUNTER_BODY_MAX
-    assert k["case"] == {"scene": "the tests pass alone", "question": "why?", "answer": "a shared token"}
+    # no other case to borrow a wrong answer from, and none ruled out: nothing to diagnose
+    assert k["case"] == {"scene": "the tests pass alone", "question": "why?", "answer": "a shared token", "options": []}
     assert k["modules"] == [{"id": "M-python", "name": "Python", "attr": "craft"},
                             {"id": "M-auth", "name": "Auth", "attr": "guard"}]
     assert [p["agent"] for p in got["party"]] == list(CODING_AGENTS)
@@ -134,6 +137,85 @@ def test_an_encounter_is_one_lesson_with_its_case_and_the_party_that_meets_it(ho
         assert party.encounter(conn, here, None, lid)["lesson"]["modules"][0]["name"] == "M-python（日本語）"
     finally:
         i18n.lang.reset(token)
+
+
+# ------------------------------------------------------------------ the Diagnose
+def _case(conn, lid, answer, *leads, question="why?"):
+    case = {"scene": "it broke", "question": question, "answer": answer,
+            "ruled_out": [{"lead": lead, "why": why} for lead, why in leads]}
+    conn.execute("UPDATE knowledge SET case_json = ? WHERE id = ?", (json.dumps(case), lid))
+    conn.commit()
+
+
+def test_a_diagnose_offers_the_answer_its_own_leads_then_other_cases_answers(home):  # noqa: F811
+    conn, here = home["conn"], home["here"]
+    other = "/Users/test/Projects/other-app"
+    a, b, c = _session(conn), _session(conn), _session(conn, project=other)
+    lid = _lesson(conn, a, "pytest fails on a token", kind="gotcha")  # python and auth
+    _case(conn, lid, "A shared token.", ("the cache", "cleared, it still failed"), ("a shared token", "the answer again"),
+          ("  ", "no lead"))
+    for sid, title, kind, answer in ((a, "SQL query timeout", "gotcha", "a missing index"),  # its own session: no
+                                     (b, "pytest order", "gotcha", "test order"),  # python too: could be right as well
+                                     (b, "SQL query plan", "fix", "add an index"),  # another kind: last
+                                     (c, "SQL query pool", "gotcha", "the pool size"),  # another project: next
+                                     (b, "deploy timeout", "gotcha", "the health check")):  # same kind and project: first
+        _case(conn, _lesson(conn, sid, title, kind=kind, project=other if sid == c else CWD), answer)
+    opts = party.encounter(conn, here, None, lid)["lesson"]["case"]["options"]
+    # the answer, its own lead (with why: the same answer again and an empty lead aren't wrong ones), another case's
+    assert opts == [{"text": "A shared token.", "right": True},
+                    {"text": "the cache", "right": False, "why": "cleared, it still failed"},
+                    {"text": "the health check", "right": False, "from": "deploy timeout"}]
+    _case(conn, lid, "A shared token.")
+    assert [o["text"] for o in party.encounter(conn, here, None, lid)["lesson"]["case"]["options"]] == [
+        "A shared token.", "the health check", "the pool size"]
+    _case(conn, lid, "A shared token.", ("one", "a"), ("two", "b"), ("three", "c"))
+    assert [o["text"] for o in party.encounter(conn, here, None, lid)["lesson"]["case"]["options"]] == [
+        "A shared token.", "one", "two"]
+    json.dumps(opts)
+
+
+def test_first_picks_are_kept_once_a_day_and_change_no_level(home):  # noqa: F811
+    conn, here = home["conn"], home["here"]
+    sid = _session(conn)
+    lid = _lesson(conn, sid, "pytest and a token", stage="established")
+    _case(conn, lid, "a shared token")
+    plain = _lesson(conn, sid, "pytest without a case")
+    before = party.compute(conn, here)["agents"]
+    assert party.adventure_map(conn, here)["diagnosed"] == []
+    assert party.record_diagnosis(conn, here, None, lid, False, today=date(2026, 10, 14)) is True
+    assert party.record_diagnosis(conn, here, None, lid, True, today=date(2026, 10, 14)) is False  # the first pick stands
+    assert party.adventure_map(conn, here)["diagnosed"] == []
+    assert party.record_diagnosis(conn, here, None, lid, True, today=date(2026, 10, 15)) is True
+    assert party.diagnoses_of(conn, "here") == [{"id": lid, "on": "2026-10-14", "right": False},
+                                                {"id": lid, "on": "2026-10-15", "right": True}]
+    m = party.adventure_map(conn, here)
+    assert m["diagnosed"] == [lid] and {k["id"]: k["case"] for k in m["lessons"]} == {lid: True, plain: False}
+    for bad in (plain, None, "1", True, 1.0, 999999):  # no case file, or not one of the Party's lessons
+        with pytest.raises(party.PartyError, match="no such lesson"):
+            party.record_diagnosis(conn, here, None, bad, True)
+    party.clear_cache()
+    assert party.compute(conn, here)["agents"] == before
+    assert party.record_diagnosis(conn, here, None, lid, False, today=date(2026, 10, 16)) is True
+    assert party.adventure_map(conn, here)["diagnosed"] == []  # the newest first pick decides
+    conn.execute("UPDATE kv SET value = '{\"not\": \"a list\"}' WHERE key = 'party.diagnoses:here'")
+    assert party.diagnoses_of(conn, "here") == [] and party.diagnosed([]) == []
+
+
+def test_a_hub_persons_first_picks_are_kept_nowhere(home):  # noqa: F811
+    conn, here = home["conn"], home["here"]
+    ada = people.add(conn, "Ada", "ada@example.com", "admin")
+    bob = people.add(conn, "Bob", "bob@example.com", "member", by=ada)
+    conn.execute("INSERT INTO machines(id, name, role, person_id) VALUES (?, 'bob-pc', 'spoke', ?)", (BOB_PC, bob["id"]))
+    conn.commit()
+    bobs = _lesson(conn, _session(conn, machine=BOB_PC, source="remote"), "SQL query on bob's computer")
+    mine = _lesson(conn, _session(conn, machine=here), "pytest at the hub itself")
+    _case(conn, bobs, "an index")
+    _case(conn, mine, "a fixture")
+    assert party.record_diagnosis(conn, here, bob, bobs, True) is False
+    assert kv_get(conn, f"party.diagnoses:person:{bob['id']}") is None
+    assert party.adventure_map(conn, here, bob)["diagnosed"] == []
+    with pytest.raises(party.PartyError):
+        party.record_diagnosis(conn, here, bob, mine, True)  # not one of Bob's
 
 
 # ------------------------------------------------------------------ whose lessons
@@ -192,11 +274,14 @@ def test_the_cleared_log_dedupes_validates_and_shows_at_once(home, monkeypatch):
 def test_the_adventure_is_behind_the_partys_sign_in(hubweb, catalog):  # noqa: F811
     url, cfg, conn = hubweb["url"], hubweb["cfg"], hubweb["conn"]
     lid = _lesson(conn, SID, "pytest secrets")
+    conn.execute("UPDATE knowledge SET case_json = ? WHERE id = ?",
+                 (json.dumps({"scene": "s", "question": "q", "answer": "a"}), lid))
+    conn.commit()
     for path, body in (("/api/party/map", None), (f"/api/party/encounter?id={lid}", None),
-                       ("/api/party/cleared", {"id": lid, "cleared": True})):
+                       ("/api/party/cleared", {"id": lid, "cleared": True}), ("/api/party/diagnosis", {"id": lid, "right": True})):
         status, r = _http(url, path, body)
         assert status == 403 and r["signin"] is True and "pytest" not in json.dumps(r), path
-    assert kv_get(conn, "party.cleared:here") is None
+    assert kv_get(conn, "party.cleared:here") is None and kv_get(conn, "party.diagnoses:here") is None
     _joined(cfg, board=False)
     status, data = _http(url, "/api/party/map")
     assert status == 200 and [k["id"] for k in data["lessons"]] == [lid] and data["cleared"] == []
@@ -214,6 +299,11 @@ def test_the_adventure_is_behind_the_partys_sign_in(hubweb, catalog):  # noqa: F
     assert _http(url, "/api/party/cleared", {"id": str(lid), "cleared": True})[0] == 400
     status, r = _http(url, "/api/party/cleared", {"id": lid, "cleared": False})
     assert status == 200 and r["cleared"] == [] and r["reward"] is None and r["bag"]["gold"] == 12
+    status, r = _http(url, "/api/party/diagnosis", {"id": lid, "right": True})
+    assert status == 200 and r == {"recorded": True, "diagnosed": [lid]}
+    assert _http(url, "/api/party/diagnosis", {"id": lid, "right": False})[1] == {"recorded": False, "diagnosed": [lid]}
+    assert _http(url, "/api/party/map")[1]["diagnosed"] == [lid]
+    assert _http(url, "/api/party/diagnosis", {"id": 999999, "right": True})[0] == 400
 
 
 def test_each_hub_person_keeps_their_own_cleared_log(team, catalog):  # noqa: F811
@@ -235,3 +325,10 @@ def test_each_hub_person_keeps_their_own_cleared_log(team, catalog):  # noqa: F8
     assert _http(url, "/api/party/cleared", {"id": here, "cleared": True})[1]["cleared"] == [here]
     assert _http(url, "/api/party/map", headers=_as(s["Bob"]))[1]["cleared"] == [bobs]
     assert _http(url, "/api/party/cleared", {"id": bobs, "cleared": True}, _as(s["Vic"]))[0] == 400  # Vic's own scope
+    # Bob may play a Diagnose, but his first picks are kept nowhere: per-person learning data stays on his computer
+    conn.execute("UPDATE knowledge SET case_json = ? WHERE id = ?",
+                 (json.dumps({"scene": "s", "question": "q", "answer": "a"}), bobs))
+    conn.commit()
+    status, r = _http(url, "/api/party/diagnosis", {"id": bobs, "right": True}, _as(s["Bob"]))
+    assert status == 200 and r == {"recorded": False, "diagnosed": []}
+    assert kv_get(conn, f"party.diagnoses:person:{bob['id']}") is None

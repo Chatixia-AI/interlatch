@@ -7,6 +7,12 @@
    onWin); the victory text says the XP was earned when the agent learned the lesson. A boss can't be beaten here at
    all: it holds at 1 HP until the person marks the milestone done on the Quests page.
 
+   Diagnose: a lesson with a case file asks its question, and the person picks the answer among wrong ones (the
+   encounter's case.options: leads its session ruled out, other cases' answers). The right pick is the fight's best
+   move: a share of the monster's HP at once, a broken charge, and every later blow harder (less after a wrong pick).
+   A wrong pick costs the turn and says why it's wrong. Nothing forces it: Attack and the rest still win. The page is
+   told the person's first pick (onDiagnose), the one that shows what they remembered.
+
    Art is drawn on a <canvas> (Sprites for the agents, Scene.art for the monsters, with a pixel blob if either is
    missing); the menu, the party's bars and the battle log are DOM. CSP: no inline styles (CSSOM only), no eval, no
    data:/blob: images.
@@ -26,6 +32,8 @@
                                (a lesson that paid out before: "no gold this time") or of false (saving the win failed:
                                "try it again from the map"); undefined, or no promise, shows no reward line
      opts.onUseItem(id)        an item was used (once per use; the page POSTs /api/party/use); the battle counts it down
+     opts.onDiagnose(lessonId, right)  the person's first pick in the Diagnose (once a fight; the page POSTs
+                               /api/party/diagnosis)
      opts.onLose()             Retry pressed on the defeat screen (the page remounts with attempt + 1)
      opts.onRun()              Run chosen (no confirmation); the page goes back to the map
      opts.onExit()             "Back to the map" on any end screen
@@ -47,9 +55,13 @@
      stats(encounter, labels?) -> {attr, modules, heroes, foe}   the numbers a fight starts with
      setup(encounter, attempt, labels?) -> state   (state.events: the intro to play, state.log: every line said)
      skillOptions(state, heroIndex) -> [{id, name, level, own, gear, cost, usable}]   level = own + gear
+     caseOf(encounter, seed) -> {question, options, tried, solved, first} | null   the Diagnose (state.diag): needs a
+                                           question and 2+ options, one right; shuffled on a stream of its own
+     diagnoseOptions(state) -> [{i, text, tried, usable}]   what the Diagnose submenu offers (never which is right)
      itemOptions(state) -> [{id, name, kind, count, target, usable}]   what the Item command offers the active hero
-     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"item"|"defend"|"run", module?, id?,
-                                                    target?}; an item uses the hero's turn and counts down by one:
+     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"item"|"diagnose"|"defend"|"run",
+                                                    module?, id?, target?, pick?}; a pick is a diagnoseOptions index;
+                                                    an item uses the hero's turn and counts down by one:
          c:potion +40% HP (the active hero), c:ether +50% MP (the active hero), c:phoenix revives the first knocked-out
          hero at 30% HP (not usable when nobody is down), c:smoke a sure escape, l:patch +25% HP everyone, l:sign 40% less
          damage for 2 monster turns, l:adr the monster loses its next turn, l:insight +30% MP everyone, l:template the
@@ -59,7 +71,8 @@
    Balance: the monster is sized to the party without gear plus half of what gear adds, so an ungeared party meets the
    same fight as before gear existed and gear makes fights easier without making them instant.
      simulate(encounter, attempt, policy?, maxRounds?) -> state
-     summary(state, labels?, formatDate?) -> {title, text, quoteTitle, quote}   the end screen's words
+     summary(state, labels?, formatDate?) -> {title, text, note, quoteTitle, quote}   the end screen's words (note:
+                                           how the Diagnose went, "" without one)
      rewardLines(result, labels?) -> [{kind: "gold"|"loot"|"none"|"failed", text}]   the win screen's reward lines
    Battle.LABELS, Battle.LABEL_VARS (the placeholders each label may use), Battle.format(template, vars)
 
@@ -79,7 +92,7 @@
   //   level / hp / mp / hpValue   the party window                      {n} / – / – / {hp} {max}
   //   taught       the tag on the hero who taught the lesson
   //   prompt       the menu's heading                                    {hero}
-  //   attack / skill / item / defend / run / back   the commands
+  //   attack / skill / item / diagnose / defend / run / back   the commands
   //   skillLevel / skillGear / skillNone / skillCost   a skill's row: its level, what gear adds ({n}), its MP cost
   //   itemCount / itemTarget   an item's row: how many are left ({n}), who it will be used on ({hero})
   //   itemNone     the bag is empty
@@ -96,6 +109,10 @@
   //     lineSkipNext {monster}, lineTemplate, lineScript {item} {monster} {n}; lineNoItem {item}: using an item
   //   lineHit, lineGuarded, lineDodge, lineDrain, lineHeal, lineKo, lineCharged, lineSkipped: the monster's turn
   //   lineWin / lineLose / lineHold: the end of a fight
+  //   caseAsk {question}: the case's question, after the intro; diagTried: an option already picked; weakTag: under the
+  //     damage a right pick deals; lineDiagnose {hero} {text}, then lineRight {monster} {n} (and lineBreak {monster}
+  //     when it was charging) or lineWrong and lineRuledOut {why} / lineOtherCase {title}: a pick
+  //   diagFirst, diagLater {n} (the pick that was right: 2, 3), diagNone: the end screen's note on the Diagnose
   //   win, winText, winAnswer, winExcerpt, readLesson, openSession, backToMap: the victory screen
   //   rewardWait, rewardGold {n}, rewardLoot {item}, rewardPaid, rewardFailed: what onWin's promise brings (gold and
   //     loot; null: nothing, the lesson paid out before; false: the win couldn't be saved)
@@ -108,7 +125,7 @@
     region: "Battle: {monster}", scene: "{monster} faces {heroes}", epithet: "«{title}»",
     bossEpithet: "Milestone {n}: {text}", round: "Round {n}", level: "Lv {n}", hp: "HP", mp: "MP", hpValue: "{hp}/{max}",
     taught: "Taught it", prompt: "What will {hero} do?", log: "Battle log", commands: "Commands",
-    attack: "Attack", skill: "Skill", item: "Item", defend: "Defend", run: "Run", back: "Back",
+    attack: "Attack", skill: "Skill", item: "Item", diagnose: "Diagnose", defend: "Defend", run: "Run", back: "Back",
     skillLevel: "Lv {n}", skillGear: "+{n} gear", skillNone: "untrained", skillCost: "{n} MP", attrSkill: "{attr} lore",
     itemCount: "×{n}", itemTarget: "→ {hero}", itemNone: "The bag is empty.", itemNoTarget: "Nobody is knocked out.",
     itemFullHp: "Everyone is at full HP.", itemFullMp: "Everyone is at full MP.", more: "More below",
@@ -129,6 +146,12 @@
     lineHit: "{hero} takes {n} damage.", lineGuarded: "{hero} blocks: only {n} damage.", lineDodge: "{hero} dodges!",
     lineDrain: "{hero} loses {mp} MP.", lineHeal: "{monster} recovers {n} HP.", lineKo: "{hero} is knocked out!",
     lineCharged: "{monster} is gathering strength. Defend!",
+    caseAsk: "The case: {question} Diagnose it to find its weak spot.", diagTried: "ruled out", weakTag: "weak spot",
+    lineDiagnose: "{hero} names it: «{text}»", lineRight: "That's it! {monster}'s weak spot is exposed: {n} damage.",
+    lineBreak: "{monster}'s charge breaks.", lineWrong: "Not it.", lineRuledOut: "Ruled out in the session: {why}",
+    lineOtherCase: "That answers another case: «{title}».",
+    diagFirst: "Diagnosed on the first pick.", diagLater: "Diagnosed on pick {n}.",
+    diagNone: "Won without a diagnosis: the case is still open.",
     lineWin: "{monster} is beaten!", lineLose: "The party falls back.",
     lineHold: "{monster} holds at 1 HP: only you can defeat this boss.",
     win: "{monster} is beaten!", winText: "{agent} learned this on {date}: +{xp} XP then. Battles don't change levels.",
@@ -181,7 +204,8 @@
     rewardGold: ["n"], rewardLoot: ["item"], lineNoMp: ["hero", "skill"], lineHit: ["hero", "n"], lineGuarded: ["hero", "n"],
     lineDodge: ["hero"], lineDrain: ["hero", "mp"], lineHeal: ["monster", "n"], lineKo: ["hero"], lineCharged: ["monster"],
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
-    bossDone: ["monster"], bossDoneText: ["text"],
+    bossDone: ["monster"], bossDoneText: ["text"], caseAsk: ["question"], lineDiagnose: ["hero", "text"],
+    lineRight: ["monster", "n"], lineBreak: ["monster"], lineRuledOut: ["why"], lineOtherCase: ["title"], diagLater: ["n"],
   };
   for (const k of Object.keys(LABELS)) if (k.startsWith("move.")) LABEL_VARS[k] = ["monster"];
   for (const k of Object.keys(LABELS)) if (!LABEL_VARS[k]) LABEL_VARS[k] = [];
@@ -205,6 +229,8 @@
   const WIPE_ROUNDS = 10;   // the monster deals the party's whole HP in ~10/d^0.7 rounds (a boss: 10/d^0.5)
   const SKILL_COST = 6, CRIT = 1 / 16, GUARD = 0.45;
   const GEAR_SHARE = 0.5;   // the part of the party's gear the monster is sized to
+  const DIAG_HIT = [0.4, 0.2];    // a right diagnosis takes this share of the monster's HP (after a wrong pick: less)...
+  const DIAG_WEAK = [1.5, 1.25];  // ...and every later blow of the party's hits this much harder
 
   function rng(seed) {
     let a = seed >>> 0;
@@ -320,11 +346,25 @@
       big: { id: "unleash", type: "big", pow: 2.2 } },
   };
 
+  // a lesson's Diagnose: its case's question and options (the answer and wrong ones), in an order of the fight's seed
+  // drawn on a stream of its own, so the battle's dice are the same with a Diagnose or without
+  function caseOf(encounter, seed) {
+    const enc = encounter || {}, c = !enc.boss && enc.lesson ? enc.lesson.case : null;
+    const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    if (!c || !str(c.question) || !Array.isArray(c.options)) return null;
+    const options = c.options.filter((o) => o && str(o.text))
+      .map((o) => ({ text: str(o.text), right: o.right === true, why: str(o.why), from: str(o.from) }));
+    if (options.length < 2 || options.filter((o) => o.right).length !== 1) return null;
+    const r = rng((seed ^ 0x9e3779b9) >>> 0);
+    for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
+    return { question: str(c.question), options, tried: [], solved: false, first: null };
+  }
   function setup(encounter, attempt = 0, labels = LABELS) {
     const enc = encounter || {}, s = stats(enc, labels), seed = seedOf(enc, attempt);
     const state = { seed, attempt: Math.max(0, Math.floor(num(attempt))), boss: !!enc.boss, attr: s.attr, modules: s.modules,
       heroes: s.heroes, foe: s.foe, round: 1, phase: "hero", active: 0, log: [], events: [],
-      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false };
+      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false,
+      diag: caseOf(enc, seed), weak: 1 };
     const ev = state.events, foe = state.foe;
     if (enc.boss && enc.boss.status === "done") {
       state.phase = "done";
@@ -335,6 +375,7 @@
     if (scene) say(state, ev, null, { text: scene });
     if (enc.boss) say(state, ev, "introBoss", { monster: foe.name, text: foe.title });
     else say(state, ev, "intro", { monster: foe.name, title: foe.title });
+    if (state.diag) say(state, ev, "caseAsk", { question: state.diag.question });
     ev.push({ t: "round", n: 1 });
     return state;
   }
@@ -368,6 +409,13 @@
       : state.modules.map((m) => ({ id: m.id, name: m.name, level: (h.skills[m.id] || 0) + (h.gearSkills[m.id] || 0),
         own: h.skills[m.id] || 0, gear: h.gearSkills[m.id] || 0 }));
     return opts.map((o) => ({ own: o.level, gear: 0, ...o, cost: SKILL_COST, usable: h.mp >= SKILL_COST }));
+  }
+  // what the Diagnose submenu offers: every option in the fight's order, those already picked marked (none says which
+  // is right); nothing once diagnosed
+  function diagnoseOptions(state) {
+    const d = state && state.diag;
+    if (!d || d.solved) return [];
+    return d.options.map((o, i) => ({ i, text: o.text, tried: d.tried.includes(i), usable: !d.tried.includes(i) }));
   }
   // what the Item submenu offers the active hero: each item with its count, who it would be used on, and whether it can be
   // An item is only offered when it would do something: a Potion goes to the standing hero lowest on HP (by share of
@@ -418,6 +466,7 @@
       return ev;
     }
     if (a.type === "item") return useItem(state, h, a, ev);
+    if (a.type === "diagnose") return diagnose(state, h, a, ev);
     let mult = 1, skill = null;
     if (a.type === "skill") {
       skill = skillOptions(state, h.i).find((o) => o.id === a.module) || null;
@@ -429,7 +478,7 @@
     h.guard = false;
     const boost = state.template ? 1.6 : 1;
     state.template = false;
-    let n = Math.max(1, Math.round(h.atk * mult * boost * (0.85 + 0.3 * roll())));
+    let n = Math.max(1, Math.round(h.atk * mult * boost * state.weak * (0.85 + 0.3 * roll())));
     const crit = roll() < CRIT;
     if (crit) n = Math.round(n * 1.6);
     const before = foe.hp;
@@ -455,6 +504,39 @@
       say(state, ev, "lineWin", { monster: foe.name });
       ev.push({ t: "end", phase: "won" });
     } else advance(state, ev);
+  }
+  // a pick in the Diagnose: the right one takes a share of the monster's HP, breaks a charge and leaves it weak to every
+  // later blow; a wrong one costs the turn and says why it's wrong. The first pick of the fight is the one the page keeps.
+  function diagnose(state, h, a, ev) {
+    const d = state.diag, foe = state.foe, i = Number.isInteger(a.pick) ? a.pick : -1, o = d && d.options[i];
+    if (!d || d.solved || !o || d.tried.includes(i)) return ev;
+    const first = d.first === null;
+    if (first) d.first = o.right;
+    d.tried.push(i);
+    h.guard = false;
+    ev.push({ t: "diagnosis", right: o.right, first });
+    say(state, ev, "lineDiagnose", { hero: h.name, text: o.text });
+    if (!o.right) {
+      say(state, ev, "lineWrong", {});
+      if (o.why) say(state, ev, "lineRuledOut", { why: o.why });
+      else if (o.from) say(state, ev, "lineOtherCase", { title: o.from });
+      advance(state, ev);
+      return ev;
+    }
+    d.solved = true;
+    const k = d.tried.length === 1 ? 0 : 1;
+    state.weak = DIAG_WEAK[k];
+    const n = Math.max(1, Math.round(foe.maxHp * DIAG_HIT[k])), before = foe.hp;
+    foe.hp = Math.max(0, foe.hp - n);
+    ev.push({ t: "strike", hero: h.i, n, crit: false, skill: null, lv: 0, diag: true, hp: foe.hp, mp: h.mp, was: before });
+    say(state, ev, "lineRight", { monster: foe.name, n });
+    if (foe.charged) {
+      foe.charged = false;
+      ev.push({ t: "uncharge" });
+      say(state, ev, "lineBreak", { monster: foe.name });
+    }
+    settle(state, ev);
+    return ev;
   }
   // an item uses the hero's turn; its count goes down by one (the page is told through onUseItem)
   function useItem(state, h, a, ev) {
@@ -652,24 +734,28 @@
   }
   function summary(state, labels = LABELS, formatDate = null, encounter = null) {
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
-    const foe = state.foe, lesson = (encounter && encounter.lesson) || {};
+    const foe = state.foe, lesson = (encounter && encounter.lesson) || {}, d = state.diag;
+    const note = !d || !["won", "lost"].includes(state.phase) ? ""
+      : d.solved ? (d.tried.length === 1 ? lab("diagFirst") : fill(lab("diagLater"), { n: d.tried.length }))
+        : state.phase === "won" ? lab("diagNone") : "";
     if (state.phase === "won") {
       const lead = state.heroes[0] || { name: "" };
       const at = String(lesson.at || "").slice(0, 10);
       const date = typeof formatDate === "function" ? formatDate(at) : at;
       const c = lesson.case && typeof lesson.case.answer === "string" && lesson.case.answer.trim() ? lesson.case.answer.trim() : "";
       return { title: fill(lab("win"), { monster: foe.name }),
-        text: fill(lab("winText"), { agent: lead.name, date, xp: Math.max(0, Math.round(num(lesson.xp))) }),
+        text: fill(lab("winText"), { agent: lead.name, date, xp: Math.max(0, Math.round(num(lesson.xp))) }), note,
         quoteTitle: c ? lab("winAnswer") : lab("winExcerpt"), quote: c || excerpt(lesson.body) };
     }
-    if (state.phase === "lost") return { title: lab("lose"), text: lab("loseText"), quoteTitle: "", quote: "" };
-    if (state.phase === "held") return { title: fill(lab("hold"), { monster: foe.name }), text: lab("holdText"), quoteTitle: "", quote: "" };
-    if (state.phase === "done") return { title: fill(lab("bossDone"), { monster: foe.name }), text: fill(lab("bossDoneText"), { text: foe.title }), quoteTitle: "", quote: "" };
-    return { title: "", text: "", quoteTitle: "", quote: "" };
+    if (state.phase === "lost") return { title: lab("lose"), text: lab("loseText"), note, quoteTitle: "", quote: "" };
+    if (state.phase === "held") return { title: fill(lab("hold"), { monster: foe.name }), text: lab("holdText"), note, quoteTitle: "", quote: "" };
+    if (state.phase === "done") return { title: fill(lab("bossDone"), { monster: foe.name }), text: fill(lab("bossDoneText"), { text: foe.title }), note, quoteTitle: "", quote: "" };
+    return { title: "", text: "", note, quoteTitle: "", quote: "" };
   }
 
   const RULES = Object.freeze({ rng, seedOf, difficulty, gearOf, heroStats, pickParty, stats, setup, skillOptions, itemOptions,
-    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS });
+    caseOf, diagnoseOptions, heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS,
+    DIAG_HIT, DIAG_WEAK });
 
   // =====================================================================================
   // Colour and theme: read from the page's tokens, like scene.js, tinted toward the region's hue
@@ -874,9 +960,11 @@
       logEl.scrollTop = Math.min(logEl.scrollHeight - logEl.clientHeight, li.offsetTop);
     }
 
-    // ---- the menu: Attack, Skill, Defend, Run; Skill opens the lesson's modules; arrows move, Esc goes back
+    // ---- the menu: Diagnose (a case, until it's diagnosed), Attack, Skill, Item, Defend, Run; Diagnose, Skill and Item
+    // open submenus; arrows move, Esc goes back
     let mode = "main", busy = true;
-    const main = [["attack", lab("attack")], ["skill", lab("skill")], ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
+    const main = () => [...(diagnoseOptions(st).length ? [["diagnose", lab("diagnose")]] : []), ["attack", lab("attack")],
+      ["skill", lab("skill")], ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
     function button(label, onClick, extra) {
       const b = el("button", "bt-cmd");
       b.type = "button";
@@ -887,6 +975,8 @@
     function renderMenu() {
       cmds.textContent = "";
       cmds.classList.toggle("bt-sub", mode !== "main");
+      menuHead.classList.toggle("bt-ask", mode === "diagnose");
+      root.classList.toggle("bt-asking", mode === "diagnose");
       const hero = st.heroes[st.active];
       // a submenu: its rows in a list that scrolls by whole rows, Back pinned under it
       const sub = () => {
@@ -895,7 +985,25 @@
         wrap.append(list, cue);
         return { wrap, list };
       };
-      if (mode === "item" && hero) {
+      if (mode === "diagnose" && hero && diagnoseOptions(st).length) {
+        rich(menuHead, st.diag.question); // the question over its options, whole: it wraps
+        const { wrap, list } = sub();
+        for (const o of diagnoseOptions(st)) {
+          const b = el("button", "bt-cmd bt-skill bt-diag" + (o.tried ? " bt-tried" : ""));
+          b.type = "button";
+          b.append(rich(el("span", "bt-cmd-name"), o.text));
+          if (o.tried) {
+            b.setAttribute("aria-disabled", "true");
+            b.append(el("span", "bt-cmd-meta", lab("diagTried")));
+          }
+          b.addEventListener("click", () => { if (!busy && !o.tried) command({ type: "diagnose", pick: o.i }); });
+          list.append(b);
+        }
+        const back = button(lab("back"), () => { mode = "main"; renderMenu(); focusFirst(true, "diagnose"); });
+        back.classList.add("bt-back");
+        cmds.append(wrap, back);
+        fitSub(wrap, list, back);
+      } else if (mode === "item" && hero) {
         menuHead.textContent = lab("item");
         const { wrap, list } = sub();
         for (const o of itemOptions(st)) {
@@ -945,13 +1053,14 @@
       } else {
         mode = "main";
         menuHead.textContent = hero ? lab("prompt", { hero: hero.name }) : "";
-        for (const [id, text] of main) {
+        for (const [id, text] of main()) {
           const b = button(text, () => {
-            if (id === "skill" || id === "item") { mode = id; renderMenu(); focusFirst(true); return; }
+            if (id === "skill" || id === "item" || id === "diagnose") { mode = id; renderMenu(); focusFirst(true); return; }
             command({ type: id });
           });
           b.dataset.cmd = id;
           if (id === "item" && !itemOptions(st).length) b.classList.add("bt-dim");
+          if (id === "diagnose") b.classList.add("bt-diagnose");
           cmds.append(b);
         }
         const hgt = cmds.getBoundingClientRect().height;
@@ -990,7 +1099,7 @@
     }
     function focusFirst(force, cmd) {
       const list = items();
-      const b = (cmd && list.find((x) => x.dataset.cmd === cmd)) || list[0];
+      const b = (cmd && list.find((x) => x.dataset.cmd === cmd)) || list.find((x) => x.getAttribute("aria-disabled") !== "true") || list[0];
       if (!b) return;
       roving(b);
       const inside = root.contains(document.activeElement) || document.activeElement === document.body || !document.activeElement;
@@ -1025,7 +1134,10 @@
       if (!evs.length) return;
       const used = evs.find((e) => e.t === "item");
       if (used) call("onUseItem", used.id); // the page spends it (POST /api/party/use); the battle counts it down itself
+      const picked = evs.find((e) => e.t === "diagnosis" && e.first);
+      if (picked) call("onDiagnose", st.lessonId, picked.right); // the page keeps the first pick (POST /api/party/diagnosis)
       mode = "main";
+      if (action.type === "diagnose") renderMenu(); // the party is back in view for what the pick does
       if (st.phase === "hero" && evs.every((e) => e.t === "say")) { // nothing happened (no MP): stay on this hero
         play(evs, () => {});
         return;
@@ -1067,6 +1179,7 @@
       head.tabIndex = -1;
       card.append(head);
       if (sum.text) card.append(rich(el("p", "bt-card-text"), sum.text));
+      if (sum.note) card.append(el("p", "bt-card-note" + (st.diag && st.diag.solved ? " bt-solved" : ""), sum.note));
       if (st.phase === "won" && reward !== undefined) card.append(rewardBox());
       if (sum.quote) {
         const fig = el("figure", "bt-quote");
@@ -1154,15 +1267,16 @@
         case "strike": {
           const s = shown.heroes[ev.hero];
           s.guard = false; s.mp = ev.mp;
-          const skill = !!ev.skill, hitAt = skill ? 330 : 170;
+          const skill = !!ev.skill || !!ev.diag, hitAt = skill ? 330 : 170, big = ev.crit || ev.lv >= 3 || !!ev.diag;
           spawn({ kind: "lunge", who: ev.hero, t0, dur: skill ? 520 : 360, dx: skill ? -10 : -18 });
           if (skill) spawn({ kind: "pillar", who: ev.hero, t0, dur: 420 });
-          spawn({ kind: skill ? "burst" : "slash", t0: t0 + hitAt, dur: skill ? 520 : 260, big: ev.crit || ev.lv >= 3, seed: ev.n + ev.hero });
+          spawn({ kind: skill ? "burst" : "slash", t0: t0 + hitAt, dur: skill ? 520 : 260, big, seed: ev.n + ev.hero });
           spawn({ kind: "flash", who: "foe", t0: t0 + hitAt, dur: 110 });
-          spawn({ kind: "shake", who: "foe", t0: t0 + hitAt, dur: ev.crit ? 380 : 260, amp: ev.crit ? 4 : 2 });
-          if (ev.crit || (skill && ev.lv >= 3)) spawn({ kind: "quake", t0: t0 + hitAt, dur: 260, amp: 2 });
-          spawn({ kind: "num", who: "foe", t0: t0 + hitAt, dur: 1000, text: String(ev.n), color: ev.crit ? "gold" : skill ? "accent" : "ink",
-            size: ev.crit ? 27 : skill ? 24 : 20, sub: skill && ev.lv > 0 ? lab("skillLevel", { n: ev.lv }) : ev.crit ? "!" : "" });
+          spawn({ kind: "shake", who: "foe", t0: t0 + hitAt, dur: ev.crit || ev.diag ? 380 : 260, amp: ev.crit || ev.diag ? 4 : 2 });
+          if (big) spawn({ kind: "quake", t0: t0 + hitAt, dur: 260, amp: 2 });
+          spawn({ kind: "num", who: "foe", t0: t0 + hitAt, dur: 1000, text: String(ev.n), color: ev.crit || ev.diag ? "gold" : skill ? "accent" : "ink",
+            size: ev.crit || ev.diag ? 27 : skill ? 24 : 20,
+            sub: ev.diag ? lab("weakTag") : skill && ev.lv > 0 ? lab("skillLevel", { n: ev.lv }) : ev.crit ? "!" : "" });
           later(t0 + hitAt, () => { shown.foe.hp = ev.hp; paintStatus(); });
           if (still) shown.foe.hp = ev.hp;
           return hitAt + 520;
@@ -1213,6 +1327,8 @@
         }
         case "skip": spawn({ kind: "ring", t0, dur: 600 }); spawn({ kind: "shake", who: "foe", t0, dur: 260, amp: 1 }); return 650;
         case "charge": shown.foe.charged = true; spawn({ kind: "ring", t0, dur: 700 }); return 720;
+        case "uncharge": shown.foe.charged = false; return 0;
+        case "diagnosis": return 0;
         case "heal": {
           spawn({ kind: "crosses", t0, dur: 800 });
           spawn({ kind: "num", who: "foe", t0: t0 + 120, dur: 1000, text: "+" + ev.n, color: "good", size: 20 });
