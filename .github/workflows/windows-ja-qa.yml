@@ -1,0 +1,101 @@
+name: Windows (Japanese) QA
+
+# The documented Windows install as a standard user named in Japanese, with the console in code page 932, then the
+# dashboard in Edge in Japanese. Runs on demand; `source` is what `uv tool install` installs.
+
+on:
+  push:
+    branches: [windows-japanese]
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "pypi (the released interlatch) or wheel (built from this branch)"
+        default: wheel
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+      - run: |
+          uv run --locked python docs/demo/make_demo.py "$RUNNER_TEMP/demo"
+          tar -C "$RUNNER_TEMP/demo" -czf "$RUNNER_TEMP/demo-home.tgz" home
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: demo-home
+          path: ${{ runner.temp }}/demo-home.tgz
+
+  japanese:
+    needs: demo
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      SOURCE: ${{ inputs.source || 'pypi' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: demo-home
+          path: ${{ runner.temp }}
+      - name: The QA scripts (and the wheel) in C:\qa
+        shell: bash
+        run: |
+          mkdir -p /c/qa
+          cp .github/windows-ja-qa/* /c/qa/
+          if [ "$SOURCE" = wheel ]; then
+            uv build --wheel -o /c/qa/dist
+            echo "INSTALL_FROM=$(cygpath -w "$(ls /c/qa/dist/*.whl)")" >> "$GITHUB_ENV"
+          else
+            echo "INSTALL_FROM=interlatch" >> "$GITHUB_ENV"
+          fi
+      - name: Install as the Japanese-named user, as the docs say
+        shell: powershell
+        run: C:\qa\driver.ps1 -Phase install -Source "$env:INSTALL_FROM"
+      - name: What it printed
+        if: always()
+        shell: bash
+        run: uv run --no-project python /c/qa/report.py
+      - name: The demo dashboard (this runner's own user)
+        if: always()
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force C:\demo | Out-Null
+          tar -xzf "$env:RUNNER_TEMP\demo-home.tgz" -C C:\demo
+          $env:INTERLATCH_HOME = 'C:\demo\home'
+          Start-Process -FilePath uvx -ArgumentList "--from $env:INSTALL_FROM interlatch ui --port 8898" -WindowStyle Hidden `
+            -RedirectStandardOutput C:\demo\ui.out -RedirectStandardError C:\demo\ui.err
+          Start-Sleep -Seconds 25
+      - name: Screenshots in Edge, Japanese
+        if: always()
+        shell: bash
+        run: |
+          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:11530 shots ja-user || true
+          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:8898 shots demo || true
+          cat /c/demo/ui.err 2>/dev/null | tail -20 || true
+      - name: Uninstall as the same user
+        if: always()
+        shell: powershell
+        run: C:\qa\driver.ps1 -Phase uninstall -Source "$env:INSTALL_FROM"
+      - name: What uninstall printed
+        if: always()
+        shell: bash
+        run: uv run --no-project python /c/qa/report.py | sed -n '/20-uninstall/,$p'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: always()
+        with:
+          name: windows-ja-${{ matrix.os }}
+          path: |
+            C:\qa
+            shots
