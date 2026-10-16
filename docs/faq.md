@@ -20,7 +20,8 @@ Claude Desktop, Cursor, Windsurf and Gemini CLI aren't recorded, but they can us
 
 **Do I need Claude Code?** No. Analysis runs through Claude Code, Codex or IBM Bob, or a model provider's API with
 your own key: Anthropic, Amazon Bedrock, OpenAI, Azure OpenAI, OpenRouter, any OpenAI-compatible server, or Ollama on
-your own computer. Pick one in **Status › Analysis** or with `interlatch config set analysis.backend <name>`
+your own computer. Pick one when you run `interlatch install`, in **Status › Analysis**, or with
+`interlatch config set analysis.backend <name>`
 ([Model providers](analysis.md#model-providers)). Recording and browsing work either way; with none set up, sessions
 are archived and wait in the analysis queue.
 

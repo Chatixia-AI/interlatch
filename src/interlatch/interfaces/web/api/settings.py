@@ -135,9 +135,7 @@ def action_provider_test(ctx: Context, name: str) -> dict:
     if not runner.available():
         return {"error": runner.unavailable_reason()}
     try:
-        res = runner.run('Reply with {"ok": true}.', {"type": "object", "properties": {"ok": {"type": "boolean"}},
-                                                      "required": ["ok"]},
-                         system="You check that a connection works.", effort="low", timeout=120)
+        res = runner.check()
     except LLMError as exc:
         return {"error": str(exc)[:600]}
     return {"ok": res.data.get("ok") is True, "model": res.model, "ms": res.duration_ms,

@@ -59,7 +59,7 @@ def test_install_asks_per_agent_and_connects_the_chosen(machine, monkeypatch, ca
     asked = _answer(monkeypatch, {"Claude Code": "y", "Codex": "n", "Cursor": "y", "Analyze": "n", "Open": "n"})
     assert _install() == 0
     out = capsys.readouterr().out
-    assert [q.split("?")[0] for q in asked] == ["Record Claude Code sessions", "Record Codex sessions",
+    assert [q.split("?")[0] for q in asked] == ["Which one", "Record Claude Code sessions", "Record Codex sessions",
                                                  "Give Cursor Interlatch's MCP tools (search your past sessions)",
                                                  "Analyze it now and show the progress"]
     cfg = load_config(machine["home"])
@@ -183,6 +183,100 @@ def test_install_explains_analysis_and_builds_the_glossary_now_when_asked(machin
     assert _glossary_terms(cfg) > 0 and conn.execute("SELECT COUNT(*) FROM project_kb").fetchone()[0] >= 1
     assert "analyzed 1 session, built" in out and "glossary term" in out
     assert "The Glossary and the Map are ready on the dashboard." in out
+
+
+@pytest.fixture()
+def no_providers(monkeypatch):
+    """No API key, AWS or Azure sign-in, Ollama host or IBM Bob from the computer that runs the tests."""
+    from interlatch.analysis.runners.settings import KEY_ENVS
+
+    for name in [*KEY_ENVS.values(), "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "OLLAMA_HOST"]:
+        if name:
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr("interlatch.core.config.Config.bob_bin", lambda self: None)
+    monkeypatch.setattr("interlatch.analysis.runners.api._tool", lambda name: None)
+
+
+def test_first_install_lists_every_backend_and_enter_keeps_the_ready_one(machine, no_providers, monkeypatch, capsys):
+    asked = _answer(monkeypatch, {"Claude Code": "y", "Codex": "n", "Cursor": "n", "Analyze": "n", "Open": "n"})
+    assert _install("--no-sync") == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert asked[0] == "Which one? [1-10, Enter = 1]: "
+    assert "1 Claude Code ready · your own login and plan ← Enter" in out and "2 Codex not installed" in out
+    assert "4 Anthropic API add an API key" in out and "9 Ollama choose a model" in out
+    assert "Sessions are analyzed with Claude Code." in out
+    assert load_config(machine["home"]).analysis.backend == "claude"
+    asked = _answer(monkeypatch, {})
+    assert _install("--no-sync") == 0
+    assert not any(q.startswith("Which one") for q in asked)  # asked once; the choice is kept
+
+
+def test_picking_a_provider_asks_for_its_key_and_checks_it(machine, no_providers, monkeypatch, capsys):
+    from interlatch.analysis.runners.api import ApiRunner
+    from interlatch.analysis.runners.base import LLMResult
+    from interlatch.analysis.runners.settings import key_source
+
+    checked = []
+    monkeypatch.setattr("getpass.getpass", lambda q: "sk-ant-test")
+    monkeypatch.setattr(ApiRunner, "check", lambda self: checked.append(self.name) or LLMResult(
+        {"ok": True}, 0.0, 800, "claude-sonnet-5-5", 10, 5))
+    asked = _answer(monkeypatch, {"Which one": "4", "Check": "y", "Claude Code": "y", "Codex": "n", "Cursor": "n",
+                                  "Analyze": "n", "Open": "n"})
+    assert _install() == 0
+    out = " ".join(capsys.readouterr().out.split())
+    cfg = load_config(machine["home"])
+    assert cfg.analysis.backend == "anthropic" and key_source(cfg, "anthropic") == ("sk-ant-test", "stored")
+    assert checked == ["anthropic"] and "It works (claude-sonnet-5-5, 0.8 s)" in out
+    assert "Sessions are analyzed with Anthropic API." in out
+    assert "reads each session through Anthropic API (claude-sonnet-5-5)" in out and "is billed to your key" in out
+    assert any(q.startswith("Analyze it now") for q in asked)
+
+
+def test_picking_ollama_offers_its_models(machine, no_providers, monkeypatch, capsys):
+    from interlatch.analysis.runners.api import ApiRunner
+
+    monkeypatch.setattr(ApiRunner, "list_models", lambda self, timeout=15: ["llama3.2", "qwen3"])
+    _answer(monkeypatch, {"Which one": "ollama", "Model": "qwen3", "Check": "n", "Claude Code": "y", "Codex": "n",
+                          "Cursor": "n", "Analyze": "n", "Open": "n"})
+    assert _install() == 0
+    out = " ".join(capsys.readouterr().out.split())
+    cfg = load_config(machine["home"])
+    assert cfg.analysis.backend == "ollama" and cfg.providers["ollama"]["model"] == "qwen3"
+    assert "Models it offers: llama3.2, qwen3" in out and "with Ollama on this computer" in out
+
+
+def test_a_setup_left_blank_goes_back_to_the_list(machine, no_providers, monkeypatch, capsys):
+    picks = iter(["6", ""])  # OpenAI API, then (its model left blank) Enter for the ready one
+
+    def fake_input(q):
+        if q.startswith("Which one"):
+            return next(picks)
+        return "" if "Model" in q else "n"
+
+    monkeypatch.setattr(sys, "stdin", _Tty())
+    monkeypatch.setattr("builtins.input", fake_input)
+    monkeypatch.setattr("getpass.getpass", lambda q: "sk-test")
+    monkeypatch.setattr("interlatch.analysis.runners.api.ApiRunner.list_models", lambda self, timeout=15: [])
+    assert _install("--no-sync") == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert out.count("What analyzes your sessions") == 2
+    assert load_config(machine["home"]).analysis.backend == "claude"
+
+
+def test_backend_flag_sets_it_without_asking_and_says_what_is_missing(machine, no_providers, monkeypatch, capsys):
+    monkeypatch.setattr("builtins.input", lambda q: pytest.fail(f"asked {q!r} with --yes"))
+    assert _install("--yes", "--backend", "openai") == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert load_config(machine["home"]).analysis.backend == "openai"
+    assert ("OpenAI API: choose a model (providers.openai.model). Sessions are recorded but not analyzed until it is "
+            "set up: `interlatch config set providers.openai.model NAME`, `interlatch config set-key openai`") in out
+    assert "past session waiting" not in out
+
+
+def test_backend_flag_with_dry_run_changes_nothing(machine, capsys):
+    assert _install("--dry-run", "--backend", "codex") == 0
+    assert "Would analyze sessions with Codex (Codex (`codex`) was not found)." in capsys.readouterr().out
+    assert load_config(machine["home"]).analysis.backend == "claude"
 
 
 def test_install_without_a_terminal_leaves_analysis_for_later_and_says_how(machine, capsys):

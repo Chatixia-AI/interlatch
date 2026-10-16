@@ -151,7 +151,8 @@ milliseconds; analysis runs later in the background.
 
 **Do I need Claude Code?** No. Analysis runs through Claude Code, Codex or IBM Bob, or a model provider's API with your
 own key: Anthropic, Amazon Bedrock, OpenAI, Azure OpenAI, OpenRouter, any OpenAI-compatible server, or Ollama on your own
-computer. Pick one in **Status › Analysis** or with `interlatch config set analysis.backend <name>`
+computer. Pick one when you run `interlatch install`, in **Status › Analysis**, or with
+`interlatch config set analysis.backend <name>`
 ([Model providers](docs/analysis.md#model-providers)). Recording and browsing work either way; with none set up,
 sessions are archived and wait in the analysis queue.
 

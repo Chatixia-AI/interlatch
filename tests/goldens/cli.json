@@ -1357,6 +1357,33 @@
      },
      {
       "action": "_StoreAction",
+      "choices": [
+       "claude",
+       "codex",
+       "bob",
+       "anthropic",
+       "bedrock",
+       "openai",
+       "azure",
+       "openrouter",
+       "ollama",
+       "openai-compatible"
+      ],
+      "const": null,
+      "default": null,
+      "dest": "backend",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": "NAME",
+      "nargs": null,
+      "option_strings": [
+       "--backend"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreAction",
       "choices": null,
       "const": null,
       "default": null,
