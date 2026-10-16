@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.0 (2026-10-16)
+
+- **Formations:** the Party page builds decks, teams of one to three agents in the order they fight, up to five
+  of them. The Arena fields the deck you pick, as a relay: lead against lead, and whoever wins a bout stays on with
+  the HP it has left. A deck of one is the old champion duel. Sheets now carry the lineup (format 3), so arena players
+  on older versions don't meet newer ones until they update ([Party](docs/party.md#formations)).
+
 ## 0.26.0 (2026-10-16)
 
 - **Adventure:** a new page in Innerlatch puts every lesson that counts on a pixel world map, one region per attribute
