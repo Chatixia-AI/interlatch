@@ -42,6 +42,7 @@ function payload(n = 1100, seed = 7) {
     bosses: [{ id: 'G1', n: 1, text: 'one', attr: 'craft', status: 'done' }, { id: 'G2', n: 2, text: 'two', attr: 'guard', status: 'evidence' },
       { id: 'G3', n: 3, text: 'three', attr: 'craft', status: 'open' }, { id: 'G4', n: 4, text: 'four', attr: 'lore', status: 'open' }],
     agents: [{ agent: 'claude', name: 'Claude Code', short: 'Claude', level: 9, tier: 'adept' }],
+    towns: road.attrs.filter((a) => a.id !== 'lore').map((a) => ({ attr: a.id, name: a.name + ' town' })),
   };
 }
 // inside a convex polygon, by at least `m`
@@ -149,4 +150,33 @@ const newest = L.lessons.find((p) => p.id === d.newest);
 assert.equal(L.party.territory, newest.territory);
 assert.equal(L.party.lesson, d.newest);
 assert.ok(inside(L.territories[L.party.territory].poly, L.party.x, L.party.y));
+""")
+
+
+def test_every_region_has_a_town_clear_of_everything_and_named():
+    check("""
+const d = payload();
+for (const seed of [1, 2, 3]) {
+  const L = A.layout(d, seed);
+  assert.equal(JSON.stringify(L.regions.map((r) => r.town)), JSON.stringify(A.layout(d, seed).regions.map((r) => r.town)));
+  for (const r of L.regions) {
+    const T = r.town;
+    assert.ok(T, `${r.id} has no town`);
+    assert.ok(T.x >= r.rect.x && T.y >= r.rect.y && T.x + T.w <= r.rect.x + r.rect.w && T.y + T.h <= r.rect.y + r.rect.h, `${r.id}'s town leaves its region`);
+    assert.equal(T.feet.y, T.y + T.h);
+    // no encounter, boss or party within the minimum distance of the town
+    const gap = (x, y) => Math.hypot(Math.max(T.x - x, 0, x - (T.x + T.w)), Math.max(T.y - y, 0, y - (T.y + T.h)));
+    for (const p of L.lessons) assert.ok(gap(p.x, p.y) >= L.minDist, `lesson ${p.id} stands ${gap(p.x, p.y)} from ${r.id}'s town`);
+    for (const b of L.bosses) assert.ok(gap(b.x, b.y) >= 16, `boss ${b.id} stands on ${r.id}'s town`);
+    assert.ok(gap(L.party.x, L.party.y) >= 16, `the party stands on ${r.id}'s town`);
+    // nor on the banner or the gate's yard
+    const banner = r.reserve[1], yard = r.reserve[0], over = (q) => T.x < q.x + q.w && q.x < T.x + T.w && T.y < q.y + q.h && q.y < T.y + T.h;
+    assert.ok(!over(banner) && !over(yard), `${r.id}'s town is on its banner or gate`);
+  }
+}
+// named by the payload; the region's own name when the payload has none for it
+const L = A.layout(d, 1);
+assert.equal(L.regions.find((r) => r.id === 'craft').town.name, 'Craft town');
+assert.equal(L.regions.find((r) => r.id === 'lore').town.name, 'Lore');
+assert.equal(A.layout({ ...d, towns: undefined }, 1).regions[0].town.name, d.regions[0].name);
 """)

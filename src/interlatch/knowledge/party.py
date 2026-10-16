@@ -19,7 +19,8 @@ compute() is cached in this process per scope, the lessons as they stand (count,
 goal kept for that scope, the catalog and the language.
 
 The Adventure (adventure_map, encounter, set_cleared) lays the same lessons out as encounters on a map; battles change
-no level or XP, they only mark a lesson cleared in the viewer's own log.
+no level or XP, they only mark a lesson cleared in the viewer's own log. A first clear also pays gold and maybe loot
+into the viewer's bag (bag.py: a game economy that changes only battle numbers, never a level).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from pathlib import Path
 from ..core.agents import CODING_AGENTS, full_name, short_name
 from ..core.i18n import lang
 from ..core.util import loads, utcnow, utcnow_iso
-from ..storage.kv import kv_get, kv_set
+from ..storage.kv import kv_get, kv_set, kv_transaction
 
 CATALOG_PATH = Path(__file__).with_name("roadmap.json")
 KINDS = ("fix", "gotcha", "decision", "learning", "pattern", "command")
@@ -1113,21 +1114,32 @@ def set_cleared(conn: sqlite3.Connection, here_id: str, viewer: dict | None, les
                 catalog: Catalog | None = None) -> list[int]:
     """Mark a lesson's encounter cleared (or not) in the viewer's own log; answers the log. The lesson must be one of
     the viewer's (lessons_in their scope); one already in the log may always be taken out of it."""
+    return clear(conn, here_id, viewer, lesson_id, cleared, catalog=catalog)[0]
+
+
+def clear(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, cleared: bool, *,
+          catalog: Catalog | None = None) -> tuple[list[int], dict | None]:
+    """set_cleared, and what the win paid: the first time a lesson is cleared, its gold and loot go into the viewer's
+    bag (bag.pay_first_clear), in the same transaction as the log; None when nothing was paid (un-clearing, clearing
+    again, or a lesson that already paid once)."""
+    from . import bag
+
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
-    log = cleared_of(conn, sc.key)
-    known = isinstance(lesson_id, int) and not isinstance(lesson_id, bool)
-    if known and not (not cleared and lesson_id in log):
-        known = any(k.id == lesson_id for k in lessons_in(conn, cat, sc))
-    if not known:
-        raise PartyError("no such lesson")
-    if cleared and lesson_id not in log:
-        log = (log + [lesson_id])[-CLEARED_MAX:]
-    elif not cleared:
-        log = [x for x in log if x != lesson_id]
-    kv_set(conn, CLEARED_KEY + sc.key, json.dumps(log))
-    conn.commit()
-    return log
+    valid = isinstance(lesson_id, int) and not isinstance(lesson_id, bool)
+    lesson = next((k for k in lessons_in(conn, cat, sc) if k.id == lesson_id), None) if valid else None
+    with kv_transaction(conn):  # two quick POSTs: the second reads the first's log and bag
+        log = cleared_of(conn, sc.key)
+        if not valid or (lesson is None and (cleared or lesson_id not in log)):
+            raise PartyError("no such lesson")
+        reward = None
+        if cleared and lesson_id not in log:
+            log = (log + [lesson_id])[-CLEARED_MAX:]
+            reward = bag.pay_first_clear(conn, cat, sc.key, lesson)
+        elif not cleared:
+            log = [x for x in log if x != lesson_id]
+        kv_set(conn, CLEARED_KEY + sc.key, json.dumps(log))
+    return log, reward
 
 
 def _boss_attr(cat: Catalog, track_id: str) -> str | None:
@@ -1146,7 +1158,10 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
                   catalog: Catalog | None = None, today: date | None = None) -> dict:
     """GET /api/party/map: the regions (every attr, every module of it, how many counted lessons stand there: those
     whose best module it is, and their XP), every counted lesson oldest first, the lessons cleared, the bosses (the
-    main quest's milestones), the newest lesson (where the party stands) and the agents."""
+    main quest's milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag
+    and a town per region (bag.py)."""
+    from . import bag
+
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
     data = _computed(conn, cat, sc, today or utcnow().date())
@@ -1172,6 +1187,8 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
                    for q in data["quests"] if q["main"]],
         "newest": counted[-1].id if counted else None,
         "agents": [{x: a[x] for x in ("agent", "name", "short", "level", "tier")} for a in data["agents"]],
+        "gold": bag.load(conn, sc.key)["gold"],
+        "towns": bag.towns(cat),
     }
 
 
@@ -1187,8 +1204,11 @@ def _case(raw) -> dict | None:
 def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, *,
               catalog: Catalog | None = None, today: date | None = None) -> dict | None:
     """GET /api/party/encounter: one of the viewer's lessons (counted or not) with its body and case file, the party
-    that meets it (each agent's level, attrs and skill in the lesson's modules), and whether it's cleared. None for a
-    lesson that isn't the viewer's."""
+    that meets it (each agent's level, attrs and skill in the lesson's modules, and the battle stats its gear adds),
+    whether it's cleared, and the consumables and loot the viewer's bag holds (bag.py). None for a lesson that isn't
+    the viewer's."""
+    from . import bag
+
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
     k = next((x for x in lessons_in(conn, cat, sc) if x.id == lesson_id), None)
@@ -1197,11 +1217,14 @@ def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesso
     row = conn.execute("SELECT case_json FROM knowledge WHERE id = ?", (k.id,)).fetchone()
     data = _computed(conn, cat, sc, today or utcnow().date())
     mids = [cat.modules[i]["id"] for i in k.modules]
+    held = bag.load(conn, sc.key)
+    gear = bag.gear_of(cat, held)
     party_ = []
     for a in data["agents"]:
         levels = {s["module"]: s["level"] for s in a["skills"]}
         party_.append({**{x: a[x] for x in ("agent", "name", "short", "level", "tier")},
-                       "attr_levels": dict(a["attr_levels"]), "skills": {m: levels.get(m, 0) for m in mids}})
+                       "attr_levels": dict(a["attr_levels"]), "skills": {m: levels.get(m, 0) for m in mids},
+                       "gear": gear[a["agent"]]})
     return {
         "lesson": {"id": k.id, "title": k.title, "kind": k.kind, "stage": k.stage, "agent": k.agent, "at": k.at[:10],
                    "xp": k.xp * len(k.modules), "session_id": k.session_id, "project": k.project_name,
@@ -1210,6 +1233,7 @@ def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesso
                                 "attr": cat.modules[i].get("attr")} for i in k.modules]},
         "party": party_,
         "cleared": k.id in cleared_of(conn, sc.key),
+        "items": bag.usable(cat, held),
     }
 
 

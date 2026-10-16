@@ -153,6 +153,8 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/party/tracks"): LIMITED_OK,  # the catalog's own tracks, for picking a goal
     ("GET", "/api/party/map"): LIMITED_OK.but(here=403),  # the Adventure's map; here: not signed in
     ("GET", "/api/party/encounter"): LIMITED_OK.ok(404).but(here=403),  # no such lesson; here: not signed in
+    ("GET", "/api/party/bag"): LIMITED_OK.but(here=403),  # the viewer's own bag; here: not signed in
+    ("GET", "/api/party/shop"): LIMITED_OK.ok(404).but(here=403),  # no such region; here: not signed in
     # POST: anyone, and any signed-in person (their own news)
     ("POST", "/api/signout"): POST_ANYONE,
     ("POST", "/api/team/news/seen"): POST_SIGNED_IN,
@@ -160,6 +162,10 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/party/quest"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/goal"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/cleared"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
+    ("POST", "/api/party/buy"): POST_SIGNED_IN.ok(400).but(here=403),  # no such item
+    ("POST", "/api/party/sell"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/equip"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/use"): POST_SIGNED_IN.ok(400).but(here=403),
     # POST: admins (the hub computer, or an admin person)
     ("POST", "/api/import"): POST_ADMIN,
     ("POST", "/api/sync"): POST_ADMIN,
@@ -269,6 +275,7 @@ QUERY = {
     "/api/party/skill": "?agent=claude&module=M-nothing",
     "/api/party/track": "?id=nothing",
     "/api/party/encounter": "?id=999999",
+    "/api/party/shop": "?region=nowhere",
 }
 BODY = {
     "/api/team-store/save": {"enabled": False},
@@ -284,6 +291,10 @@ BODY = {
     "/api/update/notify": {"on": False},
     "/api/party/goal": {"track": "no-such-track"},
     "/api/party/cleared": {"id": 999999, "cleared": True},
+    "/api/party/buy": {"id": "c:nothing"},
+    "/api/party/sell": {"id": "c:nothing"},
+    "/api/party/equip": {"agent": "claude", "slot": "weapon", "id": "g:nothing"},
+    "/api/party/use": {"id": "c:nothing"},
 }
 PARAMS = {"{id}": SID, "{n}": "999999"}
 PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connectors/{id}/disconnect": {"{id}": "claude"},

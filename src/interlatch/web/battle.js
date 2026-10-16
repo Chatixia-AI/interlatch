@@ -13,13 +13,19 @@
 
    ---------------------------------------------------------------------------------------------------------------
    Battle.mount(host, opts) -> { destroy(), redraw() }
-     opts.encounter   GET /api/party/encounter's payload, or for a boss {boss: <a /api/party/map boss>, party: [...]}
+     opts.encounter   GET /api/party/encounter's payload, or for a boss {boss: <a /api/party/map boss>, party: [...]};
+                      party[i].gear {atk, hp, mp, def, skills: {module: extra}} and encounter.items [{id, name, kind,
+                      count}] (consumables and loot) when the person has them
      opts.attempt     int, 0 on the first try; the page bumps it on Retry (new dice, still reproducible)
      opts.labels      overrides for LABELS below (the page passes Japanese)
      opts.reducedMotion  no shaking, tweens or idle animation; every update is instant
      opts.height      css px for the battle stage (default: the stylesheet's clamp)
      opts.autofocus   focus the first command on mount (default true)
-     opts.onWin(lessonId)      the monster is beaten (once; the page marks the encounter cleared)
+     opts.onWin(lessonId)      the monster is beaten (once; the page marks the encounter cleared). It may return a
+                               Promise of {gold, loot: [item]} (the win screen shows them when it resolves), of null
+                               (a lesson that paid out before: "no gold this time") or of false (saving the win failed:
+                               "try it again from the map"); undefined, or no promise, shows no reward line
+     opts.onUseItem(id)        an item was used (once per use; the page POSTs /api/party/use); the battle counts it down
      opts.onLose()             Retry pressed on the defeat screen (the page remounts with attempt + 1)
      opts.onRun()              Run chosen (no confirmation); the page goes back to the map
      opts.onExit()             "Back to the map" on any end screen
@@ -32,17 +38,29 @@
      rng(seed) -> () => [0, 1)             mulberry32, as scene.js
      seedOf(encounter, attempt) -> uint32  lesson id × 1009 + attempt (a boss: a hash of its id × 1009 + attempt)
      difficulty(encounter) -> d            1 + 0.05·min(xp, 18) + stage (0 / 0.15 / 0.3); a boss 1.5 + 0.15·n
-     heroStats(member, attr) -> {hp, mp, atk}
+     gearOf(member) -> {atk, hp, mp, def, skills}   party[i].gear, cleaned (def 0..0.6)
+     heroStats(member, attr, {gear?}) -> {hp, mp, atk, def}   level and attribute level, then gear on top (def cuts damage
+                                           taken by that fraction); gear's skill levels add to the module's skill level
+                                           in battle only, shown apart ("+N gear"), never as the hero's level
      pickParty(encounter) -> members       the teacher first, then the two highest-level others with level > 0
                                            (a boss: the three strongest)
      stats(encounter, labels?) -> {attr, modules, heroes, foe}   the numbers a fight starts with
      setup(encounter, attempt, labels?) -> state   (state.events: the intro to play, state.log: every line said)
-     skillOptions(state, heroIndex) -> [{id, name, level, cost, usable}]
-     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"defend"|"run", module?}
+     skillOptions(state, heroIndex) -> [{id, name, level, own, gear, cost, usable}]   level = own + gear
+     itemOptions(state) -> [{id, name, kind, count, target, usable}]   what the Item command offers the active hero
+     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"item"|"defend"|"run", module?, id?,
+                                                    target?}; an item uses the hero's turn and counts down by one:
+         c:potion +40% HP (the active hero), c:ether +50% MP (the active hero), c:phoenix revives the first knocked-out
+         hero at 30% HP (not usable when nobody is down), c:smoke a sure escape, l:patch +25% HP everyone, l:sign 40% less
+         damage for 2 monster turns, l:adr the monster loses its next turn, l:insight +30% MP everyone, l:template the
+         next blow ×1.6, l:script 25% of the monster's max HP (a boss 10%, and it still holds at 1 HP)
      monsterTurn(state, rng?) -> events
      policy(state) -> action               a plain Attack/Skill player (the tests' bot)
+   Balance: the monster is sized to the party without gear plus half of what gear adds, so an ungeared party meets the
+   same fight as before gear existed and gear makes fights easier without making them instant.
      simulate(encounter, attempt, policy?, maxRounds?) -> state
      summary(state, labels?, formatDate?) -> {title, text, quoteTitle, quote}   the end screen's words
+     rewardLines(result, labels?) -> [{kind: "gold"|"loot"|"none"|"failed", text}]   the win screen's reward lines
    Battle.LABELS, Battle.LABEL_VARS (the placeholders each label may use), Battle.format(template, vars)
 
    state.phase: "hero" (waiting for the active hero's command) → "monster" → "hero" … until "won", "lost", "ran",
@@ -61,14 +79,26 @@
   //   level / hp / mp / hpValue   the party window                      {n} / – / – / {hp} {max}
   //   taught       the tag on the hero who taught the lesson
   //   prompt       the menu's heading                                    {hero}
-  //   attack / skill / defend / run / back   the commands
-  //   skillLevel / skillNone / skillCost     a skill's row               {n} / – / {n}
+  //   attack / skill / item / defend / run / back   the commands
+  //   skillLevel / skillGear / skillNone / skillCost   a skill's row: its level, what gear adds ({n}), its MP cost
+  //   itemCount / itemTarget   an item's row: how many are left ({n}), who it will be used on ({hero})
+  //   itemNone     the bag is empty
+  //   itemNoTarget / itemFullHp / itemFullMp   why an item can't be used now (shown on its row in place of its hint,
+  //                    and said in the log): nobody knocked out (Phoenix Down), nobody hurt (Potion, Patch), nobody short
+  //                    of MP (Ether, Insight); nothing is spent
+  //   more         the cue (for screen readers too) that a submenu has more rows below
+  //   hint.<item id>   an item's effect, under its name (c:potion, c:ether, c:phoenix, c:smoke, l:patch, l:sign, l:adr,
+  //                    l:insight, l:template, l:script); hint.l:script.boss the Script's in a boss fight (10%)
   //   attrSkill    a boss fight's one skill: the region's attribute      {attr}
   //   intro / introBoss   the opening line                              {monster} {title} / {monster} {text}
   //   lineAttack, lineCrit, lineSkill, lineSkillWeak, lineDefend, lineDefendFull, lineNoMp, lineRun: a hero's turn
-  //   lineHit, lineGuarded, lineDodge, lineDrain, lineHeal, lineKo, lineCharged: the monster's turn
+  //   lineItem {hero} {item}, then lineItemHeal / lineItemMp / lineRevive {target} {n}, lineSmoke, lineWard {n},
+  //     lineSkipNext {monster}, lineTemplate, lineScript {item} {monster} {n}; lineNoItem {item}: using an item
+  //   lineHit, lineGuarded, lineDodge, lineDrain, lineHeal, lineKo, lineCharged, lineSkipped: the monster's turn
   //   lineWin / lineLose / lineHold: the end of a fight
   //   win, winText, winAnswer, winExcerpt, readLesson, openSession, backToMap: the victory screen
+  //   rewardWait, rewardGold {n}, rewardLoot {item}, rewardPaid, rewardFailed: what onWin's promise brings (gold and
+  //     loot; null: nothing, the lesson paid out before; false: the win couldn't be saved)
   //   lose, loseText, retry: the defeat screen; hold, holdText, openQuests: a boss at 1 HP
   //   bossDone, bossDoneText: a boss already defeated on the Quests page
   //   monster.<kind>   a lesson kind's monster name; boss.<1-4> the four bosses; attr.<id> a region's name
@@ -78,13 +108,24 @@
     region: "Battle: {monster}", scene: "{monster} faces {heroes}", epithet: "«{title}»",
     bossEpithet: "Milestone {n}: {text}", round: "Round {n}", level: "Lv {n}", hp: "HP", mp: "MP", hpValue: "{hp}/{max}",
     taught: "Taught it", prompt: "What will {hero} do?", log: "Battle log", commands: "Commands",
-    attack: "Attack", skill: "Skill", defend: "Defend", run: "Run", back: "Back",
-    skillLevel: "Lv {n}", skillNone: "untrained", skillCost: "{n} MP", attrSkill: "{attr} lore",
+    attack: "Attack", skill: "Skill", item: "Item", defend: "Defend", run: "Run", back: "Back",
+    skillLevel: "Lv {n}", skillGear: "+{n} gear", skillNone: "untrained", skillCost: "{n} MP", attrSkill: "{attr} lore",
+    itemCount: "×{n}", itemTarget: "→ {hero}", itemNone: "The bag is empty.", itemNoTarget: "Nobody is knocked out.",
+    itemFullHp: "Everyone is at full HP.", itemFullMp: "Everyone is at full MP.", more: "More below",
+    "hint.c:potion": "Heals 40% HP", "hint.c:ether": "Restores 50% MP", "hint.c:phoenix": "Revives a fallen hero",
+    "hint.c:smoke": "A sure escape", "hint.l:patch": "Heals everyone 25% HP", "hint.l:sign": "40% less damage, 2 turns",
+    "hint.l:adr": "The monster loses a turn", "hint.l:insight": "Everyone recovers 30% MP", "hint.l:template": "Next blow ×1.6",
+    "hint.l:script": "Hits for 25% of its HP", "hint.l:script.boss": "Hits a boss for 10% of its HP",
     intro: "A wild {monster} appears: «{title}»", introBoss: "{monster} bars the way: «{text}»",
     lineAttack: "{hero} attacks: {n} damage.", lineCrit: "{hero} lands a critical hit: {n} damage!",
     lineSkill: "{hero} uses {skill} (Lv {lv}): {n} damage!", lineSkillWeak: "{hero} tries {skill} untrained: {n} damage.",
     lineDefend: "{hero} defends and steadies (+{mp} MP).", lineDefendFull: "{hero} defends.", lineNoMp: "{hero} doesn't have the MP for {skill}.",
     lineRun: "The party slips away.",
+    lineItem: "{hero} uses {item}.", lineItemHeal: "{target} recovers {n} HP.", lineItemMp: "{target} recovers {n} MP.",
+    lineRevive: "{target} is back on their feet ({n} HP).", lineSmoke: "Smoke fills the field: the party escapes.",
+    lineWard: "The party braces: less damage for {n} turns.", lineSkipNext: "{monster} will lose its next turn.",
+    lineSkipped: "{monster} is still rethinking and loses its turn.", lineTemplate: "The next blow will hit ×1.6.",
+    lineScript: "{item} hits {monster} for {n} damage!", lineNoItem: "No {item} left.",
     lineHit: "{hero} takes {n} damage.", lineGuarded: "{hero} blocks: only {n} damage.", lineDodge: "{hero} dodges!",
     lineDrain: "{hero} loses {mp} MP.", lineHeal: "{monster} recovers {n} HP.", lineKo: "{hero} is knocked out!",
     lineCharged: "{monster} is gathering strength. Defend!",
@@ -93,6 +134,9 @@
     win: "{monster} is beaten!", winText: "{agent} learned this on {date}: +{xp} XP then. Battles don't change levels.",
     winAnswer: "The answer", winExcerpt: "From the lesson", readLesson: "Read the lesson", openSession: "Open the session",
     backToMap: "Back to the map",
+    rewardWait: "Counting the spoils…", rewardGold: "+{n} gold", rewardLoot: "Found: {item}",
+    rewardPaid: "Already cleared before: no gold this time.",
+    rewardFailed: "The win wasn't saved: try it again from the map.",
     lose: "The party falls back", loseText: "Nothing is lost: battles don't change levels. Retry rolls new dice.",
     retry: "Retry",
     hold: "{monster} holds at 1 HP", holdText: "Only you can defeat this boss: mark the milestone done on the Quests page.",
@@ -131,7 +175,10 @@
     level: ["n"], hpValue: ["hp", "max"], prompt: ["hero"], skillLevel: ["n"], skillCost: ["n"], attrSkill: ["attr"],
     intro: ["monster", "title"], introBoss: ["monster", "text"],
     lineAttack: ["hero", "n"], lineCrit: ["hero", "n"], lineSkill: ["hero", "skill", "lv", "n"], lineSkillWeak: ["hero", "skill", "n"],
-    lineDefend: ["hero", "mp"], lineDefendFull: ["hero"], lineNoMp: ["hero", "skill"], lineHit: ["hero", "n"], lineGuarded: ["hero", "n"],
+    lineDefend: ["hero", "mp"], lineDefendFull: ["hero"], skillGear: ["n"], itemCount: ["n"], itemTarget: ["hero"],
+    lineItem: ["hero", "item"], lineItemHeal: ["target", "n"], lineItemMp: ["target", "n"], lineRevive: ["target", "n"],
+    lineWard: ["n"], lineSkipNext: ["monster"], lineSkipped: ["monster"], lineScript: ["item", "monster", "n"], lineNoItem: ["item"],
+    rewardGold: ["n"], rewardLoot: ["item"], lineNoMp: ["hero", "skill"], lineHit: ["hero", "n"], lineGuarded: ["hero", "n"],
     lineDodge: ["hero"], lineDrain: ["hero", "mp"], lineHeal: ["monster", "n"], lineKo: ["hero"], lineCharged: ["monster"],
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
     bossDone: ["monster"], bossDoneText: ["text"],
@@ -157,6 +204,7 @@
   const BOSS_ROUNDS = 3.4;
   const WIPE_ROUNDS = 10;   // the monster deals the party's whole HP in ~10/d^0.7 rounds (a boss: 10/d^0.5)
   const SKILL_COST = 6, CRIT = 1 / 16, GUARD = 0.45;
+  const GEAR_SHARE = 0.5;   // the part of the party's gear the monster is sized to
 
   function rng(seed) {
     let a = seed >>> 0;
@@ -183,9 +231,20 @@
     const l = enc.lesson || {};
     return 1 + 0.05 * clamp(num(l.xp), 0, 18) + (STAGE_D[l.stage] || 0);
   }
-  function heroStats(member, attr) {
+  // what an agent wears, summed (party[i].gear): {atk, hp, mp, def (a damage cut, 0..0.6), skills: {module: extra}}
+  function gearOf(member) {
+    const g = (member && member.gear) || {}, skills = {};
+    for (const [k, v] of Object.entries(g.skills && typeof g.skills === "object" ? g.skills : {})) skills[k] = clamp(Math.floor(num(v)), 0, 30);
+    return { atk: clamp(Math.round(num(g.atk)), 0, 999), hp: clamp(Math.round(num(g.hp)), 0, 9999), mp: clamp(Math.round(num(g.mp)), 0, 999),
+      def: clamp(num(g.def), 0, 0.6), skills };
+  }
+  // a hero's numbers: level and the attribute level for the lesson's region, then gear on top (gear changes battle
+  // numbers only, never a level)
+  function heroStats(member, attr, { gear = true } = {}) {
     const m = member || {}, L = clamp(num(m.level), 0, 99), a = clamp(num((m.attr_levels || {})[attr]), 0, 99);
-    return { hp: Math.round(36 + 3 * L + 5 * a), mp: Math.round(14 + 0.5 * L + 1.5 * a), atk: Math.round(8 + 0.6 * L + 1.2 * a) };
+    const g = gear ? gearOf(m) : { atk: 0, hp: 0, mp: 0, def: 0 };
+    return { hp: Math.round(36 + 3 * L + 5 * a) + g.hp, mp: Math.round(14 + 0.5 * L + 1.5 * a) + g.mp,
+      atk: Math.round(8 + 0.6 * L + 1.2 * a) + g.atk, def: g.def };
   }
   const byLevel = (p, q) => num(q.level) - num(p.level) || AGENT_ORDER.indexOf(p.agent) - AGENT_ORDER.indexOf(q.agent);
   function pickParty(encounter) {
@@ -209,14 +268,23 @@
     const attr = boss ? (ATTRS.includes(enc.boss.attr) ? enc.boss.attr : "craft")
       : (modules[0] && ATTRS.includes(modules[0].attr) ? modules[0].attr : "craft");
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
-    const heroes = pickParty(enc).map((m, i) => {
-      const s = heroStats(m, attr), skills = {};
-      for (const mod of modules) skills[mod.id] = Math.max(0, Math.floor(num((m.skills || {})[mod.id])));
+    const members = pickParty(enc);
+    const heroes = members.map((m, i) => {
+      const s = heroStats(m, attr), g = gearOf(m), skills = {}, gearSkills = {};
+      for (const mod of modules) {
+        skills[mod.id] = Math.max(0, Math.floor(num((m.skills || {})[mod.id])));
+        gearSkills[mod.id] = g.skills[mod.id] || 0;
+      }
       return { i, agent: String(m.agent), name: nameOf(m), level: Math.max(0, Math.floor(num(m.level))),
         tier: m.tier || "novice", lead: !boss && i === 0, attrLevel: Math.max(0, Math.floor(num((m.attr_levels || {})[attr]))),
-        maxHp: s.hp, hp: s.hp, maxMp: s.mp, mp: s.mp, atk: s.atk, skills, guard: false, ko: false };
+        maxHp: s.hp, hp: s.hp, maxMp: s.mp, mp: s.mp, atk: s.atk, def: s.def, skills, gearSkills, guard: false, ko: false };
     });
-    const d = difficulty(enc), atkSum = heroes.reduce((t, h) => t + h.atk, 0), hpSum = heroes.reduce((t, h) => t + h.maxHp, 0);
+    // the monster is sized to the party without its gear, plus half of what the gear adds: gear makes a fight easier,
+    // and an ungeared party meets exactly the monster it always did
+    const bare = members.map((m) => heroStats(m, attr, { gear: false }));
+    const d = difficulty(enc);
+    let atkSum = 0, hpSum = 0;
+    heroes.forEach((h, i) => { atkSum += bare[i].atk + GEAR_SHARE * (h.atk - bare[i].atk); hpSum += bare[i].hp + GEAR_SHARE * (h.maxHp - bare[i].hp); });
     const kind = boss ? "boss" : KINDS.includes(lesson.kind) ? lesson.kind : "fix";
     const n = boss ? clamp(Math.floor(num(enc.boss.n, 1)), 1, 4) : 0;
     const maxHp = Math.max(12, Math.round((boss ? BOSS_ROUNDS : FOE_ROUNDS) * d * atkSum));
@@ -256,7 +324,7 @@
     const enc = encounter || {}, s = stats(enc, labels), seed = seedOf(enc, attempt);
     const state = { seed, attempt: Math.max(0, Math.floor(num(attempt))), boss: !!enc.boss, attr: s.attr, modules: s.modules,
       heroes: s.heroes, foe: s.foe, round: 1, phase: "hero", active: 0, log: [], events: [],
-      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels };
+      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false };
     const ev = state.events, foe = state.foe;
     if (enc.boss && enc.boss.status === "done") {
       state.phase = "done";
@@ -269,6 +337,20 @@
     else say(state, ev, "intro", { monster: foe.name, title: foe.title });
     ev.push({ t: "round", n: 1 });
     return state;
+  }
+  // the consumables and loot the person owns (encounter.items), those the battle knows how to use, with counts
+  const ITEMS = ["c:potion", "c:ether", "c:phoenix", "c:smoke", "l:patch", "l:sign", "l:adr", "l:insight", "l:template", "l:script"];
+  function bagOf(encounter) {
+    const out = [], seen = new Set();
+    for (const it of Array.isArray(encounter && encounter.items) ? encounter.items : []) {
+      const id = it && String(it.id || "");
+      if (!ITEMS.includes(id) || seen.has(id)) continue;
+      const count = clamp(Math.floor(num(it.count)), 0, 99);
+      if (count <= 0) continue;
+      seen.add(id);
+      out.push({ id, name: String(it.name || id), kind: it.kind === "loot" ? "loot" : "consumable", count });
+    }
+    return out.sort((p, q) => ITEMS.indexOf(p.id) - ITEMS.indexOf(q.id));
   }
   // a line of narration: a label key and its values (or, with no key, a text of the lesson's own, like its case scene)
   function say(state, events, key, vars) {
@@ -283,8 +365,33 @@
     const lab = (k) => (state.labels && state.labels[k] != null ? state.labels[k] : LABELS[k]);
     const opts = state.boss
       ? [{ id: "attr:" + state.attr, name: fill(lab("attrSkill"), { attr: lab("attr." + state.attr) }), level: h.attrLevel }]
-      : state.modules.map((m) => ({ id: m.id, name: m.name, level: h.skills[m.id] || 0 }));
-    return opts.map((o) => ({ ...o, cost: SKILL_COST, usable: h.mp >= SKILL_COST }));
+      : state.modules.map((m) => ({ id: m.id, name: m.name, level: (h.skills[m.id] || 0) + (h.gearSkills[m.id] || 0),
+        own: h.skills[m.id] || 0, gear: h.gearSkills[m.id] || 0 }));
+    return opts.map((o) => ({ own: o.level, gear: 0, ...o, cost: SKILL_COST, usable: h.mp >= SKILL_COST }));
+  }
+  // what the Item submenu offers the active hero: each item with its count, who it would be used on, and whether it can be
+  // An item is only offered when it would do something: a Potion goes to the standing hero lowest on HP (by share of
+  // their max), an Ether to the one lowest on MP, a Phoenix Down to the first one knocked out; Patch and Insight need
+  // somebody short of HP or MP. `why` is the label that says why one can't be used now.
+  function needy(state, what) {
+    let best = null, low = 1;
+    for (const x of alive(state)) {
+      const frac = what === "hp" ? x.hp / x.maxHp : x.mp / Math.max(1, x.maxMp);
+      if (frac < low) { low = frac; best = x; }
+    }
+    return best;
+  }
+  function itemOptions(state) {
+    const fallen = state.heroes.find((x) => x.ko), hurt = needy(state, "hp"), drained = needy(state, "mp");
+    return state.items.filter((it) => it.count > 0).map((it) => {
+      let target = null, why = null;
+      if (it.id === "c:phoenix") { target = fallen || null; if (!fallen) why = "itemNoTarget"; }
+      else if (it.id === "c:potion") { target = hurt; if (!hurt) why = "itemFullHp"; }
+      else if (it.id === "c:ether") { target = drained; if (!drained) why = "itemFullMp"; }
+      else if (it.id === "l:patch" && !hurt) why = "itemFullHp";
+      else if (it.id === "l:insight" && !drained) why = "itemFullMp";
+      return { ...it, target: target ? target.i : null, usable: !why, why };
+    });
   }
   const skillMult = (level) => (level > 0 ? Math.min(3.4, 1 + 0.24 * level) : 0.7);
   const alive = (state) => state.heroes.filter((h) => !h.ko);
@@ -310,6 +417,7 @@
       advance(state, ev);
       return ev;
     }
+    if (a.type === "item") return useItem(state, h, a, ev);
     let mult = 1, skill = null;
     if (a.type === "skill") {
       skill = skillOptions(state, h.i).find((o) => o.id === a.module) || null;
@@ -319,16 +427,23 @@
       mult = skillMult(skill.level);
     }
     h.guard = false;
-    let n = Math.max(1, Math.round(h.atk * mult * (0.85 + 0.3 * roll())));
+    const boost = state.template ? 1.6 : 1;
+    state.template = false;
+    let n = Math.max(1, Math.round(h.atk * mult * boost * (0.85 + 0.3 * roll())));
     const crit = roll() < CRIT;
     if (crit) n = Math.round(n * 1.6);
     const before = foe.hp;
     foe.hp = Math.max(0, foe.hp - n);
-    const hold = state.boss && foe.hp <= 0;
-    if (hold) foe.hp = 1;
-    ev.push({ t: "strike", hero: h.i, n, crit, skill: skill ? skill.id : null, lv: skill ? skill.level : 0, hp: foe.hp, mp: h.mp, was: before });
+    ev.push({ t: "strike", hero: h.i, n, crit, skill: skill ? skill.id : null, lv: skill ? skill.level : 0, hp: state.boss ? Math.max(1, foe.hp) : foe.hp, mp: h.mp, was: before });
     if (skill) say(state, ev, skill.level > 0 ? "lineSkill" : "lineSkillWeak", { hero: h.name, skill: skill.name, lv: skill.level, n });
     else say(state, ev, crit ? "lineCrit" : "lineAttack", { hero: h.name, n });
+    settle(state, ev);
+    return ev;
+  }
+  // after a blow: a boss holds at 1 HP (only the person beats it, on the Quests page); a monster at 0 is beaten
+  function settle(state, ev) {
+    const foe = state.foe, hold = state.boss && foe.hp <= 0;
+    if (hold) foe.hp = 1;
     if (hold) {
       state.phase = "held";
       ev.push({ t: "hold" });
@@ -340,6 +455,62 @@
       say(state, ev, "lineWin", { monster: foe.name });
       ev.push({ t: "end", phase: "won" });
     } else advance(state, ev);
+  }
+  // an item uses the hero's turn; its count goes down by one (the page is told through onUseItem)
+  function useItem(state, h, a, ev) {
+    const it = state.items.find((x) => x.id === a.id), foe = state.foe;
+    if (!it) return ev;
+    if (it.count <= 0) { say(state, ev, "lineNoItem", { item: it.name }); return ev; }
+    const opt = itemOptions(state).find((x) => x.id === it.id);
+    // nothing to do (everyone full, nobody down): said, and nothing is spent
+    if (!opt || !opt.usable) { say(state, ev, (opt && opt.why) || "itemNoTarget", {}); return ev; }
+    // a chosen target must be one the item can help; otherwise the one who needs it most
+    const pick = a.target != null ? state.heroes[a.target] : null;
+    const fits = (x) => x && (it.id === "c:phoenix" ? x.ko : !x.ko && (it.id === "c:potion" ? x.hp < x.maxHp : it.id === "c:ether" ? x.mp < x.maxMp : true));
+    const target = fits(pick) ? pick : opt.target != null ? state.heroes[opt.target] : h;
+    it.count -= 1;
+    h.guard = false;
+    const hits = [];
+    say(state, ev, "lineItem", { hero: h.name, item: it.name });
+    const heal = (x, frac) => { const n = Math.min(x.maxHp - x.hp, Math.ceil(x.maxHp * frac)); x.hp += n; hits.push({ hero: x.i, hp: x.hp, mp: x.mp, n, what: "hp" }); return n; };
+    const ether = (x, frac) => { const n = Math.min(x.maxMp - x.mp, Math.ceil(x.maxMp * frac)); x.mp += n; hits.push({ hero: x.i, hp: x.hp, mp: x.mp, n, what: "mp" }); return n; };
+    const event = { t: "item", id: it.id, hero: h.i, left: it.count, hits };
+    if (it.id === "c:potion") { const n = heal(target, 0.4); ev.push(event); say(state, ev, "lineItemHeal", { target: target.name, n }); }
+    else if (it.id === "c:ether") { const n = ether(target, 0.5); ev.push(event); say(state, ev, "lineItemMp", { target: target.name, n }); }
+    else if (it.id === "c:phoenix") {
+      target.ko = false;
+      target.hp = Math.max(1, Math.ceil(target.maxHp * 0.3));
+      hits.push({ hero: target.i, hp: target.hp, mp: target.mp, n: target.hp, what: "revive" });
+      ev.push(event);
+      say(state, ev, "lineRevive", { target: target.name, n: target.hp });
+    } else if (it.id === "c:smoke") {
+      ev.push(event);
+      state.phase = "ran";
+      say(state, ev, "lineSmoke", {});
+      ev.push({ t: "end", phase: "ran" });
+      return ev;
+    } else if (it.id === "l:patch") {
+      const got = alive(state).map((x) => [x, heal(x, 0.25)]);
+      ev.push(event);
+      for (const [x, n] of got) say(state, ev, "lineItemHeal", { target: x.name, n });
+    } else if (it.id === "l:insight") {
+      const got = alive(state).map((x) => [x, ether(x, 0.3)]);
+      ev.push(event);
+      for (const [x, n] of got) say(state, ev, "lineItemMp", { target: x.name, n });
+    } else if (it.id === "l:sign") { state.ward = 2; ev.push(event); say(state, ev, "lineWard", { n: 2 }); }
+    else if (it.id === "l:adr") { foe.skip = true; ev.push(event); say(state, ev, "lineSkipNext", { monster: foe.name }); }
+    else if (it.id === "l:template") { state.template = true; ev.push(event); say(state, ev, "lineTemplate", {}); }
+    else if (it.id === "l:script") {
+      const n = Math.max(1, Math.round(foe.maxHp * (state.boss ? 0.1 : 0.25)));
+      const before = foe.hp;
+      foe.hp = Math.max(0, foe.hp - n);
+      event.foe = { n, hp: state.boss ? Math.max(1, foe.hp) : foe.hp, was: before };
+      ev.push(event);
+      say(state, ev, "lineScript", { item: it.name, monster: foe.name, n });
+      settle(state, ev);
+      return ev;
+    }
+    advance(state, ev);
     return ev;
   }
   function advance(state, ev) {
@@ -359,13 +530,22 @@
   function monsterTurn(state, r) {
     const roll = r || state.rng, ev = [];
     if (!state || state.phase !== "monster") return ev;
-    const foe = state.foe, mv = pickMove(state, roll), size = state.heroes.length;
+    const foe = state.foe, size = state.heroes.length;
+    if (foe.skip) { // an ADR Scroll: it loses this turn (a charge it gathered waits)
+      foe.skip = false;
+      ev.push({ t: "skip" });
+      say(state, ev, "lineSkipped", { monster: foe.name });
+      return nextRound(state, ev);
+    }
+    const mv = pickMove(state, roll), ward = state.ward > 0 ? 0.6 : 1;
+    if (state.ward > 0) state.ward -= 1;
     say(state, ev, `move.${foe.kind}.${mv.id}`, { monster: foe.name });
     const hits = [];
     const strike = (h, pow, big) => {
       if (mv.miss && roll() < mv.miss) { hits.push({ hero: h.i, miss: true }); return; }
       let n = foe.power * pow * (0.85 + 0.3 * roll());
       if (h.guard) n *= GUARD;
+      n *= (1 - (h.def || 0)) * ward; // armour, then a Warning Sign
       if (!big) n = Math.min(n, h.maxHp * 0.75);
       n = Math.max(1, Math.round(n));
       h.hp = Math.max(0, h.hp - n);
@@ -404,6 +584,9 @@
       ev.push({ t: "end", phase: "lost" });
       return ev;
     }
+    return nextRound(state, ev);
+  }
+  function nextRound(state, ev) {
     state.round += 1;
     state.phase = "hero";
     state.active = state.heroes.findIndex((h) => !h.ko);
@@ -455,6 +638,18 @@
     if (s.length > max) s = s.slice(0, s.lastIndexOf(" ", max) > max * 0.6 ? s.lastIndexOf(" ", max) : max).trimEnd() + "…";
     return s;
   }
+  // the win screen's reward lines for what onWin's promise resolved to: {gold, loot} → "+n gold" and each loot; null → the
+  // lesson paid out before; false → the win wasn't saved; anything else → no line
+  function rewardLines(result, labels = LABELS) {
+    const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
+    if (result === null) return [{ kind: "none", text: lab("rewardPaid") }];
+    if (result === false) return [{ kind: "failed", text: lab("rewardFailed") }];
+    if (!result || typeof result !== "object") return [];
+    const out = [], gold = Math.max(0, Math.round(num(result.gold)));
+    if (gold > 0) out.push({ kind: "gold", text: fill(lab("rewardGold"), { n: gold }) });
+    for (const it of Array.isArray(result.loot) ? result.loot : []) if (it) out.push({ kind: "loot", text: fill(lab("rewardLoot"), { item: String(it.name || it.id || "") }) });
+    return out;
+  }
   function summary(state, labels = LABELS, formatDate = null, encounter = null) {
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
     const foe = state.foe, lesson = (encounter && encounter.lesson) || {};
@@ -473,8 +668,8 @@
     return { title: "", text: "", quoteTitle: "", quote: "" };
   }
 
-  const RULES = Object.freeze({ rng, seedOf, difficulty, heroStats, pickParty, stats, setup, skillOptions, heroAction,
-    monsterTurn, policy, simulate, summary, excerpt, MOVES, SKILL_COST });
+  const RULES = Object.freeze({ rng, seedOf, difficulty, gearOf, heroStats, pickParty, stats, setup, skillOptions, itemOptions,
+    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS });
 
   // =====================================================================================
   // Colour and theme: read from the page's tokens, like scene.js, tinted toward the region's hue
@@ -576,7 +771,10 @@
     const still = !!opts.reducedMotion;
     const enc = opts.encounter || {};
     const st = setup(enc, opts.attempt, labels);
-    const call = (k, ...args) => { if (typeof opts[k] === "function") { try { opts[k](...args); } catch (e) { setTimeout(() => { throw e; }); } } };
+    const call = (k, ...args) => {
+      if (typeof opts[k] !== "function") return undefined;
+      try { return opts[k](...args); } catch (e) { setTimeout(() => { throw e; }); return undefined; }
+    };
     const S = window.Sprites, SA = window.Scene && window.Scene.art;
 
     // ---- the DOM: the stage (canvas, the monster's window, the round), the message window, the party and the menu
@@ -678,7 +876,7 @@
 
     // ---- the menu: Attack, Skill, Defend, Run; Skill opens the lesson's modules; arrows move, Esc goes back
     let mode = "main", busy = true;
-    const main = [["attack", lab("attack")], ["skill", lab("skill")], ["defend", lab("defend")], ["run", lab("run")]];
+    const main = [["attack", lab("attack")], ["skill", lab("skill")], ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
     function button(label, onClick, extra) {
       const b = el("button", "bt-cmd");
       b.type = "button";
@@ -688,39 +886,97 @@
     }
     function renderMenu() {
       cmds.textContent = "";
-      cmds.classList.toggle("bt-sub", mode === "skill");
+      cmds.classList.toggle("bt-sub", mode !== "main");
       const hero = st.heroes[st.active];
-      if (mode === "skill" && hero) {
+      // a submenu: its rows in a list that scrolls by whole rows, Back pinned under it
+      const sub = () => {
+        const wrap = el("div", "bt-subwrap"), list = el("div", "bt-sublist"), cue = el("span", "bt-more-cue", "▼ " + lab("more"));
+        cue.setAttribute("aria-hidden", "true");
+        wrap.append(list, cue);
+        return { wrap, list };
+      };
+      if (mode === "item" && hero) {
+        menuHead.textContent = lab("item");
+        const { wrap, list } = sub();
+        for (const o of itemOptions(st)) {
+          const name = el("span", "bt-cmd-name");
+          const hint = o.why ? lab(o.why) : lab(o.id === "l:script" && st.boss ? "hint.l:script.boss" : "hint." + o.id);
+          name.append(el("span", "bt-item-name", o.name), el("small", "bt-item-hint" + (o.why ? " bt-why" : ""), hint));
+          const meta = el("span", "bt-cmd-meta");
+          if (o.target != null) meta.append(el("span", "bt-cmd-target", lab("itemTarget", { hero: st.heroes[o.target].name })));
+          meta.append(el("span", "bt-cmd-count", lab("itemCount", { n: o.count })));
+          const b = el("button", "bt-cmd bt-skill bt-itemrow");
+          b.type = "button";
+          b.dataset.item = o.id;
+          b.append(name, meta);
+          if (!o.usable) b.setAttribute("aria-disabled", "true");
+          b.addEventListener("click", () => {
+            if (busy) return;
+            if (b.getAttribute("aria-disabled") === "true") { addLine(lab(o.why || "itemNoTarget")); return; } // nothing spent
+            command({ type: "item", id: o.id });
+          });
+          list.append(b);
+        }
+        if (!itemOptions(st).length) list.append(el("p", "bt-empty", lab("itemNone")));
+        const back = button(lab("back"), () => { mode = "main"; renderMenu(); focusFirst(true, "item"); });
+        back.classList.add("bt-back");
+        cmds.append(wrap, back);
+        fitSub(wrap, list, back);
+      } else if (mode === "skill" && hero) {
         menuHead.textContent = lab("skill");
+        const { wrap, list } = sub();
         for (const o of skillOptions(st, st.active)) {
           const meta = el("span", "bt-cmd-meta");
-          meta.append(el("span", "bt-cmd-lv" + (o.level > 0 ? "" : " bt-none"), o.level > 0 ? lab("skillLevel", { n: o.level }) : lab("skillNone")),
-            el("span", "bt-cmd-cost", lab("skillCost", { n: o.cost })));
+          meta.append(el("span", "bt-cmd-lv" + (o.own > 0 ? "" : " bt-none"), o.own > 0 ? lab("skillLevel", { n: o.own }) : lab("skillNone")));
+          if (o.gear > 0) meta.append(el("span", "bt-cmd-gear", lab("skillGear", { n: o.gear })));
+          meta.append(el("span", "bt-cmd-cost", lab("skillCost", { n: o.cost })));
           const b = button(o.name, (blocked) => {
             if (blocked) { addLine(lab("lineNoMp", { hero: hero.name, skill: o.name })); return; }
             command({ type: "skill", module: o.id });
           }, meta);
           b.classList.add("bt-skill");
           if (!o.usable) b.setAttribute("aria-disabled", "true");
-          cmds.append(b);
+          list.append(b);
         }
         const back = button(lab("back"), () => { mode = "main"; renderMenu(); focusFirst(true, "skill"); });
         back.classList.add("bt-back");
-        cmds.append(back);
+        cmds.append(wrap, back);
+        fitSub(wrap, list, back);
       } else {
         mode = "main";
         menuHead.textContent = hero ? lab("prompt", { hero: hero.name }) : "";
         for (const [id, text] of main) {
           const b = button(text, () => {
-            if (id === "skill") { mode = "skill"; renderMenu(); focusFirst(true); return; }
+            if (id === "skill" || id === "item") { mode = id; renderMenu(); focusFirst(true); return; }
             command({ type: id });
           });
           b.dataset.cmd = id;
+          if (id === "item" && !itemOptions(st).length) b.classList.add("bt-dim");
           cmds.append(b);
         }
+        const hgt = cmds.getBoundingClientRect().height;
+        if (hgt > 0) mainH = hgt;
       }
       roving();
       setBusy(busy);
+    }
+    // a submenu is as tall as the main menu (taller on a phone, where the page scrolls anyway): as many whole rows as fit
+    // above the pinned Back, and a "▼ more" fade while rows are hidden below (or above)
+    let mainH = 0;
+    function fitSub(wrap, list, back) {
+      const rowsEl = [...list.children], gap = 2;
+      if (!rowsEl.length || !rowsEl[0].offsetHeight) return;
+      const cueEl = wrap.querySelector(".bt-more-cue");
+      const budget = Math.max(mainH || 188, root.clientWidth <= 560 ? 280 : 0) - back.offsetHeight - (cueEl ? cueEl.offsetHeight : 0) - gap;
+      let used = 0, k = 0;
+      for (const r of rowsEl) { const hgt = r.offsetHeight + (k ? gap : 0); if (k && used + hgt > budget) break; used += hgt; k++; }
+      if (k < rowsEl.length) list.style.maxHeight = Math.max(rowsEl[0].offsetHeight, used) + "px";
+      const cue = () => {
+        wrap.classList.toggle("bt-more", list.scrollTop + list.clientHeight < list.scrollHeight - 2);
+        wrap.classList.toggle("bt-less", list.scrollTop > 2);
+      };
+      list.addEventListener("scroll", cue, { passive: true });
+      cue();
     }
     function items() { return [...cmds.querySelectorAll(".bt-cmd")]; }
     // focus moves where it can be seen: the nearest scroll that shows the whole element
@@ -747,7 +1003,7 @@
       else if (e.key === "ArrowUp" || e.key === "ArrowLeft") to = (i - 1 + list.length) % list.length;
       else if (e.key === "Home") to = 0;
       else if (e.key === "End") to = list.length - 1;
-      else if (e.key === "Escape" && mode === "skill") { e.preventDefault(); mode = "main"; renderMenu(); focusFirst(true, "skill"); return; }
+      else if (e.key === "Escape" && mode !== "main") { e.preventDefault(); const was = mode; mode = "main"; renderMenu(); focusFirst(true, was); return; }
       if (to < 0 || !list.length) return;
       e.preventDefault();
       roving(list[to]);
@@ -767,6 +1023,8 @@
       if (busy || st.phase !== "hero") return;
       const evs = heroAction(st, action);
       if (!evs.length) return;
+      const used = evs.find((e) => e.t === "item");
+      if (used) call("onUseItem", used.id); // the page spends it (POST /api/party/use); the battle counts it down itself
       mode = "main";
       if (st.phase === "hero" && evs.every((e) => e.t === "say")) { // nothing happened (no MP): stay on this hero
         play(evs, () => {});
@@ -809,6 +1067,7 @@
       head.tabIndex = -1;
       card.append(head);
       if (sum.text) card.append(rich(el("p", "bt-card-text"), sum.text));
+      if (st.phase === "won" && reward !== undefined) card.append(rewardBox());
       if (sum.quote) {
         const fig = el("figure", "bt-quote");
         fig.append(el("figcaption", "", sum.quoteTitle), el("blockquote", "", sum.quote));
@@ -834,6 +1093,27 @@
       const first = acts.querySelector(".bt-btn");
       const inside = root.contains(document.activeElement) || document.activeElement === document.body;
       if (first && (inside || opts.autofocus !== false)) { first.focus({ preventScroll: true }); reveal(card); }
+    }
+
+    // what onWin brought: a promise of {gold, loot: [item]}, or null for a lesson that paid out before (undefined: the
+    // page says nothing about rewards, so the screen doesn't either)
+    let reward;
+    function rewardBox() {
+      const box = el("div", "bt-reward");
+      box.setAttribute("aria-live", "polite");
+      const show = (r) => {
+        box.textContent = "";
+        box.classList.remove("bt-wait");
+        const lines = rewardLines(r, labels);
+        for (const x of lines) box.append(el("p", "bt-reward-" + x.kind + (x.kind === "failed" ? " bt-reward-none" : ""), x.text));
+        box.hidden = !lines.length;
+      };
+      if (reward && typeof reward.then === "function") {
+        box.classList.add("bt-wait");
+        box.append(el("p", "", lab("rewardWait")));
+        reward.then((r) => { if (alive_) show(r === undefined ? {} : r); }, () => { if (alive_) show(false); });
+      } else show(reward);
+      return box;
     }
 
     // ---- events: each one changes what is shown and starts its effects; the next waits for it
@@ -906,6 +1186,32 @@
           });
           return hitAt + (ev.all ? 0 : (ev.hits.length - 1) * 260) + 560;
         }
+        case "item": {
+          const hb = shown.heroes[ev.hero];
+          hb.guard = false;
+          spawn({ kind: "pillar", who: ev.hero, t0, dur: 380 });
+          ev.hits.forEach((x, k) => {
+            const s2 = shown.heroes[x.hero], at = t0 + 260 + k * 90;
+            const fix = () => { s2.hp = x.hp; s2.mp = x.mp; if (x.what === "revive") s2.ko = false; paintStatus(); };
+            spawn({ kind: "crosses", who: x.hero, t0: at, dur: 700, color: x.what === "mp" ? "accent" : "good" });
+            if (x.what === "revive") spawn({ kind: "burst", who: x.hero, t0: at, dur: 520, seed: 7 });
+            spawn({ kind: "num", who: x.hero, t0: at, dur: 1000, text: "+" + x.n + (x.what === "mp" ? " " + lab("mp") : ""), color: x.what === "mp" ? "accent" : "good", size: 18 });
+            if (still) fix(); else later(at, fix);
+          });
+          if (ev.id === "l:sign") st.heroes.forEach((h, i) => { if (!shown.heroes[i].ko) spawn({ kind: "shield", who: i, t0: t0 + 200, dur: 700 }); });
+          if (ev.id === "l:adr") spawn({ kind: "ring", t0: t0 + 200, dur: 700 });
+          if (ev.id === "c:smoke") spawn({ kind: "smoke", t0: t0 + 150, dur: 900 });
+          if (ev.foe) {
+            const at = t0 + 300;
+            spawn({ kind: "burst", t0: at, dur: 520, big: true, seed: ev.foe.n });
+            spawn({ kind: "flash", who: "foe", t0: at, dur: 110 });
+            spawn({ kind: "shake", who: "foe", t0: at, dur: 300, amp: 3 });
+            spawn({ kind: "num", who: "foe", t0: at, dur: 1000, text: String(ev.foe.n), color: "gold", size: 24 });
+            if (still) shown.foe.hp = ev.foe.hp; else later(at, () => { shown.foe.hp = ev.foe.hp; paintStatus(); });
+          }
+          return ev.id === "c:smoke" ? 900 : 820;
+        }
+        case "skip": spawn({ kind: "ring", t0, dur: 600 }); spawn({ kind: "shake", who: "foe", t0, dur: 260, amp: 1 }); return 650;
         case "charge": shown.foe.charged = true; spawn({ kind: "ring", t0, dur: 700 }); return 720;
         case "heal": {
           spawn({ kind: "crosses", t0, dur: 800 });
@@ -914,7 +1220,7 @@
           return 760;
         }
         case "ko": shown.heroes[ev.hero].ko = true; shown.heroes[ev.hero].guard = false; spawn({ kind: "fall", who: ev.hero, t0, dur: 450 }); return 480;
-        case "down": shown.foe.down = true; shown.foe.charged = false; spawn({ kind: "dissolve", t0, dur: 1000 }); call("onWin", st.lessonId); return 1050;
+        case "down": shown.foe.down = true; shown.foe.charged = false; spawn({ kind: "dissolve", t0, dur: 1000 }); reward = call("onWin", st.lessonId); return 1050;
         case "hold": shown.foe.held = true; shown.foe.charged = false; spawn({ kind: "quake", t0, dur: 500, amp: 5 }); spawn({ kind: "flash", who: "foe", t0, dur: 300 });
           spawn({ kind: "num", who: "foe", t0: t0 + 200, dur: 1600, text: "1 " + lab("hp"), color: "gold", size: 24, lift: 20 }); return 1000;
         case "end": if (ev.phase === "won" || ev.phase === "held") shown.cheer = ev.phase === "won"; shown.foe.charged = false; return 350;
@@ -1208,11 +1514,12 @@
         if (t < f.t0 || t >= f.t0 + f.dur) continue;
         const u = (t - f.t0) / f.dur;
         if (f.kind === "slash") slash(fb, u, f.big);
-        else if (f.kind === "burst") burst(fb, u, f);
+        else if (f.kind === "burst") burst(f.who != null ? heroBox(f.who, t) : fb, u, f);
         else if (f.kind === "pillar") pillar(heroBox(f.who, t), u);
         else if (f.kind === "claw") clawMark(heroBox(f.who, t), u);
         else if (f.kind === "ring") ringFx(fb, u);
-        else if (f.kind === "crosses") crosses(fb, u);
+        else if (f.kind === "crosses") crosses(f.who != null && f.who !== "foe" ? heroBox(f.who, t) : fb, u, f.color);
+        else if (f.kind === "smoke") smoke(u);
         else if (f.kind === "wave") wave(u);
       }
       for (const f of fx) {
@@ -1316,12 +1623,20 @@
       ctx.fillStyle = rgba(theme.gold, 0.9);
       for (let i = 0; i < 32; i++) { const a = (i / 32) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(a) * rr) * P, Math.round(cy + Math.sin(a) * rr * 0.8) * P, P, P); }
     }
-    function crosses(fb, u) {
-      ctx.fillStyle = theme.good;
+    function crosses(fb, u, color) {
+      ctx.fillStyle = color ? colorOf(color) : theme.good;
       for (let k = 0; k < 7; k++) {
         const x = Math.round(fb.x + 4 + ((k * 11) % Math.max(8, fb.w - 8))), y = Math.round(fb.y + fb.h - ((u * 50 + k * 7) % (fb.h + 6)));
         ctx.fillRect(x * P, (y - 1) * P, P, 3 * P);
         ctx.fillRect((x - 1) * P, y * P, 3 * P, P);
+      }
+    }
+    function smoke(u) { // a Smoke Bomb: grey puffs swell over the party, then thin out
+      const r = rng(41), step = Math.floor(u * 8) / 8;
+      ctx.fillStyle = rgba(mix(theme.skyLow, theme.ink, 0.35), 0.55 * (1 - step));
+      for (let i = 0; i < 14; i++) {
+        const cx = Math.round(W * (0.55 + r() * 0.4)), cy = Math.round(horizon + (L - horizon) * (0.1 + r() * 0.8)), rad = Math.round(3 + step * (6 + r() * 8));
+        for (let y = -rad; y <= rad; y++) { const w = Math.round(Math.sqrt(rad * rad - y * y)); ctx.fillRect((cx - w) * P, (cy + y) * P, (w * 2 + 1) * P, P); }
       }
     }
     function wave(u) { // an attack on everyone: a band sweeping right across the floor
