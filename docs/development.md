@@ -30,6 +30,14 @@ check on `main`), the pre-commit hooks (`lint`) and `pip-audit` over the locked 
 `uv.lock` and the workflows' actions, which are pinned to commit hashes (the version is in a comment beside each).
 GitHub's secret scanning, push protection and CodeQL code scanning are on in the repository settings.
 
+**Actions → Windows (Japanese) QA → Run workflow** (`.github/workflows/windows-ja-qa.yml`, on demand) tries the
+[Windows install](install.md#windows) as a standard user named in Japanese (山田太郎, so the profile folder has
+Japanese in it) with the console in code page 932: the docs' PowerShell lines exactly as written, then the session in a
+Japanese-named folder, the hooks through Git Bash and PowerShell, the Task Scheduler tasks and uninstall, on Windows
+Server 2022 and 2025. It saves every command's output byte for byte and screenshots of the dashboard in Edge, in
+Japanese at 100% and 150% scaling, as the run's artifacts. CI can't switch Windows' own language (that takes a restart),
+so the Japanese messages of Windows' own programs are covered by the unit tests in `tests/test_windows.py`.
+
 ### Pre-commit hooks
 
 `uvx pre-commit install` once, and `.pre-commit-config.yaml` checks each commit: merge markers, YAML and TOML,

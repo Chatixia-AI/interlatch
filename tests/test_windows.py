@@ -249,6 +249,28 @@ def test_the_old_windows_console_gets_plain_stand_ins():
     assert out.getvalue() == "  + MCP - Status > Updates... Ctrl+K 記録中" and stream.isatty()
 
 
+def test_the_dashboards_files_keep_their_types_whatever_the_registry_says(synced, monkeypatch):
+    """mimetypes reads Windows' registry, where an editor's installer can map .js to text/plain: served as that, with
+    nosniff, the browser ran none of the page's scripts."""
+    import mimetypes
+    import urllib.request
+
+    from test_hub import _serve
+
+    real = mimetypes.guess_type
+    monkeypatch.setattr(mimetypes, "guess_type", lambda url, strict=True:
+                        ("text/plain", None) if str(url).endswith((".js", ".css", ".svg")) else real(url, strict))
+    _app, httpd, url = _serve(synced["cfg"])
+    try:
+        for name, want in (("app.js", "text/javascript"), ("app.css", "text/css"), ("index.html", "text/html"),
+                           ("agent-claude.svg", "image/svg+xml"), ("plex-sans-400.woff2", "font/woff2")):
+            with urllib.request.urlopen(f"{url}/{name}", timeout=10) as r:
+                assert r.headers["Content-Type"].split(";")[0] == want, name
+                assert r.headers["X-Content-Type-Options"] == "nosniff"
+    finally:
+        httpd.shutdown()
+
+
 @on_windows
 def test_the_tasks_run_as_this_accounts_sid():
     """The SID, not DOMAIN\\name, which Task Scheduler may not resolve for an Entra ID (AzureAD\\...) account."""

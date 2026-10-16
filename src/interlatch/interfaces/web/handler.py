@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import re
 import time
 from http.server import BaseHTTPRequestHandler
@@ -17,7 +16,7 @@ from ...core import i18n
 from ...core.i18n import tr
 from ...sharing import news
 from .app import App
-from .assets import PAGE_CSP, WEB_FILES
+from .assets import PAGE_CSP, WEB_FILES, web_type
 from . import api, routes
 
 LOOPBACK = ("127.0.0.1", "localhost", "[::1]")
@@ -373,11 +372,8 @@ def make_handler(app: App, port: int):
             if name not in WEB_FILES:
                 name = "index.html"
             body = WEB_FILES[name]
-            ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
-            if ctype.startswith("text/") or ctype in ("application/javascript",):
-                ctype += "; charset=utf-8"
             self.send_response(200)
-            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Type", web_type(name))
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-cache")
             self.send_header("X-Content-Type-Options", "nosniff")

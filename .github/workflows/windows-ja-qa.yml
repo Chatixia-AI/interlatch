@@ -1,11 +1,10 @@
 name: Windows (Japanese) QA
 
 # The documented Windows install as a standard user named in Japanese, with the console in code page 932, then the
-# dashboard in Edge in Japanese. Runs on demand; `source` is what `uv tool install` installs.
+# dashboard in Edge in Japanese (docs/development.md, Continuous integration). Runs on demand; `source` is what
+# `uv tool install` installs.
 
 on:
-  push:
-    branches: [windows-japanese]
   workflow_dispatch:
     inputs:
       source:
