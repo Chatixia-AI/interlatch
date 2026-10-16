@@ -77,7 +77,7 @@ jobs:
         shell: bash
         run: |
           uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:11530 /c/qa/shots ja-user || true
-          mkdir -p /c/demo && tar -xzf "$RUNNER_TEMP/demo-home.tgz" -C /c/demo
+          mkdir -p /c/demo && tar --force-local -xzf "$(cygpath -u "$RUNNER_TEMP")/demo-home.tgz" -C /c/demo
           # in this step: a process a step starts in the background ends with the step
           INTERLATCH_HOME='C:\demo\home' uvx --from "$INSTALL_FROM" interlatch ui --port 8898 > /c/demo/ui.out 2> /c/demo/ui.err &
           uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:8898 /c/qa/shots demo || true
