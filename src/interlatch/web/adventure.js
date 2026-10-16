@@ -22,6 +22,7 @@
        opts.onReady()      the land is fully painted (a soft preview shows until then); again after a theme change
      layout(data, seed = 1) -> the world, pure and deterministic (no DOM): see layout() below
      LABELS                the English defaults
+     art                   {BIOMES, DECO, decoVariant, paintArt, TOWN_ROWS, townPal, mix, rgba}: the land's art, for field.js
    } */
 (() => {
   "use strict";
@@ -1960,5 +1961,7 @@
     };
   }
 
-  root.Adventure = Object.freeze({ mountMap, layout, LABELS });
+  // the land's art, for the region fields (field.js): the biomes, the props, the towns, and the painter that shades them
+  const ART = Object.freeze({ BIOMES, DECO, decoVariant, paintArt, TOWN_ROWS, townPal, mix, rgba });
+  root.Adventure = Object.freeze({ mountMap, layout, LABELS, art: ART });
 })();

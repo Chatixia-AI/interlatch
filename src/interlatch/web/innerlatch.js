@@ -1243,8 +1243,8 @@ async function adventureSidebar(box) {
     h("div", { class: "sb-group" }, t("Regions")),
     (m.regions || []).map((r) => {
       const x = tally.by[r.id] || { total: 0, cleared: 0 };
-      return h("a", { class: "sb-row sb-region", href: `#/innerlatch/adventure?view=map&region=${r.id}`, title: r.about || r.name,
-        "data-route": "/innerlatch/adventure", "data-key": "region", "data-val": r.id },
+      return h("a", { class: "sb-row sb-region", href: `#/innerlatch/adventure/field/${r.id}`, title: r.about || r.name,
+        "data-route": `/innerlatch/adventure/field/${r.id}` },
         pxIcon(r.id, 1), h("span", null, r.name), h("em", null, t("{n}/{total}", { n: fmtNum(x.cleared), total: fmtNum(x.total) })));
     })));
 }
@@ -1286,7 +1286,9 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
     h("div", null, h("h1", null, t("Adventure")),
       h("div", { class: "sub" }, tally.total ? t("Every lesson your agents learned is out there. {n} of {total} cleared.", { n: fmtNum(tally.cleared), total: fmtNum(tally.total) })
         : t("No lessons on the roadmap yet: the world is still under fog.")))),
-    h("div", { class: "head-actions" }, goldChip(m.gold), h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Bag")),
+    h("div", { class: "head-actions" }, goldChip(m.gold),
+      h("a", { class: "btn small primary", href: `#/innerlatch/adventure/field/${partyRegion(m)}` }, icon("map"), t("Explore")),
+      h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Bag")),
       segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
       (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure"))));
   if (list) return h("div", { class: "party-page adv-page" }, head, advList(m, params));
@@ -1460,7 +1462,8 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("This lesson isn't in your party's archive."), " ",
       h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
   }
-  const back = `#/innerlatch/adventure?lesson=${id}`;
+  const field = /^\w+$/.test(params.field || "") ? params.field : null; // walked into it on a region's field
+  const back = field ? `#/innerlatch/adventure/field/${field}` : `#/innerlatch/adventure?lesson=${id}`;
   const onWin = async () => { // the battle shows the reward: gold and loot on a first clear, nothing on a second
     const r = await lbPost("/api/party/cleared", { id: Number(id), cleared: true });
     if (r) { mapCleared(r.cleared); if (r.bag) bagKeep(r.bag); }
@@ -1472,7 +1475,8 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     const enc = first || await api("/api/party/encounter", { id }).catch(() => ({ ...encounter, items: [] })); // never the old counts
     first = null;
     return { encounter: enc, ...cb, onWin };
-  }, back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [plainTitle(encounter.lesson.title)]], token);
+  }, back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"],
+    ...(field ? [[(mapCache?.regions || []).find((r) => r.id === field)?.name || field, back]] : []), [plainTitle(encounter.lesson.title)]], token);
 });
 route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
   const token = renderSeq;
@@ -1524,6 +1528,70 @@ async function bagAct(path, body, done, btn = null) {
   if (sbSection === "adventure") buildSidebar("adventure");
   render();
 }
+// ------------------------------------------------------------------ a region's field (field.js): the party walks one
+// region; walking into a monster opens its battle, into the town's gate the town. Where the party stands is kept for this
+// tab, so a battle or the town comes back to the same spot.
+const FIELD_SPOT_KEY = "interlatch.innerlatch.field.";
+function fieldSpot(attr) {
+  try { const v = JSON.parse(sessionStorage.getItem(FIELD_SPOT_KEY + attr) || "null"); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null; }
+  catch (e) { return null; }
+}
+function keepFieldSpot(attr, at) { try { sessionStorage.setItem(FIELD_SPOT_KEY + attr, JSON.stringify(at)); } catch (e) { /* this page only */ } }
+// the region the party stands in on the map: the newest lesson's
+function partyRegion(m) {
+  const newest = (m.lessons || []).find((l) => l.id === m.newest), mod = newest?.modules?.[0];
+  return (m.regions || []).find((r) => r.modules.some((x) => x.id === mod))?.id || m.regions?.[0]?.id || "craft";
+}
+function fieldLabels() { // the field engine's words (field.js LABELS), in the page's language
+  return { "field": t("{region}: a field to explore. Click or tap where to walk, or use the arrow keys or WASD. Walk into a monster to battle it, or into the town's gate to shop."),
+    "zoneLeft": t("{n} to battle here"), "zoneClear": t("All cleared here"), "zoneFog": t("Unexplored: no lessons here yet"),
+    "level": t("Lv {n}"), "hint": t("Click to walk · arrow keys or WASD"), "empty": t("No lessons in this region yet: nothing to battle here.") };
+}
+route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const m = await mapLoad(true);
+  const region = (m.regions || []).find((r) => r.id === attr);
+  setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [region?.name || attr]], token);
+  if (!region || !window.Field || typeof window.Field.mountField !== "function") {
+    return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, region ? t("The field didn't load.") : t("No such region."), " ",
+      h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+  }
+  const x = advTally(m).by[attr] || { total: 0, cleared: 0 };
+  const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon(attr, 3),
+    h("div", null, h("h1", null, region.name),
+      h("div", { class: "sub" }, x.total ? t("Walk into a monster to battle it. {n} of {total} cleared here.", { n: fmtNum(x.cleared), total: fmtNum(x.total) })
+        : t("No lessons in this region yet: nothing to battle here.")))),
+    h("div", { class: "head-actions" }, goldChip(m.gold),
+      h("a", { class: "btn small", href: `#/innerlatch/adventure/town/${attr}` }, icon("home"), townName(m, attr)),
+      h("a", { class: "btn small", href: "#/innerlatch/adventure" }, icon("map"), t("World map"))));
+  const host = h("div", { class: "fd-host" });
+  const page = h("div", { class: "party-page adv-page field" }, head, host,
+    h("p", { class: "muted small adv-note" }, t("Battles don't change levels: an agent's XP comes from its lessons. A win marks the encounter cleared.")));
+  whenShown(host, () => {
+    let field;
+    try {
+      field = Field.mountField(host, { data: m, region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
+        onMove: (at) => keepFieldSpot(attr, at),
+        onEncounter: (lesson) => { hideTip(); go(`#/innerlatch/adventure/battle/${lesson.id}?field=${attr}`); },
+        onTown: () => { hideTip(); go(`#/innerlatch/adventure/town/${attr}?field=1`); },
+        onHover: (item, at) => {
+          if (!item) { hideTip(); return; }
+          const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 }, l = item.lesson;
+          if (item.type === "monster") showTip(where, plainTitle(l.title), [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),
+            t("Walk into it to battle"));
+          else if (item.type === "town") showTip(where, item.name, region.name, t("Walk into its gate to shop"));
+          else if (item.type === "sign") showTip(where, item.zone.name, region.name, !item.zone.lessons ? t("Unexplored: no lessons here yet")
+            : item.zone.open ? t("{n} to battle here", { n: fmtNum(item.zone.open) }) : t("All cleared here"));
+          else hideTip();
+        } });
+    } catch (e) { host.replaceChildren(h("div", { class: "card empty" }, t("Could not load: {error}", { error: e.message }))); return; }
+    const gone = new MutationObserver(() => { if (!host.isConnected) { gone.disconnect(); hideTip(); try { field.destroy?.(); } catch (e) { /* gone */ } } });
+    gone.observe(document.querySelector("#app"), { childList: true });
+  });
+  return page;
+});
 route(/^\/innerlatch\/adventure\/town\/(\w+)$/, async (params, attr) => {
   const token = renderSeq;
   const p = await partyGet();
@@ -1543,6 +1611,7 @@ route(/^\/innerlatch\/adventure\/town\/(\w+)$/, async (params, attr) => {
   const open = (shop.gear || []).filter((x) => !x.locked).length;
   return partyShell(name, shop.region?.about || null,
     h("div", { class: "town-bar" }, goldChip(shop.gold), h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Open your bag")),
+      h("a", { class: "btn small", href: `#/innerlatch/adventure/field/${attr}` }, icon("map"), t("Back to the field")),
       h("a", { class: "btn small", href: `#/innerlatch/adventure?view=map&region=${attr}` }, icon("map"), t("Back to the map"))),
     h("section", { class: "card town-card" }, cardHead(t("Supplies"), { iconName: "zap", hint: t("For battles: use them from the Item command") }),
       h("ul", { class: "bag-rows" }, (shop.consumables || []).map((x) => itemRow({ ...x, count: owned.get(x.id) || 0 },

@@ -2509,4 +2509,17 @@ window.INTERLATCH_JA = {
   "Employers ask for": "企業が求めるもの",
   "employers ask for it": "企業が求めています",
   "A green corner marks a module employers ask for.": "緑の角は、企業が求めるモジュールです。",
+  // a region's field (field.js): the party walks one region and meets its lessons as monsters
+  "{region}: a field to explore. Click or tap where to walk, or use the arrow keys or WASD. Walk into a monster to battle it, or into the town's gate to shop.": "{region}：歩いて探索するフィールド。クリックかタップで行き先を選ぶか、矢印キーか WASD で歩きます。モンスターにぶつかると戦闘、町の門に入ると買い物です。",
+  "{n} to battle here": "ここで戦える教訓 {n} 件",
+  "All cleared here": "ここはすべてクリア済み",
+  "Unexplored: no lessons here yet": "未踏：ここにはまだ教訓がありません",
+  "Click to walk · arrow keys or WASD": "クリックで移動・矢印キーか WASD",
+  "No lessons in this region yet: nothing to battle here.": "この地方にはまだ教訓がありません。戦う相手はいません。",
+  "The field didn't load.": "フィールドを読み込めませんでした。",
+  "No such region.": "その地方はありません。",
+  "Walk into a monster to battle it. {n} of {total} cleared here.": "モンスターにぶつかると戦闘です。ここでは {total} 件中 {n} 件クリア。",
+  "Walk into it to battle": "ぶつかると戦闘",
+  "Walk into its gate to shop": "門に入ると買い物",
+  "Back to the field": "フィールドに戻る",
 };
