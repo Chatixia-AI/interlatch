@@ -1,12 +1,12 @@
-/* Innerlatch's Adventure page: the overworld. Every counted lesson from GET /api/party/map stands on a pixel continent as
-   an encounter, in the territory of its first module: six regions, one per attribute (a forge town, a lake country,
+/* Innerlatch's Adventure page: the overworld. Every counted lesson from GET /api/party/map has its place on a pixel
+   continent, in the territory of its first module: six regions, one per attribute (a forge town, a lake country,
    server mountains, a walled march, a wizard's land, an old forest), each cut into one territory per module. A module
-   with no lessons yet lies under fog. The main quest's bosses wait at their region's gate; the party stands where the
-   newest lesson was learned.
+   with no lessons yet lies under fog. No creature stands on the map: the lessons count toward their territories, the
+   bosses keep their places in the layout, and the party stands where the newest lesson was learned.
 
    The art is pixel maps, as in sprites.js and scene.js: no images, styles only through the CSSOM, no eval. The land is
    painted once into a canvas one pixel a world pixel (ImageData, then the Cast's props); each frame draws the part of it
-   on screen, scaled, and the encounters, bosses and party over it. One requestAnimationFrame loop serves every mounted
+   on screen, scaled, and the towns and the party over it. One requestAnimationFrame loop serves every mounted
    map; it rests while the page is hidden, the map is off screen, or (with reduced motion) nothing moves.
 
    window.Adventure = {
@@ -14,9 +14,9 @@
        opts.data           the /api/party/map payload
        opts.labels         overrides for LABELS below (the page passes Japanese)
        opts.reducedMotion  no idle animation, no camera easing
-       opts.onHover(item, at)  item = {type: "lesson", lesson, cleared} | {type: "boss", boss} | {type: "party", agents}
-                           | {type: "region", region, module, fog} | null; at = {x, y} in client pixels
-       opts.onPick(item)   click, tap or Enter on a lesson, a boss or the party
+       opts.onHover(item, at)  item = {type: "party", agents} | {type: "town", ...} | {type: "region", region, module, fog}
+                           | null; at = {x, y} in client pixels
+       opts.onPick(item)   click, tap or Enter on the party or a town
        opts.height         css pixels (otherwise the map fills its host, 320 at least)
        opts.seed           the layout's seed (1)
        opts.onReady()      the land is fully painted (a soft preview shows until then); again after a theme change
@@ -43,7 +43,7 @@
        regions       {attr id: name}: renames regions (the payload's names otherwise)
        modules       {module id: name}: renames territories */
   const LABELS = Object.freeze({
-    map: "Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the encounters on screen and Enter opens one.",
+    map: "Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the places on screen and Enter opens one.",
     regionTitle: "{name}",
     regionStats: "{cleared}/{lessons} cleared",
     fog: "Unexplored",
@@ -1101,8 +1101,6 @@
   }
   if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { for (const m of maps) m.wake(); schedule(); });
 
-  const KIND_DOT = { fix: "#e5484d", gotcha: "#7a7f96", decision: "#4a8fd8", learning: "#9a7ae0", pattern: "#5d7f8a", command: "#d9a05b" };
-  const STATUS = { open: "bossAsleep", evidence: "bossAwake", done: "bossDefeated" };
 
   function mountMap(host, opts = {}) {
     const given = opts.labels || {};
@@ -1114,29 +1112,17 @@
     const seed = Number.isFinite(opts.seed) ? opts.seed : 1;
     const data = opts.data || {};
     const L = layout(data, seed);
-    const lessonOf = new Map((Array.isArray(data.lessons) ? data.lessons : []).map((l) => [String(l.id), l]));
     const regionOf = new Map((Array.isArray(data.regions) ? data.regions : []).map((r) => [r.id, r]));
     const moduleOf = new Map();
     for (const r of regionOf.values()) for (const m of r.modules || []) moduleOf.set(m.id, m);
-    const bossOf = new Map((Array.isArray(data.bosses) ? data.bosses : []).map((b) => [String(b.id), b]));
     const agents = (Array.isArray(data.agents) ? data.agents : []).slice()
       .sort((a, b) => (b.level || 0) - (a.level || 0) || AGENT_ORDER.indexOf(a.agent) - AGENT_ORDER.indexOf(b.agent));
     let cleared = new Set((Array.isArray(data.cleared) ? data.cleared : []).map(String));
     const regionName = (r) => labels.regions[r.id] || r.name;
     const moduleName = (t) => labels.modules[t.id] || t.name;
 
-    // encounters, drawn back to front; a grid for finding the one under the pointer
-    const encs = L.lessons.map((p) => {
-      const l = lessonOf.get(String(p.id)) || { id: p.id };
-      return { ...p, lesson: l, kind: l.kind || "fix", stage: l.stage || "provisional", ph: (strHash(p.id) % 1000) / 1000, key: "lesson:" + p.id };
-    }).sort((a, b) => a.y - b.y || a.x - b.x);
-    const CELL = 32, grid = new Map();
-    for (const e of encs) {
-      const k = Math.floor(e.x / CELL) * 65536 + Math.floor(e.y / CELL);
-      if (!grid.has(k)) grid.set(k, []);
-      grid.get(k).push(e);
-    }
-    const bosses = L.bosses.map((b) => ({ ...b, boss: bossOf.get(String(b.id)) || b, key: "boss:" + b.id }));
+    // the lessons' places: no creature is drawn there, but each counts toward its territory and region
+    const encs = L.lessons;
     const terrStats = L.territories.map(() => ({ n: 0, done: 0 }));
     const regionStats = L.regions.map(() => ({ n: 0, done: 0 }));
     function recount() {
@@ -1193,7 +1179,7 @@
     const zMax = 6;
     const cam = { x: L.width / 2, y: L.height / 2, z: 2 };
     let goal = null, last = 0, animT = 0, frameNo = -1, dirty = true;
-    let hover = null, hoverTerr = -1, focus = null, lastFocus = null, keyboard = false, ping = null;
+    let hover = null, hoverTerr = -1, focus = null, lastFocus = null, keyboard = false;
     let drag = null;
     const pointers = new Map();
     let hits = []; // what was drawn this frame, for Tab
@@ -1317,36 +1303,6 @@
 
     // ---- art caches (world pixels: one canvas pixel per art pixel)
     const art = new Map();
-    function monster(kind, stage, frame) {
-      const key = `m|${kind}|${stage}|${frame}`;
-      if (!art.has(key)) {
-        let cv = null;
-        try {
-          const A = root.Scene && root.Scene.art;
-          if (A) cv = A.monster(A.kinds[kind] || "glitch", stage, frame);
-        } catch (e) { cv = null; }
-        if (!cv) { // no Scene: a little blob of the kind's colour
-          const c = KIND_DOT[kind] || "#e5484d";
-          cv = paintArt(["..cccc..", ".cccccc.", "cwkccwkc", "cccccccc", "cccccccc", ".cccccc.", ".c.cc.c."], { c, w: "=#ffffff", k: "=#1b1d33" }, false).cv;
-        }
-        art.set(key, cv);
-      }
-      return art.get(key);
-    }
-    function fly(kind) {
-      try { const A = root.Scene && root.Scene.art; return A ? A.fly(A.kinds[kind] || "glitch") : 0; } catch (e) { return 0; }
-    }
-    function bossImg(n, frame, felled) {
-      const key = `b|${n}|${frame}|${felled ? 1 : 0}`;
-      if (!art.has(key)) {
-        let cv = null;
-        try { const A = root.Scene && root.Scene.art; if (A) cv = A.boss(n, frame, { felled }); } catch (e) { cv = null; }
-        if (!cv) cv = paintArt(["...rrrrrr...", ".rrrrrrrrrr.", "rrwkrrrrwkrr", "rrrrrrrrrrrr", "rrrrmmmmrrrr", "rrrrrrrrrrrr", ".rr.rr.rr.rr"],
-          { r: felled ? "#8a8a96" : "#e05a5a", w: "=#ffffff", k: "=#1b1d33", m: "=#3b1f2e" }, false).cv;
-        art.set(key, cv);
-      }
-      return art.get(key);
-    }
     function agentImg(agent, tier, frame) {
       const key = `a|${agent}|${tier}|${frame}`;
       if (!art.has(key)) {
@@ -1513,42 +1469,10 @@
         ctx.stroke();
         ctx.restore();
       }
-      // the party's ring and the gates' bosses' auras go under everything that stands
+      // the party's ring goes under everything that stands
       drawGroundMarks(t);
       drawTowns(t);
-      // encounters, back to front
-      const far = S < 0.5;
-      ctx.imageSmoothingEnabled = S < 1;
-      for (const e of encs) {
-        if (!seen(e.x, e.y, 24)) continue;
-        const done = cleared.has(String(e.id)), lift = hover === e.key || focus === e.key ? 1 : 0;
-        if (far) {
-          const c = done ? biomeOf(L.regions[L.territories[e.territory].region]).hue : KIND_DOT[e.kind] || "#e5484d";
-          const s = Math.max(3, Math.round(6 * S)), x0 = Math.round(X(e.x)) - (s >> 1), y0 = Math.round(Y(e.y - 4)) - (s >> 1);
-          ctx.fillStyle = "rgba(10, 12, 30, 0.6)";
-          ctx.fillRect(x0 - 1, y0 - 1, s + 2, s + 2);
-          ctx.fillStyle = c;
-          ctx.fillRect(x0, y0, s, s);
-          hits.push({ key: e.key, x: e.x, y: e.y, box: [e.x - 6, e.y - 10, 12, 12], item: () => lessonItem(e) });
-          continue;
-        }
-        if (done) {
-          const cv = propImg("flag", biomeOf(L.regions[L.territories[e.territory].region]));
-          rect(e.x - 2, e.y, 6, 1, theme.shadow);
-          put(cv, e.x + 2, e.y + 1 - lift);
-          hits.push({ key: e.key, x: e.x, y: e.y, box: [e.x - 5, e.y - 12, 11, 13], item: () => lessonItem(e) });
-        } else {
-          const k = e.stage === "canonical" ? 1.5 : 1, fl = fly(e.kind);
-          const fr = (frame + Math.floor(e.ph * 7)) % 2, cv = monster(e.kind, e.stage, fr);
-          const bob = fl ? Math.round(Math.sin(t * 3 + e.ph * 6.28)) - Math.round(fl * 0.5) : 0;
-          rect(e.x - 5 * k, e.y - 1, 10 * k, 1, theme.shadow);
-          rect(e.x - 3 * k, e.y, 6 * k, 1, theme.shadow);
-          if (lift) ring(e.x, e.y, 8 * k, theme.cta);
-          put(cv, e.x, e.y + bob - lift, k);
-          hits.push({ key: e.key, x: e.x, y: e.y, box: [e.x - 9 * k, e.y - 17 * k, 18 * k, 18 * k], item: () => lessonItem(e) });
-        }
-      }
-      drawBosses(t, frame);
+      // no creatures on the map: only the party stands on it
       drawParty(t, frame);
       drawLabels();
       drawFocus(t);
@@ -1574,39 +1498,6 @@
         const p = L.party, pulse = reduced ? 0 : (t * 0.8) % 1;
         ring(p.x, p.y, 15, rgba(theme.cta, 0.9));
         if (!reduced) ring(p.x, p.y, 15 + pulse * 10, rgba(theme.cta, 0.6 * (1 - pulse)));
-      }
-      for (const b of bosses) {
-        if (b.status !== "evidence") continue;
-        const pulse = reduced ? 0.5 : (t * 0.6) % 1;
-        ring(b.x, b.y, 18 + pulse * 6, rgba("#ff6b6b", 0.8 * (1 - pulse)));
-        ring(b.x, b.y, 17, rgba(theme.cta, 0.8));
-      }
-    }
-    function drawBosses(t, frame) {
-      for (const b of bosses) {
-        if (b.x < -ox / S - 60 || b.x > (canvas.width - ox) / S + 60) continue;
-        const done = b.status === "done", awake = b.status === "evidence";
-        const cv = bossImg(b.n || 1, awake && !reduced ? frame % 2 : 0, done);
-        const lift = hover === b.key || focus === b.key ? 1 : 0;
-        rect(b.x - 13, b.y - 1, 26, 2, theme.shadow);
-        ctx.save();
-        if (b.status === "open") ctx.globalAlpha = 0.82;
-        put(cv, b.x, b.y + (done ? 3 : 0) - lift, 2);
-        ctx.restore();
-        const top = b.y - cv.height * 2;
-        if (done) put(propImg("flag", biomeOf(L.regions[b.region])), b.x - 16, b.y + 1);
-        else if (awake) { // awake: a "!" over its head
-          const bounce = reduced ? 0 : Math.round(Math.abs(Math.sin(t * 4)) * -2);
-          rect(b.x - 1, top - 10 + bounce, 3, 6, "#ff5a5a");
-          rect(b.x - 1, top - 3 + bounce, 3, 2, "#ff5a5a");
-        } else { // asleep: z's drifting up
-          for (let k = 0; k < 2; k++) {
-            const u = reduced ? k * 0.5 : (t * 0.4 + k * 0.5) % 1, zx = b.x + 10 + u * 6 + k * 2, zy = top + 2 - u * 12, s = k ? 4 : 3;
-            const c = rgba(theme.dark ? "#e6ecff" : "#3a3f5a", reduced ? 0.8 : 1 - u);
-            rect(zx, zy, s, 1, c); rect(zx + s - 1 - Math.floor(s / 2), zy + 1, 1, s - 2, c); rect(zx, zy + s - 1, s, 1, c);
-          }
-        }
-        hits.push({ key: b.key, x: b.x, y: b.y, box: [b.x - 18, top, 36, b.y - top + 2], item: () => ({ type: "boss", boss: b.boss }) });
       }
     }
     function drawParty(t, frame) {
@@ -1635,9 +1526,9 @@
         for (const q of occluded) if (b.x < q.x + q.w && q.x < b.x + b.w && b.y < q.y + q.h && q.y < b.y + b.h) b.x = q.x - b.w - 2 * dpr;
         return b.x >= 0;
       };
-      // the party and the bosses stand clear of every name
+      // the party stands clear of every name
       const shield = (h) => { const [x, y, w, hh] = h.box; boxes.push({ x: X(x), y: Y(y) - 4 * dpr, w: w * S, h: hh * S + 4 * dpr }); };
-      for (const h of hits) if (h.key === "party" || h.key.startsWith("boss:")) shield(h);
+      for (const h of hits) if (h.key === "party") shield(h);
       // the regions' banners
       const fpx = clamp(Math.round(11 + 3 * z), 14, 20);
       for (const r of L.regions) {
@@ -1658,7 +1549,7 @@
           }
         }
       }
-      // the towns' names, under each town (or over it), never on the party or a boss
+      // the towns' names, under each town (or over it), never on the party
       for (const h of hits) if (h.key.startsWith("town:")) shield(h);
       if (z >= 0.9) for (const r of L.regions) {
         const T = r.town;
@@ -1675,43 +1566,6 @@
         if (!placed) continue;
         text(name, placed.x + w / 2, placed.y + h / 2, { size: 11, weight: 700, color: theme.dark ? "#ffe2a0" : "#5a3a06", max: w - 4 * dpr });
         boxes.push(placed);
-      }
-      // the bosses' tags: one panel under each gate, a line a boss
-      if (z >= 1.1) for (const r of L.regions) {
-        const mine = bosses.filter((b) => b.region === r.index);
-        if (!mine.length) continue;
-        const two = z >= 2;
-        ctx.font = `600 ${Math.round(9.5 * dpr)}px ${FONT}`;
-        const lines = mine.map((b) => {
-          const tag = fill(labels.boss, { text: String(b.boss.text || "").replace(/[.。]\s*$/, "") });
-          return { b, tag: two ? `${tag} · ${labels[STATUS[b.status] || "bossAsleep"]}` : tag };
-        });
-        const maxW = Math.min(300 * dpr, canvas.width - 24 * dpr), lh = 14 * dpr;
-        const w = Math.min(maxW, Math.max(...lines.map((l) => ctx.measureText(l.tag).width))) + 14 * dpr, h = lines.length * lh + 8 * dpr;
-        const top = Y(r.arch.y + 4), cx = X(r.arch.x);
-        if (cx < -w || cx > canvas.width + w || top > canvas.height || top + h < 0) continue;
-        // under the gate, stepping down past anything already there; else over the bosses' heads; else not at all (the
-        // page's tooltip still names them)
-        const above = Y(r.arch.y - 44) - h;
-        const tries = [0, 1, 2, 3].map((k) => top + k * lh).concat([0, 1, 2].map((k) => above - k * lh));
-        let pb = null;
-        for (const y of tries) {
-          const c = { x: cx - w / 2, y, w, h };
-          if (slide(c) && !hit(c)) { pb = c; break; }
-        }
-        if (!pb) continue;
-        ctx.save();
-        ctx.fillStyle = theme.panel;
-        ctx.fillRect(Math.round(pb.x), Math.round(pb.y), Math.round(w), Math.round(h));
-        ctx.strokeStyle = rgba(biomeOf(r).hue, 0.9);
-        ctx.lineWidth = Math.max(1, Math.round(dpr));
-        ctx.strokeRect(Math.round(pb.x) + 0.5, Math.round(pb.y) + 0.5, Math.round(w) - 1, Math.round(h) - 1);
-        ctx.restore();
-        lines.forEach((l, k) => {
-          const c = l.b.status === "evidence" ? (theme.dark ? "#ff9a9a" : "#b02a2a") : l.b.status === "done" ? theme.muted : theme.ink;
-          text(l.tag, pb.x + 7 * dpr, pb.y + 4 * dpr + lh * (k + 0.5), { size: 9.5, weight: 600, color: c, align: "left", max: w - 14 * dpr, outline: false });
-        });
-        boxes.push(pb);
       }
       if (z < 1.05) return;
       // the territories' names (two lines when long), the busiest first; the party's territory names itself over the party
@@ -1795,12 +1649,6 @@
       const key = focus && keyboard ? focus : null;
       const h = key && hits.find((x) => x.key === key);
       if (h) corners(h.box, Math.floor(t * 4) % 2 && !reduced ? theme.ink : theme.cta);
-      if (ping) { // focusLesson: a ring that opens round the encounter
-        const u = reduced ? 0.3 : ((performance.now() - ping.t0) / 1000) % 1.2 / 1.2;
-        const hp = hits.find((x) => x.key === ping.key);
-        if (hp) { ring(hp.x, hp.y - 6, 10 + u * 16, rgba(theme.cta, 1 - u), (10 + u * 16) * 0.8); corners(hp.box, theme.cta); }
-        if (!reduced && performance.now() - ping.t0 > 6000) ping = null;
-      }
     }
     function corners([x, y, w, h], c) {
       const k = 3;
@@ -1825,13 +1673,11 @@
       mctx.strokeStyle = theme.cta;
       mctx.strokeRect(x0 + lw / 2, y0 + lw / 2, Math.max(2, x1 - x0 - lw), Math.max(2, y1 - y0 - lw));
       const dot = (x, y, c, s) => { mctx.fillStyle = c; mctx.fillRect(Math.round(x * k - s / 2), Math.round(y * k - s / 2), s, s); };
-      for (const b of bosses) if (b.status !== "done") dot(b.x, b.y - 8, b.status === "evidence" ? "#ff5a5a" : "#b06060", Math.round(3 * dpr));
       for (const r of L.regions) if (r.town) { dot(r.town.feet.x, r.town.feet.y - 10, "#ffffff", Math.round(5 * dpr)); dot(r.town.feet.x, r.town.feet.y - 10, biomeOf(r).hue, Math.round(3 * dpr)); }
       if (L.party) { dot(L.party.x, L.party.y - 8, "#ffffff", Math.round(5 * dpr)); dot(L.party.x, L.party.y - 8, theme.cta, Math.round(3 * dpr)); }
     }
 
     // ---- what is where
-    function lessonItem(e) { return { type: "lesson", lesson: e.lesson, cleared: cleared.has(String(e.id)) }; }
     function territoryAt(wx, wy) {
       for (const r of L.regions) {
         if (!inRect(r.rect, wx, wy)) continue;
@@ -1840,23 +1686,11 @@
       return null;
     }
     function hitAt(wx, wy) {
-      // the party and the bosses stand in front; then the frontmost encounter under the point
+      // what stands there: the party or a town, the frontmost first
       for (let i = hits.length - 1; i >= 0; i--) {
-        const h = hits[i];
-        if (h.key.startsWith("lesson:")) continue;
-        const [x, y, w, hh] = h.box;
-        if (wx >= x && wx < x + w && wy >= y && wy < y + hh) return h;
+        const [x, y, w, hh] = hits[i].box;
+        if (wx >= x && wx < x + w && wy >= y && wy < y + hh) return hits[i];
       }
-      let best = null;
-      const gx = Math.floor(wx / CELL), gy = Math.floor(wy / CELL);
-      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 2; j++) {
-        for (const e of grid.get((gx + i) * 65536 + gy + j) || []) {
-          const done = cleared.has(String(e.id)), k = e.stage === "canonical" && !done ? 1.5 : 1;
-          const box = S < 0.5 ? [e.x - 6, e.y - 10, 12, 12] : done ? [e.x - 5, e.y - 12, 11, 13] : [e.x - 9 * k, e.y - 17 * k, 18 * k, 18 * k];
-          if (wx >= box[0] && wx < box[0] + box[2] && wy >= box[1] && wy < box[1] + box[3] && (!best || e.y > best.e.y)) best = { e, box };
-        }
-      }
-      if (best) return { key: best.e.key, x: best.e.x, y: best.e.y, box: best.box, item: () => lessonItem(best.e) };
       return null;
     }
     // a territory: its region, and its module with the map's own counts (total: encounters standing there; cleared:
@@ -1992,11 +1826,6 @@
     }
     function say(item) {
       if (!item) return "";
-      if (item.type === "lesson") {
-        const l = item.lesson || {};
-        return fill(labels.lesson, { title: l.title || "", kind: l.kind || "", agent: l.agent || "" }) + (item.cleared ? ` (${labels.cleared})` : "");
-      }
-      if (item.type === "boss") return `${fill(labels.boss, { text: item.boss.text || "" })} (${labels[STATUS[item.boss.status] || "bossAsleep"]})`;
       if (item.type === "party") return labels.party;
       if (item.type === "town") return fill(labels.town, { name: item.town.name });
       return "";
@@ -2111,9 +1940,8 @@
     return {
       destroy,
       focusLesson(id) {
-        const e = encs.find((x) => String(x.id) === String(id));
+        const e = encs.find((x) => String(x.id) === String(id)); // where the lesson's place is: the camera goes there
         if (!e) return false;
-        ping = { key: e.key, t0: performance.now() };
         flyTo(e.x, e.y - 8, Math.max(cam.z, 3));
         return true;
       },

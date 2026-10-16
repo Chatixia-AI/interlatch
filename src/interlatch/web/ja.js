@@ -1334,7 +1334,7 @@ window.INTERLATCH_JA = {
   "Leaves Innerlatch for the dashboard's session page": "Innerlatch を出て、ダッシュボードのセッションのページを開きます",
   "Open the session in Interlatch": "Interlatch でセッションを開く",
   "every lesson as a world to explore": "すべての教訓を探検する世界に",
-  "Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the encounters on screen and Enter opens one.": "冒険のマップ。ドラッグか矢印キーで見回し、スクロール、ピンチ、+ と − で拡大縮小します。N と P で画面上の遭遇を順に選び、Enter で開きます。",
+  "Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the places on screen and Enter opens one.": "冒険のマップ。ドラッグか矢印キーで見回し、スクロール、ピンチ、+ と − で拡大縮小します。N と P で画面上の場所を順に選び、Enter で開きます。",
   "{cleared}/{lessons} cleared": "{lessons} 件中 {cleared} 件クリア",
   "Unexplored": "未踏の地",
   "{cleared}/{lessons}": "{cleared}/{lessons}",

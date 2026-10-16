@@ -1331,7 +1331,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
 });
 function advMapLabels() { // the map engine's words (adventure.js LABELS), in the page's language
   return {
-    "map": t("Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the encounters on screen and Enter opens one."),
+    "map": t("Adventure map. Drag or use the arrow keys to look around; scroll, pinch or press + and − to zoom; N and P step through the places on screen and Enter opens one."),
     "regionStats": t("{cleared}/{lessons} cleared"), "fog": t("Unexplored"), "progress": t("{cleared}/{lessons}"),
     "boss": t("Boss: {text}"), "bossAsleep": t("asleep"), "bossAwake": t("awake: evidence found"),
     "bossDefeated": t("defeated"), "party": t("Your party"), "cleared": t("cleared"), "zoomIn": t("Zoom in"),
