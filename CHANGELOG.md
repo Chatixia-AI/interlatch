@@ -3,6 +3,32 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.26.0 (2026-10-16)
+
+- **Adventure:** a new page in Innerlatch puts every lesson that counts on a pixel world map, one region per attribute
+  and one territory per roadmap module, fogged where no lesson reached yet. Click a monster for a turn-based battle
+  (Attack, Skill, Defend, Run) led by the agent that taught it; a win marks it cleared, and battles never change
+  levels. The Party page keeps the characters and quests, and a lesson link anywhere in Innerlatch now opens the lesson
+  in a window over the page instead of leaving for the dashboard ([Party](docs/party.md#adventure)).
+- **Choose what analyzes sessions at install:** `interlatch install` now lists every choice (Claude Code, Codex,
+  IBM Bob and the model providers' APIs, Ollama included) with whether each is ready, and sets up the one you pick:
+  its endpoint, API key and model, then one test call. `--backend <name>` chooses without asking
+  ([Install](docs/install.md#command-line)).
+- **Joining a hub works again:** `interlatch hub join` no longer stops with "module 'http' has no attribute 'client'"
+  on a fresh install.
+- **A group's page:** **Analyze** on a project group's heading on the Projects page (or **The whole group** in the
+  sidebar) reads the group's projects as one big project. It shows each project's share of the group's time, cost and
+  knowledge, what waits on you across all of them, where their last sessions left off, each folder in git, their
+  roadmaps and their work week by week, with every item named by its project. A **Map** draws the projects and the
+  services and platforms they use, hand-drawn, with the ones they share easy to spot and an Excalidraw download; Usage
+  charts each project's time week by week. Each project's knowledge base and architecture sketch sit beside the
+  others, and the glossary terms the projects share come first ([Project groups](docs/dashboard.md#project-groups)).
+- **Towns and gear:** each Adventure region has a town whose shop sells gear for its roadmap modules (a weapon, armor
+  and charm per module, in three tiers that open as your agents reach Lv 1, 3 and 5 in that skill) and battle supplies.
+  A lesson's first win pays gold and may drop loot of its kind; battles gain an **Item** command, and each agent
+  wears three slots, changed on its page or in the new **Bag**. Gear only changes battle numbers, never levels
+  ([Party](docs/party.md#towns-and-gear)).
+
 ## 0.25.0 (2026-10-15)
 
 - **Innerlatch:** the Party, the Leaderboard, the Arena and their Google sign-in moved out of the dashboard into
