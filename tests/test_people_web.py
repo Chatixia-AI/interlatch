@@ -169,6 +169,29 @@ def test_signing_in_with_a_link(team):
     assert status == 302 and "Secure" not in headers["Set-Cookie"]
 
 
+def test_signing_in_again_replaces_the_browsers_session(team):
+    url, conn, ada, s = team["url"], team["conn"], team["ada"], team["sessions"]
+    old = s["Ada"]
+    legacy = people.open_browser(conn, people.signin_code(conn, ada), "test")[1]  # a cookie from before the rename
+    status, headers, _ = _raw(url, f"/signin?code={people.signin_code(conn, ada)}",
+                              headers={**REMOTE, "Cookie": f"interlatch_session={old}; chronicle_session={legacy}"})
+    new = headers["Set-Cookie"].split(";")[0].split("=", 1)[1]
+    assert status == 302 and new not in (old, legacy)
+    assert _call(url, "/api/me", headers=_as(old))[0] == 401 and _call(url, "/api/me", headers=_as(legacy))[0] == 401
+    code, r = _call(url, "/api/people", headers=_as(new))
+    mine = next(p for p in r["people"] if p["name"] == "Ada")["browsers"]
+    assert code == 200 and [b.get("this") for b in mine] == [True]
+
+    extra = [people.open_browser(conn, people.signin_code(conn, ada), "test")[1] for _ in range(2)]  # older piled-up ones
+    ids = [b["id"] for b in people.listing(conn, new)[0]["browsers"] if not b.get("this")]
+    assert len(ids) == 2
+    code, r = _call(url, "/api/people/revoke", {"id": ada["id"], "tokens": ids}, _as(new))
+    assert code == 200 and [b.get("this") for b in next(p for p in r["people"] if p["name"] == "Ada")["browsers"]] == [None]
+    assert all(people.browser_person(conn, x) is None for x in extra) and people.browser_person(conn, new)
+    assert _call(url, "/api/people/revoke", {"id": ada["id"], "tokens": ids}, _as(new))[0] == 400  # already ended
+    assert _call(url, "/api/people/revoke", {"id": ada["id"], "tokens": []}, _as(new))[0] == 400
+
+
 def test_a_signin_link_opens_on_the_page_it_names(team):
     url, conn, bob = team["url"], team["conn"], team["bob"]
     page = "/project?path=%2Fdata%2Fprojects%2FCosmo-Quote-Agent"

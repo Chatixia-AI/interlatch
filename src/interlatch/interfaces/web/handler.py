@@ -129,14 +129,17 @@ def make_handler(app: App, port: int):
                     and (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https")
 
         def _session(self) -> str:
+            return next(iter(self._sessions()), "")
+
+        def _sessions(self) -> tuple[str, ...]:
+            """The session cookies this browser sent: the current one first, then one from before the rename."""
             from http.cookies import CookieError, SimpleCookie
 
             try:
                 jar = SimpleCookie(self.headers.get("Cookie") or "")
             except CookieError:
-                return ""
-            morsel = jar.get(SESSION_COOKIE) or jar.get(LEGACY_SESSION_COOKIE)
-            return morsel.value if morsel else ""
+                return ()
+            return tuple(m.value for m in (jar.get(SESSION_COOKIE), jar.get(LEGACY_SESSION_COOKIE)) if m and m.value)
 
         def _session_cookie(self, value: str, max_age: int) -> str:
             secure = "; Secure" if self._proxied_https() else ""
@@ -205,7 +208,8 @@ def make_handler(app: App, port: int):
             try:
                 if wait:
                     raise people.PeopleError(TOO_MANY_CODES, seconds=wait)  # the code isn't looked at
-                _person, session = people.open_browser(app.conn, code, label=self.headers.get("User-Agent"))
+                _person, session = people.open_browser(app.conn, code, label=self.headers.get("User-Agent"),
+                                                       replaces=self._sessions())  # this browser's old session ends
             except people.PeopleError as exc:
                 if isinstance(exc, people.UnknownCode):
                     app.code_attempts.wrong(who)

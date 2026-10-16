@@ -6352,7 +6352,27 @@ function peopleCard(dv) {
     } }, t("Revoke"));
     return h("div", { class: "pp-tok" }, icon(kind === "computer" ? "devices" : "page"),
       h("span", { title: kind === "browser" ? x.label || "" : x.machine_id || "" }, label),
+      x.this ? h("span", { class: "muted" }, t("this browser")) : null,
       h("span", { class: "muted" }, x.last_used ? t("used {ago}", { ago: ago(x.last_used) }) : t("since {ago}", { ago: ago(x.since) })), revoke);
+  };
+  // a person's sessions in the same browser: the one in use (or used last) on its own row, the older ones folded into one
+  // row with one Revoke (they pile up from sign-ins before a browser's new session ended its old one)
+  const browserRows = (p, browsers) => {
+    const groups = new Map();
+    for (const b of browsers) groups.set(uaLabel(b.label), [...(groups.get(uaLabel(b.label)) || []), b]);
+    const used = (x) => x.last_used || x.since || "";
+    return [...groups.entries()].flatMap(([label, list]) => {
+      const [kept, ...older] = [...list].sort((a, b) => Number(!!b.this) - Number(!!a.this) || (used(a) < used(b) ? 1 : used(a) > used(b) ? -1 : 0));
+      if (!older.length) return [tokenRow(p, kept, "browser")];
+      const revoke = h("button", { class: "link-btn danger", type: "button", onclick: async () => {
+        if (!confirm(tn(older.length, "End {n} older session of {name} in {browser}? Only the one used last stays; any other browser still using one has to sign in again.",
+          "End {n} older sessions of {name} in {browser}? Only the one used last stays; any other browser still using one has to sign in again.", { name: p.name, browser: label }))) return;
+        revoke.disabled = true;
+        if (await send("/api/people/revoke", { id: p.id, tokens: older.map((x) => x.id) })) { toast(t("Revoked.")); load(); } else revoke.disabled = false;
+      } }, t("Revoke them"));
+      return [tokenRow(p, kept, "browser"), h("div", { class: "pp-tok pp-older" },
+        h("span", { class: "muted" }, tn(older.length, "+ {n} older session, last used {ago}", "+ {n} older sessions, last used {ago}", { ago: ago(used(older[0])) })), revoke)];
+    });
   };
   const personRow = (p, roles) => {
     const me = ME?.viewer?.id != null && ME.viewer.id === p.id;
@@ -6408,9 +6428,9 @@ function peopleCard(dv) {
       h("td", null, sel),
       scope,
       h("td", null, computers.length || browsers.length
-        ? [...computers.map((c) => tokenRow(p, c, "computer")), ...browsers.map((b) => tokenRow(p, b, "browser"))]
+        ? [...computers.map((c) => tokenRow(p, c, "computer")), ...browserRows(p, browsers)]
         : h("span", { class: "muted" }, lastInvite ? t("Not joined yet") : t("No computer or browser yet: make a new invite"))),
-      h("td", { class: "pp-actions" }, reinvite, remove)), editRow];
+      h("td", { class: "pp-actions" }, h("div", null, reinvite, remove))), editRow];
   };
 
   const inviteForm = (roles, first) => {
@@ -6478,7 +6498,7 @@ function peopleCard(dv) {
     box.replaceChildren(); append(box, [ // append() flattens the arrays and skips nulls
       cardHead(t("People"), { iconName: "preference", hint: people.length ? tn(people.length, "{n} person", "{n} people") : null }),
       people.length ? [
-        h("div", { class: "table-wrap" }, h("table", { class: "data pp-table" },
+        h("div", { class: "table-wrap pp-wrap" }, h("table", { class: "data pp-table" },
           h("thead", null, h("tr", null, ...[t("Person"), t("Role"), t("Projects"), t("Computers and browsers"), ""].map((x) => h("th", null, x)))),
           h("tbody", null, people.map((p) => personRow(p, roles))))),
         h("p", { class: "muted" }, t("Admins invite people and change this hub's settings; members' computers send here and get their teammates' lessons back; read-only people only open this dashboard. Whoever is at this computer is always an admin."))]

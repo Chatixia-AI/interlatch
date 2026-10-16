@@ -2064,8 +2064,21 @@ a.ar-tile-media.empty:hover { background: var(--accent-wash); }
 .pp-table select { max-width: 150px; }
 .pp-tok { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 1px 0; }
 .pp-tok .icon { width: 13px; height: 13px; color: var(--muted); flex: none; }
-.pp-actions { white-space: nowrap; text-align: right; }
-.pp-actions .btn + .btn { margin-left: 6px; }
+.pp-actions > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; } /* a narrow table stacks them */
+.pp-actions .btn { white-space: nowrap; }
+.pp-older { padding-left: 19px; font-size: 12.5px; }
+/* a narrow card: each person as a block (name and role, then projects, computers and browsers, actions), no sideways scroll */
+.pp-wrap { container-type: inline-size; }
+@container (max-width: 720px) {
+  .pp-table thead { display: none; }
+  .pp-table, .pp-table tbody, .pp-table td { display: block; }
+  .pp-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+  .pp-table tr[hidden] { display: none; }
+  .pp-table tr.pp-edit { display: block; padding-top: 0; }
+  table.data.pp-table td { border: 0; padding: 0; min-width: 0; }
+  .pp-table td:nth-child(n+3) { grid-column: 1 / -1; }
+  .pp-actions > div { justify-content: flex-start; }
+}
 .link-btn.danger { color: var(--critical-ink); }
 .people-form { margin-bottom: 6px; }
 .pp-scope { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px 10px; margin: 0 0 12px; min-width: 0; }

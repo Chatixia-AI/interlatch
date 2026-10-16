@@ -74,6 +74,20 @@ def test_browser_sessions_signin_and_removal(conn):
     assert people.add(conn, "Vic", "vic@example.com", "member")["role"] == "member"  # can be added again
 
 
+def test_a_browser_signing_in_again_ends_its_old_session(conn):
+    vic = people.add(conn, "Vic", "vic@example.com", "readonly")
+    _, first = people.open_browser(conn, people.signin_code(conn, vic), "Edge")
+    _, other = people.open_browser(conn, people.signin_code(conn, vic), "Safari")  # another browser keeps its own
+    with pytest.raises(people.PeopleError):
+        people.open_browser(conn, "AAAA-BBBB-CCCC", "Edge", replaces=(first,))  # a wrong code ends nothing
+    assert people.browser_person(conn, first)
+    _, second = people.open_browser(conn, people.signin_code(conn, vic), "Edge", replaces=(first, "", "not-a-session"))
+    assert people.browser_person(conn, first) is None and people.browser_person(conn, second) and people.browser_person(conn, other)
+    listed = people.listing(conn, second)[0]["browsers"]
+    assert [b["label"] for b in listed] == ["Safari", "Edge"] and [b.get("this") for b in listed] == [None, True]
+    assert not any(b.get("this") for b in people.listing(conn)[0]["browsers"])
+
+
 def test_wrong_codes_make_an_address_wait():
     t = [1000.0]
     a = people.CodeAttempts(clock=lambda: t[0])
