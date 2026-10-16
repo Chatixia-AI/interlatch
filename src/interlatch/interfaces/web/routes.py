@@ -179,7 +179,7 @@ def _unseen_suggestions(h, ctx, m, q):
 
 GET: list[Route] = [
     Route("/api/me", ANYONE, lambda h, ctx, m, q: h._json(h._me())),
-    Route("/api/people", ADMIN, lambda h, ctx, m, q: h._json(api.hub_admin.people_info(ctx))),
+    Route("/api/people", ADMIN, lambda h, ctx, m, q: h._json(api.hub_admin.people_info(ctx, h._session()))),
     Route("/api/overview", ANYONE, lambda h, ctx, m, q: h._json(api.status.overview(ctx, q, limited=h.limited))),
     # a person's own computer only
     Route("/api/leaderboard", LEADERBOARD, lambda h, ctx, m, q: h._json(api.leaderboard.leaderboard(ctx, q))),

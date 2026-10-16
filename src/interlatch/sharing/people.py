@@ -265,9 +265,11 @@ def _admins(conn: sqlite3.Connection) -> list[int]:
     return [r[0] for r in conn.execute("SELECT id FROM people WHERE role = 'admin' AND removed_at IS NULL")]
 
 
-def listing(conn: sqlite3.Connection) -> list[dict]:
-    """Everyone on the hub, with their computers, open browser sessions and unused invites (no secrets)."""
+def listing(conn: sqlite3.Connection, session: str | None = None) -> list[dict]:
+    """Everyone on the hub, with their computers, open browser sessions and unused invites (no secrets). The browser
+    session `session` (the viewer's own cookie) is marked `this`."""
     now = _iso(_now())
+    mine = _hash(session) if session else None
     out = []
     for p in conn.execute("SELECT * FROM people WHERE removed_at IS NULL ORDER BY role = 'admin' DESC, name"):
         p = dict(p)
@@ -278,7 +280,8 @@ def listing(conn: sqlite3.Connection) -> list[dict]:
             "WHERE t.person_id = ? AND t.revoked_at IS NULL ORDER BY t.created_at", (p["id"],))]
         p["computers"] = [{"id": t["token_hash"][:16], "machine_id": t["machine_id"], "name": t["machine_name"] or t["label"],
                            "since": t["created_at"], "last_used": t["last_used"]} for t in toks if t["kind"] == "computer"]
-        p["browsers"] = [{"id": t["token_hash"][:16], "label": t["label"], "since": t["created_at"], "last_used": t["last_used"]}
+        p["browsers"] = [{"id": t["token_hash"][:16], "label": t["label"], "since": t["created_at"], "last_used": t["last_used"],
+                          **({"this": True} if t["token_hash"] == mine else {})}
                          for t in toks if t["kind"] == "browser" and not (t["expires_at"] and t["expires_at"] < now)]
         p["invites"] = [{"expires_at": r[0], "created_at": r[1]} for r in conn.execute(
             "SELECT expires_at, created_at FROM people_codes WHERE person_id = ? AND kind = 'invite' AND used_at IS NULL "
@@ -416,11 +419,17 @@ def join_computer(conn: sqlite3.Connection, code: str, machine_id: str, machine_
     return p, token
 
 
-def open_browser(conn: sqlite3.Connection, code: str, label: str | None = None) -> tuple[dict, str]:
-    """Redeem an invite or a sign-in code in a browser: (person, session secret for the cookie)."""
+def open_browser(conn: sqlite3.Connection, code: str, label: str | None = None,
+                 replaces: tuple[str, ...] = ()) -> tuple[dict, str]:
+    """Redeem an invite or a sign-in code in a browser: (person, session secret for the cookie). `replaces` are the
+    sessions that browser's cookies held: the new cookie takes their place, so they end here rather than linger,
+    unused, as more rows on the People page until they expire. Only once the code was good: a wrong one ends nothing."""
     p = _take_code(conn, code, ("invite", "signin"))
     session = secrets.token_urlsafe(32)
     now = _now()
+    for old in {s for s in replaces if s}:
+        conn.execute("UPDATE people_tokens SET revoked_at = ? WHERE token_hash = ? AND kind = 'browser' AND revoked_at IS NULL",
+                     (_iso(now), _hash(old)))
     conn.execute("INSERT INTO people_tokens(token_hash, person_id, kind, label, created_at, expires_at, last_used) "
                  "VALUES (?, ?, 'browser', ?, ?, ?, ?)",
                  (_hash(session), p["id"], (label or "")[:200] or None, _iso(now), _iso(now + timedelta(days=BROWSER_DAYS)), _iso(now)))

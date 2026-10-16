@@ -135,11 +135,12 @@ def action_team_store_save(ctx: Context, body: dict) -> dict:
     return {"ok": True, "store": team_store_info(ctx), "status": team_store_status(ctx)}
 
 
-def people_info(ctx: Context) -> dict:
+def people_info(ctx: Context, session: str | None = None) -> dict:
+    """The People page; `session` is the viewer's own browser session, which the page marks as this browser."""
     from ....sharing import people
     from ....sharing.projects import hub_projects
 
-    return {"people": people.listing(ctx.conn), "shared_token": ctx.cfg.hub_shared_token,
+    return {"people": people.listing(ctx.conn, session), "shared_token": ctx.cfg.hub_shared_token,
             "address": ctx.cfg.hub_address or None, "audit": people.audit_log(ctx.conn, 50),
             "roles": list(people.ROLES), "projects": hub_projects(ctx.conn)}
 
@@ -212,8 +213,11 @@ def action_people(ctx: Context, verb: str, body: dict, by: dict | None, address:
             people.set_projects(ctx.conn, pid, _projects_body(ctx, body), by=by)
         elif verb == "remove":
             people.remove(ctx.conn, pid, by=by)
-        elif verb == "revoke":
-            if not people.revoke(ctx.conn, pid, str(body.get("token") or ""), by=by):
+        elif verb == "revoke":  # one token, or several (a browser's older sessions, at once)
+            tokens = body.get("tokens") if isinstance(body.get("tokens"), list) else [body.get("token")]
+            if not tokens or len(tokens) > 500:
+                return {"error": tr("no such computer or browser session")}, 400
+            if not sum(people.revoke(ctx.conn, pid, str(x or ""), by=by) for x in tokens):
                 return {"error": tr("no such computer or browser session")}, 400
         else:
             return {"error": tr("not found")}, 404
