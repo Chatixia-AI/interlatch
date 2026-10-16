@@ -7,6 +7,7 @@ import os
 import subprocess
 import time
 
+from ...core.process import program_text
 from .base import LLMError, SleepInterruptedError
 
 SLEEP_GRACE_S = 120  # wall-clock time not seen by the monotonic clock = the machine was asleep
@@ -42,16 +43,17 @@ def run_sleep_aware(cmd: list[str], prompt: str, *, cwd, env, timeout: int, name
     by sleep (its HTTPS connection dead) would otherwise hang for its full timeout after wake.
     """
     try:
+        # bytes, decoded by program_text: an npm install's claude.cmd reports cmd.exe's errors in the console's code page
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, cwd=cwd, env=env, start_new_session=True)
+                                cwd=cwd, env=env, start_new_session=True)
     except OSError as exc:  # a configured path that does not exist, or is not executable
         raise LLMError(f"{name} could not start: {exc}") from exc
     wall0, mono0 = time.time(), time.monotonic()
-    pending_input: str | None = prompt
+    pending_input: bytes | None = prompt.encode("utf-8")
     while True:
         try:
             out, err = proc.communicate(input=pending_input, timeout=POLL_S)
-            return out or "", err or "", proc.returncode
+            return program_text(out), program_text(err), proc.returncode
         except subprocess.TimeoutExpired:
             pending_input = None  # input is only sent once; later calls just keep collecting output
             wall = time.time() - wall0

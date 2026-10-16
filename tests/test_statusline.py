@@ -58,6 +58,20 @@ def test_without_a_status_line_it_prints_its_own(env, monkeypatch):
     assert rec["limits"]["five_hour"]["used_pct"] == 23.5
 
 
+def test_on_windows_the_users_status_line_runs_in_git_bash_or_powershell(tmp_path, monkeypatch):
+    """As Claude Code runs it there: cmd.exe (shell=True) reads neither a Bash nor a PowerShell command."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    bash = tmp_path / "Git" / "bin" / "bash.exe"
+    monkeypatch.setenv("ProgramFiles", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    assert statusline.shell_argv("echo hi") == ["powershell", "-NoProfile", "-Command", "echo hi"]
+    bash.parent.mkdir(parents=True)
+    bash.write_bytes(b"")
+    assert statusline.shell_argv("echo hi") == [str(bash), "-c", "echo hi"]
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert statusline.shell_argv("echo hi") == "echo hi"
+
+
 def test_it_runs_the_users_own_status_line_unchanged(env, monkeypatch):
     statusline.state_dir().mkdir(parents=True, exist_ok=True)
     statusline.wrapped_path().write_text(json.dumps({"type": "command", "command": "cat > /dev/null; printf 'my line'"}))

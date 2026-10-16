@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+import tempfile
 import time
+from pathlib import Path
 
 from ...core.config import Config
 from ...core.process import internal_env
 from .base import LIMIT_MARKERS, BudgetExceededError, LLMError, LLMResult, Runner, UsageLimitError
 from .process import run_sleep_aware
+
+
+def through_cmd(binary: str) -> bool:
+    """Whether Windows runs `binary` through cmd.exe: a .cmd or .bat file, as npm installs `claude`."""
+    return sys.platform == "win32" and binary.lower().endswith((".cmd", ".bat"))
 
 
 class ClaudeRunner(Runner):
@@ -32,6 +40,16 @@ class ClaudeRunner(Runner):
         if not self.bin:
             raise LLMError("claude executable not found (set analysis.claude_bin in config.toml)")
         a = self.cfg.analysis
+        workdir = self.cfg.home / "workdir"
+        workdir.mkdir(parents=True, exist_ok=True)
+        prompt_file = None
+        if through_cmd(self.bin):
+            # cmd.exe, which runs an npm install's claude.cmd, ends the command line at the first newline: the system
+            # prompt lost all but its first paragraph, and every flag after it. A file carries it whole.
+            with tempfile.NamedTemporaryFile("w", dir=workdir, prefix="claude-system-", suffix=".md", encoding="utf-8",
+                                             delete=False) as fh:
+                fh.write(system)
+            prompt_file = fh.name
         cmd = [
             self.bin, "-p",
             "--output-format", "json",
@@ -41,17 +59,19 @@ class ClaudeRunner(Runner):
             "--strict-mcp-config",
             "--disable-slash-commands",
             "--tools", "",
-            "--system-prompt", system,
+            *(["--system-prompt-file", prompt_file] if prompt_file else ["--system-prompt", system]),
             "--max-budget-usd", f"{max_budget_usd or a.max_budget_usd:.2f}",
         ]
         if effort or a.effort:
             cmd += ["--effort", effort or a.effort]
         env = internal_env()  # the sessions of the agents this runs are not recorded
-        workdir = self.cfg.home / "workdir"
-        workdir.mkdir(parents=True, exist_ok=True)
         t0 = time.monotonic()
-        stdout, stderr, returncode = run_sleep_aware(cmd, prompt, cwd=workdir, env=env,
-                                                     timeout=timeout or a.timeout_seconds, name=self.cli)
+        try:
+            stdout, stderr, returncode = run_sleep_aware(cmd, prompt, cwd=workdir, env=env,
+                                                         timeout=timeout or a.timeout_seconds, name=self.cli)
+        finally:
+            if prompt_file:
+                Path(prompt_file).unlink(missing_ok=True)
         elapsed = int((time.monotonic() - t0) * 1000)
         proc = subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
         out = (proc.stdout or "").strip()

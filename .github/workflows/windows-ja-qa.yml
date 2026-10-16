@@ -39,7 +39,7 @@ jobs:
         os: [windows-2022, windows-2025]
     runs-on: ${{ matrix.os }}
     env:
-      SOURCE: ${{ inputs.source || 'pypi' }}
+      SOURCE: ${{ inputs.source || 'wheel' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -71,22 +71,15 @@ jobs:
         if: always()
         shell: bash
         run: uv run --no-project python /c/qa/report.py
-      - name: The demo dashboard (this runner's own user)
-        if: always()
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force C:\demo | Out-Null
-          tar -xzf "$env:RUNNER_TEMP\demo-home.tgz" -C C:\demo
-          $env:INTERLATCH_HOME = 'C:\demo\home'
-          Start-Process -FilePath uvx -ArgumentList "--from $env:INSTALL_FROM interlatch ui --port 8898" -WindowStyle Hidden `
-            -RedirectStandardOutput C:\demo\ui.out -RedirectStandardError C:\demo\ui.err
-          Start-Sleep -Seconds 2
-      - name: Screenshots in Edge, Japanese
+      - name: Screenshots in Edge, Japanese (the user's dashboard, then the demo's, run here)
         if: always()
         shell: bash
         run: |
-          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:11530 shots ja-user || true
-          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:8898 shots demo || true
+          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:11530 /c/qa/shots ja-user || true
+          mkdir -p /c/demo && tar -xzf "$RUNNER_TEMP/demo-home.tgz" -C /c/demo
+          # in this step: a process a step starts in the background ends with the step
+          INTERLATCH_HOME='C:\demo\home' uvx --from "$INSTALL_FROM" interlatch ui --port 8898 > /c/demo/ui.out 2> /c/demo/ui.err &
+          uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:8898 /c/qa/shots demo || true
       - name: The dashboards' own logs
         if: always()
         shell: powershell
@@ -112,6 +105,4 @@ jobs:
         if: always()
         with:
           name: windows-ja-${{ matrix.os }}
-          path: |
-            C:\qa
-            shots
+          path: C:\qa

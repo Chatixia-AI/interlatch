@@ -29,10 +29,15 @@ const JA = LANG === "ja" ? window.INTERLATCH_JA || {} : null;
 function fillVars(str, vars) {
   return vars ? str.replace(/\{(\w+)\}/g, (m, k) => (k in vars && vars[k] != null ? String(vars[k]) : m)) : str;
 }
-function t(en, vars) { return fillVars((JA && JA[en]) || en, vars); }
+// shortcut keys as this keyboard names them: off a Mac, ⌘ is Ctrl (app.js's shortcuts read ctrlKey there)
+const MAC_KEYS = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+function keys(s) {
+  return MAC_KEYS || typeof s !== "string" ? s : s.replace(/⌘⇧/g, "Ctrl+Shift+").replace(/⌘-/g, "Ctrl-").replace(/⌘/g, "Ctrl+");
+}
+function t(en, vars) { return keys(fillVars((JA && JA[en]) || en, vars)); }
 // the same English in two places that Japanese words differently ("Added" a date column, "Added" a state):
 // ja.js keys the variant "Added [date]"
-function tc(context, en, vars) { return fillVars((JA && (JA[`${en} [${context}]`] || JA[en])) || en, vars); }
+function tc(context, en, vars) { return keys(fillVars((JA && (JA[`${en} [${context}]`] || JA[en])) || en, vars)); }
 // plural: English picks by n, Japanese has one form (the translation of `other`); {n} is n unless vars.n is given
 function tn(n, one, other, vars) { return t(JA ? other : n === 1 ? one : other, { n, ...vars }); }
 // the English a Japanese label was translated from, so the ⌘K palette finds commands by either name

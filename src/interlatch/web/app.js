@@ -7869,7 +7869,7 @@ function paletteCommands() {
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },
     { group: cmds, label: t("Analyze the queue now"), icon: "queued", hint: "", run: analyzeQueueNow, admin: true },
-    { group: cmds, label: t("Toggle sidebar"), icon: "sidebar", hint: "⌘B", run: toggleSidebar },
+    { group: cmds, label: t("Toggle sidebar"), icon: "sidebar", hint: keys("⌘B"), run: toggleSidebar },
     { group: cmds, label: dark ? t("Switch to light theme") : t("Switch to dark theme"), icon: dark ? "sun" : "moon", hint: "", run: flipTheme },
     // named in the language it switches to, like the status bar button
     { group: cmds, label: LANG === "ja" ? "Switch to English" : "日本語に切り替え", icon: "domain", hint: "", run: () => setLang(LANG === "ja" ? "en" : "ja") },
@@ -7957,7 +7957,7 @@ function openPalette() {
   box.replaceChildren(h("div", { class: "pal", role: "dialog", "aria-modal": "true", "aria-label": t("Search or jump to") },
     h("div", { class: "pal-in" }, icon("search"), input, h("kbd", null, "esc")), list,
     h("div", { class: "pal-foot" }, h("span", null, h("kbd", null, "↑"), " ", h("kbd", null, "↓"), " ", t("move")), h("span", null, h("kbd", null, "↵"), " ", t("open")),
-      h("span", null, h("kbd", null, "⌘K"), " ", h("kbd", null, "⌘P"), " ", h("kbd", null, "/"), " ", t("open this")))));
+      h("span", null, h("kbd", null, keys("⌘K")), " ", h("kbd", null, keys("⌘P")), " ", h("kbd", null, "/"), " ", t("open this")))));
   box.hidden = false;
   box.onmousedown = (e) => { if (e.target === box) closePalette(); };
   refreshPalette("");
@@ -8289,6 +8289,7 @@ function translateStatic() {
   set("#fwd-btn", { title: t("Forward"), "aria-label": t("Forward") });
   set("#search-pill", { "aria-label": t("Search or jump to (⌘K)") });
   set("#search-pill .sp-label", { text: t("Search or jump to…") });
+  set("#search-pill kbd", { text: keys("⌘K") });
   set("#sync-btn", { title: t("Sync transcripts and process the analysis queue"), text: t("Sync") });
   set("#theme-btn", { "aria-label": t("Toggle theme") });
   set("#activity", { "aria-label": t("Activity") });

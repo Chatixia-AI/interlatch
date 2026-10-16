@@ -25,7 +25,7 @@ lines: list[str] = []
 
 def settle(page) -> None:
     try:
-        page.wait_for_function("document.querySelector('#app')?.getAttribute('aria-busy') !== 'true'", timeout=20000)
+        page.locator("#app:not([aria-busy='true'])").wait_for(timeout=20000)  # a selector: the page's CSP has no eval
     except Exception as exc:  # noqa: BLE001
         lines.append(f"  still busy: {exc}")
     page.wait_for_timeout(1500)

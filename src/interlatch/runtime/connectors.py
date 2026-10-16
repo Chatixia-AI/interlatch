@@ -14,7 +14,7 @@ import tomllib
 from pathlib import Path
 
 from ..core.config import Config, set_config_value
-from ..core.process import internal_env
+from ..core.process import internal_env, run_program
 from ..core.i18n import tr
 from .install import LEGACY_MCP_NAME, MCP_NAME, exe_argv
 from ..sources import discovery  # discovery.vscode_user_dirs() through the module: one patch there reaches every caller
@@ -33,8 +33,7 @@ def _version(binary: str | None) -> str | None:
     if hit and time.time() - hit[0] < 600:
         return hit[1]
     try:
-        out = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10,
-                             env=internal_env()).stdout.strip().splitlines()
+        out = run_program([binary, "--version"], timeout=10, env=internal_env()).stdout.strip().splitlines()
         version = out[0] if out else None
     except (OSError, subprocess.SubprocessError):
         version = None
@@ -55,7 +54,7 @@ def _recorded(conn: sqlite3.Connection, where: str, params=()) -> dict:
 
 # ------------------------------------------------------------------ Claude Code
 def claude_status(cfg: Config, conn: sqlite3.Connection) -> dict:
-    from .install import LAUNCHD_LABEL, hooks_installed, launchd_status, mcp_registered, uses_systemd
+    from .install import LAUNCHD_LABEL, hooks_installed, launchd_status, mcp_registered, on_windows, uses_systemd
 
     binary = cfg.claude_bin()
     dirs = cfg.claude_dirs
@@ -94,7 +93,7 @@ def claude_status(cfg: Config, conn: sqlite3.Connection) -> dict:
             {"key": "inject", "label": tr("Knowledge injection"), "ok": bool(hooks.get("SessionStart")), "optional": True,
              "detail": tr("SessionStart hook adds the project's knowledge base to new sessions")},
             {"key": "sync", "label": tr("Background sync"), "ok": bool(sync.get("loaded")),
-             "detail": tr("{manager}, every 15 minutes", manager="systemd" if uses_systemd() else "launchd")},
+             "detail": tr("{manager}, every 15 minutes", manager="systemd" if uses_systemd() else "Task Scheduler" if on_windows() else "launchd")},
         ],
         "notes": [tr("{n} older sessions recovered (prompt history / Codex imports)", n=recovered["sessions"])]
         if recovered["sessions"] else [],
@@ -197,7 +196,7 @@ def connect_codex(cfg: Config, exe: str) -> list[str]:
         return actions + [tr("MCP registration skipped: codex CLI not found")]
     if not codex_mcp_registered(home):
         cmd = [binary, "mcp", "add", MCP_NAME, "--", *exe_argv(exe), "mcp"]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = run_program(cmd, timeout=60)
         actions.append(tr("registered MCP server 'interlatch' in Codex") if proc.returncode == 0
                        else tr("Codex MCP registration failed: {error}", error=(proc.stderr or proc.stdout).strip()[:300]))
     return actions
@@ -212,7 +211,7 @@ def disconnect_codex(cfg: Config) -> list[str]:
     except (OSError, tomllib.TOMLDecodeError):
         servers = {}
     for name in [n for n in MCP_NAMES if n in servers] if binary else []:
-        proc = subprocess.run([binary, "mcp", "remove", name], capture_output=True, text=True, timeout=60)
+        proc = run_program([binary, "mcp", "remove", name], timeout=60)
         actions.append((tr("removed MCP server 'interlatch' from Codex") if name == MCP_NAME
                        else tr("removed MCP server '{name}'", name=name)) if proc.returncode == 0
                        else tr("Codex MCP removal failed: {error}", error=(proc.stderr or proc.stdout).strip()[:200]))

@@ -219,13 +219,27 @@ def _unlock(fh) -> None:
         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
 
 
+class SharedRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """A log that several processes write (the dashboard, the background sync, the hooks). Windows can't rename a file
+    another process has open, so a rollover there fails until the others let go; it used to print "--- Logging error
+    ---" with WinError 32 under every message. A failed rollover now keeps writing to the same file and is tried again
+    with the next message."""
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except PermissionError:
+            if self.stream is None:
+                self.stream = self._open()
+
+
 def setup_logging(logs_dir: Path, *, verbose: bool = False, console: bool = False) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger("interlatch")
     if getattr(root, "_interlatch_configured", False):
         return
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
-    fh = logging.handlers.RotatingFileHandler(logs_dir / "chronicle.log", maxBytes=5_000_000, backupCount=3)
+    fh = SharedRotatingFileHandler(logs_dir / "chronicle.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8")
     fh.setFormatter(logging.Formatter("%(asctime)s %(process)d %(levelname)s %(name)s: %(message)s"))
     root.addHandler(fh)
     if console:

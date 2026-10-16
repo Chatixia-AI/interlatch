@@ -129,9 +129,13 @@ On Windows 10 and 11 Interlatch is the command-line install; there is no desktop
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
+$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # where uv and interlatch go; new windows know it already
 uv tool install --python 3.13 interlatch
 interlatch install
 ```
+
+uv's installer adds `%USERPROFILE%\.local\bin` to your PATH for new windows only, so the second line tells this one;
+without it the next line ends with "uv is not recognized" (Japanese Windows: 「用語 'uv' は…認識されません」).
 
 `interlatch install` asks what it asks on a Mac. In place of launchd it registers two tasks in Task Scheduler, in an
 **Interlatch** folder, for your account while you are signed in:
@@ -142,14 +146,17 @@ interlatch install
 | `\Interlatch\Dashboard` | Keeps the dashboard at <http://127.0.0.1:11524/>: started when you sign in, and again within 5 minutes if it stops |
 
 Neither opens a window: a task starts `pythonw.exe`, which runs the command in a console without one, and its output
-goes to `sync.out.log`, `ui.err.log` and the like in `%USERPROFILE%\.interlatch\logs`. They run on battery too.
+goes to `sync.out.log`, `ui.err.log` and the like in `%USERPROFILE%\.interlatch\logs` (UTF-8: in Windows PowerShell, read
+them with `Get-Content -Encoding UTF8`). They run on battery too.
 `interlatch uninstall` ends and removes them, the dashboard with them.
 
 The hooks it adds to Claude Code run `C:/Users/<you>/.local/bin/interlatch.exe hook session-end`. Claude Code runs a
 hook in Git Bash, or in PowerShell without Git for Windows, and forward slashes read the same in both. A folder with
 a space in its name is written in its short form (`C:/Users/ADALOV~1/…`).
 
-Interlatch reads and writes text in UTF-8, as the coding agents write it, whatever language Windows is set to. It
+Interlatch reads and writes text in UTF-8, as the coding agents write it, whatever language Windows is set to, and
+shows Windows' own messages (Task Scheduler's, PowerShell's) in that language. In the console window of Windows 10
+(not Windows Terminal), which has no ✓ or ›, its output uses `+` and `>` in their place. It
 matches a Windows path however an agent or VS Code spells it (`C:\work\app`, `c:/work/app`), so the
 [VS Code extension](vscode.md)'s file history and folder list work there too.
 
