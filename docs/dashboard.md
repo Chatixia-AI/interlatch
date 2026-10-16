@@ -163,10 +163,15 @@ sessions, knowledge base and hub sharing.
   sessions, estimated cost, knowledge and when it was last worked on. Below come the project page's cards over all of
   them, each item named by its project: **Needs you** (each folder's uncommitted and unpushed work, and the decisions
   each project's last sessions left open), **Where you left off**, **The folders now**, each project's roadmap file,
-  the backlog and **Week by week**. **Knowledge bases** shows each project's own side by side (nothing is written for
-  the group as a whole), with the glossary terms more than one project uses first; the Knowledge, Sessions, Artifacts
-  and Usage tabs cover every project in the group. As on a project's page, git and roadmap files are read only when
-  you open the page on this computer.
+  the backlog and **Week by week**. **Map** draws the projects and the services and platforms they use, hand-drawn
+  like an architecture sketch: a service many lines meet (a Langfuse, a database, a cloud) is one the projects share,
+  and dashed arcs are the links the [Systems map](#systems-map) found between the projects themselves (one edits the
+  other's files, or its glossary names it). Click a part or a line to see where it was found, in manifests or in the
+  commands sessions ran, and **Excalidraw** downloads it to edit. **Knowledge bases** shows each project's own side by
+  side, with each one's architecture sketch where it has one (nothing is written for the group as a whole), and the
+  glossary terms more than one project uses first. The Knowledge, Sessions, Artifacts and Usage tabs cover every
+  project in the group; Usage adds each project's active time week by week and the group's activity calendar. As on a
+  project's page, git and roadmap files are read only when you open the page on this computer.
 
 Groups are kept in this computer's archive and never go to a hub. On a hub with people, admins see and change the
 hub's groups; someone limited to some projects sees none. On a computer that sends to a hub, a whole group can be

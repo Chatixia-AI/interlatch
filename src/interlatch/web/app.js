@@ -637,7 +637,7 @@ function columnChart(container, width, data, { value, fmt, label, height = 210, 
 
 function heatColor(level) { return `var(--seq-${level})`; }
 
-function calendarHeatmap(container, width, rows) {
+function calendarHeatmap(container, width, rows, { query = "" } = {}) { // query: more to filter a clicked day's sessions by
   const byDate = Object.fromEntries(rows.map((r) => [r.date, r]));
   const today = new Date(); today.setHours(12, 0, 0, 0);
   const first = rows.length ? new Date(rows[0].date + "T12:00:00") : today;
@@ -680,7 +680,7 @@ function calendarHeatmap(container, width, rows) {
       const rect = s("rect", { class: "cell", x: left + w * step, y: topPad + dow * step, width: cell, height: cell, rx: cell > 12 ? 3 : 2, fill: heatColor(level) });
       hoverable(rect, () => [r ? t("{dur} active", { dur: fmtDur(activeS) }) : t("No sessions"), wdFmt.format(day),
         r ? `${tn(r.sessions, "{n} session", "{n} sessions")} · ${tn(r.prompts || 0, "{n} prompt", "{n} prompts")}` : null]);
-      rect.addEventListener("click", () => r && go(`#/sessions?day=${key}`));
+      rect.addEventListener("click", () => r && go(`#/sessions?day=${key}${query}`));
       svg.append(rect);
       if (dow === 0 && day.getMonth() !== lastMonth && day.getDate() <= 7) {
         lastMonth = day.getMonth();
@@ -2839,8 +2839,12 @@ function roughSeed(str) {
   for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0;
   return (x % 2147483646) + 1; // stable per part: the sketch keeps its wobble between renders, as Excalidraw does
 }
-function diagramCard(p) {
-  const dg = p.diagram, L = dg.layout;
+// opts, for a diagram that isn't a knowledge base's own (a group's map): its parts' kinds named, its title and hint,
+// the download, and explain(what, item) for the detail line in place of the knowledge items a sketch cites. A layout
+// may carry arcs (links between first-column parts, drawn dashed, the diagram's `links`) and x0, the room they take.
+function diagramCard(p, { dg = p.diagram, kinds = DIAGRAM_KINDS, title = t("Architecture"), hint = null, download = null, explain = null,
+  table = null, prompt = t("Click a part or a connection to see the knowledge it comes from.") } = {}) {
+  const L = dg.layout;
   const kIndex = Object.fromEntries((p.knowledge || []).map((k) => [k.id, k]));
   const byId = Object.fromEntries(dg.nodes.map((n) => [n.id, n]));
   const cited = new Set([...dg.nodes, ...dg.edges].flatMap((x) => x.sources || []));
@@ -2854,11 +2858,11 @@ function diagramCard(p) {
 
   const draw = (body) => {
     const gen = rough.generator();
-    const svg = s("svg", { class: "kbd-svg", viewBox: `0 0 ${L.width} ${L.height}`, role: "img",
-      "aria-label": t("Architecture sketch: {parts} parts, {edges} connections", { parts: dg.nodes.length, edges: dg.edges.length }) });
+    const svg = s("svg", { class: "kbd-svg", viewBox: `${L.x0 || 0} 0 ${L.width} ${L.height}`, role: "img",
+      "aria-label": t("{title}: {parts} parts, {edges} connections", { title, parts: dg.nodes.length, edges: dg.edges.length }) });
     Object.assign(svg.style, { maxWidth: `${L.width}px`, minWidth: `${Math.round(L.width * 0.72)}px` });
     const edgeG = s("g"), nodeG = s("g"), labelG = s("g");
-    const els = { node: {}, edge: [], label: [] };
+    const els = { node: {}, edge: [], label: [], arc: [] };
     dg.edges.forEach((e, i) => {
       const lay = L.edges[i], o = { seed: roughSeed(`${e.from}>${e.to}`), roughness: 0.9, bowing: 0.6, strokeWidth: 1.2, stroke: "#000" };
       const g = s("g", { class: "kbd-edge" }, s("path", { class: "hit", d: lay.d }),
@@ -2874,6 +2878,16 @@ function diagramCard(p) {
         labelG.append(t);
         els.label[i] = t;
       }
+    });
+    (L.arcs || []).forEach((a, i) => {
+      const o = { seed: roughSeed(`${a.from}~${a.to}`), roughness: 0.9, bowing: 0.6, strokeWidth: 1.2, stroke: "#000" };
+      const ln = (dg.links || []).find((x) => x.from === a.from && x.to === a.to && x.kind === a.kind) || a;
+      const g = s("g", { class: "kbd-edge kbd-arc" }, s("path", { class: "hit", d: a.d }),
+        roughEls(gen, gen.path(a.d, o), "dash"), a.head ? roughEls(gen, gen.linearPath(a.head, o)) : null);
+      g.addEventListener("click", (ev) => { ev.stopPropagation(); select(["arc", i]); });
+      hoverable(g, () => [`${byId[a.from].label} ${a.head ? "→" : "↔"} ${byId[a.to].label}`, explain ? explain("arc", ln, true) : null], { focusable: false });
+      edgeG.append(g);
+      els.arc.push(g);
     });
     dg.nodes.forEach((n, i) => {
       const b = L.nodes[i], o = { seed: roughSeed(n.id), roughness: 1.15, bowing: 0.9, strokeWidth: 1.4, stroke: "#000",
@@ -2893,10 +2907,10 @@ function diagramCard(p) {
       const cy = b.y + b.h / 2 + (n.kind === "store" ? L.font * 0.45 : 0), k = b.lines.length;
       const label = s("text", { class: "kbd-label", "text-anchor": "middle", style: { fontSize: `${L.font}px` } },
         b.lines.map((ln, j) => s("tspan", { x: b.x + b.w / 2, y: cy + (j - (k - 1) / 2) * L.line, "dominant-baseline": "central" }, ln)));
-      const g = s("g", { class: `kbd-node k-${n.kind}`, role: "button", "aria-label": `${n.label}: ${DIAGRAM_KINDS[n.kind]}` }, shape, label);
+      const g = s("g", { class: `kbd-node k-${n.kind}`, role: "button", "aria-label": `${n.label}: ${kinds[n.kind]}` }, shape, label);
       g.addEventListener("click", (ev) => { ev.stopPropagation(); select(["node", n.id]); });
       g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(["node", n.id]); } });
-      hoverable(g, () => [n.label, DIAGRAM_KINDS[n.kind], n.note || null]);
+      hoverable(g, () => [n.label, kinds[n.kind], n.note || null]);
       nodeG.append(g);
       els.node[n.id] = g;
     });
@@ -2906,9 +2920,16 @@ function diagramCard(p) {
     function select(what) {
       picked = what && picked && what[0] === picked[0] && what[1] === picked[1] ? null : what; // a second click lets go
       svg.classList.toggle("picking", !!picked);
-      [...Object.values(els.node), ...els.edge, ...els.label].forEach((e) => e && e.classList.remove("on"));
+      [...Object.values(els.node), ...els.edge, ...els.label, ...els.arc].forEach((e) => e && e.classList.remove("on"));
       if (!picked) {
-        detail.replaceChildren(h("span", { class: "muted" }, t("Click a part or a connection to see the knowledge it comes from.")));
+        detail.replaceChildren(h("span", { class: "muted" }, prompt));
+        return;
+      }
+      if (picked[0] === "arc") {
+        const a = L.arcs[picked[1]], ln = (dg.links || []).find((x) => x.from === a.from && x.to === a.to && x.kind === a.kind) || a;
+        [els.arc[picked[1]], els.node[a.from], els.node[a.to]].forEach((x) => x && x.classList.add("on"));
+        detail.replaceChildren(h("div", null, h("b", null, byId[a.from].label), ` ${a.head ? "→" : "↔"} `, h("b", null, byId[a.to].label)),
+          explain ? explain("arc", ln) : null);
         return;
       }
       if (picked[0] === "node") {
@@ -2919,29 +2940,33 @@ function diagramCard(p) {
           if (e.from !== n.id && e.to !== n.id) return;
           [els.edge[i], els.label[i], els.node[e.from], els.node[e.to]].forEach((x) => x && x.classList.add("on"));
         });
-        detail.replaceChildren(h("div", null, h("b", null, n.label), h("span", { class: "muted" }, ` · ${DIAGRAM_KINDS[n.kind]}`),
-          n.note ? h("span", null, ` · ${n.note}`) : null), sources(n.sources));
+        (L.arcs || []).forEach((a, i) => {
+          if (a.from === n.id || a.to === n.id) [els.arc[i], els.node[a.from], els.node[a.to]].forEach((x) => x && x.classList.add("on"));
+        });
+        detail.replaceChildren(h("div", null, h("b", null, n.label), h("span", { class: "muted" }, ` · ${kinds[n.kind]}`),
+          n.note && !explain ? h("span", null, ` · ${n.note}`) : null), explain ? explain("node", n) : sources(n.sources));
       } else {
         const e = dg.edges[picked[1]];
         [els.edge[picked[1]], els.label[picked[1]], els.node[e.from], els.node[e.to]].forEach((x) => x && x.classList.add("on"));
         detail.replaceChildren(h("div", null, h("b", null, byId[e.from].label), ` → ${e.label ? `${e.label} → ` : ""}`, h("b", null, byId[e.to].label)),
-          sources(e.sources));
+          explain ? explain("edge", e) : sources(e.sources));
       }
     }
-    const kinds = Object.keys(DIAGRAM_KINDS).filter((k) => dg.nodes.some((n) => n.kind === k));
+    const shown = Object.keys(kinds).filter((k) => dg.nodes.some((n) => n.kind === k));
     body.append(h("div", { class: "kbd-scroll" }, svg),
-      h("div", { class: "kbd-foot" }, h("div", { class: "kbd-legend" }, kinds.map((k) => h("span", { class: `k-${k}` }, h("i"), DIAGRAM_KINDS[k]))), detail));
+      h("div", { class: "kbd-foot" }, h("div", { class: "kbd-legend" }, shown.map((k) => h("span", { class: `k-${k}` }, h("i"), kinds[k])),
+        L.arcs?.length ? h("span", { class: "k-arc" }, h("i"), t("Link between projects")) : null), detail));
     const keep = picked; // keep the selection across a redraw (select toggles, so start from none)
     picked = null;
     select(keep);
   };
-  const table = () => ({ columns: [t("From"), t("Connection"), t("To"), t("Based on")],
+  table ||= () => ({ columns: [t("From"), t("Connection"), t("To"), t("Based on")],
     rows: dg.edges.map((e) => [byId[e.from].label, e.label || "→", byId[e.to].label,
       (e.sources || []).map((id) => kIndex[id]?.title).filter(Boolean).join(" · ") || tn((e.sources || []).length, "{n} item", "{n} items")]) });
-  const download = h("a", { class: "btn small kbd-dl", href: `/api/diagram?path=${encodeURIComponent(p.project_path)}`, download: "",
+  const dl = h("a", { class: "btn small kbd-dl", href: download || `/api/diagram?path=${encodeURIComponent(p.project_path)}`, download: "",
     title: t("Download as an .excalidraw file to edit it in excalidraw.com or the Excalidraw VS Code extension") }, icon("download"), "Excalidraw");
-  return chartCard(t("Architecture"), tn(cited.size, "Sketched from {n} knowledge item · click a part to see its sources", "Sketched from {n} knowledge items · click a part to see its sources", { n: fmtNum(cited.size) }),
-    (body) => draw(body), table, [download], "system");
+  return chartCard(title, hint || tn(cited.size, "Sketched from {n} knowledge item · click a part to see its sources", "Sketched from {n} knowledge items · click a part to see its sources", { n: fmtNum(cited.size) }),
+    (body) => draw(body), table, [dl], "system");
 }
 
 // A project's page is for coming back to it: where its last sessions left things, its work week by week and its folder
@@ -3189,7 +3214,7 @@ route(/^\/project$/, async (params) => {
 // A group's page reads its projects as one (api.projects.group): each project's share of the work, then the project
 // page's cards over all of them, each item named by the project it came from (x.member). Like a project's page, no
 // model writes anything for it: the Knowledge bases tab shows each project's own, as its project keeps it.
-const GROUP_TABS = [["overview", t("Overview")], ["working", t("Knowledge bases")], ["knowledge", t("Knowledge")],
+const GROUP_TABS = [["overview", t("Overview")], ["map", t("Map")], ["working", t("Knowledge bases")], ["knowledge", t("Knowledge")],
   ["sessions", t("Sessions")], ["artifacts", t("Artifacts")], ["usage", t("Usage")]];
 function memberTag(x) { return h("a", { class: "member-tag", href: `#/project?path=${encodeURIComponent(x.project_path)}`, title: x.project_path }, x.member); }
 function membersCard(g) { // the group's projects side by side, with each one's share of the group's active time
@@ -3250,6 +3275,89 @@ function memberKbsCard(g) { // each project's own knowledge base, briefly; the w
     withKb.length ? h("div", { class: "member-kbs" }, withKb.map(kbCard)) : null,
     without.length ? h("p", { class: "muted small" }, t("No knowledge base yet: {projects}", { projects: without.map((m) => m.label).join(", ") })) : null);
 }
+// The group's projects and the services and platforms they use (systems.group_map), drawn like a knowledge base's
+// sketch: a service many lines meet is one the projects share. Dashed arcs are the links the Systems map found between
+// the projects themselves (edited files, glossary mentions). Read from manifests and commands; no model draws it.
+const GROUP_MAP_KINDS = { component: t("Project in the group"), store: t("Data store"), external: t("Service"), interface: t("Platform it runs on") };
+function groupMapCard(g, m) {
+  const byId = Object.fromEntries(m.nodes.map((n) => [n.id, n]));
+  const users = (n) => m.edges.filter((e) => e.to === n.id).map((e) => byId[e.from].label);
+  const projects = m.nodes.filter((n) => n.kind === "component").length;
+  for (const n of m.nodes) {
+    if (n.kind !== "component") n.note = t("Used by {n} of {total} projects", { n: users(n).length, total: projects });
+  }
+  const list = (xs) => (xs && xs.length ? h("ul", { class: "kbd-ev" }, xs.slice(0, 4).map((x) => h("li", null, x))) : null);
+  const explain = (what, x, brief = false) => {
+    if (what === "arc") {
+      const word = x.kind === "files" ? t("Its sessions read or edited the other's files") : t("Its glossary names the other");
+      return brief ? word : h("div", null, h("div", { class: "muted" }, word), list(x.evidence));
+    }
+    if (what === "edge") return list(x.evidence);
+    if (x.kind === "component") {
+      return h("div", null, h("span", { class: "muted" }, [x.note, tn(x.sessions, "{n} session", "{n} sessions", { n: fmtNum(x.sessions) })].filter(Boolean).join(" · ")),
+        " ", h("a", { class: "link-arrow", href: `#/systems?system=${encodeURIComponent(x.system)}` }, t("Open its system map"), icon("arrow")));
+    }
+    return h("div", null, t("Used by {projects}", { projects: users(x).join(", ") }));
+  };
+  const shared = m.nodes.filter((n) => n.kind !== "component" && users(n).length > 1).length;
+  const hint = [tn(shared, "{n} service or platform shared by more than one project", "{n} services or platforms shared by more than one project"),
+    m.read_manifests ? t("from manifests and the commands sessions ran") : t("from the commands sessions ran (reading manifests is off)")].join(" · ");
+  const table = () => ({ columns: [t("Project"), t("Uses"), t("Found in")],
+    rows: [...m.edges.map((e) => [byId[e.from].label, byId[e.to].label, (e.evidence || []).join(" · ")]),
+      ...m.links.map((l) => [byId[l.from].label, byId[l.to].label, explain("arc", l, true)])] });
+  return diagramCard({}, { dg: m, kinds: GROUP_MAP_KINDS, title: t("Projects and the services they use"), hint, explain, table,
+    download: `/api/group/map.excalidraw?id=${g.id}`, prompt: t("Click a project, a service or a line to see where it was found.") });
+}
+// Each project's active time week by week, stacked: who the group's time went to, and when. A project keeps its hue
+// whatever the weeks shown (fixed order by path); past SERIES_MAX projects, the quieter ones are "Other".
+const SERIES_MAX = 7;
+function groupSeries(g) {
+  const label = Object.fromEntries(g.members.map((m) => [m.project_path, m.label]));
+  const total = (s) => s.values.reduce((a, b) => a + b, 0);
+  const busy = g.weekly.series.filter((s) => total(s) > 0).sort((a, b) => total(b) - total(a));
+  const named = busy.slice(0, busy.length > SERIES_MAX + 1 ? SERIES_MAX : SERIES_MAX + 1);
+  const rest = busy.slice(named.length);
+  const hues = Object.fromEntries([...named].sort((a, b) => a.project_path.localeCompare(b.project_path)).map((s, i) => [s.project_path, `var(--series-${i + 1})`]));
+  const series = named.map((s) => ({ name: label[s.project_path], color: hues[s.project_path], values: s.values }));
+  if (rest.length) series.push({ name: t("Other"), color: "var(--muted)", values: g.weekly.weeks.map((_, i) => rest.reduce((a, s) => a + s.values[i], 0)) });
+  return series;
+}
+function stackedWeeks(container, width, weeks, series, { height = 220 } = {}) {
+  const m = { l: 44, r: 8, t: 10, b: 24 };
+  const iw = width - m.l - m.r, ih = height - m.t - m.b;
+  const totals = weeks.map((_, i) => series.reduce((a, sr) => a + sr.values[i], 0));
+  const unit = Math.max(...totals) >= 3 * 3600 ? 3600 : 60;
+  const ticks = niceTicks(Math.max(0, ...totals) / unit).map((v) => v * unit);
+  const top = ticks[ticks.length - 1] || 1;
+  const band = iw / Math.max(weeks.length, 1), bw = Math.max(3, Math.min(26, band - 4));
+  const svg = s("svg", { width, height, viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": t("Active time per week, by project") });
+  const g = s("g", { transform: `translate(${m.l},${m.t})` });
+  svg.append(g);
+  for (const v of ticks) {
+    const y = ih - (v / top) * ih;
+    g.append(s("line", { class: v === 0 ? "baseline" : "gridline", x1: 0, x2: iw, y1: Math.round(y) + 0.5, y2: Math.round(y) + 0.5 }));
+    g.append(s("text", { class: "axis tick-num chart-label", x: -8, y: y + 3.5, "text-anchor": "end" }, fmtDur(v)));
+  }
+  const every = Math.max(1, Math.ceil(weeks.length / Math.max(2, Math.floor(iw / 70))));
+  weeks.forEach((wk, i) => {
+    const x = i * band + (band - bw) / 2;
+    const parts = series.map((sr) => [sr, sr.values[i]]).filter(([, v]) => v > 0);
+    let y = ih;
+    parts.forEach(([sr, v], j) => { // a 2px gap between segments; the top one rounded
+      const hgt = Math.max(1, (v / top) * ih), last = j === parts.length - 1;
+      const seg = last ? s("path", { d: barPath(x, y - hgt, bw, hgt, 4) }) : s("rect", { x, y: y - hgt, width: bw, height: Math.max(0.5, hgt - 2) });
+      seg.style.fill = sr.color;
+      g.append(seg);
+      y -= hgt;
+    });
+    if (i % every === 0) g.append(s("text", { class: "chart-label", x: i * band + band / 2, y: ih + 16, "text-anchor": "middle" }, fmtDate(`${wk}T12:00:00`)));
+    const hit = s("rect", { class: "hit", x: i * band, y: 0, width: band, height: ih });
+    hoverable(hit, () => [fmtDur(totals[i]), t("Week of {date}", { date: fmtDateY(`${wk}T00:00:00`) }),
+      parts.slice().reverse().map(([sr, v]) => `${sr.name} ${fmtDur(v)}`).join(" · ") || null]);
+    g.append(hit);
+  });
+  container.append(h("span", { class: "mini-legend" }, series.map((sr) => h("span", null, h("i", { class: "sw", style: { background: sr.color } }), sr.name))), svg);
+}
 function groupGlossary(g) { // the terms more than one of the group's projects use first: the group's shared language
   if (!g.glossary.length) return null;
   const label = Object.fromEntries(g.members.map((m) => [m.project_path, m.label]));
@@ -3301,16 +3409,43 @@ route(/^\/group$/, async (params) => {
     planCard({ knowledge: g.knowledge })].filter(Boolean);
   const leftOff = leftOffCard(g.recent), side = [foldersCard(g.repos), ...plans].filter(Boolean);
   const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
+  // the map is drawn from the Systems map, which may take a few seconds to build: asked for when its tab opens
+  const mapPane = window.rough ? h("div", { class: "grid" }, h("section", { class: "card empty" }, t("Drawing the map…"))) : null;
+  let mapAsked = false;
+  const loadMap = async () => {
+    if (mapAsked || !mapPane) return;
+    mapAsked = true;
+    try {
+      const m = await api("/api/group/map", { id: g.id });
+      mapPane.replaceChildren(groupMapCard(g, m),
+        m.missing.length ? h("p", { class: "lo-foot" }, t("Not on the map, with no repository of their own: {projects}", { projects: m.missing.join(", ") })) : null);
+    } catch {
+      mapPane.replaceChildren(h("section", { class: "card empty" }, t("Nothing to map yet: none of these projects is in a repository the Systems map knows.")));
+    }
+  };
+  const series = groupSeries(g);
+  const weeksCard = series.length ? chartCard(t("Active time by project"), t("Week by week, the last {n} weeks", { n: g.weekly.weeks.length }),
+    (el, w) => stackedWeeks(el, w, g.weekly.weeks, series),
+    () => ({ columns: [t("Week"), ...series.map((sr) => sr.name)], num: [false, ...series.map(() => true)],
+      rows: g.weekly.weeks.map((wk, i) => [wk, ...series.map((sr) => fmtDur(sr.values[i]))]).filter((_, i) => series.some((sr) => sr.values[i])) }),
+    [], "calendar") : null;
+  const calCard = g.daily.length ? chartCard(t("Activity calendar"), t("Active time per day · click a day to see its sessions"),
+    (el, w) => calendarHeatmap(el, w, g.daily, { query: `&group=${g.id}` }),
+    () => ({ columns: [t("Date"), t("Sessions"), t("Prompts"), t("Active")], num: [false, true, true, true], rows: g.daily.map((r) => [r.date, r.sessions, r.prompts || 0, fmtDur(r.active_s)]) }),
+    [], "calendar") : null;
+  const sketches = window.rough ? g.members.filter((m) => m.diagram).map((m) => diagramCard(
+    { diagram: m.diagram, knowledge: g.diagram_sources, project_path: m.project_path }, { title: t("Architecture · {project}", { project: m.label }) })) : [];
   const panes = {
     overview: h("div", { class: "grid" }, membersCard(g), needsYouCard(g),
       leftOff && sideCol ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, leftOff, sideCol) : leftOff || sideCol, timelineCard(g.timeline)),
-    working: h("div", null, memberKbsCard(g), groupGlossary(g)),
+    map: mapPane,
+    working: h("div", null, memberKbsCard(g), sketches.length ? h("div", { class: "grid member-sketches" }, sketches) : null, groupGlossary(g)),
     knowledge: g.knowledge.length ? h("div", { class: "kgrid" }, g.knowledge.map((k) => knowledgeCard(k, { compact: true }))) : null,
     sessions: h("div", null, sessions, st.sessions > g.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
       shown: fmtNum(g.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?group=${g.id}` }, t("All of them in Sessions")) })) : null),
     artifacts: g.artifacts?.total ? artifactsCard(g.artifacts.recent, {
       hint: ART_KINDS.filter(([k]) => g.artifacts.counts[k]).map(([k, plural]) => `${plural} ${fmtNum(g.artifacts.counts[k])}`).join(" · ") }) : null,
-    usage: h("div", { class: "grid" }, tiles, costCard, filesCard),
+    usage: h("div", { class: "grid" }, tiles, weeksCard, calCard, costCard, filesCard),
   };
   const counts = { knowledge: g.knowledge.length, sessions: st.sessions, artifacts: g.artifacts?.total };
   const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Group view") }, GROUP_TABS.filter(([k]) => panes[k]).map(([k, name]) =>
@@ -3319,6 +3454,7 @@ route(/^\/group$/, async (params) => {
     for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
     tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
     if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
+    if (name === "map") loadMap();
   };
   showTab(panes[params.tab] ? params.tab : "overview", false);
   const edit = canGroup() ? h("button", { class: "btn", type: "button", onclick: async () => {

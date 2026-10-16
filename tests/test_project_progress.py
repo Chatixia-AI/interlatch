@@ -273,9 +273,37 @@ def test_a_group_page_reads_its_projects_as_one(project):
     assert len(page["sessions"]) == 5 and "s-away" not in {s["id"] for s in page["sessions"]}
     assert page["artifacts"]["total"] == 3  # the pull request and two commits, each once
     assert page["repos"] is None and page["roadmaps"] is None  # not asked from this computer
+    weekly = page["weekly"]
+    assert len(weekly["weeks"]) == 26 and weekly["weeks"] == sorted(weekly["weeks"])  # oldest first, Mondays
+    assert [x["project_path"] for x in weekly["series"]] == ["/Users/me/Work/other", PROJECT]
+    assert {x["date"] for x in page["daily"]} <= {"2026-09-16", "2026-10-07", "2026-10-14"}  # the blog's day isn't one
+    assert page["diagram_sources"] == [] and all(m["diagram"] is None for m in page["members"])
     assert api.projects.group(ctx, work + 100) is None  # no such group
     empty = groups.save(conn, None, "Nothing yet", ["/Users/me/Elsewhere"])
     assert api.projects.group(ctx, empty) is None  # no sessions in it
+
+
+def test_a_group_page_counts_this_weeks_work_and_draws_each_projects_own_sketch(project):
+    from interlatch.core.util import to_iso, utcnow
+    from interlatch.projects import groups
+
+    conn = project["conn"]
+    _session(conn, "s-now", to_iso(utcnow()), active_s=1200)
+    sketch = {"nodes": [{"id": "api", "label": "API", "kind": "component", "note": "", "sources": [7]},
+                        {"id": "db", "label": "DB", "kind": "store", "note": "", "sources": [7]}],
+              "edges": [{"from": "api", "to": "db", "label": "writes", "sources": [7]}]}
+    conn.execute("INSERT INTO knowledge(id, project_path, kind, title, status) VALUES (7, ?, 'fact', 'The API writes to the DB', 'active')",
+                 (PROJECT,))
+    conn.execute("INSERT INTO project_kb(project_path, project_name, updated_at, kb_json) VALUES (?, 'quote-agent', ?, ?)",
+                 (PROJECT, to_iso(utcnow()), json.dumps({"overview": "x", "diagram": sketch})))
+    conn.commit()
+    gid = groups.save(conn, None, "Work", ["/Users/me/Work"])
+    page = api.projects.group(App(project["cfg"]).context(), gid)
+    mine = next(x for x in page["weekly"]["series"] if x["project_path"] == PROJECT)
+    assert mine["values"][-1] >= 1200  # this week is the last (with s-last too when it falls in it)
+    member = next(m for m in page["members"] if m["project_path"] == PROJECT)
+    assert [n["id"] for n in member["diagram"]["nodes"]] == ["api", "db"] and member["diagram"]["layout"]["nodes"]
+    assert [k["title"] for k in page["diagram_sources"]] == ["The API writes to the DB"]
 
 
 def test_a_group_page_reads_each_folder_once_and_only_for_someone_at_this_computer(project, repo):

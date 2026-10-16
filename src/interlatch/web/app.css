@@ -1849,6 +1849,15 @@ details.agent-pick [aria-checked="true"] .ap-check { visibility: visible; }
 .kbd-legend .k-external i { border-style: dashed; background: none; }
 .kbd-legend .k-interface i { border-radius: 4px; }
 .kbd-detail { min-height: 2.6em; color: var(--ink-2); }
+/* a group's map: dashed arcs between its projects, and where each line was found */
+.kbd-arc .o { stroke: var(--accent); }
+.kbd-arc .o.dash { stroke-dasharray: 6 5; }
+.kbd-arc:hover .o, .kbd-arc.hover .o, .kbd-arc.on .o { stroke: var(--accent-ink); }
+.kbd-svg.picking .kbd-arc:not(.on) { opacity: 0.2; }
+.kbd-legend .k-arc i { height: 0; border: 0; border-top: 1.6px dashed var(--accent); border-radius: 0; background: none; }
+.kbd-ev { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; color: var(--muted); overflow-wrap: anywhere; }
+.member-sketches { margin-top: 14px; }
+.chart > .mini-legend { flex-wrap: wrap; gap: 4px 12px; margin-bottom: 6px; }
 .kbd-detail b { color: var(--ink); font-weight: 600; }
 .kbd-src { margin-top: 3px; color: var(--muted); }
 .kbd-src a { color: var(--accent-ink); }

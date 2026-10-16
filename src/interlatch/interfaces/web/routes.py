@@ -128,12 +128,28 @@ def _project(h, ctx, m, q):
 
 
 def _group(h, ctx, m, q):  # a group of projects read as one (groups.py): not for someone limited to projects
-    try:
-        gid = int(q.get("id", ""))
-    except ValueError:
+    gid = _group_id(q)
+    if gid is None:
         return h._json({"error": tr("not found")}, 404)
     found = api.projects.group(ctx, gid, here=h._from_here(), limited=h.limited)
     return h._json({**found, "local": h._local()}) if found else h._json({"error": tr("not found")}, 404)
+
+
+def _group_id(q) -> int | None:
+    try:
+        return int(q.get("id", ""))
+    except ValueError:
+        return None
+
+
+def _group_map(h, ctx, m, q):  # the group's projects and the services they use, from the Systems map's evidence
+    found = api.projects.group_map(ctx, _group_id(q)) if _group_id(q) is not None else None
+    return h._json(found) if found else h._json({"error": tr("not found")}, 404)
+
+
+def _group_map_file(h, ctx, m, q):  # a download: the group's map as an .excalidraw file
+    f = api.projects.group_map_file(ctx, _group_id(q)) if _group_id(q) is not None else None
+    return h._download(*f) if f else h._json({"error": tr("not found")}, 404)
 
 
 def _diagram(h, ctx, m, q):  # a download: the project's architecture sketch as an .excalidraw file
@@ -200,6 +216,8 @@ GET: list[Route] = [
     Route(r"/api/artifacts/(\d+)/file", ANYONE, _artifact_file),
     Route("/api/project", ANYONE, _project),
     Route("/api/group", ANYONE, _group),
+    Route("/api/group/map", ANYONE, _group_map),
+    Route("/api/group/map.excalidraw", ANYONE, _group_map_file),
     Route("/api/diagram", ANYONE, _diagram),
     # parse_qs has decoded the path already: a second unquote would mangle a literal %
     Route("/api/file", ANYONE, lambda h, ctx, m, q: h._json(

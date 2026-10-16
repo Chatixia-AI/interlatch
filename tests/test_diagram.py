@@ -9,7 +9,7 @@ from http.server import ThreadingHTTPServer
 
 from interlatch.analysis.session import analyze_session
 from interlatch.core.diagrams import MAX_NODES, normalize_diagram, to_mermaid
-from interlatch.interfaces.exports.diagrams import Metrics, layout, to_excalidraw
+from interlatch.interfaces.exports.diagrams import Metrics, layout, side_links, to_excalidraw
 from interlatch.knowledge.synthesize import GLOBAL, GLOBAL_SCHEMA, KB_SCHEMA, synthesize_project
 
 from conftest import CWD, SID
@@ -102,6 +102,29 @@ def test_excalidraw_scene_binds_labels_and_arrows():
     labels = {e["text"] for e in scene["elements"] if e["type"] == "text"}
     assert {"Part cli", "Part db", "demo: architecture", "calls", "a cycle"} <= labels
     assert sum(e["type"] == "arrow" for e in scene["elements"]) == len(d["edges"])
+
+
+def test_links_between_first_column_parts_are_arcs_to_their_left_and_dashed_arrows_in_excalidraw():
+    d = {"nodes": [node("a"), node("b"), node("c"), node("svc", "external")],
+         "edges": [edge("a", "svc", label=""), edge("b", "svc", label=""), edge("c", "svc", label="")],
+         "links": [{"from": "a", "to": "c", "kind": "files"}, {"from": "a", "to": "b", "kind": "mentions", "directed": False},
+                   {"from": "a", "to": "gone", "kind": "files"}]}
+    lay = layout(d)
+    arcs, reach = side_links(lay, d["links"])
+    assert [(x["from"], x["to"]) for x in arcs] == [("a", "b"), ("a", "c")]  # the shortest innermost; one to nowhere dropped
+    assert arcs[0]["head"] is None and arcs[1]["head"]  # a mention has no direction
+
+    def leftmost(arc):  # of the drawn curve, not its control points
+        (x0, _), (x1, _), (x2, _), (x3, _) = arc["points"]
+        return min((1 - t) ** 3 * x0 + 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3 * x3
+                   for t in (i / 50 for i in range(51)))
+    assert leftmost(arcs[1]) < leftmost(arcs[0]) < min(nb["x"] for nb in lay["nodes"])  # nested, left of the parts
+    assert leftmost(arcs[1]) >= -reach  # inside the margin the drawing adds
+    scene = to_excalidraw(d, "group: map", {"component": "Project in the group"})
+    dashed = [e for e in scene["elements"] if e["type"] == "arrow" and e["strokeStyle"] == "dashed"]
+    assert len(dashed) == 2 and {e["endArrowhead"] for e in dashed} == {"arrow", None}
+    assert "Project in the group" in {e["text"] for e in scene["elements"] if e["type"] == "text"}
+    assert layout({**d, "wrap": 3})["nodes"][0]["lines"] == ["Part", "a"]  # a diagram may wrap its labels sooner
 
 
 def test_mermaid_escapes_and_shapes():

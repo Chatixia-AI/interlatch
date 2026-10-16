@@ -195,3 +195,40 @@ def test_api(world):
             assert exc.code == 404
     finally:
         httpd.shutdown()
+
+
+def test_a_group_map_shows_its_projects_the_services_they_use_and_the_links_between_them(world):
+    data = systems.build(world["conn"], world["cfg"])
+    shop, worker, feat = str(world["shop"]), str(world["worker"]), str(world["feat"])
+    m = systems.group_map(data, {shop: "Shop", worker: "Worker", feat: "Feat", str(world["acme"]): "Acme"})
+    by = {n["id"]: n for n in m["nodes"]}
+    projects = [n for n in m["nodes"] if n["kind"] == "component"]
+    # a system with two of the group's folders (a repository and its worktree) is one part, named as the map names it
+    assert [(n["label"], sorted(n["project_paths"])) for n in projects] == [("shop", sorted([shop, feat])), ("Worker", [worker])]
+    assert m["missing"] == ["Acme"]  # the folder that only holds the others
+    used = {(by[e["from"]]["label"], by[e["to"]]["label"], by[e["to"]]["kind"]): e["evidence"] for e in m["edges"]}
+    assert used[("shop", "OpenAI API", "external")] == ["openai in backend/pyproject.toml"]
+    assert ("Worker", "IBM Cloud", "interface") in used and "Azure runs on it" not in used[("shop", "Azure", "interface")]
+    assert "shop-app runs on it" in used[("shop", "Azure", "interface")]
+    assert {(by[ln["from"]]["label"], by[ln["to"]]["label"], ln["kind"], ln["directed"]) for ln in m["links"]} == {
+        ("Worker", "shop", "files", True), ("shop", "Worker", "mentions", False)}
+    assert systems.group_map(data, {"/nowhere": "Gone"})["nodes"] == []
+
+
+def test_a_group_page_draws_its_map_and_hands_it_over_for_excalidraw(world, monkeypatch):
+    from interlatch.interfaces.web import api
+    from interlatch.interfaces.web.app import App
+    from interlatch.projects import groups
+
+    monkeypatch.setitem(systems._CACHE, "data", None)  # another test's map is never this one's
+    gid = groups.save(world["conn"], None, "Acme", [str(world["acme"])])
+    ctx = App(world["cfg"]).context()
+    m = api.projects.group_map(ctx, gid)
+    assert {n["label"] for n in m["nodes"] if n["kind"] == "component"} == {"shop", "worker"}
+    assert len(m["layout"]["arcs"]) == 2 and m["layout"]["x0"] < 0  # room left of the projects for the two links
+    assert m["layout"]["width"] > max(nb["x"] + nb["w"] for nb in m["layout"]["nodes"]) - m["layout"]["x0"] - 1
+    name, kind, body = api.projects.group_map_file(ctx, gid)
+    scene = json.loads(body)
+    assert (name, kind, scene["type"]) == ("Acme-map.excalidraw", "application/vnd.excalidraw+json", "excalidraw")
+    assert "Acme: projects and the services they use" in {e.get("text") for e in scene["elements"]}
+    assert api.projects.group_map(ctx, gid + 1) is None and api.projects.group_map_file(ctx, gid + 1) is None

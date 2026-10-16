@@ -91,7 +91,8 @@ def _bezier(p0, p1, t):
 
 def layout(d: dict, m: Metrics = UI) -> dict:
     """Layered left-to-right layout: cycles broken, parts ranked by longest path, long edges routed through gaps,
-    rows ordered to cut crossings, then placed so each part lines up with its neighbours."""
+    rows ordered to cut crossings, then placed so each part lines up with its neighbours. d may set `wrap`, the widest
+    a part's label runs before it wraps, and `gap`, the narrowest gap between columns (both in font sizes)."""
     s = m.size
     nodes, edges = d["nodes"], d["edges"]
     idx = {n["id"]: i for i, n in enumerate(nodes)}
@@ -175,7 +176,7 @@ def layout(d: dict, m: Metrics = UI) -> dict:
     pad_x, pad_y = s * 1.1, s * 0.85
     boxes = []
     for n in nodes:
-        lines = m.wrap(n["label"], s * 11)
+        lines = m.wrap(n["label"], s * d.get("wrap", 11))
         w = max(s * 7, max(m.width(ln) for ln in lines) + 2 * pad_x)
         hgt = len(lines) * m.line + 2 * pad_y + (s * 0.9 if n["kind"] == "store" else 0)  # a cylinder's cap
         boxes.append({"w": round(w, 1), "h": round(hgt, 1), "lines": lines})
@@ -188,7 +189,7 @@ def layout(d: dict, m: Metrics = UI) -> dict:
         labels.append({"lines": lines, "w": max((m.width(ln, m.label) for ln in lines), default=0),
                        "h": len(lines) * m.label_line, "gap": vrank[chain[0]]})
     col_w = {r: max((size[v][0] for v in order[r]), default=0) for r in ranks}
-    gap = {r: max(s * 4.5, max((lb["w"] for lb in labels if lb["gap"] == r), default=0) + s * 3.2) for r in ranks}
+    gap = {r: max(s * d.get("gap", 4.5), max((lb["w"] for lb in labels if lb["gap"] == r), default=0) + s * 3.2) for r in ranks}
     margin = s * 1.3
     col_x, x = {}, margin
     for r in ranks:
@@ -283,6 +284,29 @@ def layout(d: dict, m: Metrics = UI) -> dict:
             "label_line": m.label_line, "nodes": out_nodes, "edges": out_edges}
 
 
+def side_links(lay: dict, links: list[dict], m: Metrics = UI) -> tuple[list[dict], float]:
+    """Links between parts of the first column (a group's projects), drawn as arcs that bow out to its left, the
+    shortest innermost so they don't cross: each {from, to, kind, d, points, head}, head None for a link with no
+    direction. Also how far the arcs reach left of the layout, which the drawing adds as a margin."""
+    s = m.size
+    box = {nb["id"]: nb for nb in lay["nodes"]}
+    todo = [ln for ln in links if ln["from"] in box and ln["to"] in box and ln["from"] != ln["to"]]
+    todo.sort(key=lambda ln: abs(box[ln["from"]]["y"] - box[ln["to"]]["y"]))
+    out, reach = [], 0.0
+    for j, ln in enumerate(todo):
+        a, b = box[ln["from"]], box[ln["to"]]
+        ax, ay = a["x"] - 1, a["y"] + a["h"] / 2
+        bx, by = b["x"] - 1, b["y"] + b["h"] / 2
+        k = s * 2.6 + j * s * 1.1  # control points this far out: the arc reaches about three quarters of it
+        reach = max(reach, k * 0.75 - min(ax, bx) + s)
+        d = f"M{ax},{round(ay, 1)} C{round(ax - k, 1)},{round(ay, 1)} {round(bx - k, 1)},{round(by, 1)} {bx},{round(by, 1)}"
+        head = [[round(bx - s * 0.7, 1), round(by - s * 0.42, 1)], [bx, round(by, 1)], [round(bx - s * 0.7, 1), round(by + s * 0.42, 1)]]
+        out.append({"from": ln["from"], "to": ln["to"], "kind": ln.get("kind"), "d": d,
+                    "points": [[ax, round(ay, 1)], [round(ax - k, 1), round(ay, 1)], [round(bx - k, 1), round(by, 1)], [bx, round(by, 1)]],
+                    "head": head if ln.get("directed", True) else None})
+    return out, round(max(0.0, reach), 1)
+
+
 # Excalidraw's own palette: light fills, dark ink
 _INK, _MUTED = "#1e1e1e", "#495057"
 _FILL = {"component": "#a5d8ff", "interface": "#b2f2bb", "store": "#ffec99", "external": "#e9ecef"}
@@ -291,9 +315,12 @@ _KIND_NAME = {"component": "Code it owns", "interface": "Way in (CLI, UI, API)",
 _HAND = Metrics(size=16, char=0.62, label_scale=0.9)  # Virgil
 
 
-def to_excalidraw(d: dict, title: str = "") -> dict:
-    """An Excalidraw scene of the diagram: parts with their labels bound, arrows bound to both ends, and a legend."""
+def to_excalidraw(d: dict, title: str = "", names: dict[str, str] | None = None) -> dict:
+    """An Excalidraw scene of the diagram: parts with their labels bound, arrows bound to both ends, and a legend.
+    d["links"]: links between first-column parts, drawn as dashed arcs (side_links); names: the legend's words for
+    each kind, when the parts aren't a project's own (a group's projects and the services they use)."""
     lay = layout(d, _HAND)
+    names = {**_KIND_NAME, **(names or {})}
     rng = random.Random(7)
     els: list[dict] = []
     count = [0]
@@ -349,6 +376,25 @@ def to_excalidraw(d: dict, title: str = "") -> dict:
             t = text(eb["label"]["x"], eb["label"]["y"], "\n".join(eb["label"]["lines"]), round(_HAND.label),
                      color=_MUTED, container=arrow["id"], align="center")
             arrow["boundElements"].append({"type": "text", "id": t["id"]})
+    arcs, _ = side_links(lay, d.get("links") or [], _HAND)
+    for ab in arcs:
+        p0, c1, c2, p3 = ab["points"]
+        pts = []
+        for t in (0, 0.2, 0.4, 0.6, 0.8, 1):  # sample the arc: Excalidraw smooths through the points
+            u = 1 - t
+            pts.append((u ** 3 * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t ** 3 * p3[0],
+                        u ** 3 * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t ** 3 * p3[1]))
+        x0, y0 = pts[0]
+        rel = [[round(px - x0, 1), round(py - y0, 1)] for px, py in pts]
+        xs, ys = [p[0] for p in rel], [p[1] for p in rel]
+        a, b = shapes[ab["from"]], shapes[ab["to"]]
+        arrow = el("arrow", round(x0, 1), round(y0, 1), max(xs) - min(xs), max(ys) - min(ys), points=rel,
+                   strokeColor=_MUTED, strokeStyle="dashed", roundness={"type": 2}, startArrowhead=None,
+                   endArrowhead="arrow" if ab["head"] else None, lastCommittedPoint=None, elbowed=False,
+                   startBinding={"elementId": a["id"], "focus": 0, "gap": 2},
+                   endBinding={"elementId": b["id"], "focus": 0, "gap": 2})
+        a["boundElements"].append({"type": "arrow", "id": arrow["id"]})
+        b["boundElements"].append({"type": "arrow", "id": arrow["id"]})
     if title:
         text(0, -64, title, 24)
     lx, ly = 0, lay["height"] + 24
@@ -356,7 +402,7 @@ def to_excalidraw(d: dict, title: str = "") -> dict:
         if any(n["kind"] == kind for n in d["nodes"]):
             el("rectangle", lx, ly, 34, 22, backgroundColor=_FILL[kind], strokeStyle="dashed" if kind == "external" else "solid",
                roundness={"type": 3} if kind in ("interface", "store") else None)
-            t = text(lx + 44, ly + 1, _KIND_NAME[kind], 15, color=_MUTED)
+            t = text(lx + 44, ly + 1, names[kind], 15, color=_MUTED)
             lx += 44 + t["width"] + 32
     return {"type": "excalidraw", "version": 2, "source": "https://interlatch.com", "elements": els,
             "appState": {"gridSize": None, "viewBackgroundColor": "#ffffff"}, "files": {}}
