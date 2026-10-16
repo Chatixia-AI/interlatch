@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from ....analysis.runners.factory import BACKENDS, make_runner
@@ -212,6 +212,183 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
 def _labelled(ctx: Context, timeline: dict) -> dict:
     label_who(ctx, [x for w in timeline["weeks"] for x in w["items"]])  # all weeks at once: one look-up of who's who
     return timeline
+
+
+WEEKLY = 26  # weeks of each project's active time on a group's page
+GROUP_MAP_KINDS = {"component": "Project in the group", "store": "Data store", "external": "Service",
+                   "interface": "Platform it runs on"}
+
+
+def group(ctx: Context, group_id: int, here: bool = False, limited: bool = False) -> dict | None:
+    """A group's page: its projects read as one, the way a project's page reads one (project()). Each project's share
+    of the work, where the group's last sessions left things and what they left to a person, the work week by week, and
+    each knowledge base as its project keeps it (no model writes anything for the group). here: the request comes from
+    this computer, so each folder's git state and roadmap file are read too. None for a group that doesn't exist or
+    whose projects have no sessions."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ....knowledge.glossary import glossary_entries
+    from ....projects import progress
+    from ....projects.groups import groups, paths_in
+    from ...exports.diagrams import for_kb
+    from .status import _local_offset_modifier
+
+    c = ctx.conn
+    g = next((g for g in groups(c) if g["id"] == group_id), None)
+    if not g:
+        return None
+    wanted = paths_in(c, group_id)
+    if not wanted:
+        return None
+    marks = ",".join("?" * len(wanted))
+    labels = project_labels(c)
+    members = []
+    for r in c.execute(
+            "SELECT project_path, MAX(project_name) project_name, COUNT(*) sessions, SUM(n_prompts) prompts, "
+            "SUM(active_s) active_s, SUM(est_cost_usd) cost, "
+            "SUM(input_tokens+output_tokens+cache_read_tokens+cache_write_tokens) tokens, MIN(started_at) first, "
+            f"MAX(started_at) last FROM sessions WHERE project_path IN ({marks}) GROUP BY project_path ORDER BY last DESC",
+            wanted):
+        d = dict(r)
+        d["label"] = labels.get(d["project_path"], d["project_name"])
+        d["knowledge"] = c.execute("SELECT COUNT(*) FROM knowledge WHERE project_path = ? AND status = 'active'",
+                                   (d["project_path"],)).fetchone()[0]
+        kb = c.execute("SELECT updated_at, n_items, kb_json FROM project_kb WHERE project_path = ?",
+                       (d["project_path"],)).fetchone()
+        data = (loads(kb["kb_json"], {}) or {}) if kb else {}
+        d["kb"] = {"updated_at": kb["updated_at"], "n_items": kb["n_items"], "overview": data.get("overview") or "",
+                   "tldr": [str(x) for x in data.get("tldr") or []][:5],
+                   "sections": [{"title": s.get("title") or "", "n": len(s.get("items") or [])}
+                                for s in data.get("sections") or [] if isinstance(s, dict) and s.get("items")]} if kb else None
+        d["diagram"] = for_kb(kb["kb_json"]) if kb else None  # its own architecture sketch, where its KB drew one
+        members.append(d)
+    if not members:
+        return None
+    paths = [m["project_path"] for m in members]
+    marks = ",".join("?" * len(paths))
+    stats = c.execute(
+        "SELECT COUNT(*) sessions, SUM(n_prompts) prompts, SUM(active_s) active_s, SUM(est_cost_usd) cost, "
+        "SUM(input_tokens+output_tokens+cache_read_tokens+cache_write_tokens) tokens, SUM(lines_added) lines_added, "
+        f"SUM(lines_removed) lines_removed, MIN(started_at) first, MAX(started_at) last FROM sessions "
+        f"WHERE project_path IN ({marks})", paths).fetchone()
+    asks = []  # each project's own last few: one busy project's sessions don't push the others' out
+    for p in paths:
+        asks += progress.asks(label_who(ctx, progress.recent(c, p)))
+    asks.sort(key=lambda a: a["started_at"] or "", reverse=True)
+    repos, roadmaps = [], []
+    if here:  # the folders, and a roadmap in each, only on this computer; members in one repository read it once
+        with ThreadPoolExecutor(max_workers=min(8, len(paths))) as pool:
+            states = list(pool.map(progress.repo_state, paths))
+        seen_roots, seen_files = set(), set()
+        for p, r in zip(paths, states, strict=True):
+            if r and r["root"] not in seen_roots:
+                seen_roots.add(r["root"])
+                repos.append({**r, "project_path": p})
+            rm = progress.roadmap(p, r["root"] if r else None)
+            if rm and rm["path"] not in seen_files:
+                seen_files.add(rm["path"])
+                roadmaps.append({**rm, "project_path": p})
+    inside = set(paths)
+    glossary = []
+    for e in glossary_entries(c):
+        uses = [u for u in e["usage"] if u["project_path"] in inside]
+        if uses:
+            glossary.append({"term": e["term"], "category": e["category"], "definition": e["definition"],
+                             "context": uses[0]["context"], "projects": sorted({u["project_path"] for u in uses})})
+    cited = sorted({i for m in members if m["diagram"] for x in m["diagram"]["nodes"] + m["diagram"]["edges"]
+                    for i in x.get("sources") or []})
+    diagram_sources = [dict(r) for r in c.execute(  # what the sketches cite, so each part links to its sources
+        f"SELECT id, kind, title, project_name, session_id FROM knowledge WHERE id IN ({','.join('?' * len(cited))})",
+        cited)] if cited else []
+    # each project's active time week by week (the last WEEKLY weeks, oldest first), and the group's days for a year
+    this_week = progress.week_of(to_iso(utcnow()))
+    weeks = [(date.fromisoformat(this_week) - timedelta(weeks=WEEKLY - 1 - i)).isoformat() for i in range(WEEKLY)]
+    at = {w: i for i, w in enumerate(weeks)}
+    weekly = {p: [0.0] * WEEKLY for p in paths}
+    for r in c.execute(f"SELECT project_path, started_at, active_s FROM sessions WHERE project_path IN ({marks}) "
+                       "AND started_at >= ?", (*paths, to_iso(utcnow() - timedelta(weeks=WEEKLY + 1)))):
+        i = at.get(progress.week_of(r["started_at"]) or "")
+        if i is not None:
+            weekly[r["project_path"]][i] += r["active_s"] or 0
+    mod = _local_offset_modifier()
+    daily = [dict(r) for r in c.execute(
+        f"SELECT date(started_at, '{mod}') date, COUNT(*) sessions, SUM(active_s) active_s, SUM(n_prompts) prompts "
+        f"FROM sessions WHERE project_path IN ({marks}) AND started_at >= ? GROUP BY date ORDER BY date",
+        (*paths, to_iso(utcnow() - timedelta(days=372))))]
+    return {
+        "id": g["id"], "name": g["name"], "folders": g["folders"], "hub_project": g["hub_project"],
+        "weekly": {"weeks": weeks, "series": [{"project_path": p, "values": weekly[p]} for p in paths]},
+        "daily": daily,
+        "diagram_sources": diagram_sources,
+        "stats": dict(stats),
+        "members": members,
+        "recent": label_who(ctx, progress.recent(c, paths, limit=progress.RECENT * 2)),
+        "asks": asks,
+        "timeline": _labelled(ctx, progress.timeline(c, paths, session_prs=not limited)),
+        "repos": repos if here else None,
+        "roadmaps": roadmaps if here else None,
+        "artifacts": _artifact_summary(ctx, paths),
+        "sessions": session_rows(ctx, f"project_path IN ({marks})", paths, "started_at DESC", 200),
+        "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
+            "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
+            f"WHERE k.project_path IN ({marks}) AND k.status = 'active' ORDER BY k.pinned DESC, k.id DESC LIMIT 300",
+            paths)],
+        "glossary": glossary,
+        "files": [dict(r) for r in c.execute(
+            "SELECT f.path, s.project_path, COUNT(*) sessions, SUM(f.edits + f.writes) edits, SUM(f.lines_added) added, "
+            "SUM(f.lines_removed) removed FROM session_files f JOIN sessions s ON s.id = f.session_id "
+            f"WHERE s.project_path IN ({marks}) AND (f.edits + f.writes) > 0 GROUP BY s.project_path, f.path "
+            "ORDER BY edits DESC LIMIT 25", paths)],
+    }
+
+
+def _group_map(ctx: Context, group_id: int) -> tuple[str, dict] | None:
+    """The group's name and its map (systems.group_map), or None for no such group or one with nothing on the map."""
+    from ....projects import systems
+    from ....projects.groups import groups, paths_in
+
+    g = next((g for g in groups(ctx.conn) if g["id"] == group_id), None)
+    paths = paths_in(ctx.conn, group_id) if g else []
+    if not paths:
+        return None
+    labels = project_labels(ctx.conn)
+    names = {r["project_path"]: labels.get(r["project_path"], r["project_name"]) for r in ctx.conn.execute(
+        f"SELECT project_path, MAX(project_name) project_name FROM sessions WHERE project_path IN ({','.join('?' * len(paths))}) "
+        "GROUP BY project_path", paths)}
+    d = systems.group_map(systems.cached(ctx.conn, ctx.cfg), names)
+    d.update(wrap=20, gap=11)  # project names run long (ai_quotation_processor); many lines cross the one gap
+    return (g["name"], d) if any(n["kind"] == "component" for n in d["nodes"]) else None
+
+
+def group_map(ctx: Context, group_id: int) -> dict | None:
+    """A group's map for its page: the projects, the services and platforms they use and the links between them, laid
+    out left to right with the links as arcs to the projects' left (exports.diagrams)."""
+    from ...exports.diagrams import layout, side_links
+
+    found = _group_map(ctx, group_id)
+    if not found:
+        return None
+    d = found[1]
+    lay = layout(d)
+    arcs, reach = side_links(lay, d["links"])
+    lay.update(arcs=arcs, x0=-reach, width=round(lay["width"] + reach, 1))  # room for the arcs left of the projects
+    return {**d, "layout": lay, "read_manifests": bool(ctx.cfg.systems_read_manifests)}
+
+
+def group_map_file(ctx: Context, group_id: int) -> tuple[str, str, bytes] | None:
+    """A group's map as an .excalidraw file, to open and edit in Excalidraw."""
+    import json
+    import re
+
+    from ...exports.diagrams import to_excalidraw
+
+    found = _group_map(ctx, group_id)
+    if not found:
+        return None
+    name, d = found
+    scene = to_excalidraw(d, f"{name}: projects and the services they use", GROUP_MAP_KINDS)
+    slug = re.sub(r"[^\w.-]+", "-", name).strip("-") or "group"
+    return f"{slug}-map.excalidraw", "application/vnd.excalidraw+json", json.dumps(scene, ensure_ascii=False, indent=1).encode()
 
 
 def file_sessions(ctx: Context, path: str, limit: int = 50) -> dict:

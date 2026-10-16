@@ -796,7 +796,7 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 .leftoff .lo-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
 .leftoff .lo-goal, .leftoff .lo-note { margin: 8px 0 0; font-size: 13.5px; max-width: 90ch; }
 .leftoff .lo-note { color: var(--ink-2); }
-.lo-rows { display: grid; border-top: 1px solid var(--border); }
+.lo-rows { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--border); }
 .lo-row { border-bottom: 1px solid var(--border); }
 .lo-row summary { display: flex; align-items: center; gap: 8px; padding: 7px 2px; cursor: pointer; font-size: 13px; list-style: none; }
 .lo-row summary::-webkit-details-marker { display: none; }
@@ -819,7 +819,7 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 .tl-week:first-child { border-top: 0; padding-top: 4px; }
 .tl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13.5px; }
 .tl-head span { font-size: 12.5px; color: var(--muted); }
-.tl-items { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.tl-items { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
 .tl-items li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; }
 .tl-items li a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-shipped { display: grid; gap: 3px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
@@ -848,6 +848,30 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 .bl-todos li > button { flex: none; }
 .rm-path { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--muted); min-width: 0; }
 .rm-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a group's page: which project an item came from, each project's share, its folders and knowledge bases */
+.member-tag { flex: none; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px;
+  border-radius: 999px; background: var(--accent-wash); color: var(--accent-ink); font-size: 11.5px; line-height: 18px; }
+a.member-tag:hover { text-decoration: none; background: var(--accent-wash-2); }
+.members-card > .card-pad { padding: 14px 16px 0; }
+.share-cell { min-width: 190px; }
+.share-bar { display: grid; grid-template-columns: minmax(60px, 1fr) auto; align-items: center; gap: 8px; font-size: 12.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.share-track { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.share-fill { height: 100%; background: var(--chart); border-radius: 0 4px 4px 0; }
+.gf-list { list-style: none; margin: 0; padding: 0; display: grid; font-size: 12.5px; }
+.gf-list li { padding: 8px 0; min-width: 0; overflow-wrap: anywhere; }
+.gf-list li + li { border-top: 1px solid var(--border); }
+.gf-list li.gf-busy { box-shadow: inset 3px 0 0 var(--warning); padding-left: 10px; }
+.gf-head { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 2px; }
+.gf-head .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.member-kbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.member-kb { display: grid; gap: 10px; align-content: start; }
+.member-kb .rv-tldr { margin: 0; }
+.member-kb .kb-nav { margin: 0; }
+.member-kb .kb-chip { cursor: default; }
+.member-kb .link-arrow { justify-self: start; }
+.gl-more { margin-top: 14px; }
+.gl-more > summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
 .rm-path .link-btn { flex: none; white-space: nowrap; }
 
 mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; padding: 0 1px; }
@@ -1825,6 +1849,15 @@ details.agent-pick [aria-checked="true"] .ap-check { visibility: visible; }
 .kbd-legend .k-external i { border-style: dashed; background: none; }
 .kbd-legend .k-interface i { border-radius: 4px; }
 .kbd-detail { min-height: 2.6em; color: var(--ink-2); }
+/* a group's map: dashed arcs between its projects, and where each line was found */
+.kbd-arc .o { stroke: var(--accent); }
+.kbd-arc .o.dash { stroke-dasharray: 6 5; }
+.kbd-arc:hover .o, .kbd-arc.hover .o, .kbd-arc.on .o { stroke: var(--accent-ink); }
+.kbd-svg.picking .kbd-arc:not(.on) { opacity: 0.2; }
+.kbd-legend .k-arc i { height: 0; border: 0; border-top: 1.6px dashed var(--accent); border-radius: 0; background: none; }
+.kbd-ev { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; color: var(--muted); overflow-wrap: anywhere; }
+.member-sketches { margin-top: 14px; }
+.chart > .mini-legend { flex-wrap: wrap; gap: 4px 12px; margin-bottom: 6px; }
 .kbd-detail b { color: var(--ink); font-weight: 600; }
 .kbd-src { margin-top: 3px; color: var(--muted); }
 .kbd-src a { color: var(--accent-ink); }
@@ -2231,6 +2264,7 @@ table.team-projects td { vertical-align: middle; }
 .pgroup > summary::-webkit-details-marker { display: none; }
 .pgroup > summary h2 { margin: 0; font-size: 16px; }
 .pgroup > summary .btn { margin-left: auto; }
+.pgroup > summary .pg-open + .btn { margin-left: 0; }  /* Edit sits beside Analyze */
 .pg-caret { width: 15px; height: 15px; color: var(--muted); transition: transform 0.15s; }
 .pgroup[open] > summary .pg-caret { transform: rotate(90deg); }
 .pg-meta { font-size: 12.5px; color: var(--ink-2); }

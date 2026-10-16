@@ -36,14 +36,22 @@ ASK = re.compile(
     re.IGNORECASE)
 
 
-def recent(conn: sqlite3.Connection, path: str, limit: int = RECENT) -> list[dict]:
-    """The project's last sessions, newest first, as each one left things: what it set out to do, how it went and what
-    it left open. Whether a later session dealt with what an earlier one left open isn't recorded."""
+def _in(column: str, path: str | list[str]) -> tuple[str, list[str]]:
+    """`column` is the project's path, or one of a group's (a list)."""
+    paths = [path] if isinstance(path, str) else list(path)
+    return f"{column} IN ({','.join('?' * len(paths))})", paths
+
+
+def recent(conn: sqlite3.Connection, path: str | list[str], limit: int = RECENT) -> list[dict]:
+    """The project's last sessions (or a group's, `path` a list), newest first, as each one left things: what it set
+    out to do, how it went and what it left open. Whether a later session dealt with what an earlier one left open
+    isn't recorded."""
+    where, params = _in("project_path", path)
     rows = []
     for r in conn.execute(
-            "SELECT id, agent, source, machine_id, title, started_at, active_s, analysis_status, outcome, outcome_note, "
-            "goal, summary, open_threads_json FROM sessions WHERE project_path = ? ORDER BY started_at DESC LIMIT ?",
-            (path, limit)):
+            "SELECT id, project_path, agent, source, machine_id, title, started_at, active_s, analysis_status, outcome, "
+            f"outcome_note, goal, summary, open_threads_json FROM sessions WHERE {where} ORDER BY started_at DESC LIMIT ?",
+            (*params, limit)):
         d = dict(r)
         d["open_threads"] = [str(x) for x in loads(d.pop("open_threads_json"), []) or [] if str(x).strip()]
         rows.append(d)
@@ -58,7 +66,8 @@ def asks(rows: list[dict], sessions: int = ASK_SESSIONS) -> list[dict]:
         for text in r.get("open_threads") or []:
             if ASK.search(text) and text not in seen:
                 seen.add(text)
-                out.append({"text": text, "session_id": r["id"], "started_at": r["started_at"], "who": r.get("who")})
+                out.append({"text": text, "session_id": r["id"], "project_path": r.get("project_path"),
+                            "started_at": r["started_at"], "who": r.get("who")})
     return out
 
 
@@ -71,17 +80,18 @@ def week_of(ts) -> str | None:
     return (day - timedelta(days=day.weekday())).isoformat()
 
 
-def timeline(conn: sqlite3.Connection, path: str, weeks: int = WEEKS, session_prs: bool = True) -> dict:
-    """The project's work week by week, newest first: each week's sessions, outcomes and active time, and the pull
+def timeline(conn: sqlite3.Connection, path: str | list[str], weeks: int = WEEKS, session_prs: bool = True) -> dict:
+    """The project's work (or a group's, `path` a list) week by week, newest first: each week's sessions, outcomes and active time, and the pull
     requests and commits its sessions made (each counted once, in the week of the first session that made it). Weeks
     without sessions are left out; `earlier` counts the weeks with sessions beyond the last `weeks`.
 
     session_prs: also the pull requests a session lists itself (prs_json) when no artifact records them, as for a
     session a computer shared with a hub as knowledge: the hub has its details but not its transcript."""
+    where, params = _in("project_path", path)
     by_week: dict[str, dict] = {}
     for r in conn.execute(
-            "SELECT id, agent, source, machine_id, title, started_at, active_s, analysis_status, outcome FROM sessions "
-            "WHERE project_path = ? ORDER BY started_at DESC", (path,)):
+            "SELECT id, project_path, agent, source, machine_id, title, started_at, active_s, analysis_status, outcome "
+            f"FROM sessions WHERE {where} ORDER BY started_at DESC", params):
         start = week_of(r["started_at"])
         if not start:
             continue
@@ -97,7 +107,7 @@ def timeline(conn: sqlite3.Connection, path: str, weeks: int = WEEKS, session_pr
     seen: set[str] = set()
     for r in conn.execute(
             "SELECT a.kind, a.key, a.title, a.url, s.started_at FROM artifacts a JOIN sessions s ON s.id = a.session_id "
-            "WHERE s.project_path = ? AND a.kind IN ('pr', 'commit') ORDER BY s.started_at, a.ts, a.id", (path,)):
+            f"WHERE s.{where} AND a.kind IN ('pr', 'commit') ORDER BY s.started_at, a.ts, a.id", params):
         w = by_week.get(week_of(r["started_at"]) or "")
         if r["key"] in seen or not w:
             continue
@@ -107,8 +117,8 @@ def timeline(conn: sqlite3.Connection, path: str, weeks: int = WEEKS, session_pr
         else:
             w["commits"] += 1
     if session_prs:
-        for r in conn.execute("SELECT started_at, prs_json FROM sessions WHERE project_path = ? AND prs_json LIKE '[{%' "
-                              "ORDER BY started_at", (path,)):
+        for r in conn.execute(f"SELECT started_at, prs_json FROM sessions WHERE {where} AND prs_json LIKE '[{{%' "
+                              "ORDER BY started_at", params):
             w = by_week.get(week_of(r["started_at"]) or "")
             for pr in loads(r["prs_json"], []) or []:
                 url = pr.get("url") if isinstance(pr, dict) else None  # on a hub, as another computer sent it

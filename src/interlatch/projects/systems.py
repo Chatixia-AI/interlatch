@@ -1251,6 +1251,49 @@ def landscape(data: dict) -> dict:
     return {**{k: v for k, v in data.items() if k != "systems"}, "systems": out}
 
 
+def group_map(data: dict, members: dict[str, str]) -> dict:
+    """A group's projects (members: path -> label) and the services and platforms they use, as a diagram: one part per
+    system the projects are in, an edge to each service and platform its parts name, and the links the map found
+    between them (edited files, glossary mentions) as `links`. Shared services stand out by how many edges meet them.
+    `missing`: the projects in no system (a folder that only holds the others, a chat)."""
+    nodes, edges, shared, placed = [], [], {}, {}
+    for s in sorted(data["systems"], key=lambda s: -s["sessions"]):
+        mine = [p for p in s["project_paths"] if p in members]
+        if not mine:
+            continue
+        nid = placed[s["id"]] = f"p:{s['id']}"
+        nodes.append({"id": nid, "label": members[mine[0]] if len(mine) == 1 else s["label"], "kind": "component",
+                      "note": " · ".join(s["stack"][:4]), "sources": [], "system": s["id"], "project_paths": mine,
+                      "sessions": s["sessions"]})
+        uses: dict[str, dict] = {}
+        for p in s["parts"]:
+            ends = []
+            if p["id"].startswith("svc:") and p["kind"] in ("external", "store"):
+                ends.append((f"s:{p['id'][4:]}", p["label"], p["kind"], [e["text"] for e in p["evidence"] if e.get("text")][:3]))
+            if p.get("platform"):  # its evidence: the parts on it (not the platform's own part)
+                on = [f"{p['label']} runs on it"] if p["label"].lower() != p["platform"].lower() else []
+                ends.append((f"pl:{p['platform'].lower()}", p["platform"], "interface", on))
+            for sid, label, kind, evidence in ends:
+                node = shared.setdefault(sid, {"id": sid, "label": label, "kind": kind, "note": "", "sources": [], "users": []})
+                if nid not in node["users"]:
+                    node["users"].append(nid)
+                e = uses.setdefault(sid, {"from": nid, "to": sid, "label": "", "sources": [], "evidence": []})
+                e["evidence"] += [x for x in evidence if x not in e["evidence"]]
+        edges += uses.values()
+    nodes += sorted(shared.values(), key=lambda n: (-len(n["users"]), n["label"].lower()))  # the most shared first
+    links: dict[tuple, dict] = {}
+    for ln in data["links"]:
+        a, b = placed.get(ln["from"]), placed.get(ln["to"])
+        if not a or not b:
+            continue
+        key = (a, b, "files") if ln["kind"] == "files" else (*sorted((a, b)), "mentions")  # a mention either way is one
+        got = links.setdefault(key, {"from": key[0], "to": key[1], "kind": key[2], "directed": key[2] == "files", "evidence": []})
+        got["evidence"] += [e["text"] for e in ln.get("evidence") or [] if e.get("text") and e["text"] not in got["evidence"]][:4]
+    covered = {p for n in nodes for p in n.get("project_paths") or []}
+    return {"nodes": nodes, "edges": edges, "links": list(links.values()),
+            "missing": [members[p] for p in members if p not in covered]}
+
+
 def system(data: dict, key: str) -> dict | None:
     s = next((s for s in data["systems"] if s["id"] == key or key in s["project_paths"]), None)
     if s is None:

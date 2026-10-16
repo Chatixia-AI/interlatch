@@ -4,8 +4,9 @@ A project's group is its hand pick when it has one (a pick can also keep it out 
 folder rule is the longest one its path sits under. Picks are kept only where they differ from what the rules say,
 so a project moved back where its folder puts it follows the rules again.
 
-Groups only change how the dashboard lists projects: each project keeps its own sessions, knowledge base and hub
-sharing, and groups stay in this dashboard's database (a hub never sends or receives them).
+Groups change how the dashboard lists projects, and a group's page reads its projects as one (api.projects.group):
+each project keeps its own sessions, knowledge base and hub sharing, and groups stay in this dashboard's database (a
+hub never sends or receives them).
 """
 
 from __future__ import annotations

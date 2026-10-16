@@ -141,7 +141,7 @@ as on a session's page.
 ## Project groups
 
 Put related projects under one heading, such as **Aktio** for every Aktio repository, on the Projects page and in
-its sidebar. Groups are one level deep, and only change how projects are listed: each project keeps its own
+its sidebar, and read them as one on the group's page. Groups are one level deep: each project keeps its own
 sessions, knowledge base and hub sharing.
 
 - **Make one:** **New group** on the Projects page, or **New group…** in a project's group menu (the folder button on
@@ -157,7 +157,21 @@ sessions, knowledge base and hub sharing.
   projects; they go back to what the other groups' rules say.
 - Each group folds away, on the page and in the sidebar, and stays folded in that browser. On **Sessions**, the project
   filter lists projects under their groups, with **All of *group*** to see every session in a group. A project's page
-  shows its group in the breadcrumb.
+  shows its group in the breadcrumb, which opens the group's page.
+- **The group's page:** **Analyze** on a group's heading (or **The whole group** in the sidebar) reads its projects as
+  one big project. **By project** puts them side by side with each one's share of the group's active time, its
+  sessions, estimated cost, knowledge and when it was last worked on. Below come the project page's cards over all of
+  them, each item named by its project: **Needs you** (each folder's uncommitted and unpushed work, and the decisions
+  each project's last sessions left open), **Where you left off**, **The folders now**, each project's roadmap file,
+  the backlog and **Week by week**. **Map** draws the projects and the services and platforms they use, hand-drawn
+  like an architecture sketch: a service many lines meet (a Langfuse, a database, a cloud) is one the projects share,
+  and dashed arcs are the links the [Systems map](#systems-map) found between the projects themselves (one edits the
+  other's files, or its glossary names it). Click a part or a line to see where it was found, in manifests or in the
+  commands sessions ran, and **Excalidraw** downloads it to edit. **Knowledge bases** shows each project's own side by
+  side, with each one's architecture sketch where it has one (nothing is written for the group as a whole), and the
+  glossary terms more than one project uses first. The Knowledge, Sessions, Artifacts and Usage tabs cover every
+  project in the group; Usage adds each project's active time week by week and the group's activity calendar. As on a
+  project's page, git and roadmap files are read only when you open the page on this computer.
 
 Groups are kept in this computer's archive and never go to a hub. On a hub with people, admins see and change the
 hub's groups; someone limited to some projects sees none. On a computer that sends to a hub, a whole group can be
