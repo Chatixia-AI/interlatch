@@ -49,9 +49,10 @@ Codex、Copilot、Bob、Antigravity、OpenCode のセッションも、ログに
      ないため、Interlatch はイベントストリームも読みます：ツール呼び出しのあとに来た応答は捨てられ、その分析は失敗として扱われます。
    - **IBM Bob**（`backend = "bob"`）：Bob Shell の `bob run --format stream-json --max-turns 1 --disable-mcp
      --disable-subagents`。ツールグループをすべて無効にし、Interlatch の指示だけを持つツールなしのカスタムモードを置いた使い捨ての
-     ワークスペースで実行します。Codex と同じく、ツール呼び出しのあとに来た応答は捨てます。ヘッドレス実行には Bob の API キーが
-     必要です（アプリのサインインは使われません）：`interlatch config set-key bob`、**Status › Analysis** の IBM Bob タブ、
-     または `BOB_API_KEY`。モデルは Bob が選びます。Bob は各分析を自身のタスク一覧に残しますが、Interlatch はそれをセッションとして
+     ワークスペースで実行します。Codex と同じく、ツール呼び出しのあとに来た応答は捨てます（その呼び出しは一度だけやり直します）。
+     ヘッドレス実行には Bob の API キーが必要です（アプリのサインインは使われません）：`interlatch config set-key bob` または
+     **Status › Analysis** の IBM Bob タブ。`BOB_API_KEY` も使えますが、それを持つターミナルからだけです。バックグラウンドの
+     分析とダッシュボードはシェルの変数を見ないため、`interlatch install` が保存を提案します。モデルは Bob が選びます。Bob は各分析を自身のタスク一覧に残しますが、Interlatch はそれをセッションとして
      取り込みません。
 
    - **モデルプロバイダーの API**（`backend = "anthropic"`、`"bedrock"`、`"openai"`、`"azure"`、`"openrouter"`、

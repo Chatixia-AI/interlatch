@@ -89,6 +89,14 @@ def key_source(cfg: Config, provider: str) -> tuple[str | None, str]:
     return None, ""
 
 
+def env_only_key(cfg: Config, provider: str) -> str | None:
+    """The environment variable `provider`'s key comes from when it isn't stored. The background jobs and the
+    dashboard run from launchd (Task Scheduler on Windows) without the shell's variables, so they don't see it:
+    analysis then runs only from a terminal that has it."""
+    key, source = key_source(cfg, provider)
+    return source[1:] if key and source.startswith("$") else None
+
+
 def settings(cfg: Config, provider: str) -> dict:
     """[providers.<provider>] from config.toml, keeping only known keys of the right type."""
     raw = cfg.providers.get(provider) or {}

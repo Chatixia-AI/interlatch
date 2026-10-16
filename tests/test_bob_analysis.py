@@ -12,7 +12,7 @@ import pytest
 from interlatch.core.config import load_config, set_config_value
 from interlatch.analysis.runners.base import LLMError, UsageLimitError
 from interlatch.analysis.runners.factory import make_runner
-from interlatch.analysis.runners.bob import BOB_TOOL_GROUPS, BobRunner
+from interlatch.analysis.runners.bob import BOB_TOOL_GROUPS, NO_TOOLS, BobRunner
 from interlatch.analysis.runners.settings import key_source, set_key
 from interlatch.application.workflows import run_worker
 
@@ -28,8 +28,11 @@ modes = json.load(open(os.path.join(ws, ".bob", "custom_modes.yaml")))["customMo
 mode = next(m for m in modes if m["slug"] == args[args.index("--mode") + 1])
 with open(os.environ["FAKE_BOB_LOG"], "a") as fh:
     fh.write(json.dumps({"args": args, "prompt_chars": len(prompt), "groups": mode["groups"], "cwd": os.getcwd(),
-                         "key": os.environ.get("BOB_API_KEY"), "internal": os.environ.get("INTERLATCH_INTERNAL")}) + "\n")
+                         "key": os.environ.get("BOB_API_KEY"), "internal": os.environ.get("INTERLATCH_INTERNAL"),
+                         "role": mode["roleDefinition"]}) + "\n")
 how = os.environ.get("FAKE_BOB_MODE", "ok")
+if how == "tool-once":  # only the first call reaches for a tool
+    how = "tool" if sum(1 for _ in open(os.environ["FAKE_BOB_LOG"])) == 1 else "ok"
 if how == "license":
     print("Error: A license agreement is required. Please accept the license terms before proceeding.", file=sys.stderr)
     sys.exit(1)
@@ -83,6 +86,7 @@ def test_bob_runs_headless_with_no_tools(bob_env):
     assert args[args.index("--disable-tool-groups") + 1].split(",") == list(BOB_TOOL_GROUPS)
     assert args[args.index("--max-cost") + 1] == "3.00"
     assert call["groups"] == [] and call["key"] == "bob-test-key" and call["internal"] == "1"
+    assert call["role"].startswith("Summarize the session.") and call["role"].endswith(NO_TOOLS)
     workspace = args[args.index("--workspace") + 1]
     assert cfg.is_internal_path(workspace) and call["cwd"] == workspace
     assert not (cfg.home / "workdir" / "bob").exists() or not any((cfg.home / "workdir" / "bob").iterdir())  # removed
@@ -92,6 +96,16 @@ def test_bob_reply_after_a_tool_call_is_discarded(bob_env, monkeypatch):
     monkeypatch.setenv("FAKE_BOB_MODE", "tool")
     with pytest.raises(LLMError, match=r"used a tool \(execute_command\); the reply was discarded"):
         make_runner(bob_env["cfg"]).run("x", {"type": "object"}, system="Summarize the session.")
+    assert len(bob_calls(bob_env)) == 2  # tried again once
+
+
+def test_bob_retries_once_after_a_tool_call(bob_env, monkeypatch):
+    """Bob reads tool calls out of the reply's text, so the model can write one with every group off: one more try."""
+    monkeypatch.setenv("FAKE_BOB_MODE", "tool-once")
+    res = make_runner(bob_env["cfg"]).run("<transcript>hello</transcript>", {"type": "object"},
+                                          system="Summarize the session.")
+    assert res.data["title"] == "Fixed login token expiry bug"
+    assert len(bob_calls(bob_env)) == 2 and res.cost_usd == pytest.approx(0.062)  # the discarded call is paid for too
 
 
 def test_bob_license_or_key_problem_pauses(bob_env, monkeypatch):
@@ -176,3 +190,16 @@ def test_dashboard_sets_agent_models(env):
     assert load_config(env["cfg"].home).analysis.codex_model == ""
     assert "error" in api.settings.action_agent(app.context(), {"agent": "bob", "settings": {"model": "x"}})  # Bob picks its own model
     assert "error" in api.settings.action_agent(app.context(), {"agent": "claude", "settings": {"model": "sonnet\nbackend = 'x'"}})
+
+
+def test_failed_lines_name_projects_not_cut_paths():
+    """A worker run's error lines: `! /Users/a: …` named a knowledge base that failed only by its path's first 8
+    characters."""
+    from interlatch.interfaces.cli.common import failed_label
+
+    assert failed_label("0eb2ccdb-58fc-420f-b7ac-cbdbabfe1f9a") == "0eb2ccdb"
+    assert failed_label("/Users/a/Projects/agents-chronicle") == "agents-chronicle"
+    assert failed_label("glossary:/Users/a/Projects/agents-chronicle/") == "glossary agents-chronicle"
+    assert failed_label(r"C:\Users\a\Projects\app") == "app"
+    assert failed_label("__global__") == "global playbook" and failed_label("themes:Tooling and CI") == "themes Tooling and CI"
+    assert failed_label("2026-W41") == "2026-W41"

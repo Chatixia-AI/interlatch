@@ -54,9 +54,11 @@ instance, have no cache split (so no cost estimate), Bob tasks have no per-call 
      call is thrown away and the analysis counts as failed.
    - **IBM Bob** (`backend = "bob"`): Bob Shell's `bob run --format stream-json --max-turns 1 --disable-mcp
      --disable-subagents`, with every tool group disabled, in a throwaway workspace whose custom mode holds
-     Interlatch's instructions and no tools; as with Codex, a reply that follows any tool call is thrown away. Headless
-     runs need a Bob API key (the app's sign-in isn't used): `interlatch config set-key bob`, the IBM Bob tab in
-     **Status › Analysis**, or `BOB_API_KEY`. Bob picks its own model. It keeps each analysis in its own task list;
+     Interlatch's instructions and no tools; as with Codex, a reply that follows any tool call is thrown away (and the
+     call tried once more). Headless runs need a Bob API key (the app's sign-in isn't used): `interlatch config set-key
+     bob` or the IBM Bob tab in **Status › Analysis**. `BOB_API_KEY` works too, but only from a terminal that has it:
+     background analysis and the dashboard don't see your shell's variables, so `interlatch install` offers to save it.
+     Bob picks its own model. It keeps each analysis in its own task list;
      Interlatch doesn't import those as sessions.
 
    - **A model provider's API** (`backend = "anthropic"`, `"bedrock"`, `"openai"`, `"azure"`, `"openrouter"`,

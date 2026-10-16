@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 
-from ..common import escape_markup, load_cfg, new_console, open_archive, push_now
+from ..common import escape_markup, failed_label, load_cfg, new_console, open_archive, push_now
 
 
 def cmd_hook(args) -> int:
@@ -91,7 +91,7 @@ def cmd_work(args) -> int:
                         progress=lambda m: print(f"  {m}"))
     print(report.summary())
     for sid, err in report.failed:
-        print(f"  ! {sid[:8]}: {err[:200]}", file=sys.stderr)
+        print(f"  ! {failed_label(sid)}: {err[:200]}", file=sys.stderr)
     return 0 if not report.failed else 1
 
 

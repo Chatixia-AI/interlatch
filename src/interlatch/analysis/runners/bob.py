@@ -18,6 +18,19 @@ from .process import run_sleep_aware
 BOB_TOOL_GROUPS = ("artifact", "browser", "edit", "execute", "mcp", "mode", "plan", "read", "skill", "subagent",
                    "subtask", "todo")
 BOB_MODE = "interlatch-analyst"
+# Bob reads tool calls out of the reply's text, so a model can write one with every tool group off; saying so up front
+# makes that rare, and a call that does it anyway is retried once (TOOL_TRIES).
+NO_TOOLS = ("You have no tools here: don't call or write one (no list_files, read_file or the like). Everything you "
+            "need is in the message; answer it directly.")
+TOOL_TRIES = 2
+
+
+class _ToolUsed(LLMError):
+    """The model called a tool, so its reply was discarded; `cost_usd` is what the call cost."""
+
+    def __init__(self, msg: str, cost_usd: float):
+        super().__init__(msg)
+        self.cost_usd = cost_usd
 
 
 class BobRunner(Runner):
@@ -57,6 +70,23 @@ class BobRunner(Runner):
 
     def _call(self, prompt: str, *, system: str, model: str | None, effort: str | None, timeout: int | None,
               max_budget_usd: float | None) -> tuple[LLMResult, str]:
+        spent = 0.0
+        for attempt in range(1, TOOL_TRIES + 1):
+            try:
+                res, text = self._run(prompt, system=f"{system}\n\n{NO_TOOLS}", timeout=timeout,
+                                      max_budget_usd=max_budget_usd)
+            except _ToolUsed as exc:
+                spent += exc.cost_usd
+                if attempt == TOOL_TRIES:
+                    raise
+                continue
+            res.cost_usd += spent
+            return res, text
+        raise AssertionError("unreachable")
+
+    def _run(self, prompt: str, *, system: str, timeout: int | None,
+             max_budget_usd: float | None) -> tuple[LLMResult, str]:
+        """One `bob run`."""
         if not self.bin:
             raise LLMError("bob executable not found (set analysis.bob_bin in config.toml)")
         key, _ = self._key()
@@ -103,7 +133,8 @@ class BobRunner(Runner):
         stats = (result or {}).get("stats") or {}
         if acted or stats.get("tool_calls"):
             names = ", ".join(sorted(set(tools))) or f"{stats.get('tool_calls')} call(s)"
-            raise LLMError(f"bob used a tool ({names}); the reply was discarded")
+            raise _ToolUsed(f"bob used a tool ({names}); the reply was discarded",
+                            float(stats.get("session_costs") or 0.0))
         text = "".join(parts)
         if returncode != 0 or not result or result.get("status") != "success" or not text:
             msg = "; ".join(errors) or str((result or {}).get("error") or "") or html.unescape(stderr).strip()

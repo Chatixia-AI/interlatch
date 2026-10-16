@@ -13,6 +13,7 @@ from ..common import load_cfg, new_console, open_archive, wait_for_port
 def cmd_status(args) -> int:
     from ....analysis.queue import PAUSE_KEY, QUEUE_REASON_LABEL, count_pending
     from ....analysis.runners.factory import make_runner
+    from ....analysis.runners.settings import env_only_key
     from ....core.util import human_cost, local_str
     from ....runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
     from ....runtime.statusline import WINDOW_LABEL, plan_usage
@@ -53,6 +54,9 @@ def cmd_status(args) -> int:
     runner = make_runner(cfg)
     console.print(f"  {ok(mcp_registered())} MCP server registered   {ok(runner.available())} analysis by {runner.label}: "
                   f"{runner.where() if runner.available() else runner.unavailable_reason()}")
+    if runner.available() and (env := env_only_key(cfg, runner.name)):
+        console.print(f"    [yellow]![/] its key is only in ${env}: background analysis and the dashboard don't see it "
+                      f"(`interlatch config set-key {runner.name}` saves it)", highlight=False)
     console.print(f"  sessions: {sum(counts.values())} · " + " · ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
     console.print(f"  analysis queue: {pending['ready']} ready now, {pending['queued']} queued in all, {pending['held']} held · "
                   f"model {runner.model_label()} · auto={'on' if cfg.analysis.auto else 'off'} · spent {human_cost(spent)}")
