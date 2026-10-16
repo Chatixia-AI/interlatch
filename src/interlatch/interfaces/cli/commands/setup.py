@@ -92,6 +92,7 @@ def _analysis_step(cfg, conn, console, analyzer, *, interactive: bool, choice: s
     import math
 
     from ....analysis.queue import pending_sessions
+    from ....analysis.runners.factory import AGENTS
 
     ids = pending_sessions(conn, cfg, 100_000)
     n = len(ids)
@@ -104,12 +105,18 @@ def _analysis_step(cfg, conn, console, analyzer, *, interactive: bool, choice: s
     if not n:
         return [], 0, later
     console.print("\n[bold]Analysis: knowledge, the Glossary and the Map[/]")
-    console.print(f"  Interlatch reads each session through your {analyzer.label} login and pulls out what was learned "
+    if analyzer.name in AGENTS:
+        via, cost = f"through your {analyzer.label} login", "counts toward your plan's usage"
+    elif analyzer.local():
+        via, cost = f"with {analyzer.label} on this computer", "stays on this computer"
+    else:
+        via, cost = f"through {analyzer.label} ({analyzer.model_label()})", "is billed to your key"
+    console.print(f"  Interlatch reads each session {via} and pulls out what was learned "
                   "(fixes, decisions, gotchas, commands). That knowledge builds each project's knowledge base, then the "
                   "Glossary, then the Map. Until sessions are analyzed, the Glossary and the Map stay empty.",
                   highlight=False)
-    console.print(f"  {n} past session{'s' * (n != 1)} waiting. Each is one {analyzer.label} call and counts toward "
-                  "your plan's usage.", highlight=False)
+    console.print(f"  {n} past session{'s' * (n != 1)} waiting. Each is one {analyzer.label} call and {cost}.",
+                  highlight=False)
     if later == "in the background":
         runs = math.ceil(n / max(1, cfg.analysis.max_per_run))
         console.print(f"  Later: in the background, {cfg.analysis.max_per_run} every {interval} min, so all of them in "
@@ -284,7 +291,8 @@ def cmd_install(args) -> int:
     ask = _ask if interactive else (lambda _q, default: default)
 
     console.print("[bold]Interlatch setup[/]\n")
-    analyzer = _choose_analyzer(cfg, console, ask=ask, dry_run=args.dry_run)
+    analyzer = _choose_analyzer(cfg, console, ask=ask, dry_run=args.dry_run, conn=conn, interactive=interactive,
+                                choice=args.backend)
     if " -m " in exe:
         console.print(f"[yellow]`interlatch` is not on PATH[/]; hooks will run `{exe}`. "
                       "`uv tool install interlatch` gives it a stable path.\n", highlight=False)
@@ -417,11 +425,209 @@ def _menu_bar_line(on: bool) -> str:
     return "Interlatch's icon in the menu bar (`interlatch install --no-menu-bar` removes it)"
 
 
-def _choose_analyzer(cfg, console, *, ask, dry_run: bool):
-    """Settle which agent analyzes sessions; return its runner, or None when it is not installed."""
+ANALYZER_ASKED_KEY = "analyzer_asked"  # kv: install showed the list of analysis backends, so later runs keep the choice
+
+
+def _input(question: str) -> str:
+    try:
+        return input(question).strip()
+    except EOFError:
+        return ""
+
+
+def _runner_for(cfg, name: str):
+    from dataclasses import replace
+
+    from ....analysis.runners.factory import make_runner
+
+    return make_runner(replace(cfg, analysis=replace(cfg.analysis, backend=name)))
+
+
+def _backend_state(runner) -> str:
+    """Whether `runner` can analyze now, in a few words, for the list install shows."""
+    import re
+
+    from ....analysis.runners.factory import AGENTS
+
+    if runner.available():
+        if runner.name in AGENTS:
+            return "ready · your Bob API key" if runner.name == "bob" else "ready · your own login and plan"
+        return f"ready · {runner.model_label()}" + (" on this computer" if runner.local() else "")
+    if runner.name in AGENTS and not runner.bin:
+        return "not installed"
+    reason = runner.unavailable_reason().removeprefix(f"{runner.label}: ")
+    return re.sub(r" \([^)]*\)", "", reason).split(";")[0]
+
+
+def _how_to_finish(runner) -> str:
+    """The commands that finish setting `runner` up, for when install cannot ask."""
+    from ....analysis.runners.factory import AGENTS
+
+    if runner.name in AGENTS and not runner.bin:
+        return f"install {runner.label} and sign in"
+    if runner.name == "bob":
+        return "`interlatch config set-key bob`"
+    steps = {"endpoint": f"`interlatch config set providers.{runner.name}.base_url URL`",
+             "model": f"`interlatch config set providers.{runner.name}.model NAME`",
+             "key": f"`interlatch config set-key {runner.name}`"}
+    return ", ".join(steps[m] for m in runner.missing())
+
+
+def _finish_setup(cfg, console, runner, *, ask):
+    """Ask for what `runner` still needs (an endpoint, an API key, a model), save it, and offer one small test call.
+    Returns the runner, ready, or None when it is not (it is not installed, or a question was left blank)."""
+    import getpass
+
+    from ....analysis.runners.base import LLMError
+    from ....analysis.runners.factory import AGENTS
+    from ....analysis.runners.settings import save_settings, set_key
+    from ....core.config import load_config
+
+    name, label = runner.name, runner.label
+    if name in AGENTS and not runner.bin:
+        console.print(f"  {label} (`{runner.cli.split()[0]}`) is not installed here. Install it and sign in, then run "
+                      "`interlatch install` again, or pick another.", highlight=False)
+        return None
+    missing = ["key"] if name == "bob" else runner.missing()
+    if "endpoint" in missing:
+        hint = runner.spec.hint
+        if name == "azure":
+            answer = _input(f"  Azure OpenAI resource name, or its endpoint ({hint}): ")
+            values = {"base_url" if "://" in answer else "resource": answer}
+        else:
+            answer = _input(f"  {label} endpoint ({hint}): " if hint else f"  {label} endpoint: ")
+            values = {"base_url": answer}
+        if not answer:
+            return None
+        save_settings(cfg, name, values)
+    if "key" in missing:
+        env = "BOB_API_KEY" if name == "bob" else (runner.s.get("key_env") or runner.spec.key_env)
+        try:
+            key = getpass.getpass(f"  {label} API key{f' ({env})' if env else ''}, kept in ~/.interlatch readable by "
+                                  "you only: ").strip()
+        except EOFError:
+            key = ""
+        if not key:
+            return None
+        set_key(cfg, name, key)
+    runner = _runner_for(load_config(cfg.home), name)
+    if name != "bob" and "model" in runner.missing():
+        offered = runner.list_models()
+        if offered:
+            console.print(f"  Models it offers: {', '.join(offered[:12])}" + (" …" if len(offered) > 12 else ""),
+                          highlight=False)
+        elif runner.spec.dialect == "ollama":
+            console.print(f"  [yellow]Ollama is not answering at {runner.base_url}[/] (or has no models): start it and "
+                          "`ollama pull` a model first.", highlight=False)
+        model = _input("  Model: ")
+        if not model:
+            return None
+        save_settings(cfg, name, {"model": model})
+        runner = _runner_for(load_config(cfg.home), name)
+    if not runner.available():
+        console.print(f"  [yellow]{runner.unavailable_reason()}[/]", highlight=False)
+        return None
+    if ask(f"  Check that it works now? (one small call to {label})", True):
+        try:
+            res = runner.check()
+        except LLMError as exc:
+            console.print(f"  [red]It did not work:[/] {str(exc)[:400]}", highlight=False)
+            return None
+        console.print(f"  [green]It works[/] ({res.model or runner.model_label()}, {res.duration_ms / 1000:.1f} s).",
+                      highlight=False)
+    return runner
+
+
+def _pick_analyzer(cfg, console, *, ask):
+    """List every analysis backend with whether it is ready, ask which to use, and finish setting it up when it
+    needs a key, a model or an endpoint. Returns its runner, or None to leave analysis until one is set up."""
+    from ....analysis.runners.factory import BACKENDS
+    from ....core.config import load_config
+
+    names = list(BACKENDS)
+    while True:
+        saved = load_config(cfg.home)  # with what a setup below saved
+        runners = [_runner_for(saved, n) for n in names]
+        ready = [r for r in runners if r.available()]
+        default = next((r for r in ready if r.name == cfg.analysis.backend), ready[0] if ready else None)
+        console.print("[bold]What analyzes your sessions[/] (reads each one and pulls out what was learned)")
+        for i, r in enumerate(runners, 1):
+            state = _backend_state(r)
+            color = "green" if r.available() else "dim"
+            mark = "  [bold]← Enter[/]" if r is default else ""
+            console.print(f"  {i:>2}  {r.label:<18} [{color}]{state}[/]{mark}", highlight=False)
+        console.print("  [dim]Coding agents use your own login and plan; the APIs bill your key; Ollama keeps "
+                      "transcripts on this computer. Change it any time in Status › Analysis.[/]", highlight=False)
+        prompt = f"Which one? [1-{len(runners)}, Enter = {runners.index(default) + 1}]: " if default else \
+            f"Which one? [1-{len(runners)}, Enter = set one up later]: "
+        picked = None
+        for _ in range(3):
+            answer = _input(prompt).lower()
+            if not answer:
+                picked = default
+                break
+            if answer.isdigit() and 1 <= int(answer) <= len(runners):
+                picked = runners[int(answer) - 1]
+                break
+            if answer in names:
+                picked = runners[names.index(answer)]
+                break
+            console.print(f"  Type a number from 1 to {len(runners)}.")
+        else:
+            picked = default
+        if picked is None:
+            return None
+        if not picked.available():
+            picked = _finish_setup(cfg, console, picked, ask=ask)
+            if picked is None:
+                console.print("  [dim]Not set up; back to the list.[/]\n")
+                continue
+        set_config_value(cfg, "analysis", "backend", json.dumps(picked.name))
+        cfg.analysis.backend = picked.name
+        console.print(f"Sessions are analyzed with {picked.label}.\n", highlight=False)
+        return picked
+
+
+def _choose_analyzer(cfg, console, *, ask, dry_run: bool, conn=None, interactive: bool = False,
+                     choice: str | None = None):
+    """Settle what analyzes sessions; return its runner, or None when it cannot run yet. `choice` (--backend) sets it;
+    otherwise the first interactive install (and any after it while the chosen one cannot run) lists them all."""
     from ....analysis.runners.factory import BACKENDS, make_runner
+    from ....core.config import load_config
+    from ....core.util import utcnow_iso
+    from ....storage.kv import kv_get, kv_set
+
+    if choice:
+        runner = _runner_for(cfg, choice)
+        if dry_run:
+            console.print(f"Would analyze sessions with {runner.label}"
+                          + ("" if runner.available() else f" ({runner.unavailable_reason()})") + ".\n", highlight=False)
+            return runner if runner.available() else None
+        set_config_value(cfg, "analysis", "backend", json.dumps(choice))
+        cfg.analysis.backend = choice
+        if not runner.available() and interactive:
+            runner = _finish_setup(cfg, console, runner, ask=ask) or _runner_for(load_config(cfg.home), choice)
+        if conn is not None:
+            kv_set(conn, ANALYZER_ASKED_KEY, utcnow_iso())
+            conn.commit()
+        if not runner.available():
+            console.print(f"[yellow]{runner.unavailable_reason()}.[/] Sessions are recorded but not analyzed until it "
+                          f"is set up: {_how_to_finish(runner)}, or Status › Analysis in the dashboard.\n", highlight=False)
+            return None
+        console.print(f"Sessions are analyzed with {runner.label}.\n", highlight=False)
+        return runner
 
     runner = make_runner(cfg)
+    if interactive and conn is not None and (not kv_get(conn, ANALYZER_ASKED_KEY) or not runner.available()):
+        picked = _pick_analyzer(cfg, console, ask=ask)
+        kv_set(conn, ANALYZER_ASKED_KEY, utcnow_iso())
+        conn.commit()
+        if picked:
+            return picked
+        console.print("[yellow]No analysis yet.[/] Sessions are recorded but not analyzed until one is set up (Status › "
+                      "Analysis in the dashboard, or `interlatch install --backend NAME`), so the Glossary and the Map "
+                      "stay empty.\n", highlight=False)
+        return None
     other = "codex" if runner.name == "claude" else "claude"
     other_found = bool(cfg.codex_bin() if other == "codex" else cfg.claude_bin())
     if runner.available():
@@ -608,6 +814,8 @@ def _analyze_choice(value: str) -> str:
 
 
 def add_install(sub) -> None:
+    from ....analysis.runners.factory import BACKENDS
+
     s = sub.add_parser("install", aliases=["setup"],
                        help="set up: pick which coding agents to record, import past sessions, start the dashboard")
     s.add_argument("-y", "--yes", action="store_true", help="don't ask: record every agent found (the default without a terminal)")
@@ -621,6 +829,9 @@ def add_install(sub) -> None:
                    help="also record context and plan-limit usage from Claude Code's status line (keeps your own status line)")
     s.add_argument("--interval", type=int, default=15, help="background sync interval in minutes (default 15)")
     s.add_argument("--exe", help="command used by hooks/launchd (default: the installed `interlatch`)")
+    s.add_argument("--backend", choices=list(BACKENDS), metavar="NAME",
+                   help="what analyzes sessions: claude, codex, bob, or a model provider's API (anthropic, bedrock, "
+                        "openai, azure, openrouter, ollama, openai-compatible); asked on the first install when omitted")
     s.add_argument("--analyze", type=_analyze_choice, metavar="all|N|later",
                    help="analyze past sessions now with progress (all, or the newest N), or later; asked when omitted "
                         "(later without a terminal). The Glossary and the Map are built from the analyzed sessions")

@@ -288,14 +288,20 @@ class ApiRunner(Runner):
             return "entra" if _tool("az") else ""
         return "" if self.spec.needs_key else "none"
 
+    def missing(self) -> list[str]:
+        """What it still needs before it can run, of "endpoint", "model" and "key" (in that order)."""
+        return [what for what, have in (("endpoint", self.base_url), ("model", self._models()[0]),
+                                        ("key", self._credentials())) if not have]
+
     def unavailable_reason(self) -> str:
         from ...core.i18n import tr
 
-        if not self.base_url:
+        missing = self.missing()
+        if "endpoint" in missing:
             return tr("{label}: set its endpoint (providers.{name}.base_url)", label=self.label, name=self.name)
-        if not self._models()[0]:
+        if "model" in missing:
             return tr("{label}: choose a model (providers.{name}.model)", label=self.label, name=self.name)
-        if not self._credentials():
+        if "key" in missing:
             return tr("{label}: add an API key", label=self.label)
         return ""
 

@@ -4,7 +4,7 @@
 
 | Command | |
 | --- | --- |
-| `interlatch install [--yes] [--analyze all\|N\|later] [--[no-]notify-updates] [--[no-]menu-bar] [--dry-run]` | Setup: lists the agents found, asks which to record, imports them, offers to analyze them now with progress (which builds the Glossary and the Map), starts the dashboard, and on macOS asks once whether to show [the menu-bar icon](install.md#the-menu-bar-icon) (off unless you say yes) ([Install](install.md#command-line)) |
+| `interlatch install [--yes] [--backend NAME] [--analyze all\|N\|later] [--[no-]notify-updates] [--[no-]menu-bar] [--dry-run]` | Setup: asks what analyzes sessions (`--backend` answers it: a coding agent or a [model provider](analysis.md#model-providers), set up on the spot), lists the agents found, asks which to record, imports them, offers to analyze them now with progress (which builds the Glossary and the Map), starts the dashboard, and on macOS asks once whether to show [the menu-bar icon](install.md#the-menu-bar-icon) (off unless you say yes) ([Install](install.md#command-line)) |
 | `interlatch app` | The desktop app (window + menu bar); needs the `app` extra |
 | `interlatch ui [--open] [--menu-bar]` | Dashboard (also always running at :11524 after install; if it is, `interlatch ui` says so and `--open` opens it). On macOS the one that runs at login also shows [the menu-bar icon](install.md#the-menu-bar-icon) if you turned it on at install; `--menu-bar`/`--no-menu-bar` overrides that. Sessions, Knowledge, Projects and Glossary switch between Cards and List (a sortable table; click a row for details), remembered per page |
 | `interlatch sessions [-p project] [--since 7d]` | List sessions |

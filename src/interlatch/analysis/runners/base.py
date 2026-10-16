@@ -144,5 +144,11 @@ class Runner:
         res.data = data
         return res
 
+    def check(self) -> LLMResult:
+        """One small call with the main model: do the endpoint, the key and the model work? Raises LLMError."""
+        return self.run('Reply with {"ok": true}.', {"type": "object", "properties": {"ok": {"type": "boolean"}},
+                                                     "required": ["ok"]},
+                        system="You check that a connection works.", effort="low", timeout=120)
+
 
 CLAUDE_MODEL = re.compile(r"^(claude|sonnet|opus|haiku|fable)", re.I)

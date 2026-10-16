@@ -2,7 +2,7 @@
 
 [← Interlatch](../README.md) · [Docs index](README.md)
 
-Interlatch runs on macOS and [Windows](#windows) and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup uses Claude Code when it is installed and offers Codex when it is not; switch any time in **Status › Analysis** or with `interlatch config set analysis.backend codex`. There are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
+Interlatch runs on macOS and [Windows](#windows) and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup lists them all and asks which to use (Claude Code when it is installed, unless you pick another); switch any time in **Status › Analysis**, with `interlatch install --backend <name>` or with `interlatch config set analysis.backend <name>`. There are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
 
 Interlatch was called Chronicle. To update from Chronicle, see [Moving from Chronicle](moving-from-chronicle.md).
 
@@ -52,8 +52,15 @@ run `uv tool install --python 3.13 .` in it.
 
 `interlatch install` (also `interlatch setup`) walks through setup:
 
-1. Checks the agent that analyzes sessions (Claude Code by default). If it is missing and Codex is installed, offers
-   to analyze with Codex instead; with neither, sessions are recorded but not analyzed until one is installed.
+1. Asks what analyzes sessions. It lists every choice with whether it is ready: Claude Code, Codex and IBM Bob
+   (through your own login and plan), and the model providers' APIs (Anthropic, Amazon Bedrock, OpenAI, Azure
+   OpenAI, OpenRouter, Ollama on this computer, any OpenAI-compatible server). Enter keeps the one marked (Claude
+   Code when it is installed). Pick one that isn't set up and it asks for what it still needs (an endpoint, an API
+   key, kept in `~/.interlatch/provider-keys.json` readable by you only, and a model, with the ones the provider
+   offers listed), then offers one small test call. Leave a question blank to go back to the list. Asked on the
+   first install only, and again while the chosen one can't run; `--backend <name>` answers without asking (and,
+   without a terminal, says which `interlatch config` commands finish setting it up). With nothing ready,
+   sessions are recorded but not analyzed until one is set up.
 2. Lists the coding agents on this Mac (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode) and the MCP-only clients it
    finds (Claude Desktop, Cursor, Windsurf, Gemini CLI), with how many sessions each has on disk.
 3. Asks, for each one found and not yet connected, whether to record it (default yes), and whether to give each
@@ -67,8 +74,9 @@ run `uv tool install --python 3.13 .` in it.
    agents run; `--no-launchd --no-ui` turns them off. With the background sync on, it also asks once whether to
    show a desktop notification when a new version of Interlatch is out (`--notify-updates` or
    `--no-notify-updates` answers without asking).
-6. Explains analysis: each past session is read through your Claude Code (or Codex) login, which counts toward
-   your plan's usage (or through IBM Bob or the model provider you chose), and the knowledge it yields builds each
+6. Explains analysis: each past session is read through your Claude Code, Codex or IBM Bob login, which counts
+   toward your plan's usage (or through the model provider you chose, billed to your key, or Ollama on this
+   computer), and the knowledge it yields builds each
    project's knowledge base, then the **Glossary**, then the **Map**. Until sessions are analyzed, those two stay empty. It says how many sessions are waiting and how
    long the background takes over them (6 every 15 minutes), then asks whether to analyze them now with a
    progress bar per stage (sessions, knowledge bases, glossary, map themes): all of them, or the newest 20 for a
