@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 import sys
 import textwrap
 import threading
@@ -85,6 +86,21 @@ def hubenv(synced, monkeypatch):
                   ingest_requests=requests)
     yield synced
     httpd.shutdown()
+
+
+def test_client_works_in_a_fresh_interpreter():
+    """`interlatch hub join` runs in a process where nothing else imported http.client (this test module's http.server
+    does), so the client must import it itself: `import http` alone crashed joining with AttributeError."""
+    code = textwrap.dedent("""
+        from interlatch.sharing.client import HubClient
+        from interlatch.sharing.protocol import HubUnreachable
+        try:
+            HubClient("http://127.0.0.1:9", "", timeout=2).request("GET", "/api/hub/hello")
+        except HubUnreachable:
+            print("unreachable")
+    """)
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
+    assert out.stdout.strip() == "unreachable", out.stderr
 
 
 def test_push_then_ingest_tags_the_computer(hubenv):

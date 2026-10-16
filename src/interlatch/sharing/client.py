@@ -5,7 +5,7 @@ change at a time, never during a push)."""
 from __future__ import annotations
 
 import functools
-import http
+import http.client
 import json
 import os
 import threading
