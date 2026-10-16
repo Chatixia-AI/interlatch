@@ -8,7 +8,7 @@ import json
 import sys
 
 from ....core.config import set_config_value
-from ..common import analyzer_label, load_cfg, new_console, open_archive, wait_for_port
+from ..common import analyzer_label, failed_label, load_cfg, new_console, open_archive, wait_for_port
 
 
 def _ask(question: str, default: bool) -> bool:
@@ -222,7 +222,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
                   f"{terms} glossary term{'s' * (terms != 1)}"
                   + (f", Map themes for {themed} categor{'ies' if themed != 1 else 'y'}" if themed else ""), highlight=False)
     for target, err in report.failed[:3]:
-        console.print(f"  [red]![/] {target[:40]}: {err[:200]}", highlight=False)
+        console.print(f"  [red]![/] {failed_label(target)}: {err[:200]}", highlight=False)
     if report.paused_until:
         from ....core.util import local_str
 
@@ -293,6 +293,8 @@ def cmd_install(args) -> int:
     console.print("[bold]Interlatch setup[/]\n")
     analyzer = _choose_analyzer(cfg, console, ask=ask, dry_run=args.dry_run, conn=conn, interactive=interactive,
                                 choice=args.backend)
+    if analyzer:
+        _keep_env_key(cfg, console, analyzer, ask=ask, interactive=interactive)
     if " -m " in exe:
         console.print(f"[yellow]`interlatch` is not on PATH[/]; hooks will run `{exe}`. "
                       "`uv tool install interlatch` gives it a stable path.\n", highlight=False)
@@ -443,13 +445,37 @@ def _runner_for(cfg, name: str):
     return make_runner(replace(cfg, analysis=replace(cfg.analysis, backend=name)))
 
 
+def _keep_env_key(cfg, console, runner, *, ask, interactive: bool) -> None:
+    """Offer to save the analyzer's API key when it is only in this shell's environment, which the background jobs
+    and the dashboard don't see. Never saved without asking."""
+    import os
+
+    from ....analysis.runners.settings import env_only_key, set_key
+
+    env = env_only_key(cfg, runner.name)
+    if not env:
+        return
+    if interactive and ask(f"Your {runner.label} key is in ${env}, which background analysis and the dashboard don't "
+                           "see. Save it in ~/.interlatch, readable by you only?", True):
+        set_key(cfg, runner.name, os.environ[env])
+        console.print(f"Saved your {runner.label} key.\n", highlight=False)
+        return
+    console.print(f"[yellow]Your {runner.label} key is only in ${env}[/]: `interlatch analyze` works from this "
+                  "terminal, but background analysis and the dashboard don't see it. "
+                  f"`interlatch config set-key {runner.name}` saves it.\n", highlight=False)
+
+
 def _backend_state(runner) -> str:
     """Whether `runner` can analyze now, in a few words, for the list install shows."""
     import re
 
     from ....analysis.runners.factory import AGENTS
+    from ....analysis.runners.settings import env_only_key
 
     if runner.available():
+        env = env_only_key(runner.cfg, runner.name)
+        if env:
+            return f"ready in this terminal only · ${env}"
         if runner.name in AGENTS:
             return "ready · your Bob API key" if runner.name == "bob" else "ready · your own login and plan"
         return f"ready · {runner.model_label()}" + (" on this computer" if runner.local() else "")
@@ -772,10 +798,14 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
     print(f"[{section}] {name} = {literal}")
     if key == "analysis.backend":
         from ....analysis.runners.factory import make_runner
+        from ....analysis.runners.settings import env_only_key
 
         runner = make_runner(load_config(cfg.home))
         if not runner.available():
             print(f"note: {runner.unavailable_reason()}; analysis waits until it is set up")
+        elif env := env_only_key(runner.cfg, runner.name):
+            print(f"note: the {runner.label} key is only in ${env}, which background analysis and the dashboard don't "
+                  f"see; `interlatch config set-key {runner.name}` saves it")
     return 0
 
 

@@ -22,6 +22,23 @@ def open_archive(cfg):
     return connect(cfg.db_path)
 
 
+def failed_label(target: str) -> str:
+    """What a worker run failed on, as its error lines name it: a session's short id, a project's folder name (from a
+    knowledge base, "glossary:<path>" or "themes:<category>"), or the global playbook."""
+    from ...knowledge.synthesize import GLOBAL
+
+    kind, sep, rest = target.partition(":")
+    if sep and kind == "glossary":
+        return f"glossary {failed_label(rest)}"
+    if sep and kind == "themes":
+        return f"themes {rest}"
+    if target == GLOBAL:
+        return "global playbook"
+    if "/" in target or "\\" in target:
+        return target.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1] or target
+    return target[:8]
+
+
 def new_console():
     """A rich console for a command's output."""
     from rich.console import Console

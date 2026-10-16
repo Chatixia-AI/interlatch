@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import sys
 
-from ..common import analyzer_label, escape_markup, load_cfg, new_console, open_archive
+from ..common import analyzer_label, escape_markup, failed_label, load_cfg, new_console, open_archive
 
 
 def cmd_analyze(args) -> int:
@@ -59,7 +59,7 @@ def cmd_analyze(args) -> int:
                         export=export_markdown, progress=lambda m: print(f"  {m}"))
     print(f"{report.summary()} · analysis cost {human_cost(report.cost_usd)}")
     for sid, err in report.failed:
-        print(f"  ! {sid[:8]}: {err[:300]}", file=sys.stderr)
+        print(f"  ! {failed_label(sid)}: {err[:300]}", file=sys.stderr)
     return 0 if not report.failed else 1
 
 

@@ -273,6 +273,42 @@ def test_backend_flag_sets_it_without_asking_and_says_what_is_missing(machine, n
     assert "past session waiting" not in out
 
 
+@pytest.fixture()
+def bob_key_in_shell(no_providers, monkeypatch):
+    """IBM Bob installed and its key exported in this shell only, which launchd's jobs and the dashboard don't get."""
+    monkeypatch.setattr("interlatch.core.config.Config.bob_bin", lambda self: "/opt/bin/bob")
+    monkeypatch.setenv("BOB_API_KEY", "bob-from-shell")
+
+
+def test_a_key_only_in_the_shell_is_saved_when_asked(machine, bob_key_in_shell, monkeypatch, capsys):
+    from interlatch.analysis.runners.settings import key_source
+
+    asked = _answer(monkeypatch, {"Save": "y", "Which one": "bob", "Claude Code": "y", "Codex": "n", "Cursor": "n",
+                                  "Analyze": "n", "Open": "n"})
+    assert _install("--no-sync") == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert "3 IBM Bob ready in this terminal only · $BOB_API_KEY" in out
+    assert any(q.startswith("Your IBM Bob key is in $BOB_API_KEY") for q in asked) and "Saved your IBM Bob key." in out
+    monkeypatch.delenv("BOB_API_KEY")
+    assert key_source(load_config(machine["home"]), "bob") == ("bob-from-shell", "stored")
+
+
+def test_a_key_only_in_the_shell_is_not_saved_without_asking(machine, bob_key_in_shell, monkeypatch, capsys):
+    from interlatch.analysis.runners.settings import key_source
+
+    monkeypatch.setattr("builtins.input", lambda q: pytest.fail(f"asked {q!r} with --yes"))
+    assert _install("--yes", "--no-sync", "--backend", "bob") == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert ("Your IBM Bob key is only in $BOB_API_KEY: `interlatch analyze` works from this terminal, but background "
+            "analysis and the dashboard don't see it. `interlatch config set-key bob` saves it.") in out
+    assert key_source(load_config(machine["home"]), "bob") == ("bob-from-shell", "$BOB_API_KEY")
+    assert main(["config", "set", "analysis.backend", "bob"]) == 0
+    assert "note: the IBM Bob key is only in $BOB_API_KEY" in capsys.readouterr().out
+    assert main(["config", "set-key", "bob", "bob-saved"]) == 0
+    assert _install("--yes", "--no-sync") == 0
+    assert "only in $BOB_API_KEY" not in capsys.readouterr().out  # a saved key wins
+
+
 def test_backend_flag_with_dry_run_changes_nothing(machine, capsys):
     assert _install("--dry-run", "--backend", "codex") == 0
     assert "Would analyze sessions with Codex (Codex (`codex`) was not found)." in capsys.readouterr().out
