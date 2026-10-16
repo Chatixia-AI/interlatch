@@ -54,6 +54,10 @@ jobs:
         run: |
           mkdir -p /c/qa
           cp .github/windows-ja-qa/* /c/qa/
+          # the PowerShell lines docs/install.md#windows gives, with the package to install as {SOURCE}
+          awk '/^## Windows/{w=1} w && /^```powershell/{f=1; next} f && /^```/{exit} f' docs/install.md |
+            sed -E 's/(uv tool install --python 3\.13) interlatch/\1 {SOURCE}/' > /c/qa/docs-lines.txt
+          cat /c/qa/docs-lines.txt
           if [ "$SOURCE" = wheel ]; then
             uv build --wheel -o /c/qa/dist
             echo "INSTALL_FROM=$(cygpath -w "$(ls /c/qa/dist/*.whl)")" >> "$GITHUB_ENV"
