@@ -55,17 +55,20 @@ def status_of(row: dict, local_machine: str | None = None) -> str:
     return "present" if _HASHES[key] == row["sha256"] else "changed"
 
 
-def query(conn, *, kind: str | None = None, project: str | None = None, agent: str | None = None, q: str | None = None,
-          session_id: str | None = None, local_machine: str | None = None) -> tuple[list[dict], dict[str, int]]:
+def query(conn, *, kind: str | None = None, project: str | list[str] | None = None, agent: str | None = None,
+          q: str | None = None, session_id: str | None = None,
+          local_machine: str | None = None) -> tuple[list[dict], dict[str, int]]:
     """Artifacts newest first, with where each stands now, and the count of each kind (before the kind filter).
-    Across sessions the same file, link or commit is one item (its latest version) that knows how many sessions made it."""
+    Across sessions the same file, link or commit is one item (its latest version) that knows how many sessions made it.
+    project: one project's path, or a group's paths (a list)."""
     where, params = [], []
     if session_id:
         where.append("a.session_id = ?")
         params.append(session_id)
     if project:
-        where.append("s.project_path = ?")
-        params.append(project)
+        paths = [project] if isinstance(project, str) else project
+        where.append(f"s.project_path IN ({','.join('?' * len(paths))})")
+        params += paths
     if agent:
         where.append("s.agent = ?")
         params.append(agent)

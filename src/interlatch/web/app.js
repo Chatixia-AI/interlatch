@@ -836,7 +836,7 @@ function setParams(params) {
   lastHash = location.hash;
   const now = parseHash();
   markSidebar(now.path, now.params);
-  if (!/^\/(session\/|project$)/.test(path) && !(path === "/systems" && now.params.system)) setCrumbs(defaultCrumbs(now.path, now.params)); // those pages name themselves
+  if (!/^\/(session\/|project$|group$)/.test(path) && !(path === "/systems" && now.params.system)) setCrumbs(defaultCrumbs(now.path, now.params)); // those pages name themselves
 }
 // a page that takes more than a moment gets a bar along the top; one that takes long, a note saying so
 const LOAD_BAR_MS = 200, LOAD_NOTE_MS = 4000;
@@ -974,7 +974,7 @@ async function render() {
 }
 function navKey(path) {
   if (path.startsWith("/session")) return "sessions";
-  if (path.startsWith("/project")) return "projects";
+  if (path.startsWith("/project") || path === "/group") return "projects";
   if (path.startsWith("/knowledge")) return "knowledge";
   if (path === "/learn") return "learn";
   if (path.startsWith("/status")) return "status";
@@ -1258,6 +1258,8 @@ function groupSection(g, list, body) {
       g?.hub_project ? h("span", { class: "badge accent", title: t("Every project in this group goes to {name} on the hub, including ones that join it later", { name: hubProjectName(g.hub_project) }) },
         icon("linked"), t("On the hub as {name}", { name: hubProjectName(g.hub_project) })) : null,
       g && g.folders.length ? h("span", { class: "pg-rules mono", title: g.folders.join("\n") }, g.folders.map((f) => shortPath(f)).join(" · ")) : null,
+      g && list.some((p) => p.sessions) ? h("a", { class: "btn small pg-open", href: `#/group?id=${g.id}`,
+        title: t("Read this group's projects as one: their work, open questions and knowledge together") }, t("Analyze")) : null,
       g && canGroup() ? h("button", { type: "button", class: "btn small", onclick: (e) => { e.preventDefault(); groupDialog(g); } }, t("Edit")) : null),
     list.length ? body(list) : h("div", { class: "card empty" }, t("No projects in this group yet.")));
 }
@@ -2966,7 +2968,7 @@ function leftOffCard(recent) { // the last sessions as each one ended: the newes
   const goal = (x) => (x.goal ? h("p", { class: "lo-goal" }, h("b", null, t("Goal")), t(": "), x.goal) : null);
   const open = (x) => (x.open_threads.length ? h("ul", { class: "checklist" }, x.open_threads.map((o) => h("li", null, o))) : null);
   const lastEl = h("div", { class: "lo-last" },
-    h("div", { class: "lo-when" }, agentIcon(last.agent), sessionWho(last) ? h("b", null, sessionWho(last)) : null,
+    h("div", { class: "lo-when" }, agentIcon(last.agent), last.member ? memberTag(last) : null, sessionWho(last) ? h("b", null, sessionWho(last)) : null,
       h("span", null, `${sessionWho(last) ? "· " : ""}${fmtDT(last.started_at)} · ${ago(last.started_at)}`),
       last.active_s ? h("span", null, ` · ${t("{dur} active", { dur: fmtDur(last.active_s) })}`) : null),
     h("div", { class: "lo-title" }, h("a", { href: `#/session/${last.id}` }, title(last)), outcomeBadge(last.outcome, last.analysis_status, last.source)),
@@ -2974,7 +2976,7 @@ function leftOffCard(recent) { // the last sessions as each one ended: the newes
     last.open_threads.length ? [h("div", { class: "subhead" }, t("Left open")), open(last)] : null);
   const rows = before.map((x) => h("details", { class: "lo-row" },
     h("summary", null, outcomeMark(x), h("span", { class: "lo-date" }, fmtDate(x.started_at)), h("span", { class: "lo-name" }, title(x)),
-      sessionWho(x) ? h("span", { class: "lo-who" }, sessionWho(x)) : null,
+      x.member ? memberTag(x) : null, sessionWho(x) ? h("span", { class: "lo-who" }, sessionWho(x)) : null,
       x.open_threads.length ? h("span", { class: "lo-open" }, tn(x.open_threads.length, "{n} left open", "{n} left open")) : null),
     h("div", { class: "lo-body" }, goal(x), open(x), h("a", { class: "link-arrow", href: `#/session/${x.id}` }, t("Open session"), icon("arrow")))));
   return h("section", { class: "card leftoff" }, cardHead(team ? t("Where the team left off") : t("Where you left off"), { iconName: "history" }), lastEl,
@@ -3017,7 +3019,7 @@ function timelineCard(tl) { // the work week by week, newest first (progress.tim
   const SHOWN = 6;
   const monday = (day) => `${day}T00:00:00`; // a week's start, in local time
   const session = (x) => h("li", null, outcomeMark(x), h("a", { href: `#/session/${x.id}` }, x.title || t("(untitled session)")),
-    sessionWho(x) ? h("span", { class: "tl-who" }, sessionWho(x)) : null);
+    x.member ? memberTag(x) : null, sessionWho(x) ? h("span", { class: "tl-who" }, sessionWho(x)) : null);
   const pr = (x) => h("li", null, safeUrl(x.url) ? h("a", { href: safeUrl(x.url), target: "_blank", rel: "noopener" }, x.title || x.url) : x.title || x.url);
   const week = (w, newer) => {
     const quiet = newer ? Math.round((new Date(monday(newer.start)) - new Date(monday(w.start))) / (7 * 86400000)) - 1 : 0;
@@ -3044,33 +3046,35 @@ function timelineCard(tl) { // the work week by week, newest first (progress.tim
 }
 // What's waiting on a person: work in the folder not yet committed or pushed (git, as the page loaded), and the decisions
 // and questions the last sessions left open (progress.asks). Waiting more than two days turns it amber; nothing is red.
-const WAITING_LONG = 2 * 86400000;
-function needsYouCard(p) {
-  const r = p.repo, long = (ts) => ts && Date.now() - new Date(ts).getTime() > WAITING_LONG;
+const WAITING_LONG = 2 * 86400000, ASKS_SHOWN = 6; // the newest asks shown; a group's page has many
+function needsYouCard(p) { // a group's page passes each folder's state as p.repos, each named by its project (member)
+  const long = (ts) => ts && Date.now() - new Date(ts).getTime() > WAITING_LONG;
   const row = (ic, text, sub, since) => h("li", { class: long(since) ? "ny-long" : "" }, icon(ic), h("div", null, h("div", null, text), sub ? h("div", { class: "ny-sub" }, sub) : null));
   const git = [];
-  if (r && r.changed + r.conflicts) {
-    git.push(row("diff", tn(r.changed + r.conflicts, "{n} changed file not committed", "{n} changed files not committed"),
-      [r.changed_since ? t("oldest edit {ago}", { ago: ago(r.changed_since) }) : null,
-        r.untracked ? tn(r.untracked, "{n} new file not in git", "{n} new files not in git") : null].filter(Boolean).join(" · "), r.changed_since));
+  for (const r of p.repos || (p.repo ? [p.repo] : [])) {
+    if (r.changed + r.conflicts) {
+      git.push(row("diff", tn(r.changed + r.conflicts, "{n} changed file not committed", "{n} changed files not committed"),
+        [r.member, r.changed_since ? t("oldest edit {ago}", { ago: ago(r.changed_since) }) : null,
+          r.untracked ? tn(r.untracked, "{n} new file not in git", "{n} new files not in git") : null].filter(Boolean).join(" · "), r.changed_since));
+    }
+    if (r.unpushed) {
+      git.push(row("commit", tn(r.unpushed, "{n} commit only on this computer", "{n} commits only on this computer"),
+        [r.member, t("oldest {ago}", { ago: ago(r.unpushed_since) })].filter(Boolean).join(" · "), r.unpushed_since));
+    }
   }
-  if (r && r.unpushed) {
-    git.push(row("commit", tn(r.unpushed, "{n} commit only on this computer", "{n} commits only on this computer"),
-      t("oldest {ago}", { ago: ago(r.unpushed_since) }), r.unpushed_since));
-  }
-  const asks = (p.asks || []).map((a) => row("todo", a.text, [sessionWho(a) ? `${sessionWho(a)} · ` : "", tx("left open {ago} in {session}", {
+  const asks = (p.asks || []).map((a) => row("todo", a.text, [a.member ? `${a.member} · ` : "", sessionWho(a) ? `${sessionWho(a)} · ` : "", tx("left open {ago} in {session}", {
     ago: ago(a.started_at), session: h("a", { href: `#/session/${a.session_id}` }, t("this session")) })], a.started_at));
   if (!git.length && !asks.length) return null;
   const team = !!ME?.hub?.team;
   const waited = [...git, ...asks].some((li) => li.classList.contains("ny-long"));
   return h("section", { class: `card needs-you${waited ? " long" : ""}` }, cardHead(team ? t("Needs attention") : t("Needs you"), { iconName: "flame" }),
     git.length ? [h("div", { class: "subhead" }, t("Not saved in git yet")), h("ul", { class: "ny-list" }, git)] : null,
-    asks.length ? [h("div", { class: "subhead" }, t("Decisions and open questions")), h("ul", { class: "ny-list" }, asks),
+    asks.length ? [h("div", { class: "subhead" }, t("Decisions and open questions")), capped(asks, (li) => li, ASKS_SHOWN, "ny-list"),
       h("p", { class: "lo-foot" }, t("From what the last sessions left open, picked by how it's worded: check before acting on it."))] : null);
 }
 // Where the project is going: its own ROADMAP / BACKLOG / TODO file (progress.roadmap, on this computer), else the
 // backlog its sessions keep: to-do items (Done dismisses one) and the knowledge base's open threads, as of their dates.
-function planCard(p) {
+function planCard(p, { title = t("Roadmap") } = {}) { // title: on a group's page, whose roadmap it is
   const rm = p.roadmap;
   if (rm) {
     const SHOWN = 3;
@@ -3079,7 +3083,7 @@ function planCard(p) {
         h("span", null, s.open || s.done ? t("{open} open · {done} done", { open: fmtNum(s.open), done: fmtNum(s.done) })
           : tn(s.total, "{n} item", "{n} items", { n: fmtNum(s.total) }))),
       capped(s.items, (x) => h("li", null, x), 4, "rm-items"));
-    return h("section", { class: "card plan-card" }, cardHead(t("Roadmap"), { iconName: "map", hint: t("{file} · updated {ago}", { file: rm.file, ago: ago(rm.updated) }) }),
+    return h("section", { class: "card plan-card" }, cardHead(title, { iconName: "map", hint: t("{file} · updated {ago}", { file: rm.file, ago: ago(rm.updated) }) }),
       rm.sections.slice(0, SHOWN).map(sec),
       rm.sections.length > SHOWN ? h("p", { class: "lo-foot" }, tn(rm.sections.length - SHOWN, "and {n} more section in the file", "and {n} more sections in the file")) : null,
       h("div", { class: "rm-path" }, h("span", { class: "mono", title: rm.path }, shortPath(rm.path)),
@@ -3112,7 +3116,7 @@ route(/^\/project$/, async (params) => {
   const p = await api("/api/project", { path });
   ART_LOCAL = p.local;
   const isGlobal = path === "__global__";
-  setCrumbs(isGlobal ? [[t("Knowledge"), "#/knowledge"], [t("Global playbook")]] : [[t("Projects"), "#/projects"], ...(p.group ? [[p.group.name, "#/projects"]] : []), [p.label || shortPath(path)]], token);
+  setCrumbs(isGlobal ? [[t("Knowledge"), "#/knowledge"], [t("Global playbook")]] : [[t("Projects"), "#/projects"], ...(p.group ? [[p.group.name, `#/group?id=${p.group.id}`]] : []), [p.label || shortPath(path)]], token);
   const synth = h("button", { class: "btn primary admin-only", type: "button", onclick: async () => {
     synth.disabled = true; synth.textContent = t("Synthesizing…");
     const r = await post("/api/synthesize", { path });
@@ -3178,6 +3182,157 @@ route(/^\/project$/, async (params) => {
       usage),
       h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map")), synth)),
     lead,
+    h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
+    Object.values(panes).filter(Boolean));
+});
+
+// A group's page reads its projects as one (api.projects.group): each project's share of the work, then the project
+// page's cards over all of them, each item named by the project it came from (x.member). Like a project's page, no
+// model writes anything for it: the Knowledge bases tab shows each project's own, as its project keeps it.
+const GROUP_TABS = [["overview", t("Overview")], ["working", t("Knowledge bases")], ["knowledge", t("Knowledge")],
+  ["sessions", t("Sessions")], ["artifacts", t("Artifacts")], ["usage", t("Usage")]];
+function memberTag(x) { return h("a", { class: "member-tag", href: `#/project?path=${encodeURIComponent(x.project_path)}`, title: x.project_path }, x.member); }
+function membersCard(g) { // the group's projects side by side, with each one's share of the group's active time
+  const total = g.stats.active_s || 0;
+  const href = (m) => `#/project?path=${encodeURIComponent(m.project_path)}`;
+  return h("section", { class: "card flush members-card" }, h("div", { class: "card-pad" }, cardHead(t("By project"), { iconName: "projects", hint: t("share of the group's active time") })),
+    localTable(g.members, [
+      { key: "label", label: t("Project"), value: (m) => m.label },
+      { key: "share", label: t("Share"), desc: true, value: (m) => m.active_s || 0 },
+      { key: "sessions", label: t("Sessions"), num: true, desc: true, value: (m) => m.sessions },
+      { key: "cost", label: t("Est. cost"), num: true, desc: true, value: (m) => m.cost },
+      { key: "knowledge", label: t("Knowledge"), num: true, desc: true, value: (m) => m.knowledge },
+      { key: "last", label: t("Last session"), desc: true, value: (m) => m.last },
+    ], (m) => {
+      const [pulseCls, pulse] = projectPulse(m.last);
+      const pct = total ? ((m.active_s || 0) / total) * 100 : 0;
+      return h("tr", { class: "row-link", onclick: (e) => { if (!e.target.closest("a")) go(href(m)); } },
+        h("td", { class: "title-cell" }, h("div", { class: "t" }, h("a", { href: href(m), class: "plain" }, m.label)),
+          h("div", { class: "s", title: m.project_path }, shortPath(m.project_path))),
+        h("td", { class: "share-cell" }, h("div", { class: "share-bar", title: t("{dur} active", { dur: fmtDur(m.active_s) }) },
+          h("div", { class: "share-track" }, h("div", { class: "share-fill", style: { width: `${Math.max(0.5, pct)}%` } })),
+          h("span", null, pctText(m.active_s || 0, total), h("span", { class: "muted" }, ` · ${fmtDur(m.active_s)}`)))),
+        h("td", { class: "num" }, fmtNum(m.sessions)),
+        h("td", { class: "num" }, fmtCost(m.cost)),
+        h("td", { class: "num" }, fmtNum(m.knowledge)),
+        h("td", { class: "nowrap" }, h("span", { class: `badge ${pulseCls}` }, h("span", { class: "sdot" }), pulse), " ", h("span", { class: "muted" }, fmtDate(m.last))));
+    }, { sort: "share", order: "desc", empty: t("No projects in this group yet."), cls: "projects-table" }));
+}
+function foldersCard(repos) { // each repository in the group as the page loaded: its branch, what's uncommitted, the last commit
+  if (!repos || !repos.length) return null;
+  const state = (r) => {
+    const pending = r.changed + r.untracked + r.conflicts;
+    const sync = !r.branch ? t("detached HEAD") : !r.upstream ? t("no upstream branch")
+      : r.ahead || r.behind ? t("{ahead} ahead, {behind} behind {upstream}", { ahead: r.ahead, behind: r.behind, upstream: r.upstream })
+      : t("in step with {upstream}", { upstream: r.upstream });
+    return [pending ? tn(pending, "{n} uncommitted change", "{n} uncommitted changes") : t("Nothing uncommitted"), sync].join(" · ");
+  };
+  return h("section", { class: "card repo-card" }, cardHead(t("The folders now"), { iconName: "branch", hint: t("from git, as this page loaded") }),
+    h("ul", { class: "gf-list" }, repos.map((r) => h("li", { class: r.changed + r.conflicts || r.unpushed ? "gf-busy" : "" },
+      h("div", { class: "gf-head" }, memberTag(r), r.branch ? h("span", { class: "mono" }, r.branch) : null),
+      h("div", { class: "muted" }, state(r)),
+      r.last ? h("div", { class: "muted", title: r.last.sha }, t("last commit {ago}", { ago: ago(r.last.at) }), ` · ${r.last.subject}`) : null))));
+}
+function memberKbsCard(g) { // each project's own knowledge base, briefly; the whole of it stays on the project's page
+  const withKb = g.members.filter((m) => m.kb), without = g.members.filter((m) => !m.kb);
+  const kbCard = (m) => h("section", { class: "card member-kb" },
+    h("div", { class: "rv-kicker" }, icon("knowledge"), h("a", { href: `#/project?path=${encodeURIComponent(m.project_path)}&tab=working` }, m.label),
+      h("span", null, t("updated {ago}", { ago: ago(m.kb.updated_at) }))),
+    m.kb.tldr.length ? h("ul", { class: "rv-tldr" }, m.kb.tldr.map((x) => h("li", { class: "gloss", html: mdInline(escapeHtml(x)) })))
+      : m.kb.overview ? h("p", { class: "kb-lead" }, plainText(m.kb.overview)) : null,
+    m.kb.sections.length ? h("div", { class: "kb-nav" }, m.kb.sections.map((sec) => {
+      const tone = KB_TONES.find(([re]) => re.test(sec.title)) || [null, "dot", "accent"];
+      return h("span", { class: `kb-chip t-${tone[2]}` }, icon(tone[1]), sec.title, h("b", null, fmtNum(sec.n)));
+    })) : null,
+    h("a", { class: "link-arrow", href: `#/project?path=${encodeURIComponent(m.project_path)}&tab=working` }, t("Open its knowledge base"), icon("arrow")));
+  return h("div", { class: "grid" },
+    h("p", { class: "lo-foot" }, t("Each project keeps its own knowledge base. Here they are side by side; nothing is written for the group as a whole.")),
+    withKb.length ? h("div", { class: "member-kbs" }, withKb.map(kbCard)) : null,
+    without.length ? h("p", { class: "muted small" }, t("No knowledge base yet: {projects}", { projects: without.map((m) => m.label).join(", ") })) : null);
+}
+function groupGlossary(g) { // the terms more than one of the group's projects use first: the group's shared language
+  if (!g.glossary.length) return null;
+  const label = Object.fromEntries(g.members.map((m) => [m.project_path, m.label]));
+  const term = (e) => [h("dt", null, h("a", { href: `#/glossary?term=${encodeURIComponent(e.term)}` }, e.term)),
+    h("dd", null, e.definition, e.projects.length > 1 ? h("div", { class: "muted" }, e.projects.map((p) => label[p] || shortPath(p)).join(" · "))
+      : e.context ? h("div", { class: "muted" }, e.context) : null)];
+  const shared = g.glossary.filter((e) => e.projects.length > 1), own = g.glossary.filter((e) => e.projects.length <= 1);
+  return [h("h2", { style: { margin: "22px 0 10px" } }, t("Glossary ({n})", { n: g.glossary.length })),
+    shared.length ? h("section", { class: "card" }, cardHead(t("Used across projects"), { hint: tn(shared.length, "{n} term", "{n} terms") }),
+      h("dl", { class: "kv", style: { marginTop: 0 } }, shared.map(term))) : null,
+    own.length ? h("details", { class: "card gl-more" }, h("summary", null, tn(own.length, "{n} term used by one project", "{n} terms used by one project")),
+      h("dl", { class: "kv" }, own.map(term))) : null];
+}
+
+route(/^\/group$/, async (params) => {
+  const token = renderSeq;
+  const g = await api("/api/group", { id: params.id || "" });
+  ART_LOCAL = g.local;
+  setCrumbs([[t("Projects"), "#/projects"], [g.name]], token);
+  const label = Object.fromEntries(g.members.map((m) => [m.project_path, m.label]));
+  const tag = (x) => { x.member = label[x.project_path] || shortPath(x.project_path); return x; };
+  g.recent.forEach(tag); g.asks.forEach(tag); (g.repos || []).forEach(tag); (g.roadmaps || []).forEach(tag);
+  g.timeline.weeks.forEach((w) => w.items.forEach(tag));
+  const st = g.stats;
+  const [pulseCls, pulse] = projectPulse(st.last);
+  const usage = h("div", { class: "proj-usage" },
+    h("span", { class: `badge ${pulseCls}` }, h("span", { class: "sdot" }), pulse),
+    h("span", null, t("Last session {ago}", { ago: ago(st.last) })),
+    h("span", null, tn(g.members.length, "{n} project", "{n} projects")),
+    h("span", null, tn(st.sessions, "{n} session", "{n} sessions", { n: fmtNum(st.sessions) })),
+    h("span", null, t("{dur} active", { dur: fmtDur(st.active_s) })),
+    h("span", null, t("{n} tokens", { n: fmtCompact(st.tokens) })),
+    h("span", { title: t("API list-price equivalent; subscriptions are billed differently") }, t("{cost} est. API cost", { cost: fmtCost(st.cost) })));
+  const tiles = h("div", { class: "tiles" },
+    tile(t("Sessions"), fmtNum(st.sessions), { iconName: "sessions" }), tile(t("Active time"), fmtDur(st.active_s), { iconName: "clock" }),
+    tile(t("Prompts"), fmtNum(st.prompts), { iconName: "prompts" }), tile(t("Tokens"), fmtCompact(st.tokens), { iconName: "tokens" }),
+    tile(t("Est. API cost"), fmtCost(st.cost), { iconName: "cost" }), tile(t("Lines"), `+${fmtCompact(st.lines_added)}`, { iconName: "diff", delta: `−${fmtCompact(st.lines_removed)}` }));
+  const byCost = [...g.members].sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  const costCard = h("section", { class: "card" }, cardHead(t("Est. API cost by project")),
+    hbars(byCost, { label: (m) => m.label, value: (m) => m.cost || 0, fmt: fmtCost, href: (m) => `#/project?path=${encodeURIComponent(m.project_path)}`,
+      sub: (m) => `· ${t("{dur} active", { dur: fmtDur(m.active_s) })}` }));
+  const filesCard = g.files.length ? h("section", { class: "card" }, cardHead(t("Most edited files")),
+    hbars(g.files, { label: (f) => `${label[f.project_path] || ""} / ${shortPath(f.path, f.project_path)}`, value: (f) => f.edits, fmt: fmtNum,
+      sub: (f) => `· +${fmtCompact(f.added)}/−${fmtCompact(f.removed)}` })) : null;
+  const sessions = h("section", { class: "card", style: { padding: "4px 6px" } }, h("div", { class: "table-wrap" }, h("table", { class: "data sessions" },
+    h("thead", null, h("tr", null, [t("Started"), t("Session"), t("Project"), t("Agent"), t("Prompts"), t("Tools"), t("Active"), t("Tokens"), t("Est. cost"), t("Outcome")].map((c, i) => h("th", { class: i >= 4 && i <= 8 ? "num" : "" }, c)))),
+    h("tbody", null, g.sessions.map((x) => sessionRow(x))))));
+  const plans = [...(g.roadmaps || []).map((rm) => planCard({ roadmap: rm }, { title: t("Roadmap · {project}", { project: rm.member }) })),
+    planCard({ knowledge: g.knowledge })].filter(Boolean);
+  const leftOff = leftOffCard(g.recent), side = [foldersCard(g.repos), ...plans].filter(Boolean);
+  const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
+  const panes = {
+    overview: h("div", { class: "grid" }, membersCard(g), needsYouCard(g),
+      leftOff && sideCol ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, leftOff, sideCol) : leftOff || sideCol, timelineCard(g.timeline)),
+    working: h("div", null, memberKbsCard(g), groupGlossary(g)),
+    knowledge: g.knowledge.length ? h("div", { class: "kgrid" }, g.knowledge.map((k) => knowledgeCard(k, { compact: true }))) : null,
+    sessions: h("div", null, sessions, st.sessions > g.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
+      shown: fmtNum(g.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?group=${g.id}` }, t("All of them in Sessions")) })) : null),
+    artifacts: g.artifacts?.total ? artifactsCard(g.artifacts.recent, {
+      hint: ART_KINDS.filter(([k]) => g.artifacts.counts[k]).map(([k, plural]) => `${plural} ${fmtNum(g.artifacts.counts[k])}`).join(" · ") }) : null,
+    usage: h("div", { class: "grid" }, tiles, costCard, filesCard),
+  };
+  const counts = { knowledge: g.knowledge.length, sessions: st.sessions, artifacts: g.artifacts?.total };
+  const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Group view") }, GROUP_TABS.filter(([k]) => panes[k]).map(([k, name]) =>
+    h("button", { type: "button", "data-tab": k, onclick: () => showTab(k) }, name, counts[k] ? h("span", { class: "seg-tag" }, fmtNum(counts[k])) : null)));
+  const showTab = (name, record = true) => {
+    for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
+    tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+    if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
+  };
+  showTab(panes[params.tab] ? params.tab : "overview", false);
+  const edit = canGroup() ? h("button", { class: "btn", type: "button", onclick: async () => {
+    await loadProjects();
+    const found = groupsCache.find((x) => x.id === g.id);
+    if (found) groupDialog(found);
+  } }, t("Edit")) : null;
+  return h("div", null,
+    h("div", { class: "page-head" }, titled("folder", h("div", { class: "muted", style: { fontSize: "12.5px" } }, h("a", { href: "#/projects" }, t("Projects")), " / "),
+      h("h1", null, g.name, g.hub_project ? [" ", h("span", { class: "badge accent" }, icon("linked"), t("On the hub as {name}", { name: hubProjectName(g.hub_project) }))] : null),
+      h("div", { class: "sub mono", style: { fontSize: "12px" } }, g.folders.map((f) => shortPath(f)).join(" · ") || tn(g.members.length, "{n} project", "{n} projects"),
+        ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
+      usage),
+      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/sessions?group=${g.id}` }, icon("sessions"), t("Sessions")), edit)),
     h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
     Object.values(panes).filter(Boolean));
 });
@@ -7365,7 +7520,8 @@ async function projectsSidebar(box) {
       const shown = q && g && g.name.toLowerCase().includes(q) ? ps : ps.filter(match);
       if (!shown.length && (q || !g)) return null;
       const key = g ? String(g.id) : "none", open = !!q || !groupFolded(key);
-      return h("div", { class: "sb-fold" }, fold(key, g ? g.name : t("Other projects"), ps.length, open), open ? shown.map((p) => row(p)) : null);
+      const whole = g && open && !q && ps.some((p) => p.sessions) ? sbRow(t("The whole group"), `#/group?id=${g.id}`, "overview", null, ["/group", "id", String(g.id)]) : null;
+      return h("div", { class: "sb-fold" }, fold(key, g ? g.name : t("Other projects"), ps.length, open), whole, open ? shown.map((p) => row(p)) : null);
     }).filter(Boolean) : projects.some(match) ? [h("div", { class: "sb-group" }, t("Most recent first")), ...projects.filter(match).map((p) => row(p))] : [];
     const parts = [hubPart, ...groups].filter(Boolean);
     list.replaceChildren(...top, ...parts,

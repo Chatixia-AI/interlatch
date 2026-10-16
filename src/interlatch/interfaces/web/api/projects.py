@@ -214,6 +214,103 @@ def _labelled(ctx: Context, timeline: dict) -> dict:
     return timeline
 
 
+def group(ctx: Context, group_id: int, here: bool = False, limited: bool = False) -> dict | None:
+    """A group's page: its projects read as one, the way a project's page reads one (project()). Each project's share
+    of the work, where the group's last sessions left things and what they left to a person, the work week by week, and
+    each knowledge base as its project keeps it (no model writes anything for the group). here: the request comes from
+    this computer, so each folder's git state and roadmap file are read too. None for a group that doesn't exist or
+    whose projects have no sessions."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ....knowledge.glossary import glossary_entries
+    from ....projects import progress
+    from ....projects.groups import groups, paths_in
+
+    c = ctx.conn
+    g = next((g for g in groups(c) if g["id"] == group_id), None)
+    if not g:
+        return None
+    wanted = paths_in(c, group_id)
+    if not wanted:
+        return None
+    marks = ",".join("?" * len(wanted))
+    labels = project_labels(c)
+    members = []
+    for r in c.execute(
+            "SELECT project_path, MAX(project_name) project_name, COUNT(*) sessions, SUM(n_prompts) prompts, "
+            "SUM(active_s) active_s, SUM(est_cost_usd) cost, "
+            "SUM(input_tokens+output_tokens+cache_read_tokens+cache_write_tokens) tokens, MIN(started_at) first, "
+            f"MAX(started_at) last FROM sessions WHERE project_path IN ({marks}) GROUP BY project_path ORDER BY last DESC",
+            wanted):
+        d = dict(r)
+        d["label"] = labels.get(d["project_path"], d["project_name"])
+        d["knowledge"] = c.execute("SELECT COUNT(*) FROM knowledge WHERE project_path = ? AND status = 'active'",
+                                   (d["project_path"],)).fetchone()[0]
+        kb = c.execute("SELECT updated_at, n_items, kb_json FROM project_kb WHERE project_path = ?",
+                       (d["project_path"],)).fetchone()
+        data = (loads(kb["kb_json"], {}) or {}) if kb else {}
+        d["kb"] = {"updated_at": kb["updated_at"], "n_items": kb["n_items"], "overview": data.get("overview") or "",
+                   "tldr": [str(x) for x in data.get("tldr") or []][:5],
+                   "sections": [{"title": s.get("title") or "", "n": len(s.get("items") or [])}
+                                for s in data.get("sections") or [] if isinstance(s, dict) and s.get("items")]} if kb else None
+        members.append(d)
+    if not members:
+        return None
+    paths = [m["project_path"] for m in members]
+    marks = ",".join("?" * len(paths))
+    stats = c.execute(
+        "SELECT COUNT(*) sessions, SUM(n_prompts) prompts, SUM(active_s) active_s, SUM(est_cost_usd) cost, "
+        "SUM(input_tokens+output_tokens+cache_read_tokens+cache_write_tokens) tokens, SUM(lines_added) lines_added, "
+        f"SUM(lines_removed) lines_removed, MIN(started_at) first, MAX(started_at) last FROM sessions "
+        f"WHERE project_path IN ({marks})", paths).fetchone()
+    asks = []  # each project's own last few: one busy project's sessions don't push the others' out
+    for p in paths:
+        asks += progress.asks(label_who(ctx, progress.recent(c, p)))
+    asks.sort(key=lambda a: a["started_at"] or "", reverse=True)
+    repos, roadmaps = [], []
+    if here:  # the folders, and a roadmap in each, only on this computer; members in one repository read it once
+        with ThreadPoolExecutor(max_workers=min(8, len(paths))) as pool:
+            states = list(pool.map(progress.repo_state, paths))
+        seen_roots, seen_files = set(), set()
+        for p, r in zip(paths, states, strict=True):
+            if r and r["root"] not in seen_roots:
+                seen_roots.add(r["root"])
+                repos.append({**r, "project_path": p})
+            rm = progress.roadmap(p, r["root"] if r else None)
+            if rm and rm["path"] not in seen_files:
+                seen_files.add(rm["path"])
+                roadmaps.append({**rm, "project_path": p})
+    inside = set(paths)
+    glossary = []
+    for e in glossary_entries(c):
+        uses = [u for u in e["usage"] if u["project_path"] in inside]
+        if uses:
+            glossary.append({"term": e["term"], "category": e["category"], "definition": e["definition"],
+                             "context": uses[0]["context"], "projects": sorted({u["project_path"] for u in uses})})
+    return {
+        "id": g["id"], "name": g["name"], "folders": g["folders"], "hub_project": g["hub_project"],
+        "stats": dict(stats),
+        "members": members,
+        "recent": label_who(ctx, progress.recent(c, paths, limit=progress.RECENT * 2)),
+        "asks": asks,
+        "timeline": _labelled(ctx, progress.timeline(c, paths, session_prs=not limited)),
+        "repos": repos if here else None,
+        "roadmaps": roadmaps if here else None,
+        "artifacts": _artifact_summary(ctx, paths),
+        "sessions": session_rows(ctx, f"project_path IN ({marks})", paths, "started_at DESC", 200),
+        "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
+            "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
+            f"WHERE k.project_path IN ({marks}) AND k.status = 'active' ORDER BY k.pinned DESC, k.id DESC LIMIT 300",
+            paths)],
+        "glossary": glossary,
+        "files": [dict(r) for r in c.execute(
+            "SELECT f.path, s.project_path, COUNT(*) sessions, SUM(f.edits + f.writes) edits, SUM(f.lines_added) added, "
+            "SUM(f.lines_removed) removed FROM session_files f JOIN sessions s ON s.id = f.session_id "
+            f"WHERE s.project_path IN ({marks}) AND (f.edits + f.writes) > 0 GROUP BY s.project_path, f.path "
+            "ORDER BY edits DESC LIMIT 25", paths)],
+    }
+
+
 def file_sessions(ctx: Context, path: str, limit: int = 50) -> dict:
     """The sessions that read or changed one file, newest first (the VS Code extension's per-file history)."""
     path = clean_abs_path(path)

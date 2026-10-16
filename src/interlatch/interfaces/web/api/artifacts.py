@@ -13,7 +13,7 @@ def _artifacts(ctx: Context, **filters) -> tuple[list[dict], dict[str, int]]:
     return query(ctx.conn, local_machine=local_machine_id(ctx.cfg), **filters)
 
 
-def _artifact_summary(ctx: Context, project: str) -> dict:
+def _artifact_summary(ctx: Context, project: str | list[str]) -> dict:
     items, counts = _artifacts(ctx, project=project)
     return {"total": len(items), "counts": counts, "recent": items[:8]}
 

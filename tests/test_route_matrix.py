@@ -106,6 +106,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/sessions/{id}/events"): SIGNED_IN,
     ("GET", "/api/sessions/{id}/matches"): SIGNED_IN,
     ("GET", "/api/project-groups"): SIGNED_IN,
+    ("GET", "/api/group"): SIGNED_IN.ok(404),  # no such group
     ("GET", "/api/artifacts"): SIGNED_IN,
     ("GET", "/api/artifacts/{n}/open"): SIGNED_IN.ok(404),
     ("GET", "/api/artifacts/{n}/file"): SIGNED_IN.ok(404),
@@ -255,6 +256,7 @@ QUERY = {
     "/signin": "?code=AAAA-BBBB-CCCC",
     "/api/project": f"?path={CWD}",
     "/api/diagram": f"?path={CWD}",
+    "/api/group": "?id=999999",
     "/api/file": f"?path={CWD}/auth.py",
     "/api/files": f"?root={CWD}",
     "/api/export": f"?ids={SID}&format=md&check=1",
