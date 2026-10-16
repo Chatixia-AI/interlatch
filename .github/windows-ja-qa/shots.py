@@ -7,6 +7,8 @@ Content-Type of every script and stylesheet go to <out dir>/<tag>-report.txt.
 """
 
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -34,6 +36,15 @@ def slug(route: str) -> str:
 
 
 sys.stdout.reconfigure(encoding="utf-8")
+deadline = time.monotonic() + 180
+while True:
+    try:
+        urllib.request.urlopen(BASE + "/", timeout=5).close()
+        break
+    except OSError as exc:
+        if time.monotonic() > deadline:
+            sys.exit(f"{BASE} never answered: {exc}")
+        time.sleep(3)
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel="msedge")
     for scale in (1, 1.5):

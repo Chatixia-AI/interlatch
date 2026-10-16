@@ -76,7 +76,7 @@ jobs:
           $env:INTERLATCH_HOME = 'C:\demo\home'
           Start-Process -FilePath uvx -ArgumentList "--from $env:INSTALL_FROM interlatch ui --port 8898" -WindowStyle Hidden `
             -RedirectStandardOutput C:\demo\ui.out -RedirectStandardError C:\demo\ui.err
-          Start-Sleep -Seconds 25
+          Start-Sleep -Seconds 2
       - name: Screenshots in Edge, Japanese
         if: always()
         shell: bash

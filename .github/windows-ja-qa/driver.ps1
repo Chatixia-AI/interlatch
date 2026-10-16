@@ -21,10 +21,13 @@ $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 Register-ScheduledTask -TaskName $task -Action $action -Settings $settings -User $name -Password $pw -RunLevel Limited | Out-Null
 Start-ScheduledTask -TaskName $task
-$deadline = (Get-Date).AddMinutes(30)
+$started = Get-Date
+# 267011: has not run yet; 267009: running
 do {
     Start-Sleep -Seconds 5
     $state = (Get-ScheduledTask -TaskName $task).State
-} while ($state -eq 'Running' -and (Get-Date) -lt $deadline)
-$info = Get-ScheduledTaskInfo -TaskName $task
-Write-Host ("task {0}: state {1}, last result {2}" -f $task, $state, $info.LastTaskResult)
+    $info = Get-ScheduledTaskInfo -TaskName $task
+    $waiting = $state -in 'Running', 'Queued' -or $info.LastTaskResult -in 267011, 267009
+    $minutes = ((Get-Date) - $started).TotalMinutes
+} while ($waiting -and $minutes -lt 30 -and -not ($info.LastTaskResult -eq 267011 -and $state -eq 'Ready' -and $minutes -gt 3))
+Write-Host ("task {0}: state {1}, last result {2}, last run {3}" -f $task, $state, $info.LastTaskResult, $info.LastRunTime)
