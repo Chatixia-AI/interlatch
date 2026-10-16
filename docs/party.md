@@ -14,13 +14,15 @@ the rail brings up a large door: click it to go through. Innerlatch opens only t
 out, the door is locked and asks you to sign in with Google, then opens by itself once you have. Once through, you stay
 in until you leave, even if you reload the page.
 
-Inside, the rail shows Innerlatch's sections: **Party**, **Leaderboard** and **Arena**, and the door at the bottom of
+Inside, the rail shows Innerlatch's sections: **Party**, **Adventure**, **Leaderboard** and **Arena**, and the door at the bottom of
 the rail (**Back to Interlatch**) leads back to the page you came from, and the door shuts behind you. The Leaderboard
 and the Arena show only on the computer that runs Interlatch: not on a dedicated hub, and not for hub people limited to
 some projects.
 
 The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work, and every address in
-Innerlatch meets the door first. To hide the door icon, set **Settings › Appearance › The door** to **Hidden** (this
+Innerlatch meets the door first. A lesson link anywhere in Innerlatch opens the lesson in a window over the page, with
+its roadmap modules and, for a case file, the scene, question and answer; **Open the session in Interlatch** leaves for
+the dashboard's session page. To hide the door icon, set **Settings › Appearance › The door** to **Hidden** (this
 browser only). Innerlatch still opens from its address.
 
 ## Signing in
@@ -62,17 +64,22 @@ person's review before a milestone counts.
 and when you completed a quest, with a chart of each agent's level over time. A lesson that lifted several skills at
 once is one line. Every join, level, class and quest stays on the list; of the skill-ups, the newest 120 do.
 
-## The journey on the Party page
+## Adventure
 
-Once you're signed in, the top of the **Party** page shows your party on the move, in the style of an idle game. The six
-characters walk across a blueprint landscape that matches the skill area they levelled most this week, and fight this
-week's lessons: each lesson is a monster (a fix is Glitch the bug, a gotcha is Mal's pot, and so on), beaten by the
-agent whose session taught it, for the XP it earned. The week replays wave by wave; when it passes one of your real
-level-ups, a banner says so. Main-quest milestones with possible evidence stand at the end as bosses the party can't
-beat until you mark the quest done. Point at a monster to see its lesson, click it to open the session, and fold the
-strip away with the button in its corner. It pauses when it's out of sight, and stays still when animations are off
-(**Settings › Appearance**). Before you sign in, the Party page already shows this week's lessons in grey above the
-sign-in card, waiting while your party sleeps; point at one to see it, click it to open its session.
+**Adventure** is a world map with every lesson that counts on it. Each of the six attributes is a region (Craft a forge
+town, Data lakes and canals, Ops mountains and server towers, Guard walls and a keep, Arcana a wizard tower, Lore an old
+forest with a library), and each roadmap module is a territory in its region. Every lesson stands in the territory of
+its best-matching module as a monster of its kind (a fix is Glitch the bug, a gotcha is Mal, and so on). Territories no
+lesson has reached yet lie under fog. Your party stands where the newest lesson was learned, and the main quest's
+milestones guard their region's gate as bosses. Drag to look around, scroll or pinch to zoom, and use the minimap or the
+sidebar's regions to jump; **List** shows the same encounters as a list you can filter by region, kind and agent.
+
+Click a monster to battle it, turn by turn: the agent that taught the lesson leads, with up to two others. Each turn
+choose **Attack**, **Skill** (one of the lesson's roadmap modules, stronger the higher that agent's level in it),
+**Defend** or **Run**; the monster's strength comes from the lesson's XP and trust stage. Win, and the encounter is
+cleared: it becomes a flag on the map, kept in your archive for this party. Lose, and **Retry** rolls new dice.
+Battles never change levels or XP: those come only from the lessons. A boss can be fought, but it only falls when you
+mark its milestone done under **Quests**.
 
 ## The arena
 

@@ -17,6 +17,9 @@ reads through access.limit's views, so their party is built from those projects'
 
 compute() is cached in this process per scope, the lessons as they stand (count, last change, stages), the quests and
 goal kept for that scope, the catalog and the language.
+
+The Adventure (adventure_map, encounter, set_cleared) lays the same lessons out as encounters on a map; battles change
+no level or XP, they only mark a lesson cleared in the viewer's own log.
 """
 
 from __future__ import annotations
@@ -55,6 +58,10 @@ RECENT_MAX = 60  # ...newest first, at most this many
 SKILL_LESSONS_MAX = 200
 GOAL_KEY = "party.goal:"  # + scope key: the track the person picked
 QUESTS_KEY = "party.quests:"  # + scope key: {milestone id: {"at": iso}}, the milestones the person marked done
+CLEARED_KEY = "party.cleared:"  # + scope key: [lesson id, ...], the Adventure's encounters the person has beaten
+CLEARED_MAX = 100_000
+MAP_TITLE_MAX = 140  # the Adventure map's lesson titles are cut to this; an encounter has the whole title
+ENCOUNTER_BODY_MAX = 4000
 
 
 class PartyError(ValueError):
@@ -1006,8 +1013,11 @@ def compute(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, 
     the goal, quests, journey, series, this week's lessons and where the party is. `here_id`: this computer's machine
     id; `today`: the UTC date "recent" ends on. Cached (per day, as "recent" moves); don't change what it returns."""
     cat = catalog or load_catalog()
-    today = today or utcnow().date()
-    sc = _scope_of(conn, here_id, viewer)
+    return _computed(conn, cat, _scope_of(conn, here_id, viewer), today or utcnow().date())
+
+
+def _computed(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, today: date) -> dict:
+    """compute() for a scope already worked out (the Adventure's endpoints share theirs)."""
     done, goal = quests_done(conn, sc.key), goal_of(conn, sc.key)
     key = (sc.key, sc.finger, json.dumps(done, sort_keys=True), goal, cat.key, lang.get(), today.isoformat())
     with _lock:
@@ -1085,6 +1095,122 @@ def tracks(*, catalog: Catalog | None = None) -> dict:
     order = list(cat.categories) + [c for c in by if c not in cat.categories]
     return {"categories": [{"id": c, "name": _t(cat.categories.get(c), "name") or c, "tracks": by[c]}
                            for c in order if c in by]}
+
+
+# ------------------------------------------------------------------ the Adventure (Innerlatch's map and battles)
+# Every counted lesson is an encounter on a map of the roadmap's attrs (regions) and modules (territories); the main
+# quest's milestones are its bosses. Battles change no level or XP: beating one only marks the lesson cleared, in the
+# person's own log (like the quests). A boss is beaten only by the person marking its milestone done.
+def cleared_of(conn: sqlite3.Connection, key: str) -> list[int]:
+    """The lesson ids the scope `key` has cleared, each once, in the order they were cleared."""
+    got = loads(kv_get(conn, CLEARED_KEY + key), [])
+    if not isinstance(got, list):
+        return []
+    return list(dict.fromkeys(x for x in got if isinstance(x, int) and not isinstance(x, bool)))
+
+
+def set_cleared(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, cleared: bool, *,
+                catalog: Catalog | None = None) -> list[int]:
+    """Mark a lesson's encounter cleared (or not) in the viewer's own log; answers the log. The lesson must be one of
+    the viewer's (lessons_in their scope); one already in the log may always be taken out of it."""
+    cat = catalog or load_catalog()
+    sc = _scope_of(conn, here_id, viewer)
+    log = cleared_of(conn, sc.key)
+    known = isinstance(lesson_id, int) and not isinstance(lesson_id, bool)
+    if known and not (not cleared and lesson_id in log):
+        known = any(k.id == lesson_id for k in lessons_in(conn, cat, sc))
+    if not known:
+        raise PartyError("no such lesson")
+    if cleared and lesson_id not in log:
+        log = (log + [lesson_id])[-CLEARED_MAX:]
+    elif not cleared:
+        log = [x for x in log if x != lesson_id]
+    kv_set(conn, CLEARED_KEY + sc.key, json.dumps(log))
+    conn.commit()
+    return log
+
+
+def _boss_attr(cat: Catalog, track_id: str) -> str | None:
+    """The region a track's bosses guard: the attr with the most weight among its modules (critical ones weigh 2;
+    ties: catalog order)."""
+    weight: dict[str, int] = {}
+    for i, w in cat.weights[cat.track_index[track_id]]:
+        a = cat.modules[i].get("attr")
+        weight[a] = weight.get(a, 0) + w
+    order = [a["id"] for a in cat.attrs]
+    ranked = sorted(weight, key=lambda a: (-weight[a], order.index(a) if a in order else len(order)))
+    return ranked[0] if ranked else None
+
+
+def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, *,
+                  catalog: Catalog | None = None, today: date | None = None) -> dict:
+    """GET /api/party/map: the regions (every attr, every module of it, how many counted lessons stand there: those
+    whose best module it is, and their XP), every counted lesson oldest first, the lessons cleared, the bosses (the
+    main quest's milestones), the newest lesson (where the party stands) and the agents."""
+    cat = catalog or load_catalog()
+    sc = _scope_of(conn, here_id, viewer)
+    data = _computed(conn, cat, sc, today or utcnow().date())
+    counted = [k for k in lessons_in(conn, cat, sc) if k.modules]
+    there: dict[int, list[int]] = {}  # module index: [lessons, xp] of the lessons that stand in it
+    for k in counted:
+        got = there.setdefault(k.modules[0], [0, 0])
+        got[0] += 1
+        got[1] += k.xp * len(k.modules)
+    regions = []
+    for a in cat.attrs:
+        mods = [{"id": m["id"], "name": _t(m, "name"), "lessons": there.get(i, [0, 0])[0], "xp": there.get(i, [0, 0])[1]}
+                for i, m in enumerate(cat.modules) if m.get("attr") == a["id"]]
+        regions.append({"id": a["id"], "name": _t(a, "name"), "about": _t(a, "about"), "modules": mods})
+    return {
+        "regions": regions,
+        "lessons": [{"id": k.id, "title": k.title[:MAP_TITLE_MAX], "kind": k.kind, "stage": k.stage, "agent": k.agent,
+                     "at": k.at[:10], "xp": k.xp * len(k.modules), "modules": [cat.modules[i]["id"] for i in k.modules],
+                     "session_id": k.session_id, "project": k.project_name} for k in counted],
+        "cleared": cleared_of(conn, sc.key),
+        "bosses": [{"id": q["id"], "n": q["n"], "text": q["text"], "track": q["track"], "track_name": q["track_name"],
+                    "attr": _boss_attr(cat, q["track"]), "status": q["status"]}
+                   for q in data["quests"] if q["main"]],
+        "newest": counted[-1].id if counted else None,
+        "agents": [{x: a[x] for x in ("agent", "name", "short", "level", "tier")} for a in data["agents"]],
+    }
+
+
+def _case(raw) -> dict | None:
+    """A knowledge row's case file as an encounter tells it: its scene, question and answer, when it has all three."""
+    got = loads(raw, None)
+    if not isinstance(got, dict):
+        return None
+    case = {x: got.get(x) for x in ("scene", "question", "answer")}
+    return case if all(isinstance(v, str) and v.strip() for v in case.values()) else None
+
+
+def encounter(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, *,
+              catalog: Catalog | None = None, today: date | None = None) -> dict | None:
+    """GET /api/party/encounter: one of the viewer's lessons (counted or not) with its body and case file, the party
+    that meets it (each agent's level, attrs and skill in the lesson's modules), and whether it's cleared. None for a
+    lesson that isn't the viewer's."""
+    cat = catalog or load_catalog()
+    sc = _scope_of(conn, here_id, viewer)
+    k = next((x for x in lessons_in(conn, cat, sc) if x.id == lesson_id), None)
+    if k is None:
+        return None
+    row = conn.execute("SELECT case_json FROM knowledge WHERE id = ?", (k.id,)).fetchone()
+    data = _computed(conn, cat, sc, today or utcnow().date())
+    mids = [cat.modules[i]["id"] for i in k.modules]
+    party_ = []
+    for a in data["agents"]:
+        levels = {s["module"]: s["level"] for s in a["skills"]}
+        party_.append({**{x: a[x] for x in ("agent", "name", "short", "level", "tier")},
+                       "attr_levels": dict(a["attr_levels"]), "skills": {m: levels.get(m, 0) for m in mids}})
+    return {
+        "lesson": {"id": k.id, "title": k.title, "kind": k.kind, "stage": k.stage, "agent": k.agent, "at": k.at[:10],
+                   "xp": k.xp * len(k.modules), "session_id": k.session_id, "project": k.project_name,
+                   "body": k.body[:ENCOUNTER_BODY_MAX], "case": _case(row["case_json"] if row else None),
+                   "modules": [{"id": cat.modules[i]["id"], "name": _t(cat.modules[i], "name"),
+                                "attr": cat.modules[i].get("attr")} for i in k.modules]},
+        "party": party_,
+        "cleared": k.id in cleared_of(conn, sc.key),
+    }
 
 
 # ------------------------------------------------------------------ who's hiring (sharing/market.py)

@@ -148,12 +148,15 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/party/skill"): LIMITED_OK.ok(404).but(here=403),  # no such module; here: not signed in
     ("GET", "/api/party/track"): LIMITED_OK.ok(404).but(here=403),  # no such track; here: not signed in
     ("GET", "/api/party/tracks"): LIMITED_OK,  # the catalog's own tracks, for picking a goal
+    ("GET", "/api/party/map"): LIMITED_OK.but(here=403),  # the Adventure's map; here: not signed in
+    ("GET", "/api/party/encounter"): LIMITED_OK.ok(404).but(here=403),  # no such lesson; here: not signed in
     # POST: anyone, and any signed-in person (their own news)
     ("POST", "/api/signout"): POST_ANYONE,
     ("POST", "/api/team/news/seen"): POST_SIGNED_IN,
     # POST: any signed-in person, for their own Party quest log (no such quest or track; here: not signed in)
     ("POST", "/api/party/quest"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/goal"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/cleared"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     # POST: admins (the hub computer, or an admin person)
     ("POST", "/api/import"): POST_ADMIN,
     ("POST", "/api/sync"): POST_ADMIN,
@@ -259,6 +262,7 @@ QUERY = {
     "/api/system": "?id=nothing",
     "/api/party/skill": "?agent=claude&module=M-nothing",
     "/api/party/track": "?id=nothing",
+    "/api/party/encounter": "?id=999999",
 }
 BODY = {
     "/api/team-store/save": {"enabled": False},
@@ -273,6 +277,7 @@ BODY = {
     "/api/update/daily": {"on": False},
     "/api/update/notify": {"on": False},
     "/api/party/goal": {"track": "no-such-track"},
+    "/api/party/cleared": {"id": 999999, "cleared": True},
 }
 PARAMS = {"{id}": SID, "{n}": "999999"}
 PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connectors/{id}/disconnect": {"{id}": "claude"},

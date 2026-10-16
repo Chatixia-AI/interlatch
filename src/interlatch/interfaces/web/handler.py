@@ -28,8 +28,9 @@ LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the re
 PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
 HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub/done", "/api/hub/hello",
             "/api/hub/withdraw")
-# POSTs any person signed in to a hub may make, not only admins: their own Party quest log (routes.PARTY decides)
-PARTY_OWN = ("/api/party/quest", "/api/party/goal")
+# POSTs any person signed in to a hub may make, not only admins: their own Party quest log, goal and cleared
+# encounters (routes.PARTY decides)
+PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/cleared")
 
 log = logging.getLogger("interlatch.server")
 SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "

@@ -202,6 +202,33 @@
     pieces: [[0, 0, ["pgggggg", "pgggggg", "pgg.www", "pgggggg", "p......", "p......", "p......", "p......", "p......", "p......",
       "p......", ".BBB..."]]] };
 
+  // a lesson's monster at `scale` device pixels a pixel: its kind's two-frame map, a gold badge once established
+  function monsterArt(type, stage, frame, scale, flash) {
+    const m = MONSTERS[type], pieces = m.frames[frame % 2].slice(), pal = { ...m.pal };
+    if (stage !== "provisional") { pieces.push(BADGE.piece(5)); Object.assign(pal, BADGE.pal); }
+    return cast(pieces, pal, scale, flash ? "#ffffff" : null);
+  }
+  // a main quest's boss (the nth milestone); a felled one is greyed, with X for eyes
+  function bossArt(n, frame, scale, flash, felled) {
+    const m = BOSSES[(Math.max(1, n || 1) - 1) % BOSSES.length];
+    let pieces = m.frames[frame % 2];
+    if (felled) pieces = pieces.map(([x, y, rows]) => (rows[1] && rows[1].startsWith("wkww") ? xEyes(x, y, rows[0].length - 8) : [x, y, rows]));
+    const img = cast(pieces, felled ? { ...m.pal, ...FELLED } : m.pal, scale, flash ? "#ffffff" : null);
+    return felled ? greyed(img) : img;
+  }
+  // a copy of an image in greys (a quest's felled boss)
+  function greyed(img) {
+    const c = blank(img.cv.width, img.cv.height), g = c.getContext("2d");
+    g.drawImage(img.cv, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height);
+    for (let i = 0; i < d.data.length; i += 4) {
+      const v = d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15;
+      d.data[i] = v * 0.9 + 18; d.data[i + 1] = v * 0.92 + 20; d.data[i + 2] = v + 30;
+    }
+    g.putImageData(d, 0, 0);
+    return { ...img, cv: c };
+  }
+
   // =====================================================================================
   // Biomes, one per attribute of the zone, each with props from the Cast (faceless): drawn in full near the path, and
   // as faint blueprint drawings further back
@@ -546,40 +573,21 @@
     function monster(type, stage, frame, flash) {
       const key = `m|${type}|${stage}|${frame}|${flash ? 1 : 0}`;
       if (!art.has(key)) {
-        const m = MONSTERS[type], pieces = m.frames[frame % 2].slice(), size = stage === "canonical" ? 3 : 2;
-        const pal = { ...m.pal };
-        if (stage !== "provisional") { pieces.push(BADGE.piece(5)); Object.assign(pal, BADGE.pal); }
-        art.set(key, { ...cast(pieces, pal, P * size, flash ? "#ffffff" : null), size });
+        const size = stage === "canonical" ? 3 : 2;
+        art.set(key, { ...monsterArt(type, stage, frame, P * size, flash), size });
       }
       return art.get(key);
     }
     function boss(n, frame, flash, felled) {
       const key = `b|${n}|${frame}|${flash ? 1 : 0}|${felled ? 1 : 0}`;
       if (!art.has(key)) {
-        const m = BOSSES[(Math.max(1, n || 1) - 1) % BOSSES.length];
-        let pieces = m.frames[frame % 2];
-        // a felled boss: greyed, X for eyes
-        if (felled) pieces = pieces.map(([x, y, rows]) => (rows[1] && rows[1].startsWith("wkww") ? xEyes(x, y, rows[0].length - 8) : [x, y, rows]));
         const size = L >= 90 ? 4 : 3;
-        const img = cast(pieces, felled ? { ...m.pal, ...FELLED } : m.pal, P * size, flash ? "#ffffff" : null);
-        art.set(key, { ...(felled ? greyed(img) : img), size });
+        art.set(key, { ...bossArt(n, frame, P * size, flash, felled), size });
         if (felled) art.set(key + "|flag", cast(DONE_FLAG.pieces, DONE_FLAG.pal, P * 2));
       }
       return art.get(key);
     }
-    // a copy of an image in greys (a quest's felled boss)
-    function greyed(img) {
-      const c = blank(img.cv.width, img.cv.height), g = c.getContext("2d");
-      g.drawImage(img.cv, 0, 0);
-      const d = g.getImageData(0, 0, c.width, c.height);
-      for (let i = 0; i < d.data.length; i += 4) {
-        const v = d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15;
-        d.data[i] = v * 0.9 + 18; d.data[i + 1] = v * 0.92 + 20; d.data[i + 2] = v + 30;
-      }
-      g.putImageData(d, 0, 0);
-      return { ...img, cv: c };
-    }
-    const put = (img, x, y) => ctx.drawImage(img, Math.round(x) * P, Math.round(y) * P);
+    const put =(img, x, y) => ctx.drawImage(img, Math.round(x) * P, Math.round(y) * P);
 
     // ---- text: Plex Mono at device pixels, on the theme's panels so it reads over the blueprint
     function text(str, x, y, { size = 11, color = null, align = "left", panel = true, alpha = 1, weight = 600, max = 0 } = {}) {
@@ -1668,5 +1676,37 @@
     };
   }
 
-  window.Scene = Object.freeze({ mount, mountBattle });
+  // =====================================================================================
+  // The Cast's monsters for other pages (the Adventure map, battles), read-only:
+  //   Scene.art.kinds                        lesson kind -> monster type ("fix" -> "glitch", …)
+  //   Scene.art.types                        the monster types
+  //   Scene.art.fly(type)                    pixels a floating monster hovers (0 for walkers)
+  //   Scene.art.monster(type, stage, frame, {scale = 1, flash = false}) -> canvas
+  //   Scene.art.boss(n, frame, {scale = 1, flash = false, felled = false}) -> canvas
+  // The canvases are drawn as the Journey strip draws them, `scale` device pixels a pixel (edge included), facing left,
+  // two frames (0, 1); an established or canonical lesson's monster wears the gold badge (the strip also draws a
+  // canonical one 1.5 times the size: that is the caller's choice). They are cached and shared: draw them, never on them.
+  // Sprites.art must be loaded (it shades the maps).
+  // =====================================================================================
+  const shared = new Map();
+  const whole = (v) => Math.max(1, Math.round(Number(v) || 1));
+  const ART = Object.freeze({
+    kinds: Object.freeze({ ...KIND_MONSTER }),
+    types: Object.freeze(Object.keys(MONSTERS)),
+    fly: (type) => (MONSTERS[type] && MONSTERS[type].fly) || 0,
+    monster(type, stage = "provisional", frame = 0, { scale = 1, flash = false } = {}) {
+      const t = MONSTERS[type] ? type : "glitch", st = stage === "established" || stage === "canonical" ? stage : "provisional";
+      const f = Math.abs(Math.round(Number(frame) || 0)) % 2, sc = whole(scale), key = `m|${t}|${st}|${f}|${sc}|${flash ? 1 : 0}`;
+      if (!shared.has(key)) shared.set(key, monsterArt(t, st, f, sc, !!flash).cv);
+      return shared.get(key);
+    },
+    boss(n, frame = 0, { scale = 1, flash = false, felled = false } = {}) {
+      const k = Math.max(1, Math.round(Number(n) || 1)), f = Math.abs(Math.round(Number(frame) || 0)) % 2, sc = whole(scale);
+      const key = `b|${k}|${f}|${sc}|${flash ? 1 : 0}|${felled ? 1 : 0}`;
+      if (!shared.has(key)) shared.set(key, bossArt(k, f, sc, !!flash, !!felled).cv);
+      return shared.get(key);
+    },
+  });
+
+  window.Scene = Object.freeze({ mount, mountBattle, art: ART });
 })();

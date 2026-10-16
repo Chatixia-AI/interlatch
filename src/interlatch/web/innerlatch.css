@@ -350,24 +350,6 @@
 .party-foot .icon { width: 15px; height: 15px; margin-top: 2px; }
 .sb-party .agent-icon { flex: none; width: 15px; height: 15px; }
 .sb-party em { font-family: var(--mono); }
-/* the Journey strip atop the Party: the party's week as a side-scrolling scene (scene.js) */
-.hj { margin: 0 0 18px; padding: 12px 14px 14px; }
-.hj-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
-.hj-head .card-title .icon { color: var(--ink-2); }
-.hj-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--ink-2); }
-.hj-zone { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px var(--mono); letter-spacing: 0.04em; color: var(--ink); }
-.hj-fold { display: grid; place-items: center; margin-left: auto; width: 28px; height: 28px; }
-.hj-fold .icon { transition: transform 0.15s; }
-.hj-fold[aria-expanded="true"] .icon { transform: rotate(180deg); }
-.hj-body { margin-top: 10px; }
-.hj-scene { position: relative; width: 100%; overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 2px var(--border-strong); }
-.hj-scene canvas { display: block; image-rendering: pixelated; }
-.hj-scene canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.hj-still { display: grid; place-items: center; align-content: center; gap: 10px; }
-.hj-still-row { position: relative; z-index: 1; display: flex; justify-content: center; gap: 16px; }
-@media (max-width: 600px) { .hj-still-row { gap: 10px; } }
-.hj-still-label { position: relative; z-index: 1; font: 600 11.5px var(--mono); color: var(--ink-2); }
-@media (max-width: 600px) { .hj { padding: 10px 10px 12px; } .hj-meta { flex-basis: 100%; order: 3; } }
 /* Arena: the leaderboard's battles. A rival's row opens your battle with it; the battle page sets the two parties
    either side of the replay (scene.js), with the log in words under it */
 .arena-row { grid-template-columns: 30px 32px minmax(0, 1fr) 84px 60px; position: relative; }
@@ -571,3 +553,246 @@
 .rail a.rail-door.landed { color: var(--gold); }
 .rail a.rail-door.landed .icon { animation: door-landed 0.9s ease-out; }
 @keyframes door-landed { 0% { transform: scale(1.5); filter: drop-shadow(0 0 8px var(--gold)); } 100% { transform: scale(1); filter: none; } }
+
+/* ------------------------------------------------------------------ a lesson, in a modal over the page */
+.lesson-modal { position: fixed; inset: 0; margin: auto; height: fit-content; /* px-frame would place it in the flow */
+  width: min(720px, calc(100vw - 32px)); max-height: min(86vh, 900px); padding: 0; border: 0; border-radius: 8px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border-strong), 0 24px 70px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.lesson-modal::backdrop { background: rgba(8, 4, 24, 0.55); }
+.lesson-modal[open] { display: flex; flex-direction: column; animation: lm-in 0.18s ease-out; }
+@keyframes lm-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.lm-close { position: absolute; top: 10px; right: 10px; z-index: 1; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 4px 14px rgba(0, 0, 0, 0.18); }
+.lm-body { overflow-y: auto; padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 14px; }
+.lm-head { display: flex; gap: 14px; align-items: flex-start; padding-right: 36px; }
+.lm-head canvas { flex: none; image-rendering: pixelated; }
+.lm-head h2 { font-size: 18px; line-height: 1.3; margin: 6px 0 4px; }
+.lm-modules { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lm-modules .px-label { margin-right: 4px; }
+.lm-module { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12.5px;
+  background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--border); }
+.lm-module b { font: 600 11px var(--mono); color: var(--accent-ink); }
+.lm-case { display: grid; gap: 6px; padding: 12px 14px; border-radius: 6px; background: var(--surface-2); }
+.lm-case details summary { cursor: pointer; font-weight: 600; }
+.lm-text { font-size: 13.5px; }
+.lm-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.lm-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.lm-actions .btn .icon { width: 15px; height: 15px; }
+@media (max-width: 600px) { .lm-body { padding: 16px; } .lm-head canvas { display: none; } }
+
+/* ------------------------------------------------------------------ Adventure: the world map fills the page */
+.adv-head { margin-bottom: 14px; }
+.adv-world { position: relative; height: calc(100vh - 230px); min-height: 380px; }
+.adv-note { margin: 10px 2px 0; }
+.adv-page.map .party-foot { display: none; }
+.adv-battle { min-height: min(640px, calc(100vh - 160px)); }
+.adv-list .adv-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.adv-rows { list-style: none; margin: 0; padding: 0; }
+.adv-rows li { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-top: 1px solid var(--grid); }
+.adv-rows li:first-child { border-top: 0; }
+.adv-rows li.cleared .adv-row-main a { color: var(--muted); }
+.adv-row-main { flex: 1; min-width: 0; }
+.adv-rows .kind-chip { flex: none; width: 104px; } /* titles line up whatever the kind */
+.adv-row-main a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-flag { display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px var(--mono); color: var(--good-ink); }
+.sb-region .px-icon, .sb-region .icon { flex: none; width: 16px; height: 16px; }
+.sb-region em { font-family: var(--mono); }
+@media (max-width: 600px) { .adv-world { height: calc(100vh - 250px); } .adv-rows li { flex-wrap: wrap; }
+  .adv-rows .kind-chip { width: auto; } .adv-row-main { flex-basis: 100%; order: 3; } .adv-row-main a { white-space: normal; } }
+
+/* ------------------------------------------------------------------ the world map (adventure.js) */
+/* The Adventure page's overworld map (adventure.js). Colours come from the page's tokens only, so light, dark and
+   Innerlatch's violet (:root.in-realm) all apply; the map itself is a canvas that reads the same tokens. */
+.adv-map { position: relative; height: 100%; min-height: 320px; overflow: hidden; border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--border-strong); user-select: none; -webkit-user-select: none; }
+.adv-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated;
+  touch-action: none; cursor: grab; outline: none; }
+.adv-canvas.adv-pointer { cursor: pointer; }
+.adv-canvas.adv-dragging { cursor: grabbing; }
+.adv-map.adv-focus::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--accent); } /* keyboard focus on the map: drawn over the canvas */
+
+/* zoom, back to the party, the whole map */
+.adv-tools { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+.adv-btn { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--border-strong);
+  border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; box-shadow: var(--glass-shadow);
+  transition: background 0.15s ease, transform 0.1s ease; }
+.adv-btn:hover { background: var(--surface-3); }
+.adv-btn:active { transform: translateY(1px); }
+.adv-btn[aria-disabled="true"] { opacity: 0.4; cursor: default; box-shadow: none; }
+.adv-btn[aria-disabled="true"]:hover { background: var(--surface); }
+.adv-btn[aria-disabled="true"]:active { transform: none; }
+.adv-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.adv-ico { display: block; image-rendering: pixelated; pointer-events: none; }
+
+/* the minimap: the whole world, the view's frame, the party and the bosses */
+.adv-mini { position: absolute; right: 10px; bottom: 10px; display: block; border: 2px solid var(--border-strong);
+  border-radius: 4px; background: var(--surface); box-shadow: var(--glass-shadow); cursor: crosshair; touch-action: none;
+  image-rendering: pixelated; }
+
+.adv-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: min(420px, calc(100% - 32px));
+  padding: 12px 16px; border: 2px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--ink);
+  font: 600 13px/1.45 var(--mono); text-align: center; box-shadow: var(--glass-shadow); pointer-events: none; }
+
+.adv-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0; }
+
+@media (max-width: 600px) {
+  .adv-tools { top: 8px; right: 8px; gap: 4px; }
+  .adv-btn { width: 32px; height: 32px; }
+  .adv-mini { right: 8px; bottom: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .adv-btn { transition: none; } }
+
+/* ------------------------------------------------------------------ a battle (battle.js) */
+/* Adventure battles (battle.js): a classic JRPG battle screen in Innerlatch's pixel style. A stage (canvas) with the
+   monster's window over it, the message window, then the party's status and the command menu; an end screen over all
+   of it. Stepped frames are box-shadows (notched corners, like a sprite's); every colour is a page token, so the
+   light and dark themes and Innerlatch's violet ink (:root.in-realm) apply. Classes are prefixed bt-. */
+.bt { position: relative; display: grid; gap: 10px; min-width: 0; container-type: inline-size; color: var(--ink); font-family: var(--sans); }
+.bt [hidden] { display: none !important; }
+.bt-win { position: relative; margin: 3px; background: var(--surface); color: var(--ink);
+  box-shadow: 0 -3px 0 0 var(--border-strong), 0 3px 0 0 var(--border-strong), -3px 0 0 0 var(--border-strong), 3px 0 0 0 var(--border-strong),
+    inset 0 0 0 2px var(--surface), inset 0 0 0 3px var(--grid); }
+
+/* ---- the stage */
+/* the stage gives way first so the whole battle (stage, log, menus) fits the window: about 330px tall at 1280×800 */
+.bt-stage { position: relative; height: clamp(200px, calc(100vh - 470px), min(46cqi, 400px)); margin: 3px; overflow: hidden; background: var(--surface-2);
+  box-shadow: 0 -3px 0 0 var(--border-strong), 0 3px 0 0 var(--border-strong), -3px 0 0 0 var(--border-strong), 3px 0 0 0 var(--border-strong); }
+.bt-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.bt-foe { position: absolute; top: 10px; left: 10px; z-index: 1; width: min(52%, 320px); margin: 0; padding: 7px 11px 9px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); }
+.bt-foe-name { font: 700 15px/1.2 var(--mono); letter-spacing: 0.02em; color: var(--ink); }
+.bt-boss .bt-foe-name { color: var(--critical-ink); }
+.bt-foe-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px;
+  font-size: 12px; line-height: 1.35; color: var(--ink-2); overflow-wrap: anywhere; }
+.bt-foe .bt-bar { height: 7px; margin-top: 8px; }
+.bt-foe.bt-gone .bt-bar { opacity: 0.35; }
+.bt-round { position: absolute; top: 12px; right: 12px; z-index: 1; padding: 1px 8px; font: 600 11px/1.6 var(--mono); text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--gold); background: var(--surface);
+  box-shadow: 0 -2px 0 0 var(--border-strong), 0 2px 0 0 var(--border-strong), -2px 0 0 0 var(--border-strong), 2px 0 0 0 var(--border-strong); }
+:lang(ja) .bt-round { letter-spacing: 0.04em; }
+
+/* ---- the message window: the battle log, newest at the bottom */
+.bt-msg { padding: 9px 14px; }
+.bt-log { position: relative; list-style: none; margin: 0; padding: 0; height: 4.7em; overflow-y: auto; font: 500 13.5px/1.55 var(--mono); color: var(--muted);
+  scrollbar-width: thin; overscroll-behavior: contain; }
+.bt-log:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.bt-log li { padding-left: 16px; text-indent: -16px; overflow-wrap: anywhere; }
+.bt-log li::before { content: "· "; color: var(--baseline); }
+.bt-log li:last-child { color: var(--ink); }
+.bt-log li:last-child::before { content: "▸ "; color: var(--gold); }
+.bt-log li.bt-case { font-family: var(--sans); font-style: italic; color: var(--ink-2); }
+.bt code { padding: 0 0.25em; font: inherit; font-family: var(--mono); font-size: 0.92em; font-style: normal; background: var(--code-bg); color: var(--ink);
+  box-shadow: 0 0 0 1px var(--grid); }
+.bt-log li:last-child { animation: bt-type 0.32s steps(6) both; }
+
+/* ---- the party and the menu */
+.bt-deck { display: grid; grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.bt-menu { order: -1; padding: 8px 6px 8px; }
+.bt-over .bt-deck { grid-template-columns: minmax(0, 1fr); }
+.bt-party { display: grid; gap: 2px; padding: 7px 8px; }
+.bt-hero { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(0, 1.5fr) minmax(0, 1.1fr); align-items: center; gap: 4px 16px;
+  padding: 6px 8px; transition: background-color 0.2s steps(2); }
+.bt-hero-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bt-hero-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 14px/1.3 var(--mono); }
+.bt-hero-name::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; vertical-align: 1px; background: var(--bt-ac, var(--accent));
+  box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--border-strong); }
+.bt-hero-lv { margin-left: auto; font: 600 11px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bt-tag { flex: none; padding: 0 5px; font: 600 9.5px/1.6 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold); }
+:lang(ja) .bt-tag { letter-spacing: 0; }
+.bt-hero.bt-on { background: var(--accent-wash-2); box-shadow: inset 3px 0 0 var(--gold); }
+.bt-hero.bt-ko { opacity: 0.5; }
+.bt-hero.bt-ko .bt-hero-name { text-decoration: line-through; text-decoration-thickness: 2px; }
+.bt-hero.bt-guard .bt-hero-name::after { content: " ◆"; color: var(--accent); }
+.bt-stat { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; font: 600 11px var(--mono); }
+.bt-stat-k { color: var(--muted); letter-spacing: 0.04em; }
+.bt-stat-v { min-width: 7ch; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bt-ko .bt-stat-v { color: var(--critical-ink); }
+
+/* a bar: the lost part lingers in gold a moment (b), the fill (i) in segments */
+.bt-bar { position: relative; height: 8px; margin: 2px; background: var(--surface-3);
+  box-shadow: 0 -2px 0 0 var(--border-strong), 0 2px 0 0 var(--border-strong), -2px 0 0 0 var(--border-strong), 2px 0 0 0 var(--border-strong); }
+.bt-bar b, .bt-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; }
+.bt-bar b { background: var(--cta); transition: width 0.5s steps(10) 0.35s; }
+.bt-bar i { --bt-fill: var(--good); transition: width 0.25s steps(5);
+  background: repeating-linear-gradient(90deg, transparent 0 7px, var(--surface-3) 7px 8px),
+    linear-gradient(color-mix(in srgb, var(--bt-fill) 55%, var(--surface)) 0 2px, var(--bt-fill) 2px); }
+.bt-bar.bt-mid i { --bt-fill: var(--warning); }
+.bt-bar.bt-low i { --bt-fill: var(--critical); }
+.bt-mp i { --bt-fill: var(--accent); }
+
+/* the commands: a gold cursor points at the one in focus */
+.bt-menu-head { padding: 2px 10px 6px 12px; font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:lang(ja) .bt-menu-head { letter-spacing: 0.02em; text-transform: none; }
+.bt-cmds { display: grid; gap: 2px; }
+.bt-cmd { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-width: 0; min-height: 38px;
+  margin: 0; padding: 6px 10px 6px 28px; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: 600 14.5px/1.2 var(--mono);
+  text-align: left; cursor: pointer; }
+.bt-cmd::before { content: ""; position: absolute; left: 10px; top: 50%; margin-top: -6px; border-style: solid; border-width: 6px 0 6px 8px;
+  border-color: transparent transparent transparent var(--gold); opacity: 0; }
+.bt-cmd:hover { background: var(--hover); }
+.bt-cmd:hover::before { opacity: 0.45; }
+.bt-cmd:focus { outline: none; }
+.bt-cmd:focus-visible { background: var(--accent-wash-2); outline: 2px solid var(--accent); outline-offset: -2px; }
+.bt-cmd:focus::before { opacity: 1; animation: bt-blink 0.9s steps(2) infinite; }
+.bt-cmd[aria-disabled="true"] { color: var(--muted); }
+.bt-cmd[aria-disabled="true"] .bt-cmd-cost { color: var(--critical-ink); }
+.bt-wait .bt-cmd { opacity: 0.45; cursor: progress; }
+.bt-wait .bt-cmd::before { animation: none; }
+.bt-cmd-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-skill { min-height: 34px; padding-top: 4px; padding-bottom: 4px; font-size: 13.5px; }
+.bt-skill .bt-cmd-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; line-height: 1.25; }
+.bt-cmd-meta { display: flex; flex: none; gap: 8px; font: 600 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.bt-cmd-lv { color: var(--gold); }
+.bt-cmd-lv.bt-none { color: var(--muted); font-weight: 500; }
+.bt-back { color: var(--ink-2); font-size: 13px; }
+
+/* ---- the end screens */
+.bt-result { position: absolute; inset: 0; z-index: 3; display: grid; place-items: end center; overflow: auto; padding: 16px 16px 12px;
+  background: linear-gradient(transparent 0 25%, color-mix(in srgb, var(--page) 72%, transparent) 55%); }
+.bt-card { width: min(100%, 560px); margin: 3px; padding: 18px 20px 16px; animation: bt-pop 0.28s steps(5) both; }
+.bt-card-title { margin: 0 0 8px; font: 700 21px/1.25 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.bt-card-title:focus { outline: none; }
+.bt-won .bt-card-title, .bt-done .bt-card-title { color: var(--gold); }
+.bt-held .bt-card-title { color: var(--critical-ink); }
+.bt-card-text { margin: 0 0 12px; max-width: 62ch; color: var(--ink-2); line-height: 1.5; }
+.bt-quote { margin: 4px 0 16px; padding: 10px 14px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.bt-quote figcaption { font: 600 10.5px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+:lang(ja) .bt-quote figcaption { letter-spacing: 0.04em; }
+.bt-quote blockquote { max-height: 10.5em; overflow: auto; margin: 5px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.bt-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.bt-btn { display: inline-flex; align-items: center; min-height: 36px; margin: 2px; padding: 6px 15px; border: 0; border-radius: 0; background: var(--surface-2);
+  color: var(--ink); font: 600 13.5px/1.2 var(--mono); text-decoration: none; cursor: pointer;
+  box-shadow: 0 -2px 0 0 var(--border-strong), 0 2px 0 0 var(--border-strong), -2px 0 0 0 var(--border-strong), 2px 0 0 0 var(--border-strong),
+    inset 0 -3px 0 0 color-mix(in srgb, var(--ink) 10%, transparent); }
+.bt-btn:hover { background: var(--surface-3); text-decoration: none; }
+.bt-btn:active { transform: translateY(1px); }
+.bt-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.bt-btn.bt-primary { background: var(--cta); color: var(--cta-ink);
+  box-shadow: 0 -2px 0 0 var(--gold), 0 2px 0 0 var(--gold), -2px 0 0 0 var(--gold), 2px 0 0 0 var(--gold),
+    inset 0 -3px 0 0 color-mix(in srgb, var(--cta-ink) 18%, transparent); }
+.bt-btn.bt-primary:hover { background: var(--cta-hover); }
+
+/* ---- phones: the party over the menu; the commands two by two */
+@container (max-width: 560px) {
+  .bt-stage { height: clamp(250px, 80cqi, 320px); }
+  .bt-deck { grid-template-columns: minmax(0, 1fr); }
+  .bt-menu { order: 0; }
+  .bt-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3px 12px; padding: 5px 6px; }
+  .bt-hero-top { grid-column: 1 / -1; }
+  .bt-cmds:not(.bt-sub) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bt-foe { width: min(64%, 300px); padding: 5px 8px 7px; }
+  .bt-foe-name { font-size: 13.5px; }
+  .bt-foe-title { font-size: 11px; -webkit-line-clamp: 1; }
+  .bt-log { height: 6.3em; font-size: 12.5px; }
+  .bt-card { padding: 14px 14px 12px; }
+  .bt-card-title { font-size: 18px; }
+}
+
+@keyframes bt-blink { 50% { opacity: 0.25; } }
+@keyframes bt-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes bt-pop { from { transform: scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
+.bt-still *, .bt-still *::before, :root[data-motion="off"] .bt *, :root[data-motion="off"] .bt *::before { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .bt *, .bt *::before { animation: none !important; transition: none !important; } }
