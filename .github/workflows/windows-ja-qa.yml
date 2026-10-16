@@ -83,7 +83,19 @@ jobs:
         run: |
           uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:11530 shots ja-user || true
           uv run --no-project --with playwright==1.52.0 python /c/qa/shots.py http://127.0.0.1:8898 shots demo || true
-          cat /c/demo/ui.err 2>/dev/null | tail -20 || true
+      - name: The dashboards' own logs
+        if: always()
+        shell: powershell
+        run: |
+          Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object LocalPort -in 8898, 11530, 11524 |
+            Format-Table LocalAddress, LocalPort, OwningProcess
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'interlatch' } |
+            Format-Table ProcessId, ParentProcessId, CommandLine -Wrap
+          foreach ($f in 'C:\demo\ui.out', 'C:\demo\ui.err', 'C:\qa\ui.out', 'C:\qa\ui.err') {
+            if (Test-Path $f) { Write-Host "----- $f"; Get-Content -LiteralPath $f -Encoding UTF8 -Tail 40 }
+          }
+          Get-ChildItem C:\demo\home\logs -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "----- $($_.FullName)"; Get-Content -LiteralPath $_.FullName -Encoding UTF8 -Tail 40 }
       - name: Uninstall as the same user
         if: always()
         shell: powershell

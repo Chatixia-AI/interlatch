@@ -11,7 +11,20 @@ if ($Phase -eq 'install') {
     Set-Content -LiteralPath $pwFile -Value $pw
     New-LocalUser -Name $name -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -PasswordNeverExpires | Out-Null
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $name  # Users, not Administrators
-    icacls.exe $qa /grant "${name}:(OI)(CI)F" | Out-Null
+    icacls.exe $qa /grant "${name}:(OI)(CI)F" /T | Out-Null
+    # a task with a stored password signs in as a batch job, which a new standard user may not
+    $sid = (New-Object System.Security.Principal.NTAccount($name)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+    $inf = Join-Path $env:RUNNER_TEMP 'rights.inf'
+    secedit.exe /export /cfg $inf /areas USER_RIGHTS | Out-Null
+    $lines = Get-Content -LiteralPath $inf
+    if ($lines -match '^SeBatchLogonRight') {
+        $lines = $lines -replace '^(SeBatchLogonRight = .*)$', "`$1,*$sid"
+    } else {
+        $lines = $lines -replace '^\[Privilege Rights\]$', "[Privilege Rights]`r`nSeBatchLogonRight = *$sid"
+    }
+    Set-Content -LiteralPath $inf -Value $lines -Encoding Unicode
+    secedit.exe /configure /db (Join-Path $env:RUNNER_TEMP 'rights.sdb') /cfg $inf /areas USER_RIGHTS | Out-Null
+    wevtutil.exe sl Microsoft-Windows-TaskScheduler/Operational /e:true
 } else {
     $pw = Get-Content -LiteralPath $pwFile
 }
@@ -31,3 +44,7 @@ do {
     $minutes = ((Get-Date) - $started).TotalMinutes
 } while ($waiting -and $minutes -lt 30 -and -not ($info.LastTaskResult -eq 267011 -and $state -eq 'Ready' -and $minutes -gt 3))
 Write-Host ("task {0}: state {1}, last result {2}, last run {3}" -f $task, $state, $info.LastTaskResult, $info.LastRunTime)
+if ($info.LastTaskResult -eq 267011) {
+    Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational -MaxEvents 30 -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -match 'qa-ja' } | ForEach-Object { Write-Host ("{0} {1}: {2}" -f $_.TimeCreated, $_.Id, $_.Message) }
+}
