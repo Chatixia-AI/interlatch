@@ -11,7 +11,8 @@ if ($Phase -eq 'install') {
     Set-Content -LiteralPath $pwFile -Value $pw
     New-LocalUser -Name $name -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -PasswordNeverExpires | Out-Null
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $name  # Users, not Administrators
-    icacls.exe $qa /grant "${name}:(OI)(CI)F" /T | Out-Null
+    icacls.exe $qa /reset /T /Q | Out-Null  # Git Bash gives the files it writes permissions of their own
+    icacls.exe $qa /grant "${name}:(OI)(CI)F" /T /Q | Out-Null
     # a task with a stored password signs in as a batch job, which a new standard user may not
     $sid = (New-Object System.Security.Principal.NTAccount($name)).Translate([System.Security.Principal.SecurityIdentifier]).Value
     $inf = Join-Path $env:RUNNER_TEMP 'rights.inf'
