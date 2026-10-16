@@ -15,6 +15,7 @@ import pytest
 
 from interlatch.core.agents import CODING_AGENTS
 from interlatch.knowledge import arena as rules
+from interlatch.knowledge import formation
 from interlatch.sharing import arena
 from interlatch.sharing import leaderboard as lb
 
@@ -42,8 +43,8 @@ WEAK = _party(claude=_agent(6, "adept", craft=4, data=2, ops=2, guard=2, arcana=
 
 
 # ------------------------------------------------------------------ the rules
-def _sheet(agents, champion=None):
-    return {"agents": agents, "champion": champion}
+def _sheet(agents, champion=None, lineup=None):
+    return {"agents": agents, "champion": champion, **({"lineup": lineup} if lineup is not None else {})}
 
 
 def test_stats_follow_the_formulas():
@@ -75,7 +76,7 @@ def test_a_duel_is_the_same_whoever_computes_it():
     expected = random.random()
     random.seed(7)
     again = rules.battle(_sheet(STRONG), _sheet(WEAK), rules.seed_for(WEEK, "uid-a", "uid-b"))
-    assert again == {k: two[k] for k in ("winner", "rounds", "log", "units", "champions")}
+    assert again == {k: two[k] for k in ("winner", "rounds", "log", "units", "champions", "lineups")}
     assert random.random() == expected  # the global random generator is never touched
     claude = two["units"]["a:claude"]
     assert {k: claude[k] for k in ("hp", "tier", "level")} == {"hp": 20 + 4 * 29 + 2 * 11, "tier": "master", "level": 29}
@@ -143,6 +144,64 @@ def test_the_log_is_cut_at_400_and_the_end_says_where_they_stood(monkeypatch):
     assert all(0 < u["end_hp"] <= u["hp"] for u in out["units"].values())
 
 
+def test_a_lineup_is_up_to_three_agents_each_once_else_the_champion():
+    assert rules.lineup_of(STRONG, ["codex", "bob", "claude"]) == ["codex", "bob", "claude"]
+    assert rules.lineup_of(STRONG, ["codex", "codex", "chatgpt", 7, ["x"], "bob"]) == ["codex", "bob"]
+    assert rules.lineup_of(STRONG, ["bob", "codex", "claude", "copilot"]) == ["bob", "codex", "claude"]  # at most three
+    assert rules.lineup_of(STRONG, [], "bob") == rules.lineup_of(STRONG, None, "bob") == ["bob"]  # a sheet without one
+    assert rules.lineup_of(STRONG, "claude") == ["claude"]  # not a list: the champion (the highest level)
+    one = rules.battle(_sheet(STRONG, lineup=["codex"]), _sheet(WEAK, lineup=["claude"]), "ab12")
+    assert one == rules.battle(_sheet(STRONG, "codex"), _sheet(WEAK), "ab12")  # a lineup of one: the champion's duel
+
+
+def test_lineups_fight_in_order_and_the_winner_stays_on():
+    a, b = ["copilot", "codex", "claude"], ["claude", "codex"]
+    out = rules.match("x", _sheet(STRONG, lineup=a), "y", _sheet(WEAK, lineup=b), WEEK)
+    assert out["lineups"] == {"a": a, "b": b} and out["champions"] == {"a": "copilot", "b": "claude"}
+    assert {k: u["order"] for k, u in out["units"].items()} == {
+        "a:copilot": 0, "a:codex": 1, "a:claude": 2, "b:claude": 0, "b:codex": 1}
+    assert out["winner"] == "a" and all(out["units"][f"b:{n}"]["end_hp"] == 0 for n in b)  # all of b fell
+    # bout by bout: the two in the ring are the first of each side still standing; a newcomer steps in ("in")
+    fighting, hp = {"a": 0, "b": 0}, {}
+    for e in out["log"][:-1]:
+        ring = {f"a:{a[fighting['a']]}", f"b:{b[fighting['b']]}"}
+        if e["t"] == "in":
+            assert e["src"] in ring and e["src"] not in hp  # its first time in
+        else:
+            assert {e["src"], e["dst"]} - {None} <= ring, e
+        if e["dst"]:
+            hp[e["dst"]] = e["hp"]
+        if e["t"] in ("hit", "crit", "heal", "special"):
+            hp.setdefault(e["src"], None)
+        if e["t"] == "ko":
+            fighting[e["dst"][0]] += 1
+    ins = [e["src"] for e in out["log"] if e["t"] == "in"]
+    assert ins and len(ins) == len(set(ins)) and "a:copilot" not in ins and "b:claude" not in ins  # the firsts start
+    # whoever won a bout went on with the HP it had left: never healed back to full in between
+    first_ko = next(i for i, e in enumerate(out["log"]) if e["t"] == "ko")
+    winner = out["log"][first_ko]["src"]
+    later = next((e for e in out["log"][first_ko + 1:] if e["dst"] == winner), None)
+    assert later is None or later["hp"] < out["units"][winner]["hp"]
+
+
+def test_a_bout_out_of_time_puts_the_one_with_less_hp_out():
+    wall = _agent(200, guard=100, lore=100, ops=10)  # 1 damage a hit, big heals
+    sheet = _sheet(_party(claude=wall, codex=_agent(2)), lineup=["claude", "codex"])
+    outs = []
+    for w in range(30, 40):
+        out = rules.match("x", sheet, "y", _sheet(_party(claude=wall)), f"2026-W{w}")
+        (gone,) = [e for e in out["log"] if e["t"] == "out"][:1]
+        assert gone["r"] == rules.MAX_ROUNDS and gone["dst"] in ("a:claude", "b:claude") and gone["hp"] > 0
+        assert out["units"][gone["dst"]]["out"] is True and out["units"][gone["dst"]]["end_hp"] > 0
+        if gone["dst"] == "b:claude":  # b had one: a wins at once
+            assert out["winner"] == "a" and out["rounds"] == rules.MAX_ROUNDS
+        else:  # a's codex steps in against b's wall
+            assert {"t": "in", "src": "a:codex"}.items() <= next(e for e in out["log"] if e["t"] == "in").items()
+            assert out["winner"] == "b" and out["rounds"] > rules.MAX_ROUNDS
+        outs.append(gone["dst"])
+    assert set(outs) == {"a:claude", "b:claude"}  # level on HP: the seed decides
+
+
 def test_standings_play_every_party_against_every_other():
     table = rules.standings({"x": _sheet(STRONG), "y": _sheet(WEAK), "z": _sheet(_party())}, WEEK)
     assert table["x"] == {"wins": 2, "losses": 0} and table["z"] == {"wins": 0, "losses": 2}
@@ -157,12 +216,19 @@ def test_the_sheet_holds_levels_tiers_classes_and_attributes_only(home, net):  #
         _lesson(conn, sid, f"pytest SECRET-TITLE-{n}", "SECRET-BODY sql query", stage="canonical")
     _joined(cfg, board=True, arena=True)
     sheet = arena.sheet(cfg, conn, lb.read_state(cfg))
-    assert set(sheet) == {"name", "photo", "machine", "v", "agents", "champion"} and sheet["v"] == rules.SHEET_V == 2
-    assert sheet["champion"] == rules.default_champion(sheet["agents"]) == "claude"
+    assert set(sheet) == {"name", "photo", "machine", "v", "agents", "lineup", "champion"} and sheet["v"] == rules.SHEET_V == 3
+    # no deck saved: the one made for the party, its highest levels (ties: agent order); the first is the champion
+    assert sheet["lineup"] == ["claude", "codex", "copilot"] and sheet["champion"] == "claude"
     lb.write_state(cfg, {**lb.read_state(cfg), "champion": "not-an-agent"})  # a hand-edited state: the default
-    assert arena.sheet(cfg, conn, lb.read_state(cfg))["champion"] == "claude"
-    lb.write_state(cfg, {**lb.read_state(cfg), "champion": "codex"})
-    assert arena.sheet(cfg, conn, lb.read_state(cfg))["champion"] == "codex"
+    assert arena.sheet(cfg, conn, lb.read_state(cfg))["lineup"] == ["claude", "codex", "copilot"]
+    lb.write_state(cfg, {**lb.read_state(cfg), "champion": "bob"})  # the champion picked before decks leads
+    assert arena.sheet(cfg, conn, lb.read_state(cfg))["lineup"] == ["bob", "claude", "codex"]
+    formation.save(conn, None, {}, "d1", members=["opencode", "codex"])  # a deck saved: it, in its order
+    assert arena.sheet(cfg, conn, lb.read_state(cfg))["lineup"] == ["opencode", "codex"]
+    assert arena.sheet(cfg, conn, lb.read_state(cfg))["champion"] == "opencode"
+    formation.save(conn, None, {}, None, members=["claude"])
+    formation.field(conn, None, {}, "d2")
+    assert arena.sheet(cfg, conn, lb.read_state(cfg))["lineup"] == ["claude"]
     lb.write_state(cfg, {**lb.read_state(cfg), "champion": None})
     assert set(sheet["agents"]) == set(CODING_AGENTS)
     assert all(set(a) == {"level", "tier", "cls", "attrs"} and set(a["attrs"]) == set(rules.ATTRS)
@@ -175,7 +241,9 @@ def test_the_sheet_holds_levels_tiers_classes_and_attributes_only(home, net):  #
     players, sent = commit["body"]["writes"]
     assert sent["update"]["name"].endswith("/documents/arena/uid1")
     assert sent["updateTransforms"] == [{"fieldPath": "at", "setToServerValue": "REQUEST_TIME"}]
-    assert lb._plain(sent["update"]["fields"]) == sheet and "SECRET" not in json.dumps(commit)
+    assert lb._plain(sent["update"]["fields"]) == arena.sheet(cfg, conn, lb.read_state(cfg))
+    assert sent["update"]["fields"]["lineup"] == {"arrayValue": {"values": [{"stringValue": "claude"}]}}
+    assert "SECRET" not in json.dumps(commit)
 
 
 def test_the_sheet_goes_only_while_in_the_arena(home, net):  # noqa: F811
@@ -260,8 +328,8 @@ def test_the_standings_cache_keeps_one_slot(monkeypatch):
     arena.clear()
     for agents in (STRONG, WEAK, STRONG):
         monkeypatch.setattr(arena, "sheets", lambda now=None, a=agents: {
-            "x": {"name": "X", "photo": False, "agents": a, "champion": "claude"},
-            "y": {"name": "Y", "photo": False, "agents": WEAK, "champion": "claude"}})
+            "x": {"name": "X", "photo": False, "agents": a, "lineup": ["claude"], "champion": "claude"},
+            "y": {"name": "Y", "photo": False, "agents": WEAK, "lineup": ["claude"], "champion": "claude"}})
         arena.board("x")
         arena.board("x")  # the same sheets: from the slot
     assert len(calls) == 3 and [k for k in arena._cache if k.startswith("standings")] == ["standings"]
@@ -279,9 +347,10 @@ def test_a_new_sign_in_never_opts_in_by_itself(home, net):  # noqa: F811
 
 
 # ------------------------------------------------------------------ the dashboard
-def _doc(uid, name, agents, v=2, champion=None):
-    fields = {"name": name, "photo": "", "machine": "m" * 16, "v": v, "agents": agents,
-              "champion": champion or rules.default_champion(agents)}
+def _doc(uid, name, agents, v=3, champion=None, lineup=None):
+    champion = champion or rules.default_champion(agents)
+    fields = {"name": name, "photo": "", "machine": "m" * 16, "v": v, "agents": agents, "champion": champion,
+              **({"lineup": lineup or [champion]} if v == 3 else {})}
     return {"document": {"name": f"{lb.DB}/arena/{uid}", "fields": {k: lb._value(x) for k, x in fields.items()}}}
 
 
@@ -289,19 +358,22 @@ def test_the_arena_board_and_a_battle(hubweb, catalog, net):  # noqa: F811
     url, cfg = hubweb["url"], hubweb["cfg"]
     arena.clear()
     net.on("POST", lb.FIRESTORE + ":runQuery", [
-        _doc("uid1", "Ada", STRONG), _doc("uid2", "Ben", WEAK), _doc("uid3", "Cy", _party()),
-        _doc("uid4", "Old", STRONG, v=1), {"readTime": "x"}])
+        _doc("uid1", "Ada", STRONG), _doc("uid2", "Ben", WEAK, lineup=["claude", "codex"]), _doc("uid3", "Cy", _party()),
+        _doc("uid4", "Old", STRONG, v=1), _doc("uid5", "Was", STRONG, v=2), {"readTime": "x"}])
     _joined(cfg, arena=True)
     status, data = _http(url, "/api/leaderboard?by=arena")
     assert status == 200 and data["by"] == "arena" and data["me"]["arena"] is True and data["week"].startswith("20")
     assert [(r["rank"], r["name"], r["wins"], r["losses"], r["me"]) for r in data["rows"]] == [
-        (1, "Ada", 2, 0, True), (2, "Ben", 1, 1, False), (3, "Cy", 0, 2, False)]  # an older sheet format: left out
+        (1, "Ada", 2, 0, True), (2, "Ben", 1, 1, False), (3, "Cy", 0, 2, False)]  # older sheet formats: left out
     assert data["rows"][0]["power"] == rules.power(STRONG)
     champ = data["rows"][0]["champion"]  # the champion's own level and tier come along, so its sprite isn't a Lv 1 novice
     assert data["rows"][0]["agents"] == {champ: rules.clean_agent(STRONG[champ])} and data["rows"][0]["agents"][champ]["level"] > 1
+    ben = data["rows"][1]  # the whole lineup, each with its level and tier
+    assert ben["lineup"] == ["claude", "codex"] and set(ben["agents"]) == {"claude", "codex"}
     status, fight = _http(url, "/api/leaderboard/arena/battle?uid=uid2")
     assert status == 200 and fight["me"]["name"] == "Ada" and fight["rival"]["uid"] == "uid2"
     assert fight["me"]["champion"] == "claude" and fight["rival"]["champion"] == "claude"
+    assert fight["rival"]["lineup"] == ["claude", "codex"] and fight["result"]["lineups"]["b"] == ["claude", "codex"]
     assert fight["result"]["winner_uid"] == "uid1" and fight["result"]["log"][-1]["t"] == "end"
     assert fight["result"] == rules.match("uid2", fight["rival"], "uid1", fight["me"], fight["week"])
     assert _http(url, "/api/leaderboard/arena/battle?uid=uid4")[0] == 404  # not in the arena
@@ -371,7 +443,14 @@ def test_the_rules_keep_the_board_and_add_the_arena():
     assert block.count("allow ") == 4
     valid = re.search(r"function isValidArena\(data\) \{.*?\n    \}", text, re.S).group(0)
     assert "['name', 'photo', 'machine', 'v', 'agents', 'champion', 'at']" in valid and "data.at == request.time" in valid
-    assert "data.v == 2" in valid and "data.champion in agents" in valid
+    assert "hasOnlyAllowedFields(fields.concat(['lineup'])) && hasRequiredFields(fields)" in valid
+    # sheets from versions before decks (v 2) still pass, without a lineup; v 3 needs one
+    assert "((data.v == 2 && !('lineup' in data)) || (data.v == 3 && isValidArenaLineup(data)))" in valid
+    assert "data.champion in agents" in valid
+    lineup = re.search(r"function isValidArenaLineup\(data\) \{.*?\n    \}", text, re.S).group(0)
+    assert "data.lineup.size() >= 1 && data.lineup.size() <= 3" in lineup
+    assert "data.lineup.toSet().size() == data.lineup.size()" in lineup and "data.lineup[0] == data.champion" in lineup
+    assert "data.lineup.hasOnly(data.agents.keys())" in lineup
     assert "let agents = ['claude', 'codex', 'copilot', 'bob', 'antigravity', 'opencode'];" in valid
     # sheets from versions before OpenCode joined still pass: opencode is allowed, never required
     assert "let required = ['claude', 'codex', 'copilot', 'bob', 'antigravity'];" in valid
@@ -383,20 +462,29 @@ def test_the_rules_keep_the_board_and_add_the_arena():
     assert "isCount" not in agent and agent.count("is int") == 7
 
 
-def test_picking_a_champion(hubweb, catalog, net):  # noqa: F811
-    url, cfg = hubweb["url"], hubweb["cfg"]
+def test_fielding_a_deck(hubweb, catalog, net):  # noqa: F811
+    url, cfg, conn = hubweb["url"], hubweb["cfg"], hubweb["conn"]
     net.on("POST", lb.FIRESTORE + ":commit", {})
-    assert _http(url, "/api/leaderboard/arena/champion", {"agent": "codex"})[0] == 502  # not signed in
+    assert _http(url, "/api/leaderboard/arena/deck", {"deck": "d1"})[0] == 502  # not signed in
     _joined(cfg)  # on the board, not in the arena: kept, nothing sent
-    status, r = _http(url, "/api/leaderboard/arena/champion", {"agent": "codex"})
-    assert status == 200 and r["champion"] == "codex" and net.commits() == []
-    for bad in ("chatgpt", "claude-ai", "", None, ["claude"]):
-        status, r = _http(url, "/api/leaderboard/arena/champion", {"agent": bad})
-        assert status == 502 and "agent" in r["error"], bad
-    assert lb.read_state(cfg)["champion"] == "codex"
+    status, r = _http(url, "/api/leaderboard/arena/deck", {"deck": "d1"})  # the deck made for the party, saved
+    assert status == 200 and r["decks"]["arena"] == "d1" and r["decks"]["saved"] is True and net.commits() == []
+    formation.save(conn, None, {}, None, name="Fast", members=["codex", "bob"])
+    status, r = _http(url, "/api/leaderboard/arena/deck", {"deck": "d2"})
+    assert status == 200 and r["lineup"] == ["codex", "bob"] and r["champion"] == "codex" and net.commits() == []
+    for bad in ("d9", "", None, ["d1"], 3):
+        status, r = _http(url, "/api/leaderboard/arena/deck", {"deck": bad})
+        assert status == 502 and "deck" in r["error"], bad
+    assert formation.load(conn, "here")["arena"] == "d2"
     lb.write_state(cfg, {**lb.read_state(cfg), "arena": True})
-    status, r = _http(url, "/api/leaderboard/arena/champion", {"agent": "bob"})  # in the arena: sent now
+    status, r = _http(url, "/api/leaderboard/arena/deck", {"deck": "d1"})  # in the arena: sent now
     (commit,) = net.commits()
-    assert status == 200 and lb._plain(commit["body"]["writes"][1]["update"]["fields"])["champion"] == "bob"
-    assert _http(url, "/api/leaderboard/arena/champion", {"agent": "codex"}, headers=TAILNET)[0] == 403
-    assert lb.read_state(cfg)["champion"] == "bob"
+    sent = lb._plain(commit["body"]["writes"][1]["update"]["fields"])
+    assert status == 200 and sent["lineup"] == r["lineup"] and sent["champion"] == r["lineup"][0]
+    assert _http(url, "/api/leaderboard/arena/deck", {"deck": "d2"}, headers=TAILNET)[0] == 403
+    assert formation.load(conn, "here")["arena"] == "d1"
+    net.on("POST", lb.FIRESTORE + ":runQuery", [])
+    arena.clear()
+    status, data = _http(url, "/api/leaderboard?by=arena")  # the Arena page: the team fielded and the decks to pick
+    assert data["me"]["lineup"] == sent["lineup"] and [d["id"] for d in data["me"]["decks"]["decks"]] == ["d1", "d2"]
+    assert set(data["me"]["agents"]) == set(CODING_AGENTS) and set(data["me"]["agents"]["claude"]) == {"level", "tier"}

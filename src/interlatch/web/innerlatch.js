@@ -156,7 +156,7 @@ route(/^\/innerlatch\/arena$/, async () => {
   lbWatch(lb, "/innerlatch/arena");
   return h("div", { class: "narrow-page wide" },
     h("div", { class: "page-head" }, titled("flag", h("h1", null, t("Arena")),
-      h("div", { class: "sub" }, t("Each player's champion duels every other once a week. Wins rank them.")))),
+      h("div", { class: "sub" }, t("Each player's team fights every other team once a week. Wins rank them.")))),
     h("div", { class: "grid lb-grid" }, arenaBoard(lb), h("div", { class: "lb-you arena-side" }, arenaYouCard(lb), arenaRivals(lb))),
     h("p", { class: "muted lb-note" }, t("Each party's sheet comes from its owner's own Interlatch, and every computer works the battles out the same way from the sheets. Nobody checks them: it's for fun.")));
 });
@@ -170,8 +170,9 @@ function competeSidebar(box) {
 
 // =====================================================================================
 // Arena: leaderboard players who opted in publish their party's character sheet (each agent's level, tier, class and
-// attribute levels) and every arena party fights every other each week. Battles are worked out on this computer from the
-// two sheets and a seed, so both players see the same result (sharing/arena.py); scene.js replays them.
+// attribute levels, and the deck it fields) and every arena team fights every other each week, in a relay: lead against
+// lead, and whoever wins a bout stays on against the next. Battles are worked out on this computer from the two sheets
+// and a seed, so both players see the same result (sharing/arena.py); scene.js replays them.
 // =====================================================================================
 const ARENA_SPECIAL = { "Second wind": t("Second wind"), Focus: t("Focus"), Overdrive: t("Overdrive") };
 function arenaPower(agents) { return Object.values(agents || {}).reduce((n, a) => n + (a?.level || 0), 0); }
@@ -179,54 +180,48 @@ function arenaRecord(r) { return t("{w}–{l}", { w: fmtNum(r.wins || 0), l: fmt
 function arenaHref(uid) { return `#/innerlatch/arena/${encodeURIComponent(uid)}`; }
 // What entering publishes, said exactly: the sheet (sharing/arena.py) and nothing else
 function arenaShares() {
-  return t("Entering the arena publishes your party's character sheet: for each of your coding agents, its level, tier, class and six attribute levels, and which agent is your champion, with the name and picture you show on the board and the code that tells your computers apart (a hash, not a name). Nothing else: no lessons, projects, sessions, titles or prompts. Each sync sends it again, and leaving the arena deletes it.");
+  return t("Entering the arena publishes your party's character sheet: for each of your coding agents, its level, tier, class and six attribute levels, and the team you field (which agents, in what order), with the name and picture you show on the board and the code that tells your computers apart (a hash, not a name). Nothing else: no lessons, projects, sessions, titles or prompts. Each sync sends it again, and leaving the arena deletes it.");
 }
-// The arena is champion against champion: each player's chosen agent, by default the highest-level one
+// The arena is team against team: each player's fielded deck, in order (sharing/arena.py; a sheet from before decks
+// fields its champion alone)
 function arenaTop(agents) {
   let best = null;
   for (const a of PARTY_AGENTS) if (agents?.[a] && (!best || (agents[a].level || 0) > (agents[best].level || 0))) best = a;
   return best;
 }
-function arenaChamp(x) { // {agent, level, tier} of a board row or a sheet; `champion` is the agent's id, or the unit itself
-  const c = x?.champion, agents = x?.agents || {};
-  const agent = (typeof c === "string" ? c : c?.agent) || arenaTop(agents);
-  if (!agent) return null;
-  const u = (c && typeof c === "object" ? c : null) || agents[agent] || {};
-  return { agent, level: u.level || 1, tier: u.tier || "novice" };
+function arenaLineup(x) { // [{agent, level, tier}] of a board row or a sheet, in the order they fight
+  const agents = x?.agents || {}, c = typeof x?.champion === "string" ? x.champion : x?.champion?.agent;
+  const names = Array.isArray(x?.lineup) && x.lineup.length ? x.lineup : [c || arenaTop(agents)].filter(Boolean);
+  return names.map((agent) => ({ agent, level: agents[agent]?.level || 1, tier: agents[agent]?.tier || "novice" }));
 }
 function champLabel(c) { return `${agentName(c.agent)} · ${t("Lv {n}", { n: c.level })} · ${tierLabel(c.tier)}`; }
-function champCell(c) {
-  if (!c) return h("span", { class: "arena-champ-cell muted" }, "–");
-  return h("span", { class: "arena-champ-cell", title: champLabel(c) },
-    partySprite(c.agent, { tier: c.tier, scale: 1, still: true, decorative: true }),
-    h("span", { class: "acc-name" }, agentShort(c.agent)), h("span", { class: "acc-lv" }, t("Lv {n}", { n: c.level })));
+function teamLabel(team) { return team.map((c) => `${agentShort(c.agent)} ${t("Lv {n}", { n: c.level })}`).join(" · "); }
+function teamCell(team) {
+  if (!team.length) return h("span", { class: "arena-champ-cell muted" }, "–");
+  return h("span", { class: "arena-champ-cell arena-team-cell", title: team.map(champLabel).join("\n") },
+    team.map((c, i) => h("span", { class: `atc-unit${i ? " rest" : ""}` }, partySprite(c.agent, { tier: c.tier, scale: 1, still: true, decorative: true }))),
+    team.length === 1 ? [h("span", { class: "acc-name" }, agentShort(team[0].agent)), h("span", { class: "acc-lv" }, t("Lv {n}", { n: team[0].level }))] : null);
 }
-function arenaPicker(me) { // the agents as tiles; the champion lit. The levels: the sheet's, else this computer's party
-  const box = h("div", { class: "arena-pick" }, h("span", { class: "px-label" }, t("Your champion")));
-  const fill = (agents) => {
-    const cur = (typeof me.champion === "string" ? me.champion : me.champion?.agent) || arenaTop(agents);
-    const tiles = h("div", { class: "ap-tiles", role: "group", "aria-label": t("Your champion") });
-    tiles.append(...PARTY_AGENTS.filter((a) => agents[a]).map((a) => {
-      const u = agents[a], on = a === cur;
-      return h("button", { type: "button", class: `ap-tile${on ? " on" : ""}`, "aria-pressed": String(on), title: champLabel({ agent: a, ...u }),
-        onclick: async () => {
-          if (on) return;
-          tiles.querySelectorAll("button").forEach((b) => { b.disabled = true; });
-          if (await lbPost("/api/leaderboard/arena/champion", { agent: a })) { toast(t("{agent} is your champion now.", { agent: agentName(a) })); render(); }
-          else tiles.querySelectorAll("button").forEach((b) => { b.disabled = false; });
-        } },
-        partySprite(a, { tier: u.tier, scale: 1, still: true, decorative: true }),
-        h("span", { class: "apt-name" }, agentShort(a)), h("span", { class: "apt-lv" }, t("Lv {n}", { n: u.level || 1 })));
-    }));
-    box.append(tiles, h("p", { class: "muted small" }, t("Your champion duels every other player's champion once a week. Until you pick one, it's your highest-level agent.")));
-  };
-  if (me.agents) fill(me.agents);
-  else {
-    (partyCache?.signed_in && Date.now() - partyCacheAt < HOME_JOURNEY_FRESH ? Promise.resolve(partyCache) : partyLoad())
-      .then((p) => { if (p?.agents) fill(Object.fromEntries(p.agents.map((a) => [a.agent, { level: a.level, tier: a.tier }]))); else box.remove(); })
-      .catch(() => box.remove());
-  }
-  return box;
+function arenaDecks(me) { // the decks as rows, the one fielded lit; they're built on the Party page
+  const f = me.decks, agents = me.agents || {};
+  if (!f?.decks?.length) return null;
+  const rows = h("div", { class: "ad-decks", role: "group", "aria-label": t("Your team") });
+  rows.append(...f.decks.map((d, i) => {
+    const on = d.id === f.arena, team = arenaLineup({ agents, lineup: d.members });
+    return h("button", { type: "button", class: `ad-deck${on ? " on" : ""}`, "aria-pressed": String(on), title: team.map(champLabel).join("\n"),
+      onclick: async () => {
+        if (on) return;
+        rows.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+        if (await lbPost("/api/leaderboard/arena/deck", { deck: d.id })) { toast(t("{deck} is your Arena team now.", { deck: deckName(d, i) })); partyCache = null; render(); }
+        else rows.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      } },
+      h("span", { class: "ad-name" }, deckName(d, i)),
+      h("span", { class: "ad-team" }, team.map((c) => h("span", { class: "ad-unit" },
+        partySprite(c.agent, { tier: c.tier, scale: 1, still: true, decorative: true }), h("small", null, t("Lv {n}", { n: c.level }))))));
+  }));
+  return h("div", { class: "arena-pick" }, h("span", { class: "px-label" }, t("Your team")), rows,
+    h("p", { class: "muted small" }, t("Your team fights every other player's team once a week: lead against lead, and whoever wins a bout stays on, with the HP it has left, against the next."), " ",
+      h("a", { href: "#/innerlatch" }, t("Build decks on the Party page"))));
 }
 function arenaBoard(lb) {
   if (lb.error) return h("section", { class: "card empty" }, t("Could not reach the leaderboard: {error}", { error: lb.error }));
@@ -236,7 +231,7 @@ function arenaBoard(lb) {
   }
   const top = Math.max(1, ...lb.rows.map((r) => r.wins || 0));
   const head = h("li", { class: "lb-row lb-head arena-row", "aria-hidden": "true" }, h("span"), h("span"), h("span"),
-    h("span", { class: "lb-num on" }, t("Wins–losses")), h("span", { class: "lb-num" }, t("Champion")));
+    h("span", { class: "lb-num on" }, t("Wins–losses")), h("span", { class: "lb-num" }, t("Team")));
   // a rival's whole row opens your battle with it (the name is the link; CSS stretches it over the row). Your own
   // account is never a rival, also when another of your computers put it in the arena
   const row = (r) => arenaOwn(lb, r) ? arenaRow({ ...r, me: true }, top) : arenaRow(r, top);
@@ -248,14 +243,14 @@ function arenaBoard(lb) {
 function arenaOwn(lb, r) { return !!r.me || (!!lb.me?.uid && r.uid === lb.me.uid); }
 function arenaRow(r, top) {
   return h("li", { class: `lb-row arena-row${r.me ? " me" : " rival"}${r.rank <= 3 ? ` podium p${r.rank}` : ""}`,
-    title: [`${t("Wins–losses")}: ${arenaRecord(r)}`, arenaChamp(r) ? `${t("Champion")}: ${champLabel(arenaChamp(r))}` : null].filter(Boolean).join(" · ") },
+    title: [`${t("Wins–losses")}: ${arenaRecord(r)}`, arenaLineup(r).length ? `${t("Team")}: ${teamLabel(arenaLineup(r))}` : null].filter(Boolean).join(" · ") },
     h("span", { class: "lb-rank" }, String(r.rank)), lbAvatar(r.uid, r.name, r.photo),
     h("div", { class: "lb-who" },
       h("div", { class: "lb-name" }, r.me ? h("span", null, r.name)
         : h("a", { class: "arena-link", href: arenaHref(r.uid), title: t("Watch your battle with {name}", { name: r.name }) }, r.name),
         r.me ? h("span", { class: "lb-you-tag" }, t("you")) : null),
       h("div", { class: "lb-bar", "aria-hidden": "true" }, h("i", { style: { width: `${Math.max(2, ((r.wins || 0) / top) * 100)}%` } }))),
-    h("span", { class: "lb-num on" }, arenaRecord(r)), champCell(arenaChamp(r)));
+    h("span", { class: "lb-num on" }, arenaRecord(r)), teamCell(arenaLineup(r)));
 }
 function arenaRivals(lb) { // two above you and two below
   const i = (lb.rows || []).findIndex((r) => arenaOwn(lb, r));
@@ -264,7 +259,7 @@ function arenaRivals(lb) { // two above you and two below
   if (!near.length) return null;
   return h("section", { class: "card arena-rivals" }, cardHead(t("Rivals near you"), { iconName: "team" }),
     h("ul", { class: "arena-near" }, near.map((r) => h("li", null,
-      h("a", { href: arenaHref(r.uid) }, lbAvatar(r.uid, r.name, r.photo), h("span", { class: "an-name" }, r.name, arenaChamp(r) ? h("small", null, champLabel(arenaChamp(r))) : null),
+      h("a", { href: arenaHref(r.uid) }, lbAvatar(r.uid, r.name, r.photo), h("span", { class: "an-name" }, r.name, arenaLineup(r).length ? h("small", null, teamLabel(arenaLineup(r))) : null),
         h("span", { class: "an-rec" }, arenaRecord(r)), h("span", { class: "an-go" }, t("Watch"), icon("arrow")))))));
 }
 function arenaYouCard(lb) {
@@ -294,7 +289,7 @@ function arenaYouCard(lb) {
   }
   if (!me.arena) {
     return h("section", { class: "card lb-you arena-you" }, head,
-      h("p", null, t("Enter the arena and your champion duels every other player's champion once a week. Wins rank you here.")),
+      h("p", null, t("Enter the arena and your team fights every other player's team once a week. Wins rank you here.")),
       shares,
       h("div", { class: "lb-actions" }, h("button", { class: "btn primary", type: "button", onclick: async (e) => {
         const btn = e.currentTarget;
@@ -308,7 +303,7 @@ function arenaYouCard(lb) {
     paused,
     mine ? h("div", { class: "lb-mine arena-mine" }, fact(t("rank"), `#${mine.rank}`), fact(t("wins–losses"), arenaRecord(mine)))
       : problem ? null : h("p", { class: "muted" }, t("Your party appears here after the next sync.")),
-    arenaPicker({ ...mine, ...me, champion: me.champion || mine?.champion }),
+    arenaDecks(me),
     h("details", { class: "arena-what" }, h("summary", null, t("What it shares")), shares),
     h("div", { class: "lb-actions" }, h("button", { class: "btn", type: "button", onclick: async () => {
       if (!confirm(t("Leave the arena? Your party's sheet is deleted and it stops fighting. You stay on the leaderboard."))) return;
@@ -327,6 +322,8 @@ function arenaLogLine(ev, names) {
   if (ev.t === "heal") return t("{src} heals {dst} for {n}", { src, dst, n });
   if (ev.t === "special") return t("{src} uses {name}", { src, name: ARENA_SPECIAL[ev.name] || ev.name || "" });
   if (ev.t === "ko") return t("{dst} is down", { dst });
+  if (ev.t === "in") return t("{src} steps in", { src });
+  if (ev.t === "out") return t("Time is up: {dst} is out", { dst });
   if (ev.t === "end") return t("The battle ends");
   return ev.t;
 }
@@ -337,23 +334,35 @@ function arenaLog(result, names, open) {
     h("ol", { class: "arena-log-list" }, log.map((ev) => h("li", { class: `al-${ev.t}` },
       h("span", { class: "al-r" }, t("Round {n}", { n: ev.r })), h("span", null, arenaLogLine(ev, names))))));
 }
-function arenaFighter(side, c, label, mine) { // one champion, large, with its player
+function arenaFighter(side, team, label, mine) { // one champion, large, with its player; a team, each in its place
+  const who = h("div", { class: "af-who" }, lbAvatar(side.uid, side.name, side.photo), h("span", null, side.name || "–"));
+  if (team.length > 1) {
+    return h("div", { class: `arena-fighter team${mine ? " mine" : ""}` },
+      h("div", { class: "af-text" }, h("span", { class: "px-label" }, label), who),
+      h("ol", { class: "af-team", "aria-label": t("Order of battle") }, team.map((c, i) => h("li", { title: champLabel(c) },
+        h("span", { class: "px-label" }, DECK_SLOT[i] || String(i + 1)),
+        h("span", { class: "af-stage px-stage" }, partySprite(c.agent, { tier: c.tier, scale: 2, still: true, label: champLabel(c) })),
+        h("b", null, agentShort(c.agent)), h("span", { class: "af-lv" }, lvBadge(c.level))))));
+  }
+  const c = team[0];
   return h("div", { class: `arena-fighter${mine ? " mine" : ""}` },
     h("span", { class: "af-stage px-stage" }, c ? partySprite(c.agent, { tier: c.tier, scale: matchMedia("(max-width: 560px)").matches ? 2 : 3, still: true, label: champLabel(c) }) : null),
     h("div", { class: "af-text" }, h("span", { class: "px-label" }, label),
       c ? h("b", null, agentName(c.agent)) : null,
       c ? h("div", { class: "af-lv" }, lvBadge(c.level), tierBadge(c.tier)) : null,
-      h("div", { class: "af-who" }, lbAvatar(side.uid, side.name, side.photo), h("span", null, side.name || "–"))));
+      who));
 }
 function arenaTeam(side, label, mine) {
-  const agents = side.agents || {};
+  const agents = side.agents || {}, order = arenaLineup(side).map((c) => c.agent);
   return h("div", { class: `arena-team small${mine ? " mine" : ""}` },
     h("div", { class: "at-head" }, lbAvatar(side.uid, side.name, side.photo),
       h("div", null, h("span", { class: "px-label" }, label), h("b", null, side.name)),
       h("span", { class: "at-power" }, h("small", null, t("Power")), h("b", null, fmtNum(arenaPower(agents))))),
     h("ul", { class: "at-units" }, PARTY_AGENTS.filter((a) => agents[a]).map((a) => {
       const u = agents[a];
-      return h("li", { title: `${agentName(a)} · ${t("Lv {n}", { n: u.level })} · ${tierLabel(u.tier)}` },
+      const at = order.indexOf(a);
+      return h("li", { class: at >= 0 ? "fielded" : null, title: [`${agentName(a)} · ${t("Lv {n}", { n: u.level })} · ${tierLabel(u.tier)}`, at >= 0 ? DECK_SLOT[at] : null].filter(Boolean).join(" · ") },
+        at >= 0 ? h("span", { class: "at-order", "aria-hidden": "true" }, String(at + 1)) : null,
         h("span", { class: "at-sprite" }, partySprite(a, { tier: u.tier, scale: 1, still: true, decorative: true })),
         h("span", { class: "at-name" }, agentShort(a)), h("span", { class: "at-lv" }, t("Lv {n}", { n: u.level })));
     })));
@@ -375,11 +384,12 @@ route(/^\/innerlatch\/arena\/([\w-]+)$/, async (params, uid) => {
   const theirSide = mySide === "a" ? "b" : "a";
   const won = result.winner === mySide;
   const names = { [mySide]: t("you"), [theirSide]: rival.name || "–" };
-  const myC = arenaChamp(me), theirC = arenaChamp(rival);
-  const mine = myC ? t("Your {agent}", { agent: agentShort(myC.agent) }) : t("you");
-  const theirs = theirC ? t("{name}'s {agent}", { name: rival.name || "–", agent: agentShort(theirC.agent) }) : rival.name || "–";
+  const myTeam = arenaLineup(me), theirTeam = arenaLineup(rival);
+  const mine = myTeam.length > 1 ? t("Your team") : myTeam.length ? t("Your {agent}", { agent: agentShort(myTeam[0].agent) }) : t("you");
+  const theirs = theirTeam.length > 1 ? t("{name}'s team", { name: rival.name || "–" })
+    : theirTeam.length ? t("{name}'s {agent}", { name: rival.name || "–", agent: agentShort(theirTeam[0].agent) }) : rival.name || "–";
   const outcome = t("{winner} won in {n} rounds", { winner: won ? mine : theirs, n: result.rounds || 0 });
-  const only = (side, c) => (c && side.agents?.[c.agent] ? { [c.agent]: side.agents[c.agent] } : side.agents || {});
+  const only = (side, team) => (team.length ? Object.fromEntries(team.map((c) => [c.agent, side.agents?.[c.agent] || c])) : side.agents || {});
   const height = matchMedia("(max-width: 600px)").matches ? 200 : 240;
   const host = h("div", { class: "arena-stage", style: { height: `${height}px` } });
   const replay = h("button", { class: "btn small", type: "button", disabled: true }, icon("again"), t("Replay"));
@@ -388,8 +398,8 @@ route(/^\/innerlatch\/arena\/([\w-]+)$/, async (params, uid) => {
     h("div", { class: "page-head" }, h("div", null, h("h1", null, t("{a} vs {b}", { a: mine, b: theirs })),
       h("div", { class: "sub" }, b.week ? t("Arena, week {week}", { week: b.week }) : t("Arena"))),
       h("div", { class: "head-actions" }, h("a", { class: "btn small", href: "#/innerlatch/arena" }, icon("left"), t("Back to the arena")), live ? replay : null)),
-    h("div", { class: "arena-duel" }, arenaFighter(me, myC, t("Your champion"), true), h("span", { class: "arena-vs", "aria-hidden": "true" }, "VS"),
-      arenaFighter(rival, theirC, t("Rival's champion"), false)), // the name is on the card's own line: a long one won't wrap the label
+    h("div", { class: "arena-duel" }, arenaFighter(me, myTeam, myTeam.length > 1 ? t("Your team") : t("Your champion"), true), h("span", { class: "arena-vs", "aria-hidden": "true" }, "VS"),
+      arenaFighter(rival, theirTeam, theirTeam.length > 1 ? t("Rival's team") : t("Rival's champion"), false)), // the name is on the card's own line: a long one won't wrap the label
     live ? h("section", { class: "card arena-battle px-frame" }, host) : null,
     h("p", { class: `arena-result ${won ? "won" : "lost"}`, role: "status", hidden: live && !stillMotion() }, h("b", null, won ? t("Victory") : t("Defeat")), " · ", outcome),
     arenaLog(result, names, !live),
@@ -402,11 +412,12 @@ route(/^\/innerlatch\/arena\/([\w-]+)$/, async (params, uid) => {
       try {
         const sc = S.mountBattle(host, {
           // the players' names: the scene adds each champion's own
-          left: { name: me.name || t("you"), uid: me.uid, side: mySide, agents: only(me, myC), champion: myC?.agent },
-          right: { name: rival.name || "–", uid: rival.uid, side: theirSide, agents: only(rival, theirC), champion: theirC?.agent },
+          left: { name: me.name || t("you"), uid: me.uid, side: mySide, agents: only(me, myTeam), champion: myTeam[0]?.agent },
+          right: { name: rival.name || "–", uid: rival.uid, side: theirSide, agents: only(rival, theirTeam), champion: theirTeam[0]?.agent },
           leftSide: mySide, result, height, reducedMotion: stillMotion(), // the scene fills the {placeholders}
           labels: { victory: t("Victory"), defeat: t("Defeat"), round: t("Round {n}"), crit: t("Critical!"), ko: t("Down!"),
-            special: t("{agent}: {name}"), summary: outcome }, // "Your Claude won in 4 rounds", as the page says it
+            special: t("{agent}: {name}"), in: t("{agent} steps in"), out: t("Time! {agent} is out"),
+            summary: outcome }, // "Your Claude won in 4 rounds", as the page says it
           onEnd: () => { replay.disabled = false; page.querySelector(".arena-result")?.removeAttribute("hidden"); }, // no spoilers before the end
         });
         replay.disabled = false;
@@ -657,12 +668,140 @@ function partyCard(a, attrs, max, market) {
         a.skills?.length ? h("div", { class: "pc-top" }, h("span", { class: "px-label" }, t("Top skills")),
           h("ol", { class: "pc-skills" }, a.skills.slice(0, 3).map((sk) => h("li", null, h("span", { title: sk.name }, sk.name), h("b", null, t("Lv {n}", { n: sk.level })))))) : null]);
 }
+// ------------------------------------------------------------------ formations: decks of one to three agents, in the order
+// they fight (formation.py). The Arena fields one of them: the lead fights first, and whoever wins a bout stays on.
+const DECK_SLOT = [t("Lead"), t("Middle"), t("Anchor")];
+let deckOpen = null; // the deck the Formation card shows, kept across renders
+function deckName(d, i) { return d.name || t("Deck {n}", { n: i + 1 }); }
+function deckFielded(f) { return f?.decks?.find((d) => d.id === f.arena) || null; }
+function partyFormation(p) {
+  const box = h("section", { class: "card party-deck px-frame" });
+  const by = Object.fromEntries(p.agents.map((a) => [a.agent, a]));
+  const arenaHere = p.who?.kind === "google" && realmHere(); // a hub person's party never enters the arena
+  let f = p.formations, drag = null;
+  const save = async (body) => {
+    box.classList.add("busy");
+    box.querySelectorAll("button, input").forEach((el) => { el.disabled = true; });
+    const r = await lbPost("/api/party/deck", body);
+    box.classList.remove("busy");
+    if (r?.formations) {
+      f = r.formations;
+      if (partyCache) partyCache.formations = f;
+    }
+    draw();
+    return r;
+  };
+  const setMembers = (d, members) => save({ id: d.id, members });
+  const move = (d, from, to) => {
+    const m = d.members.slice(), [x] = m.splice(from, 1);
+    m.splice(Math.min(to, m.length), 0, x);
+    return setMembers(d, m);
+  };
+  // a slot takes an agent dropped on it: from another slot (they swap places in the order) or from the bench
+  const dropOn = (d, i, what) => {
+    if (!what) return;
+    if (what.slot != null) { if (what.slot !== i) move(d, what.slot, i); return; }
+    const m = d.members.slice();
+    if (m.includes(what.agent)) return;
+    if (i < m.length) m[i] = what.agent; else m.push(what.agent);
+    setMembers(d, m);
+  };
+  const dropZone = (el, onDrop) => {
+    el.addEventListener("dragover", (e) => { if (drag) { e.preventDefault(); el.classList.add("over"); } });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); const w = drag; drag = null; onDrop(w); });
+  };
+  const draggable = (el, what) => {
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => { drag = what; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what.agent); el.classList.add("dragging"); });
+    el.addEventListener("dragend", () => { drag = null; el.classList.remove("dragging"); });
+  };
+  function slot(d, i) {
+    const agent = d.members[i], a = agent ? by[agent] : null;
+    if (!a) {
+      const li = h("li", { class: "pd-slot empty" }, h("span", { class: "px-label" }, DECK_SLOT[i]),
+        h("span", { class: "pd-empty" }, t("Empty slot")), h("span", { class: "muted small" }, t("Add an agent from the bench")));
+      dropZone(li, (w) => dropOn(d, i, w));
+      return li;
+    }
+    const n = d.members.length;
+    const li = h("li", { class: "pd-slot", style: { "--ac": partyColor(agent) }, title: partyLabel(a) },
+      h("span", { class: "px-label" }, DECK_SLOT[i]),
+      h("span", { class: "pd-stage px-stage" }, partySprite(agent, { tier: a.tier, scale: 2, decorative: true })),
+      h("b", { class: "pd-name" }, a.name), h("span", { class: "pd-lv" }, lvBadge(a.level), tierBadge(a.tier)),
+      h("div", { class: "pd-tools" },
+        h("button", { class: "btn small icon-only", type: "button", disabled: i === 0, "aria-label": t("Move {agent} earlier", { agent: a.name }),
+          title: t("Move earlier"), onclick: () => move(d, i, i - 1) }, icon("left")),
+        h("button", { class: "btn small icon-only", type: "button", disabled: i === n - 1, "aria-label": t("Move {agent} later", { agent: a.name }),
+          title: t("Move later"), onclick: () => move(d, i, i + 1) }, icon("right")),
+        h("button", { class: "btn small icon-only", type: "button", disabled: n === 1, "aria-label": t("Take {agent} out of the deck", { agent: a.name }),
+          title: n === 1 ? t("A deck keeps at least one agent") : t("Take out"), onclick: () => setMembers(d, d.members.filter((x) => x !== agent)) }, icon("x"))));
+    draggable(li, { slot: i, agent });
+    dropZone(li, (w) => dropOn(d, i, w));
+    return li;
+  }
+  function bench(d) {
+    const out = p.agents.filter((a) => !d.members.includes(a.agent));
+    const full = d.members.length >= f.team;
+    const list = h("div", { class: "pd-bench-tiles" }, out.map((a) => {
+      // full, a click only says so; dropped on a slot, it still takes that place
+      const b = h("button", { type: "button", class: `ap-tile pd-bench-tile${full ? " full" : ""}`, "aria-disabled": String(full), style: { "--ac": partyColor(a.agent) },
+        "aria-label": t("Add {agent} to the deck", { agent: a.name }), title: full ? t("The deck is full: drop an agent on a slot to swap, or take one out first") : partyLabel(a),
+        onclick: () => (full ? toast(t("The deck is full: drop an agent on a slot to swap, or take one out first")) : setMembers(d, [...d.members, a.agent])) },
+      partySprite(a.agent, { tier: a.tier, scale: 1, still: true, decorative: true }),
+      h("span", { class: "apt-name" }, agentShort(a.agent)), h("span", { class: "apt-lv" }, t("Lv {n}", { n: a.level })));
+      draggable(b, { agent: a.agent });
+      return b;
+    }));
+    const zone = h("div", { class: "pd-bench" }, h("span", { class: "px-label" }, t("Bench")), out.length ? list : h("p", { class: "muted small" }, t("Every agent is in this deck.")));
+    dropZone(zone, (w) => { if (w?.slot != null && d.members.length > 1) setMembers(d, d.members.filter((x) => x !== w.agent)); });
+    return zone;
+  }
+  function draw() {
+    const decks = f.decks, i = Math.max(0, decks.findIndex((d) => d.id === deckOpen)), d = decks[i];
+    deckOpen = d.id;
+    const fielded = d.id === f.arena;
+    const tabs = h("div", { class: "pd-tabs", role: "tablist", "aria-label": tc("party", "Decks") },
+      decks.map((x, k) => h("button", { type: "button", role: "tab", class: `pd-tab${x.id === d.id ? " on" : ""}`, "aria-selected": String(x.id === d.id),
+        onclick: () => { deckOpen = x.id; draw(); } },
+        h("span", null, deckName(x, k)), arenaHere && x.id === f.arena ? h("span", { class: "pd-arena-tag", title: t("Fielded in the Arena") }, icon("arena")) : null)),
+      decks.length < f.max ? h("button", { type: "button", class: "pd-tab pd-new", onclick: async () => {
+        const r = await save({});
+        if (r?.formations) { deckOpen = r.formations.decks[r.formations.decks.length - 1].id; draw(); }
+      } }, "+ ", t("New deck")) : null);
+    const name = h("input", { type: "text", class: "pd-name-input", value: d.name, maxlength: 24, placeholder: deckName({}, i), "aria-label": t("Deck name") });
+    const rename = () => { const v = name.value.trim(); if (v !== d.name) save({ id: d.id, name: v }); };
+    name.addEventListener("change", rename);
+    name.addEventListener("keydown", (e) => { if (e.key === "Enter") name.blur(); if (e.key === "Escape") { name.value = d.name; name.blur(); } });
+    const actions = h("div", { class: "pd-actions" },
+      arenaHere ? (fielded ? h("span", { class: "pd-fielded" }, icon("arena"), t("Fielded in the Arena"))
+        : h("button", { class: "btn small primary", type: "button", onclick: async () => {
+          if (await save({ id: d.id, arena: true })) toast(t("{deck} is your Arena team now.", { deck: deckName(d, i) }));
+        } }, icon("arena"), t("Field in the Arena"))) : null,
+      decks.length > 1 ? h("button", { class: "btn small", type: "button", onclick: () => {
+        if (confirm(t("Delete {deck}?", { deck: deckName(d, i) }))) save({ id: d.id, delete: true });
+      } }, t("Delete deck")) : null);
+    box.replaceChildren(
+      cardHead(t("Formation"), { iconName: "arena", hint: tn(decks.length, "{n} of {max} deck", "{n} of {max} decks", { n: decks.length, max: f.max }) }),
+      tabs,
+      h("div", { class: "pd-panel", role: "tabpanel" },
+        h("div", { class: "pd-row" }, name, actions),
+        h("ol", { class: "pd-slots", "aria-label": t("Order of battle") }, Array.from({ length: f.team }, (_, k) => slot(d, k))),
+        bench(d)),
+      h("p", { class: "muted small pd-note" }, arenaHere
+        ? t("In the Arena the lead fights first, one on one. Whoever wins a bout stays on, with the HP it has left, against the next. A deck changes who fights and in what order, never a level.")
+        : t("A deck is a team in order: the lead fights first. It changes who fights and in what order, never a level.")));
+  }
+  draw();
+  return box;
+}
 route(/^\/innerlatch$/, async () => {
   const token = renderSeq;
   const p = await partyGet();
   if (!p.signed_in) return partyGate(p, token);
   return partyShell(t("Party"), t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
-    partyLeader(p), marketNote(p.market), h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))),
+    partyLeader(p), p.formations ? partyFormation(p) : null, marketNote(p.market),
+    h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))),
     h("p", { class: "muted small party-levels" }, t("Three kinds of level: a character's comes from all its XP, an attribute's from the XP of the skills under it, and a skill's from one roadmap module.")));
 });
 

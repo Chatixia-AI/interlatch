@@ -47,7 +47,25 @@ def party(ctx: Context, viewer: dict | None, *, here: bool) -> dict:
         return {"signed_in": False, **gate, **({"preview": pt.preview(ctx.conn, _here_id(ctx))} if here else {})}
     data = pt.compute(ctx.conn, _here_id(ctx), viewer)
     # who's hiring for the classes it shows: read from Firebase only now, signed in (the numbers are public)
-    return {"signed_in": True, **gate, "who": me, **data, "market": pt.market_block(pt.payload_tracks(data))}
+    return {"signed_in": True, **gate, "who": me, **data, "market": pt.market_block(pt.payload_tracks(data)),
+            "formations": _formations(ctx, viewer, data)}
+
+
+def _levels(data: dict) -> dict[str, int]:
+    return {a["agent"]: a["level"] for a in data.get("agents") or []}
+
+
+def _lead(ctx: Context, viewer: dict | None):
+    """The champion picked on this computer before decks existed: the first of the deck made for its party."""
+    from ....sharing import leaderboard as lb
+
+    return (lb.read_state(ctx.cfg) or {}).get("champion") if viewer is None else None
+
+
+def _formations(ctx: Context, viewer: dict | None, data: dict) -> dict:
+    from ....knowledge import formation
+
+    return formation.formations(ctx.conn, viewer, _levels(data), _lead(ctx, viewer))
 
 
 def _refused() -> tuple[dict, int]:
@@ -158,6 +176,44 @@ def action_party_bag(ctx: Context, viewer: dict | None, what: str, body: dict, *
     except pt.PartyError as exc:
         return {"error": tr(str(exc))}, 400
     return {"bag": got}, 200
+
+
+def action_party_deck(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/deck: add a deck (no "id"), rename it or change its members in order ("name", "members"),
+    delete it ("delete": true), or field it in the Arena ("arena": true, this computer's own party only). Answers the
+    decks; when the team this computer fields changed and it is in the arena, the sheet is sent now."""
+    from ....knowledge import formation
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    deck = body.get("id")
+    levels = _levels(pt.compute(ctx.conn, _here_id(ctx), viewer))
+    lead = _lead(ctx, viewer)
+    before = formation.formations(ctx.conn, viewer, levels, lead)
+    try:
+        if deck is not None and not isinstance(deck, str):
+            raise pt.PartyError(formation.NO_DECK)
+        if body.get("delete"):
+            got = formation.delete(ctx.conn, viewer, levels, deck, lead=lead)
+        elif body.get("arena"):
+            if viewer is not None:  # a hub person's party never enters the arena
+                raise pt.PartyError(formation.NO_DECK)
+            got = formation.field(ctx.conn, viewer, levels, deck, lead=lead)
+        else:
+            got = formation.save(ctx.conn, viewer, levels, deck, name=body.get("name"), members=body.get("members"),
+                                 lead=lead)
+    except pt.PartyError as exc:
+        return {"error": tr(str(exc))}, 400
+    if viewer is None and _fielded(before) != _fielded(got):
+        from ....sharing import arena
+
+        arena.resend(ctx.cfg, ctx.conn)
+    return {"formations": got}, 200
+
+
+def _fielded(f: dict) -> list[str]:
+    return next((d["members"] for d in f["decks"] if d["id"] == f["arena"]), [])
 
 
 def action_party_quest(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:

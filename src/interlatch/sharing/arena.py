@@ -1,7 +1,8 @@
 """The Arena's Firestore side: people on the leaderboard who opt in publish a small sheet of their party at
-`arena/{uid}` (each agent's level, tier, class and six attribute levels, and which one is its champion; nothing
-else), sent with the board's row; the dashboard reads every sheet and has the champions fight this week's duels (knowledge/arena.py), each on its own
-computer, all with the same result.
+`arena/{uid}` (each agent's level, tier, class and six attribute levels, and its lineup: the deck it fields, in order,
+whose first is its champion; nothing else), sent with the board's row; the dashboard reads every sheet and has the
+lineups fight this week's battles (knowledge/arena.py), each on its own computer, all with the same result. The deck
+is picked on the Party page or here (knowledge/formation.py).
 
 Opting in needs being on the board (leaderboard.on_board); leaving the board leaves the arena. `arena` in
 <home>/leaderboard.json says whether this computer sends its sheet (missing: it doesn't).
@@ -30,33 +31,65 @@ def in_arena(state: dict | None) -> bool:
     return lb.on_board(state) and bool((state or {}).get("arena"))
 
 
+def _agents(cfg: Config, conn) -> dict:
+    from ..core.machine import local_machine_id
+    from ..knowledge import party
+
+    return rules.sheet_agents(party.compute(conn, local_machine_id(cfg)))
+
+
+def _levels(agents: dict) -> dict[str, int]:
+    return {n: a["level"] for n, a in agents.items()}
+
+
+def lineup(cfg: Config, conn, state: dict | None, agents: dict | None = None) -> list[str]:
+    """The team this computer fields, in order: its arena deck (formation.py), else the one made for the party (the
+    champion picked before decks, leaderboard.json "champion", first)."""
+    from ..knowledge import formation
+
+    agents = agents if agents is not None else _agents(cfg, conn)
+    return rules.lineup_of(agents, formation.arena_members(conn, _levels(agents), (state or {}).get("champion")))
+
+
 def sheet(cfg: Config, conn, state: dict) -> dict:
     """This computer's sheet, from its own party (party.compute, this computer's scope), without the server time."""
-    from ..core.machine import local_machine_id
-    from ..knowledge import party
-
-    agents = rules.sheet_agents(party.compute(conn, local_machine_id(cfg)))
+    agents = _agents(cfg, conn)
+    team = lineup(cfg, conn, state, agents)
     return {"name": state["name"], "photo": state.get("photo") or "", "machine": lb.machine_tag(cfg), "v": rules.SHEET_V,
-            "agents": agents, "champion": rules.champion_of(agents, state.get("champion"))}
+            "agents": agents, "lineup": team, "champion": team[0]}
 
 
-def champion(cfg: Config, conn, state: dict | None) -> str:
-    """The champion this computer fields: the one picked (leaderboard.json "champion"), else the highest level."""
-    from ..core.machine import local_machine_id
-    from ..knowledge import party
+def fielding(cfg: Config, conn, state: dict | None) -> dict:
+    """For the Arena page: the team this computer fields (its arena deck, in order; the first is its champion), its
+    decks to pick from (formation.formations), and each agent's level and tier for their sprites."""
+    from ..knowledge import formation
 
-    agents = rules.sheet_agents(party.compute(conn, local_machine_id(cfg)))
-    return rules.champion_of(agents, (state or {}).get("champion"))
+    agents = _agents(cfg, conn)
+    team = lineup(cfg, conn, state, agents)
+    return {"lineup": team, "champion": team[0],
+            "decks": formation.formations(conn, None, _levels(agents), (state or {}).get("champion")),
+            "agents": {n: {"level": a["level"], "tier": a["tier"]} for n, a in agents.items()}}
 
 
-def pick(cfg: Config, conn, agent) -> dict:
-    """Field another champion (one of the five coding agents); sent now when in the arena."""
+def pick(cfg: Config, conn, deck_id) -> dict:
+    """Field another deck; sent now when in the arena."""
+    from ..knowledge import formation
+    from ..knowledge.party import PartyError
+
     state = lb.read_state(cfg)
     if state is None:
         raise lb.LeaderboardError("sign in first")
-    if agent not in rules.CODING_AGENTS:
-        raise lb.LeaderboardError("no such agent")
-    state = lb._update_state(cfg, champion=agent)
+    agents = _agents(cfg, conn)
+    try:
+        formation.field(conn, None, _levels(agents), deck_id, lead=state.get("champion"))
+    except PartyError as e:
+        raise lb.LeaderboardError(str(e)) from None
+    return resend(cfg, conn)
+
+
+def resend(cfg: Config, conn) -> dict | None:
+    """The team changed (another deck fielded, or the fielded one edited): sent now when in the arena."""
+    state = lb.read_state(cfg)
     clear()
     return lb.send(cfg, conn, force=True) if in_arena(state) else state
 
@@ -102,8 +135,8 @@ def clear() -> None:
 
 
 def sheets(*, now=None) -> dict[str, dict]:
-    """Every sheet in the arena (at most lb.TOP), cleaned to the rules' bounds: {uid: {name, photo, agents, champion}}. Read
-    again at most every lb.BOARD_TTL."""
+    """Every sheet in the arena (at most lb.TOP), cleaned to the rules' bounds: {uid: {name, photo, agents, lineup,
+    champion}}. Read again at most every lb.BOARD_TTL."""
     with _lock:
         hit = _cache.get("sheets")
         if hit and time.monotonic() - hit[0] < lb.BOARD_TTL:
@@ -125,8 +158,8 @@ def sheets(*, now=None) -> dict[str, dict]:
         if photo:
             lb._photos[uid] = photo
         agents = {n: rules.clean_agent(agents.get(n)) for n in rules.CODING_AGENTS}
-        out[uid] = {"name": name, "photo": bool(photo), "agents": agents,
-                    "champion": rules.champion_of(agents, f.get("champion"))}
+        team = rules.lineup_of(agents, f.get("lineup"), f.get("champion"))
+        out[uid] = {"name": name, "photo": bool(photo), "agents": agents, "lineup": team, "champion": team[0]}
     with _lock:
         _cache["sheets"] = (time.monotonic(), out)
     return out
@@ -140,7 +173,7 @@ def board(me_uid: str | None, *, now=None) -> list[dict]:
     """The arena board this week: every party ranked by wins (then fewer losses, then power, then name)."""
     got = sheets(now=now)
     wk = week(now)
-    key = hashlib.sha256(json.dumps([wk, sorted((u, s["agents"], s["champion"]) for u, s in got.items())],
+    key = hashlib.sha256(json.dumps([wk, sorted((u, s["agents"], s["lineup"]) for u, s in got.items())],
                                     sort_keys=True).encode()).hexdigest()
     with _lock:
         hit = _cache.get("standings")
@@ -151,8 +184,8 @@ def board(me_uid: str | None, *, now=None) -> list[dict]:
         with _lock:
             _cache["standings"] = (key, table)
     rows = [{"uid": u, "name": s["name"], "photo": s["photo"], "wins": table[u]["wins"], "losses": table[u]["losses"],
-             "power": rules.power(s["agents"]), "champion": s["champion"], "me": u == me_uid,
-             "agents": {s["champion"]: s["agents"][s["champion"]]}}  # the champion's level and tier, for its sprite
+             "power": rules.power(s["agents"]), "champion": s["champion"], "lineup": s["lineup"], "me": u == me_uid,
+             "agents": {n: s["agents"][n] for n in s["lineup"]}}  # the lineup's levels and tiers, for their sprites
             for u, s in got.items()]
     rows.sort(key=lambda r: (-r["wins"], r["losses"], -r["power"], r["name"], r["uid"]))
     return [{"rank": i + 1, **r} for i, r in enumerate(rows)]
@@ -165,6 +198,6 @@ def fight(me_uid: str, rival_uid: str, *, now=None) -> dict | None:
         return None
     wk = week(now)
     lite = lambda u: {"uid": u, "name": got[u]["name"], "photo": got[u]["photo"], "agents": got[u]["agents"],  # noqa: E731
-                      "champion": got[u]["champion"]}
+                      "lineup": got[u]["lineup"], "champion": got[u]["champion"]}
     return {"me": lite(me_uid), "rival": lite(rival_uid), "week": wk,
             "result": rules.match(me_uid, got[me_uid], rival_uid, got[rival_uid], wk)}

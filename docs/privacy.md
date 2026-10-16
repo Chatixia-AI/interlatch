@@ -20,7 +20,7 @@ public job-market numbers (open roles per roadmap track) from Interlatch's Fireb
 That request carries the project's public web key and nothing about you, not even your sign-in.
 If you also **Enter the arena** on the Arena page, each sync publishes your party's character sheet to the same
 Firebase project, readable by anyone: for each of your coding agents its level, tier, class and six attribute
-levels, and which agent is your champion, with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
+levels, and the team you field (which agents, in what order), with your board name and picture and a hash that tells your computers apart. No lessons, projects, sessions,
 titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving
 the board) deletes your sheet ([The arena](party.md#the-arena)).
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).

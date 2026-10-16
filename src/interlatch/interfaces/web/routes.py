@@ -293,8 +293,8 @@ def _arena(h, ctx, m, body):  # what this computer publishes about its party: on
     from ...sharing.leaderboard import LeaderboardError
 
     try:
-        if m.group(1) == "champion":
-            return h._json(api.leaderboard.action_arena_champion(ctx, _body(body)))
+        if m.group(1) == "deck":
+            return h._json(api.leaderboard.action_arena_deck(ctx, _body(body)))
         return h._json(api.leaderboard.action_arena(ctx, m.group(1)))
     except LeaderboardError as e:
         return h._json({"error": str(e)}, 502)
@@ -311,7 +311,9 @@ def _party_sign(h, ctx, m, body):  # the Party's Google sign-in: the leaderboard
         return h._json({"error": str(e)}, 502)
 
 
-def _party_own(h, ctx, m, body):  # the viewer's own quest log, goal, cleared encounters and bag
+def _party_own(h, ctx, m, body):  # the viewer's own quest log, goal, cleared encounters, bag and decks
+    if m.group(1) == "deck":
+        return h._json(*api.party.action_party_deck(ctx, h.viewer, _body(body), here=h._from_here()))
     if m.group(1) in ("buy", "sell", "equip", "use"):
         return h._json(*api.party.action_party_bag(ctx, h.viewer, m.group(1), _body(body), here=h._from_here()))
     act = {"quest": api.party.action_party_quest, "goal": api.party.action_party_goal,
@@ -369,11 +371,11 @@ def _suggestions_refresh(h, ctx, m, body):
 POST: list[Route] = [
     Route("/api/sync", ANYONE, lambda h, ctx, m, b: h._json({"started": api.status.action_sync(ctx)})),
     Route(r"/api/leaderboard/(signin|finish|cancel|join|send|name|leave)", LEADERBOARD, _leaderboard),
-    Route(r"/api/leaderboard/arena/(join|leave|champion)", LEADERBOARD, _arena),
+    Route(r"/api/leaderboard/arena/(join|leave|deck)", LEADERBOARD, _arena),
     # a Google sign-in kept on this computer: only from here
     Route(r"/api/party/(signin|signout)", HERE, _party_sign),
     # the viewer's own quest log: from here, or any person signed in to a hub, not only admins (handler.PARTY_OWN)
-    Route(r"/api/party/(quest|goal|cleared|buy|sell|equip|use)", PARTY, _party_own),
+    Route(r"/api/party/(quest|goal|cleared|buy|sell|equip|use|deck)", PARTY, _party_own),
     Route(r"/api/artifacts/(\d+)/reveal", LOCAL_FILES, _reveal),
     # a password: at the hub itself, or an admin of a hub with people
     Route("/api/team-store/test", OWNER, lambda h, ctx, m, b: h._json(api.hub_admin.action_team_store_test(ctx, b))),

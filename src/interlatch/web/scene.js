@@ -1212,7 +1212,8 @@
   // (knowledge/arena.py computes it; nothing here decides anything)
   // =====================================================================================
   const BATTLE_LABELS = { victory: "Victory!", defeat: "Defeat", round: "Round {n}", crit: "Crit!", ko: "KO",
-    special: "{agent}: {name}", summary: "{winner} won in {n} rounds", vs: "{left} vs {right}", level: "Lv {n}",
+    special: "{agent}: {name}", in: "{agent} steps in", out: "Time! {agent} is out",
+    summary: "{winner} won in {n} rounds", vs: "{left} vs {right}", level: "Lv {n}",
     tiers: { novice: "Novice", adept: "Adept", expert: "Expert", master: "Master" } };
   const STEP_MAX = 0.35, STEP_MIN = 0.16, REPLAY_MAX = 50; // seconds an event, and the longest a replay may run
   const AGENT_NAMES = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity",
@@ -1231,8 +1232,10 @@
     const leftSide = opts.leftSide === "b" ? "b" : "a", rightSide = leftSide === "a" ? "b" : "a";
     const sideName = { [leftSide]: (opts.left && opts.left.name) || "", [rightSide]: (opts.right && opts.right.name) || "" };
     const log = (Array.isArray(result.log) ? result.log : []).slice(0, 400);
+    // `order`: its place in a team's lineup (a relay: the first fights first), when the battle says
     const units = Object.entries(result.units || {}).map(([key, u]) => ({ key, side: key.split(":")[0], agent: key.split(":")[1],
-      max: Math.max(1, Number(u.hp) || 1), tier: u.tier || "novice", level: u.level || 1 }));
+      max: Math.max(1, Number(u.hp) || 1), tier: u.tier || "novice", level: u.level || 1,
+      order: Number.isFinite(u.order) ? u.order : null, out: !!u.out }));
     const unitOf = new Map(units.map((u) => [u.key, u]));
     const step = clamp(REPLAY_MAX / Math.max(1, log.length), STEP_MIN, STEP_MAX);
     // hp after each event, and when each unit fell, worked out once
@@ -1241,7 +1244,7 @@
       const hp = new Map(units.map((u) => [u.key, u.max]));
       log.forEach((ev, i) => {
         if (ev.dst && unitOf.has(ev.dst) && Number.isFinite(ev.hp)) hp.set(ev.dst, Math.max(0, ev.hp));
-        if (ev.t === "ko" && ev.dst) koAt.set(ev.dst, i);
+        if ((ev.t === "ko" || ev.t === "out") && ev.dst) koAt.set(ev.dst, i); // out of time: off the floor too
         hpAfter.push(new Map(hp));
       });
     }
@@ -1305,7 +1308,8 @@
       layout();
       art.clear();
     }
-    // two rows a side: the three highest levels in front, the others behind; the right side mirrors the left
+    // two rows a side: a lineup in its order (else the three highest levels) in front, the others behind; the right side
+    // mirrors the left
     function layout() {
       if (duel) { // the two champions big, facing each other in the middle of the floor
         const k = L >= 110 && W >= 300 ? 3 : 2, gap = W >= 300 ? Math.round(W * 0.05) : 6, cx = W / 2;
@@ -1320,7 +1324,8 @@
       barW = Math.min(20, stepX - 3);
       const front = L - 10, back = L - Math.round((L - horizon) * 0.5);
       for (const side of [leftSide, rightSide]) {
-        const mine = units.filter((u) => u.side === side).sort((p, q) => q.level - p.level || AGENT_ORDER.indexOf(p.agent) - AGENT_ORDER.indexOf(q.agent));
+        const mine = units.filter((u) => u.side === side).sort((p, q) => (p.order ?? 99) - (q.order ?? 99) || q.level - p.level
+          || AGENT_ORDER.indexOf(p.agent) - AGENT_ORDER.indexOf(q.agent));
         const dir = side === leftSide ? -1 : 1;
         mine.forEach((u, i) => {
           const row = i < 3 ? 0 : 1, k = row ? i - 3 + 0.5 : i;
@@ -1426,7 +1431,7 @@
       // back row first, then the front
       const order = units.slice().sort((p, q) => (slot.get(p.key).feet - slot.get(q.key).feet) || (slot.get(p.key).x - slot.get(q.key).x));
       for (const un of order) {
-        const s = slot.get(un.key), k = s.k, ko = done ? finalHp.get(un.key) <= 0
+        const s = slot.get(un.key), k = s.k, ko = done ? finalHp.get(un.key) <= 0 || un.out
           : koAt.has(un.key) && koAt.get(un.key) <= i && (koAt.get(un.key) < i || u > 0.15);
         const [lx, ly] = lunge.get(un.key) || [0, 0], kx = knock.get(un.key) || 0;
         const x = s.x + lx + kx, top = s.feet - 31 * k + ly;
@@ -1496,8 +1501,8 @@
         }
       }
     }
-    function lastSpecial(i) {
-      for (let k = i; k >= 0 && k > i - 4; k--) if (log[k].t === "special") return [log[k], (i - k) * step];
+    function lastSpecial(i, kinds = ["special"]) {
+      for (let k = i; k >= 0 && k > i - 4; k--) if (kinds.includes(log[k].t)) return [log[k], (i - k) * step];
       return null;
     }
     function drawHud(cur, done, hpNow) {
@@ -1513,10 +1518,11 @@
       hpBar(l.x + 1, l.y + l.h + 2, Math.min(half - 4, 60), team(leftSide), team(leftSide));
       hpBar(r.x + r.w - 1 - Math.min(half - 4, 60), r.y + r.h + 2, Math.min(half - 4, 60), team(rightSide), team(rightSide));
       if (cur && !done && W >= 300) text(fill(labels.round, { n: cur.r || 1 }), W / 2, 8, { size: 10, color: gold(), weight: 600 });
-      const i = log.indexOf(cur), sp = !done && cur ? lastSpecial(i) : null;
+      // the newest of a special, a newcomer stepping in, or one out of time: a band with what happened
+      const i = log.indexOf(cur), sp = !done && cur ? lastSpecial(i, ["special", "in", "out"]) : null;
       if (sp && sp[1] < 1.4) {
-        const [ev] = sp, s = slot.get(ev.src), side = ev.src.split(":")[0];
-        const msg = fill(labels.special, { agent: name(ev.src), name: ev.name || "" });
+        const [ev] = sp, who = ev.t === "out" ? ev.dst : ev.src, s = slot.get(who), side = String(who).split(":")[0];
+        const msg = ev.t === "special" ? fill(labels.special, { agent: name(ev.src), name: ev.name || "" }) : fill(labels[ev.t], { agent: name(who) });
         const bw = text(msg, W / 2, 26, { size: 12, color: side === leftSide ? gold() : red(), panel: true });
         if (s) px(ctx, P, side === leftSide ? theme.cta : red(), bw.x + 1, bw.y + bw.h, bw.w - 2, 1);
       }
