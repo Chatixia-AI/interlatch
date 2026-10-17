@@ -494,35 +494,34 @@ for (let i = 0; i < 30; i++) {
 ''')
 
 
-def test_a_judged_answer_is_the_fights_best_move_once():
+def test_the_answer_ends_a_study_battle_right_or_wrong():
     check(STUDY + '''
-for (const [verdict, hit, weak] of [['got_it', R.STUDY_HIT.got_it, R.STUDY_WEAK.got_it], ['partly', R.STUDY_HIT.partly, R.STUDY_WEAK.partly]]) {
-  const s = R.setup(studied(5), 0);
-  s.foe.charged = true;
-  const ev = R.heroAction(s, {type: 'answer', verdict, feedback: 'Close.'});
-  assert.deepEqual(ev.find((x) => x.t === 'answered'), {t: 'answered', verdict});
-  assert.equal(s.foe.maxHp - s.foe.hp, Math.round(s.foe.maxHp * hit));
-  assert.equal(s.weak, weak);
-  assert.ok(!s.foe.charged && s.log.some((l) => l.key === 'lineBreak'));
-  assert.ok(s.log.some((l) => l.key === null && l.vars.text === 'Close.'));
-  assert.deepEqual(R.heroAction(s, {type: 'answer', verdict: 'got_it'}), []);  // one answer a fight
+// right: the finishing blow, and the monster is beaten at once
+const s = R.setup(studied(5), 0);
+const ev = R.heroAction(s, {type: 'answer', verdict: 'got_it', feedback: 'Close.'});
+assert.deepEqual(ev.find((x) => x.t === 'answered'), {t: 'answered', verdict: 'got_it'});
+assert.equal(s.foe.hp, 0);
+assert.equal(s.phase, 'won');
+assert.ok(s.log.some((l) => l.key === 'lineGot') && s.log.some((l) => l.key === null && l.vars.text === 'Close.'));
+assert.deepEqual(R.heroAction(s, {type: 'answer', verdict: 'got_it'}), []);  // one answer a fight
+// wrong (or partly): nothing beaten, it slips away; no monster turn, no retry in the fight
+for (const verdict of ['not_yet', 'partly']) {
+  const n = R.setup(studied(5), 0), hp = n.foe.hp;
+  const evs = R.heroAction(n, {type: 'answer', verdict, feedback: 'A stale cache would not explain it.'});
+  assert.equal(n.foe.hp, hp);
+  assert.equal(n.phase, 'missed');
+  assert.deepEqual(evs.filter((e) => e.t === 'end'), [{t: 'end', phase: 'missed'}]);
+  assert.deepEqual(n.log.slice(-3).map((l) => l.key), ['lineNotYet', null, 'lineMiss']);
+  assert.deepEqual(R.monsterTurn(n), []);
 }
-const n = R.setup(studied(5), 0), hp = n.foe.hp, who = n.active;
-R.heroAction(n, {type: 'answer', verdict: 'not_yet'});
-assert.equal(n.foe.hp, hp);
-assert.ok(n.active !== who || n.phase === 'monster');  // the turn is spent
-assert.equal(n.weak, 1);
 for (const bad of [{type: 'answer'}, {type: 'answer', verdict: 'maybe'}]) assert.deepEqual(R.heroAction(R.setup(studied(5), 0), bad), []);
 assert.deepEqual(R.heroAction(R.setup(lesson(5), 0), {type: 'answer', verdict: 'got_it'}), []);  // no question asked
-// over 200 fights: a right answer wins every one, in fewer rounds than fighting alone
-let plain = 0, got = 0, won = 0;
-for (let i = 0; i < 200; i++) {
-  plain += R.simulate(studied(i), 0).round;
+// a right answer wins every fight, in its first round
+for (let i = 0; i < 100; i++) {
   const q = R.simulate(studied(i), 0, answerFirst('got_it'));
-  got += q.round; won += q.phase === 'won' ? 1 : 0;
+  assert.equal(q.phase, 'won');
+  assert.equal(q.round, 1);
 }
-assert.equal(won, 200);
-assert.ok(got < plain * 0.65, got + ' vs ' + plain);
 ''')
 
 
@@ -538,8 +537,11 @@ assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.
   'You understood it: it counts toward your readiness in Module 0. It comes back in 3 days for another look.');
 assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.verdict ? {type: 'answer', verdict: 'got_it', back_in: 10, owned: true} : R.policy(st)))).note,
   "Got it again on another day: it's yours now (Module 0). Next look in 10 days.");
-assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('partly'))).note, 'Partly there: it will come back so you can try again.');
-assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('not_yet'))).note, 'Not yet: it will come back.');
+const missed = R.summary(R.simulate(studied(2), 0, answerFirst('not_yet')));
+assert.deepEqual([missed.title, missed.note, missed.quoteTitle, missed.quote, missed.principle],
+  ['Breaker slipped away', 'Not yet: it comes back tomorrow.', 'The answer', 'A shared token', 'Isolate state'].map((x, i) => (i ? x : missed.title)));
+assert.match(missed.title, / slipped away$/);
+assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('partly'))).note, 'Partly there: it comes back tomorrow so you can try again.');
 assert.equal(R.summary(R.simulate(studied(2), 0)).note, "You didn't answer this one: it stays open for you.");
 assert.equal(R.summary(R.simulate(lesson(2), 0)).note, '');
 for (let i = 0; i < 120; i++) {

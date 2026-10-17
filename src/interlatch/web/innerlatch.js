@@ -1422,14 +1422,13 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
     "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map."),
     "answer": t("Answer"), "introStudy": t("A wild {monster} appears! It's a lesson from your own sessions."),
-    "studyAsk": t("{question}"), "checking": t("Checking…"), "answerAgain": t("Couldn't check it: {error}"), "weakTag": t("weak spot"),
-    "lineAnswer": t("You answer for {hero}."), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."),
-    "linePartly": t("Partly there: {n} damage."), "lineNotYet": t("Not this one: the right answer is on the end screen."),
-    "lineBreak": t("{monster}'s charge breaks."),
+    "studyAsk": t("{question}"), "checking": t("Checking…"), "answerAgain": t("Couldn't check it: {error}"), "weakTag": t("weak spot"), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."), "lineNotYet": t("Not this one: the right answer is on the end screen."),
+    "lineMiss": t("{monster} slips away."), "missTitle": t("{monster} slipped away"),
+    "choose": t("Choose an answer, then Answer."), "preparing": t("Preparing the question…"),
     "studyGot": t("You understood it: it counts toward your readiness in {module}."),
     "studyBack": t("It comes back in {n} days for another look."),
     "studyOwned": t("Got it again on another day: it's yours now ({module}). Next look in {n} days."),
-    "studyPartly": t("Partly there: it will come back so you can try again."), "studyNot": t("Not yet: it will come back."),
+    "studyPartly": t("Partly there: it comes back tomorrow so you can try again."), "studyNot": t("Not yet: it comes back tomorrow."),
     "studyNone": t("You didn't answer this one: it stays open for you."), "principleTitle": t("The principle") };
 }
 async function advBattlePage(build, back, crumbs, token) {
@@ -1473,6 +1472,7 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
       h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
   }
   const field = /^\w+$/.test(params.field || "") ? params.field : null; // walked into it on a region's field
+  if (field) await mapLoad().catch(() => null); // the region's name, for the crumbs
   const back = field ? `#/innerlatch/adventure/field/${field}` : `#/innerlatch/adventure?lesson=${id}`;
   const onWin = async () => { // the battle shows the reward: gold and loot on a first clear, nothing on a second
     const r = await lbPost("/api/party/cleared", { id: Number(id), cleared: true });

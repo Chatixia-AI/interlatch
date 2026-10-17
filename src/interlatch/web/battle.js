@@ -8,10 +8,11 @@
    all: it holds at 1 HP until the person marks the milestone done on the Quests page.
 
    Study: when the page has a question for the lesson (opts.study: its scene and question, at once or as a promise),
-   the fight is a study battle. The lesson's title stays hidden until it's answered; Answer, the first command, shows
-   its options (in an order of the fight's own), the page checks the pick (opts.onAnswer) and the verdict lands as the
-   fight's best move: "got it" a large share of the monster's HP and every later blow harder, "not yet" nothing but why
-   that one is wrong and the answer shown. One pick a fight; Attack and the rest still finish it either way.
+   the fight is a study battle: no Attack, Skill or the rest, only its options (in an order of the fight's own) to
+   choose from and Answer to lock one in. The lesson's title stays hidden until it's answered. The page checks the
+   answer (opts.onAnswer): "got it" is the finishing blow, anything else lets the monster slip away (phase "missed"),
+   with why that one is wrong and the answer shown. One answer a fight. Without a question after all (none came), it's
+   an ordinary fight.
 
    Art is drawn on a <canvas> (Sprites for the agents, Scene.art for the monsters, with a pixel blob if either is
    missing); the menu, the party's bars and the battle log are DOM. CSP: no inline styles (CSSOM only), no eval, no
@@ -78,7 +79,7 @@
    Battle.LABELS, Battle.LABEL_VARS (the placeholders each label may use), Battle.format(template, vars)
 
    state.phase: "hero" (waiting for the active hero's command) → "monster" → "hero" … until "won", "lost", "ran",
-   "held" (a boss at 1 HP) or "done" (a boss whose milestone is already done: no fight).
+   "missed" (a study battle answered wrong), "held" (a boss at 1 HP) or "done" (a boss whose milestone is already done).
    --------------------------------------------------------------------------------------------------------------- */
 (() => {
   "use strict";
@@ -95,8 +96,9 @@
   //   prompt       the menu's heading                                    {hero}
   //   attack / skill / item / answer / defend / run / back   the commands
   //   introStudy {monster}: the opening line of a study battle (no title: it would give the answer away); studyAsk
-  //     {question}: the question; checking, answerAgain {error}: while a pick is checked, or when it couldn't be; weakTag: under the
-  //     damage a good answer deals; lineAnswer {hero}; lineGot / linePartly {monster} {n}; lineNotYet; lineBreak {monster}
+  //     {question}: the question; choose, preparing: under the options, or while they're written; checking, answerAgain
+  //     {error}: while an answer is checked, or when it couldn't be; weakTag: under the finishing blow; lineGot {monster}
+  //     {n}; lineNotYet, lineMiss {monster}, missTitle {monster}: a wrong answer, the monster slipping away
   //   studyGot {module}, studyBack {n}, studyOwned {module} {n}, studyPartly, studyNot, studyNone; principleTitle: the
   //     end screen's study lines
   //   skillLevel / skillGear / skillNone / skillCost   a skill's row: its level, what gear adds ({n}), its MP cost
@@ -149,13 +151,14 @@
     lineDrain: "{hero} loses {mp} MP.", lineHeal: "{monster} recovers {n} HP.", lineKo: "{hero} is knocked out!",
     lineCharged: "{monster} is gathering strength. Defend!",
     introStudy: "A wild {monster} appears! It's a lesson from your own sessions.", studyAsk: "{question}",
-    checking: "Checking…", answerAgain: "Couldn't check it: {error}", weakTag: "weak spot", lineAnswer: "You answer for {hero}.",
-    lineGot: "You got it! {monster}'s weak spot is exposed: {n} damage.", linePartly: "Partly there: {n} damage.",
-    lineNotYet: "Not this one: the right answer is on the end screen.", lineBreak: "{monster}'s charge breaks.",
+    checking: "Checking…", answerAgain: "Couldn't check it: {error}", weakTag: "weak spot",
+    lineGot: "You got it! {monster}'s weak spot is exposed: {n} damage.",
+    lineNotYet: "Not this one: the right answer is on the end screen.", lineMiss: "{monster} slips away.",
+    missTitle: "{monster} slipped away", choose: "Choose an answer, then Answer.", preparing: "Preparing the question…",
     studyGot: "You understood it: it counts toward your readiness in {module}.",
     studyBack: "It comes back in {n} days for another look.",
     studyOwned: "Got it again on another day: it's yours now ({module}). Next look in {n} days.",
-    studyPartly: "Partly there: it will come back so you can try again.", studyNot: "Not yet: it will come back.",
+    studyPartly: "Partly there: it comes back tomorrow so you can try again.", studyNot: "Not yet: it comes back tomorrow.",
     studyNone: "You didn't answer this one: it stays open for you.", principleTitle: "The principle",
     lineWin: "{monster} is beaten!", lineLose: "The party falls back.",
     lineHold: "{monster} holds at 1 HP: only you can defeat this boss.",
@@ -210,7 +213,8 @@
     lineDodge: ["hero"], lineDrain: ["hero", "mp"], lineHeal: ["monster", "n"], lineKo: ["hero"], lineCharged: ["monster"],
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
     bossDone: ["monster"], bossDoneText: ["text"], introStudy: ["monster"], studyAsk: ["question"], answerAgain: ["error"],
-    lineAnswer: ["hero"], lineGot: ["monster", "n"], linePartly: ["monster", "n"], lineBreak: ["monster"], studyGot: ["module"],
+    lineGot: ["monster", "n"], studyGot: ["module"],
+    lineMiss: ["monster"], missTitle: ["monster"],
     studyBack: ["n"], studyOwned: ["module", "n"],
   };
   for (const k of Object.keys(LABELS)) if (k.startsWith("move.")) LABEL_VARS[k] = ["monster"];
@@ -235,8 +239,7 @@
   const WIPE_ROUNDS = 10;   // the monster deals the party's whole HP in ~10/d^0.7 rounds (a boss: 10/d^0.5)
   const SKILL_COST = 6, CRIT = 1 / 16, GUARD = 0.45;
   const GEAR_SHARE = 0.5;   // the part of the party's gear the monster is sized to
-  const STUDY_HIT = { got_it: 0.6, partly: 0.3, not_yet: 0 };     // a judged answer: this share of the monster's HP...
-  const STUDY_WEAK = { got_it: 1.5, partly: 1.2, not_yet: 1 };    // ...and every later blow of the party's this much harder
+  const VERDICTS = ["got_it", "partly", "not_yet"]; // a checked answer: only "got it" beats the monster
 
   function rng(seed) {
     let a = seed >>> 0;
@@ -357,7 +360,7 @@
     const state = { seed, attempt: Math.max(0, Math.floor(num(attempt))), boss: !!enc.boss, attr: s.attr, modules: s.modules,
       heroes: s.heroes, foe: s.foe, round: 1, phase: "hero", active: 0, log: [], events: [],
       lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false,
-      study: null, weak: 1 };
+      study: null };
     const ev = state.events, foe = state.foe;
     if (enc.boss && enc.boss.status === "done") {
       state.phase = "done";
@@ -486,7 +489,7 @@
     h.guard = false;
     const boost = state.template ? 1.6 : 1;
     state.template = false;
-    let n = Math.max(1, Math.round(h.atk * mult * boost * state.weak * (0.85 + 0.3 * roll())));
+    let n = Math.max(1, Math.round(h.atk * mult * boost * (0.85 + 0.3 * roll())));
     const crit = roll() < CRIT;
     if (crit) n = Math.round(n * 1.6);
     const before = foe.hp;
@@ -515,28 +518,29 @@
   }
   // the person's judged answer, as the active hero's move: once a fight. "got it" and "partly" take a share of the
   // monster's HP, break a charge and make later blows harder; "not yet" uses the turn and nothing else
+  // the person's checked answer ends a study battle: "got it" is the finishing blow (the monster is beaten), anything
+  // else lets it slip away ("missed": nothing beaten, the answer shown on the end screen)
   function answer(state, h, a, ev) {
-    const st = state.study, verdict = a && STUDY_HIT[a.verdict] != null ? a.verdict : null, foe = state.foe;
+    const st = state.study, verdict = a && VERDICTS.includes(a.verdict) ? a.verdict : null, foe = state.foe;
     if (!st || st.verdict || !verdict) return ev;
     const text = (v) => (typeof v === "string" ? v.trim() : "");
     Object.assign(st, { verdict, feedback: text(a.feedback), principle: text(a.principle), answer: text(a.answer),
       backIn: Math.max(0, Math.floor(num(a.back_in))), owned: a.owned === true });
-    h.guard = false;
     ev.push({ t: "answered", verdict });
-    say(state, ev, "lineAnswer", { hero: h.name });
-    if (verdict === "not_yet") {
+    if (verdict !== "got_it") {
       say(state, ev, "lineNotYet", {});
       if (st.feedback) say(state, ev, null, { text: st.feedback });
-      advance(state, ev);
+      state.phase = "missed";
+      ev.push({ t: "miss" });
+      say(state, ev, "lineMiss", { monster: foe.name });
+      ev.push({ t: "end", phase: "missed" });
       return ev;
     }
-    state.weak = STUDY_WEAK[verdict];
-    const n = Math.max(1, Math.round(foe.maxHp * STUDY_HIT[verdict])), before = foe.hp;
-    foe.hp = Math.max(0, foe.hp - n);
-    ev.push({ t: "strike", hero: h.i, n, crit: false, skill: null, lv: 0, study: true, hp: foe.hp, mp: h.mp, was: before });
-    say(state, ev, verdict === "got_it" ? "lineGot" : "linePartly", { monster: foe.name, n });
+    const n = foe.hp, before = foe.hp;
+    foe.hp = 0;
+    ev.push({ t: "strike", hero: h.i, n, crit: false, skill: null, lv: 0, study: true, hp: 0, mp: h.mp, was: before });
+    say(state, ev, "lineGot", { monster: foe.name, n });
     if (st.feedback) say(state, ev, null, { text: st.feedback });
-    if (foe.charged) { foe.charged = false; ev.push({ t: "uncharge" }); say(state, ev, "lineBreak", { monster: foe.name }); }
     settle(state, ev);
     return ev;
   }
@@ -737,7 +741,7 @@
   function summary(state, labels = LABELS, formatDate = null, encounter = null) {
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
     const foe = state.foe, lesson = (encounter && encounter.lesson) || {}, st = state.study;
-    const studied = st && ["won", "lost", "ran"].includes(state.phase);
+    const studied = st && ["won", "lost", "ran", "missed"].includes(state.phase);
     const module = (state.modules[0] && state.modules[0].name) || "";
     const note = !studied ? "" : st.verdict === "got_it" ? (st.owned ? fill(lab("studyOwned"), { module, n: st.backIn })
       : fill(lab("studyGot"), { module }) + (st.backIn ? " " + fill(lab("studyBack"), { n: st.backIn }) : ""))
@@ -753,6 +757,8 @@
         text: fill(lab("winText"), { agent: lead.name, date, xp: Math.max(0, Math.round(num(lesson.xp))) }), ...extra,
         quoteTitle: said ? lab("winAnswer") : lab("winExcerpt"), quote: said || excerpt(lesson.body) };
     }
+    if (state.phase === "missed") return { title: fill(lab("missTitle"), { monster: foe.name }), text: "", ...extra,
+      quoteTitle: st && st.answer ? lab("winAnswer") : "", quote: (st && st.answer) || "" };
     if (state.phase === "lost") return { title: lab("lose"), text: lab("loseText"), ...extra, quoteTitle: "", quote: "" };
     if (state.phase === "held") return { title: fill(lab("hold"), { monster: foe.name }), text: lab("holdText"), ...extra, quoteTitle: "", quote: "" };
     if (state.phase === "done") return { title: fill(lab("bossDone"), { monster: foe.name }), text: fill(lab("bossDoneText"), { text: foe.title }), ...extra, quoteTitle: "", quote: "" };
@@ -760,7 +766,7 @@
   }
 
   const RULES = Object.freeze({ rng, seedOf, difficulty, gearOf, heroStats, pickParty, stats, setup, ask, skillOptions, itemOptions,
-    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS, STUDY_HIT, STUDY_WEAK });
+    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS });
 
   // =====================================================================================
   // Colour and theme: read from the page's tokens, like scene.js, tinted toward the region's hue
@@ -977,11 +983,13 @@
 
     // ---- the menu: Answer (a study battle, until it's answered), Attack, Skill, Item, Defend, Run; Answer, Skill and
     // Item open their own panels; arrows move, Esc goes back
-    let mode = "main", busy = true, judging = false, judgeError = "";
-    // a pick among the options: the page checks it (opts.onAnswer, with the option's index as the page sent it) and the
-    // verdict lands as the fight's move; a failed check says so, and the person may pick again
+    let mode = "main", busy = true, judging = false, judgeError = "", chosen = null;
+    // a study battle has nothing but its question: choose an option, then Answer; the page checks it (opts.onAnswer, with
+    // the option's index as the page sent it) and the verdict ends the fight; a failed check says so, and the person
+    // may answer again
+    const studying = () => (!!st.study && !st.study.verdict) || (studyLater && !studyDone && !st.study);
     function choose(i) {
-      if (judging || busy || !st.study || st.study.verdict) return;
+      if (judging || busy || !st.study || st.study.verdict || i == null) return;
       judging = true; judgeError = "";
       renderMenu();
       Promise.resolve(call("onAnswer", i)).then((r) => {
@@ -997,9 +1005,8 @@
         renderMenu();
       });
     }
-    const answering = () => (!!st.study && !st.study.verdict) || (studyLater && !studyDone);
-    const main = () => [...(answering() ? [["answer", lab("answer")]] : []), ["attack", lab("attack")], ["skill", lab("skill")],
-      ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
+    const main = () => [["attack", lab("attack")], ["skill", lab("skill")], ["item", lab("item")], ["defend", lab("defend")],
+      ["run", lab("run")]];
     function button(label, onClick, extra) {
       const b = el("button", "bt-cmd");
       b.type = "button";
@@ -1010,7 +1017,7 @@
     function renderMenu() {
       cmds.textContent = "";
       cmds.classList.toggle("bt-sub", mode !== "main");
-      if (mode === "answer" && !(st.study && !st.study.verdict)) mode = "main";
+      mode = studying() ? "answer" : mode === "answer" ? "main" : mode;
       menuHead.classList.toggle("bt-ask", mode === "answer");
       root.classList.toggle("bt-asking", mode === "answer");
       const hero = st.heroes[st.active];
@@ -1021,21 +1028,28 @@
         wrap.append(list, cue);
         return { wrap, list };
       };
-      if (mode === "answer" && hero) {
+      if (mode === "answer" && !st.study) { // its question is still being written
+        menuHead.textContent = lab("preparing");
+      } else if (mode === "answer") {
         rich(menuHead, st.study.question); // the question over its options, whole: it wraps
         const { wrap, list } = sub();
         st.study.order.forEach((i, k) => {
-          const b = button(st.study.options[i], () => choose(i), el("span", "bt-cmd-meta", String(k + 1)));
+          const b = button(st.study.options[i], () => { if (!judging) { chosen = i; renderMenu(); focusChoice(); } },
+            el("span", "bt-cmd-meta", String(k + 1)));
           b.classList.add("bt-skill", "bt-choice");
+          b.classList.toggle("bt-chosen", chosen === i);
+          b.setAttribute("aria-pressed", chosen === i ? "true" : "false");
           b.dataset.choice = String(i);
           if (judging) b.setAttribute("aria-disabled", "true");
           list.append(b);
         });
-        const back = button(judging ? lab("checking") : lab("back"), () => { if (!judging) { mode = "main"; renderMenu(); focusFirst(true, "answer"); } });
-        back.classList.add("bt-back");
+        const go_ = button(judging ? lab("checking") : lab("answer"), () => choose(chosen));
+        go_.classList.add("bt-back", "bt-answer-go");
+        go_.dataset.cmd = "answer";
+        if (chosen == null || judging) go_.setAttribute("aria-disabled", "true");
         if (judgeError) wrap.append(el("p", "bt-answer-error", judgeError));
-        cmds.append(wrap, back);
-        fitSub(wrap, list, back);
+        else if (chosen == null) wrap.append(el("p", "bt-answer-hint", lab("choose")));
+        cmds.append(wrap, go_); // every option in full: the panel has the deck's whole width and height
       } else if (mode === "item" && hero) {
         menuHead.textContent = lab("item");
         const { wrap, list } = sub();
@@ -1131,6 +1145,11 @@
       const at = target ? list.indexOf(target) : 0;
       list.forEach((b, i) => { b.tabIndex = i === Math.max(0, at) ? 0 : -1; });
     }
+    // after choosing: the focus stays on the option chosen (the menu was drawn again)
+    function focusChoice() {
+      const b = cmds.querySelector(`.bt-choice[data-choice="${chosen}"]`);
+      if (b) { roving(b); b.focus({ preventScroll: true }); }
+    }
     function focusFirst(force, cmd) {
       const list = items();
       const b = (cmd && list.find((x) => x.dataset.cmd === cmd)) || list[0];
@@ -1140,9 +1159,9 @@
       if (force || inside) { reveal(menuWin); b.focus({ preventScroll: true }); }
     }
     cmds.addEventListener("keydown", (e) => {
-      if (mode === "answer" && /^[1-9]$/.test(e.key) && st.study) { // 1-4 pick an option
+      if (mode === "answer" && /^[1-9]$/.test(e.key) && st.study) { // 1-4 choose an option (Answer locks it in)
         const i = st.study.order[Number(e.key) - 1];
-        if (i != null) { e.preventDefault(); choose(i); }
+        if (i != null && !judging) { e.preventDefault(); chosen = i; renderMenu(); focusChoice(); }
         return;
       }
       const list = items(), i = list.indexOf(document.activeElement);
@@ -1174,7 +1193,10 @@
       const used = evs.find((e) => e.t === "item");
       if (used) call("onUseItem", used.id); // the page spends it (POST /api/party/use); the battle counts it down itself
       mode = "main";
-      if (action.type === "answer") renderMenu(); // the party is back in view for what the answer does
+      if (action.type === "answer") { // the answer ends the fight: the menu goes, the party is back in view for it
+        menuWin.hidden = true;
+        root.classList.remove("bt-asking");
+      }
       if (st.phase === "hero" && evs.every((e) => e.t === "say")) { // nothing happened (no MP): stay on this hero
         play(evs, () => {});
         return;
@@ -1239,7 +1261,8 @@
           try { href = opts.sessionHref(lesson.session_id) || ""; } catch { href = ""; }
           if (href) { const a = el("a", "bt-btn", lab("openSession")); a.href = href; acts.append(a); }
         }
-      } else if (st.phase === "lost") btn(lab("retry"), "bt-primary", () => call("onLose"));
+      } else if (st.phase === "missed") btn(lab("readLesson"), "bt-primary", () => call("onReadLesson", lesson.id));
+      else if (st.phase === "lost") btn(lab("retry"), "bt-primary", () => call("onLose"));
       else if (st.phase === "held") btn(lab("openQuests"), "bt-primary", () => call("onQuests"));
       btn(lab("backToMap"), "", () => call("onExit"));
       card.append(acts);
@@ -1371,6 +1394,7 @@
         case "charge": shown.foe.charged = true; spawn({ kind: "ring", t0, dur: 700 }); return 720;
         case "uncharge": shown.foe.charged = false; return 0;
         case "answered": paintEpithet(); return 0; // the title shows once it can't give the answer away
+        case "miss": shown.foe.down = true; shown.foe.charged = false; spawn({ kind: "dissolve", t0, dur: 1000 }); return 1050; // it slips away
         case "ask": if (!busy) renderMenu(); return 0;
         case "heal": {
           spawn({ kind: "crosses", t0, dur: 800 });
