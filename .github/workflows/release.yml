@@ -76,7 +76,7 @@ jobs:
 
   test:
     needs: plan
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
@@ -238,7 +238,7 @@ jobs:
     if: >-
       !cancelled() && needs.test.result == 'success'
       && contains(fromJSON('["success", "skipped"]'), needs.release.result)
-    runs-on: macos-14  # Apple silicon; PyInstaller cannot cross-build, so an Intel build needs an Intel runner
+    runs-on: macos-15  # Apple silicon; PyInstaller cannot cross-build, so an Intel build needs an Intel runner
     permissions:
       contents: write  # upload the DMG to the release
     env:
