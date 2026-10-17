@@ -2,7 +2,11 @@
    angle. The region's roadmap modules are its zones, cut apart by lines of trees and joined by dirt paths, with the
    region's town in the middle. Your party walks where you click or tap (or with the arrow keys and WASD), the leader
    first and the others following. In each zone a few of its uncleared lessons wander as monsters: walk into one and the
-   page opens its battle; walk into the town's gate and it opens the town.
+   page opens its battle; walk into the town's gate and it opens the town. The monsters are the lessons worth studying:
+   each zone's open ones with study material first, never the agents' own friction (study.py), more of them in the
+   main quest's zones. Open: where the person studies (data.studying), not yet understood (a win without a good answer
+   leaves it out there); elsewhere, not yet cleared. Each zone shows how many of its lessons the person understood, out
+   of what makes it ready for its gate.
 
    The art is the Adventure's (adventure.js: Adventure.art, its biomes, props and town), the agents' (sprites.js) and the
    monsters' (scene.js: Scene.art): pixel maps, no images, styles only through the CSSOM, no eval. The ground is painted
@@ -33,6 +37,8 @@
        zoneLeft    under a zone's name: its lessons still to battle    {n}
        zoneClear   under a zone's name when all its lessons are cleared
        zoneFog     a zone with no lessons yet
+       zoneYou     how many of the zone's lessons the person understood, of what makes it ready    {n} {of}
+       zoneGoal    a zone of the main quest's track
        level       a party member's level    {n}
        hint        how to move, in the corner
        empty       over the field when the region has no lessons at all */
@@ -41,6 +47,8 @@
     zoneLeft: "{n} to battle here",
     zoneClear: "All cleared here",
     zoneFog: "Unexplored: no lessons here yet",
+    zoneYou: "You understood {n}/{of}",
+    zoneGoal: "Main quest",
     level: "Lv {n}",
     hint: "Click to walk · arrow keys or WASD",
     empty: "No lessons in this region yet: nothing to battle here.",
@@ -54,7 +62,7 @@
   const T = 16;                 // world pixels a tile
   const ZONE_TILES = 240;       // tiles of field a zone
   const EDGE = 3;               // the forest band round the field, in tiles
-  const PER_ZONE = 3;           // monsters out in a zone at once (its newest uncleared lessons)
+  const PER_ZONE = [2, 4];      // monsters out in a zone at once (a main quest zone: more), its best uncleared lessons
   const CLEAR_R = 4;            // the clearing round a zone's sign, in tiles
   const TOWN_R = 5;             // the plaza round the town
   const TOWN_K = 3;             // the town's art, world pixels a pixel
@@ -277,9 +285,13 @@
       const z = zoneIndex.get((l.modules || [])[0]);
       if (z !== undefined) byZone[z].push(l);
     }
+    const goal = new Set((data && data.goal && Array.isArray(data.goal.modules)) ? data.goal.modules : []);
+    const ready = (data && data.readiness) || {};
+    const known = new Set((Array.isArray(data && data.understood) ? data.understood : []).map(String));
+    const studyable = (l) => !l.friction && (data && data.studying ? !known.has(String(l.id)) : !cleared.has(String(l.id)));
     const zones = mods.map((m, i) => ({ index: i, id: m.id, name: m.name || m.id, lessons: byZone[i].length,
-      open: byZone[i].filter((l) => !cleared.has(String(l.id))).length, site: { x: sites[i].x, y: sites[i].y },
-      sign: sites[i].sign }));
+      open: byZone[i].filter(studyable).length, goal: goal.has(m.id), you: Number(ready[m.id]) || 0,
+      site: { x: sites[i].x, y: sites[i].y }, sign: sites[i].sign }));
     const monsters = [];
     zones.forEach((z) => {
       const homes = [];
@@ -290,7 +302,9 @@
         if (d < 2 || d > 9 || Math.hypot(x - spawn.x, y - spawn.y) < 6) continue;
         homes.push({ x, y });
       }
-      const want = byZone[z.index].filter((l) => !cleared.has(String(l.id))).slice().reverse().slice(0, PER_ZONE);
+      // the lessons worth studying first (study material), the newest first; the agents' friction never
+      const want = byZone[z.index].filter(studyable).sort((a, b) => (b.study ? 1 : 0) - (a.study ? 1 : 0) || b.id - a.id)
+        .slice(0, PER_ZONE[z.goal ? 1 : 0]);
       const taken = [];
       for (const l of want) {
         const start = strHash("home" + l.id) % Math.max(1, homes.length);
@@ -711,8 +725,11 @@
       zoneShown = z;
       const zone = F.zones[z];
       if (!zone) { zoneName.textContent = F.town.name; zoneSub.textContent = F.region.name; return; }
-      zoneName.textContent = zone.name;
-      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : zone.open ? lab("zoneLeft", { n: zone.open }) : lab("zoneClear");
+      zoneName.textContent = (zone.goal ? "★ " : "") + zone.name;
+      const of = Number((opts.data || {}).ready_at) || 5;
+      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : [zone.goal ? lab("zoneGoal") : null,
+        zone.open ? lab("zoneLeft", { n: zone.open }) : lab("zoneClear"), lab("zoneYou", { n: Math.min(zone.you, of), of })].filter(Boolean).join(" · ");
+      hudZone.classList.toggle("fd-goal", !!zone.goal);
     }
 
     function render() {
@@ -759,10 +776,10 @@
       for (const z of F.zones) {
         const sx = z.sign.x * T + T / 2, sy = z.sign.y * T - 10;
         if (!seen(sx, sy, 80)) continue;
-        const txt = z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
+        const txt = (z.goal ? "★ " : "") + z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
         ctx.fillStyle = "rgba(42, 30, 18, 0.78)";
         ctx.fillRect(Math.round(bx), Math.round(by), Math.round(w), Math.round(h));
-        ctx.fillStyle = z.open ? "#ffe2a0" : "#d9e6d0";
+        ctx.fillStyle = z.goal ? "#ffd27a" : z.open ? "#ffe2a0" : "#d9e6d0";
         ctx.fillText(txt, X(sx), Y(sy) - 3 * dpr);
       }
       if (themeDark()) { ctx.fillStyle = "rgba(14, 22, 56, 0.22)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }

@@ -452,3 +452,90 @@ assert.ok(a.items.some((it) => it.count < 3), 'the first fight used nothing');
 const b = R.setup(e, 1);
 assert.deepEqual(b.items.map((it) => it.count), ALL_ITEMS.map(() => 3));
 """)
+
+
+STUDY = r'''
+const Q = {scene: 'The tests pass alone.', question: 'Why do they fail together?'};
+const studied = (i, q = Q) => ({...lesson(i), study: q});
+const answerFirst = (verdict) => (s) => (s.study && !s.study.verdict ? {type: 'answer', verdict, feedback: 'Close.', principle: 'Isolate state', answer: 'A shared token'} : R.policy(s));
+'''
+
+
+def test_a_study_battle_hides_the_title_and_asks_its_question():
+    check(STUDY + '''
+const s = R.setup(studied(3), 0);
+assert.deepEqual(s.log.map((l) => l.key), ['introStudy', null, 'studyAsk']);
+assert.ok(!JSON.stringify(s.log).includes('Lesson 3'), 'the title is in the log');
+assert.equal(s.log[1].vars.text, 'The tests pass alone.');
+assert.equal(s.log[2].vars.question, 'Why do they fail together?');
+// no question: an ordinary fight; a boss never studies; a question asked later is said once
+assert.equal(R.setup(lesson(3), 0).study, null);
+assert.equal(R.setup({...boss(1, 1), study: Q}, 0).study, null);
+const later = R.setup({...lesson(3), studyPending: true}, 0);
+assert.deepEqual(later.log.map((l) => l.key), ['introStudy']);
+assert.equal(R.ask(later, Q).filter((e) => e.t === 'say').length, 2);
+assert.deepEqual(R.ask(later, Q), []);
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: '  '}), []);
+// the dice are the same with a question or without, when nobody answers
+for (let i = 0; i < 30; i++) {
+  const a = R.simulate(studied(i), 1), b = R.simulate(lesson(i), 1);
+  assert.equal(a.phase, b.phase);
+  assert.equal(a.round, b.round);
+}
+''')
+
+
+def test_a_judged_answer_is_the_fights_best_move_once():
+    check(STUDY + '''
+for (const [verdict, hit, weak] of [['got_it', R.STUDY_HIT.got_it, R.STUDY_WEAK.got_it], ['partly', R.STUDY_HIT.partly, R.STUDY_WEAK.partly]]) {
+  const s = R.setup(studied(5), 0);
+  s.foe.charged = true;
+  const ev = R.heroAction(s, {type: 'answer', verdict, feedback: 'Close.'});
+  assert.deepEqual(ev.find((x) => x.t === 'answered'), {t: 'answered', verdict});
+  assert.equal(s.foe.maxHp - s.foe.hp, Math.round(s.foe.maxHp * hit));
+  assert.equal(s.weak, weak);
+  assert.ok(!s.foe.charged && s.log.some((l) => l.key === 'lineBreak'));
+  assert.ok(s.log.some((l) => l.key === null && l.vars.text === 'Close.'));
+  assert.deepEqual(R.heroAction(s, {type: 'answer', verdict: 'got_it'}), []);  // one answer a fight
+}
+const n = R.setup(studied(5), 0), hp = n.foe.hp, who = n.active;
+R.heroAction(n, {type: 'answer', verdict: 'not_yet'});
+assert.equal(n.foe.hp, hp);
+assert.ok(n.active !== who || n.phase === 'monster');  // the turn is spent
+assert.equal(n.weak, 1);
+for (const bad of [{type: 'answer'}, {type: 'answer', verdict: 'maybe'}]) assert.deepEqual(R.heroAction(R.setup(studied(5), 0), bad), []);
+assert.deepEqual(R.heroAction(R.setup(lesson(5), 0), {type: 'answer', verdict: 'got_it'}), []);  // no question asked
+// over 200 fights: a right answer wins every one, in fewer rounds than fighting alone
+let plain = 0, got = 0, won = 0;
+for (let i = 0; i < 200; i++) {
+  plain += R.simulate(studied(i), 0).round;
+  const q = R.simulate(studied(i), 0, answerFirst('got_it'));
+  got += q.round; won += q.phase === 'won' ? 1 : 0;
+}
+assert.equal(won, 200);
+assert.ok(got < plain * 0.65, got + ' vs ' + plain);
+''')
+
+
+def test_the_end_screen_says_what_was_understood_and_every_line_fills():
+    check(STUDY + '''
+const won = R.simulate(studied(2), 0, answerFirst('got_it'));
+const sum = R.summary(won, B.LABELS, null, studied(2));
+assert.match(sum.note, /^You understood it: it counts toward your readiness in Module 0\\.$/);
+assert.equal(sum.feedback, 'Close.');
+assert.equal(sum.principle, 'Isolate state');
+assert.equal(sum.quote, 'A shared token');
+assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('partly'))).note, 'Partly there: it will come back so you can try again.');
+assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('not_yet'))).note, 'Not yet: it will come back.');
+assert.equal(R.summary(R.simulate(studied(2), 0)).note, "You didn't answer this one: it stays open for you.");
+assert.equal(R.summary(R.simulate(lesson(2), 0)).note, '');
+for (let i = 0; i < 120; i++) {
+  const s = R.simulate(studied(i), i % 3, answerFirst(['got_it', 'partly', 'not_yet'][i % 3]));
+  for (const line of s.log) {
+    const text = line.key ? B.format(B.LABELS[line.key], line.vars) : line.vars.text;
+    assert.ok(line.key == null || line.key in B.LABELS, 'no label ' + line.key);
+    assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(text), 'unfilled: ' + text);
+  }
+  for (const t of Object.values(R.summary(s))) assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(t), 'unfilled: ' + t);
+}
+''')

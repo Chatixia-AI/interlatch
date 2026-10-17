@@ -357,6 +357,9 @@ JA: dict[str, str] = {
     "no such quest": "そのクエストはありません",
     "no such track": "そのトラックはありません",
     "no such lesson": "その教訓はありません",
+    "study battles run on your own computer": "学びの戦闘は自分のコンピューターでだけ遊べます",
+    "the analysis model isn't available: {reason}": "分析モデルを使えません：{reason}",
+    "write an answer first": "先に答えを書いてください",
     # ---- the Town & gear (bag.py)
     "no such item": "その道具はありません",
     "this isn't sold here": "これはここでは売っていません",

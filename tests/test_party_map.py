@@ -21,7 +21,7 @@ from test_party import ATTRS, BOB_PC, TEAMMATE_PC, _lesson, _session, catalog, h
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
-LESSON_KEYS = {"id", "title", "kind", "stage", "agent", "at", "xp", "modules", "session_id", "project"}
+LESSON_KEYS = {"id", "title", "kind", "stage", "agent", "at", "xp", "modules", "session_id", "project", "study", "friction"}
 
 
 def _counts(data):
@@ -38,7 +38,8 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     _lesson(conn, old, "a note that names no module")  # not counted: not on the map
     last = _lesson(conn, new, "deploy it", agent="codex", project="/Users/test/Projects/other-app")
     data = party.adventure_map(conn, here)
-    assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents", "gold", "towns"}
+    assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents", "gold", "towns", "goal", "understood",
+                         "readiness", "ready_at", "studying"}
     assert [r["id"] for r in data["regions"]] == list(ATTRS)
     craft = data["regions"][0]
     assert {k: craft[k] for k in ("name", "about")} == {"name": "Craft", "about": "about craft"}
@@ -49,7 +50,8 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     k = data["lessons"][0]
     assert set(k) == LESSON_KEYS and k == {
         "id": first, "title": "pytest and SQL query", "kind": "fix", "stage": "established", "agent": "claude",
-        "at": "2026-09-01", "xp": 6, "modules": ["M-sql", "M-python"], "session_id": old, "project": "demo-app"}
+        "at": "2026-09-01", "xp": 6, "modules": ["M-sql", "M-python"], "session_id": old, "project": "demo-app",
+        "study": False, "friction": False}
     assert len(data["lessons"][1]["title"]) == party.MAP_TITLE_MAX and data["lessons"][2]["project"] == "other-app"
     assert data["newest"] == last and data["cleared"] == []
     assert [a["agent"] for a in data["agents"]] == list(CODING_AGENTS)

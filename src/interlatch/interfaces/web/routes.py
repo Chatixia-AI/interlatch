@@ -194,6 +194,7 @@ GET: list[Route] = [
     # the Adventure: every counted lesson as an encounter on a map, and one lesson as a battle (behind the same sign-in)
     Route("/api/party/map", PARTY, lambda h, ctx, m, q: h._json(*api.party.adventure_map(ctx, h.viewer))),
     Route("/api/party/encounter", PARTY, lambda h, ctx, m, q: h._json(*api.party.encounter(ctx, h.viewer, q))),
+    Route("/api/party/ask", PARTY, lambda h, ctx, m, q: h._json(*api.party.ask(ctx, h.viewer, q))),
     # the Town & gear: the viewer's own bag, and a region's shop (gold from wins; stock unlocked by real coverage)
     Route("/api/party/bag", PARTY, lambda h, ctx, m, q: h._json(*api.party.bag(ctx, h.viewer))),
     Route("/api/party/shop", PARTY, lambda h, ctx, m, q: h._json(*api.party.shop(ctx, h.viewer, q))),
@@ -317,7 +318,7 @@ def _party_own(h, ctx, m, body):  # the viewer's own quest log, goal, cleared en
     if m.group(1) in ("buy", "sell", "equip", "use"):
         return h._json(*api.party.action_party_bag(ctx, h.viewer, m.group(1), _body(body), here=h._from_here()))
     act = {"quest": api.party.action_party_quest, "goal": api.party.action_party_goal,
-           "cleared": api.party.action_party_cleared}[m.group(1)]
+           "cleared": api.party.action_party_cleared, "judge": api.party.action_party_judge}[m.group(1)]
     return h._json(*act(ctx, h.viewer, _body(body), here=h._from_here()))
 
 
@@ -375,7 +376,7 @@ POST: list[Route] = [
     # a Google sign-in kept on this computer: only from here
     Route(r"/api/party/(signin|signout)", HERE, _party_sign),
     # the viewer's own quest log: from here, or any person signed in to a hub, not only admins (handler.PARTY_OWN)
-    Route(r"/api/party/(quest|goal|cleared|buy|sell|equip|use|deck)", PARTY, _party_own),
+    Route(r"/api/party/(quest|goal|cleared|judge|buy|sell|equip|use|deck)", PARTY, _party_own),
     Route(r"/api/artifacts/(\d+)/reveal", LOCAL_FILES, _reveal),
     # a password: at the hub itself, or an admin of a hub with people
     Route("/api/team-store/test", OWNER, lambda h, ctx, m, b: h._json(api.hub_admin.action_team_store_test(ctx, b))),

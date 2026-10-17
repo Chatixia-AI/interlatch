@@ -90,14 +90,30 @@ for (const [mods, per] of [[1, 1], [6, 5], [12, 40], [16, 3]]) {
 
 def test_the_monsters_are_each_zones_newest_uncleared_lessons_a_few_at_a_time():
     check('''
+const zonesOf = (F) => { const by = new Map(); for (const m of F.monsters) by.set(m.zone, [...(by.get(m.zone) || []), m.id]); return by; };
 const F = F_.layout(data(6, 5, [5, 4]), 'craft');
-const byZone = new Map();
-for (const m of F.monsters) byZone.set(m.zone, [...(byZone.get(m.zone) || []), m.id]);
-// zone 0 holds lessons 1-5; 5 and 4 are cleared, so its newest uncleared are 3, 2, 1
-assert.deepEqual(byZone.get(0), [3, 2, 1]);
-assert.deepEqual(byZone.get(1), [10, 9, 8]);
-assert.ok([...byZone.values()].every((ids) => ids.length <= 3));
+const byZone = zonesOf(F);
+// zone 0 holds lessons 1-5; 5 and 4 are cleared, so its newest uncleared are 3 and 2 (two a zone off the main quest)
+assert.deepEqual(byZone.get(0), [3, 2]);
+assert.deepEqual(byZone.get(1), [10, 9]);
+assert.ok([...byZone.values()].every((ids) => ids.length <= 2));
 assert.equal(F.zones[0].open, 3);
+// lessons with study material first; the agents' friction never (nor counted as open); a main quest zone has four
+const d = data(6, 5);
+d.lessons.find((l) => l.id === 1).study = true;
+d.lessons.find((l) => l.id === 5).friction = true;
+d.goal = {id: 'T', name: 'Track', modules: ['M-c1']};
+d.readiness = {'M-c0': 2};
+const G = F_.layout(d, 'craft'), byG = zonesOf(G);
+assert.deepEqual(byG.get(0), [1, 4]);
+assert.deepEqual(byG.get(1), [10, 9, 8, 7]);
+assert.equal(G.zones[0].open, 4);
+assert.deepEqual(G.zones.map((z) => [z.goal, z.you]), [[false, 2], [true, 0], [false, 0], [false, 0], [false, 0], [false, 0]]);
+// where the person studies, a lesson stays out until it's understood, cleared or not
+const S = data(6, 5, [5, 4, 3]);
+Object.assign(S, {studying: true, understood: [5, 1]});
+assert.deepEqual(zonesOf(F_.layout(S, 'craft')).get(0), [4, 3]);
+assert.equal(F_.layout(S, 'craft').zones[0].open, 3);
 // no two monsters share a home; none starts right by the spawn
 const homes = new Set(F.monsters.map((m) => m.x + ',' + m.y));
 assert.equal(homes.size, F.monsters.length);

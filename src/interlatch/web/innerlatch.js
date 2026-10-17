@@ -1420,7 +1420,16 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "lineTemplate": t("The next blow will hit ×1.6."), "lineScript": t("{item} hits {monster} for {n} damage!"),
     "lineNoItem": t("No {item} left."), "rewardWait": t("Counting the spoils…"), "rewardGold": t("+{n} gold"),
     "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
-    "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map.") };
+    "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map."),
+    "answer": t("Answer"), "introStudy": t("A wild {monster} appears! It's a lesson from your own sessions."),
+    "studyAsk": t("{question}"), "answerHint": t("In your own words: what happened, and why?"), "submit": t("Submit"),
+    "judging": t("Judging your answer…"), "answerAgain": t("Couldn't judge it: {error}"), "weakTag": t("weak spot"),
+    "lineAnswer": t("You answer for {hero}."), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."),
+    "linePartly": t("Partly there: {n} damage."), "lineNotYet": t("Not yet. The answer is on the end screen."),
+    "lineBreak": t("{monster}'s charge breaks."),
+    "studyGot": t("You understood it: it counts toward your readiness in {module}."),
+    "studyPartly": t("Partly there: it will come back so you can try again."), "studyNot": t("Not yet: it will come back."),
+    "studyNone": t("You didn't answer this one: it stays open for you."), "principleTitle": t("The principle") };
 }
 async function advBattlePage(build, back, crumbs, token) {
   setCrumbs(crumbs, token);
@@ -1434,7 +1443,7 @@ async function advBattlePage(build, back, crumbs, token) {
   const start = (enc) => {
     try { fight?.destroy?.(); } catch (e) { /* gone */ }
     host.replaceChildren();
-    fight = Battle.mount(host, { ...enc, attempt, labels: advBattleLabels(), reducedMotion: stillMotion(),
+    fight = Battle.mount(host, { ...enc, attempt, labels: { ...advBattleLabels(), ...(enc.backLabel ? { backToMap: enc.backLabel } : {}) }, reducedMotion: stillMotion(),
       formatDate: (at) => fmtDateY(partyDay(at)) });
   };
   const cb = {
@@ -1470,13 +1479,24 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     if (sbSection === "adventure") buildSidebar("adventure");
     return r ? r.reward || null : false; // false: the win wasn't saved (the battle says so)
   };
+  // a study battle: the lesson's question (asked once; the model may write one, which can take a few seconds), the
+  // person's answer judged and kept on this computer (knowledge/study.py)
+  const study = api("/api/party/ask", { id }).then((r) => (r?.available ? { scene: r.scene, question: r.question } : null), () => null);
+  const onAnswer = async (text) => {
+    const r = await post("/api/party/judge", { id: Number(id), answer: text });
+    if (!r || r.error) throw new Error(r?.error || t("no verdict came back"));
+    if (mapCache) { mapCache.understood = r.understood; mapCache.readiness = r.readiness; }
+    return r;
+  };
   let first = encounter; // a retry asks again: the items used in the lost fight are gone
   return advBattlePage(async (cb) => {
     const enc = first || await api("/api/party/encounter", { id }).catch(() => ({ ...encounter, items: [] })); // never the old counts
     first = null;
-    return { encounter: enc, ...cb, onWin };
+    return { encounter: enc, ...cb, onWin, study, onAnswer, ...(field ? { backLabel: t("Back to the field") } : {}) };
   }, back, [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"],
-    ...(field ? [[(mapCache?.regions || []).find((r) => r.id === field)?.name || field, back]] : []), [plainTitle(encounter.lesson.title)]], token);
+    ...(field ? [[(mapCache?.regions || []).find((r) => r.id === field)?.name || field, back]] : []),
+    // the monster and its module, never the lesson's title: it can give a study battle's answer away
+    [[ADV_KIND_NAME[encounter.lesson.kind] || t("Battle"), encounter.lesson.modules?.[0]?.name].filter(Boolean).join(" · ")]], token);
 });
 route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
   const token = renderSeq;
@@ -1545,6 +1565,7 @@ function partyRegion(m) {
 function fieldLabels() { // the field engine's words (field.js LABELS), in the page's language
   return { "field": t("{region}: a field to explore. Click or tap where to walk, or use the arrow keys or WASD. Walk into a monster to battle it, or into the town's gate to shop."),
     "zoneLeft": t("{n} to battle here"), "zoneClear": t("All cleared here"), "zoneFog": t("Unexplored: no lessons here yet"),
+    "zoneYou": t("You understood {n}/{of}"), "zoneGoal": t("Main quest"),
     "level": t("Lv {n}"), "hint": t("Click to walk · arrow keys or WASD"), "empty": t("No lessons in this region yet: nothing to battle here.") };
 }
 route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
@@ -1561,14 +1582,17 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
   const x = advTally(m).by[attr] || { total: 0, cleared: 0 };
   const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon(attr, 3),
     h("div", null, h("h1", null, region.name),
-      h("div", { class: "sub" }, x.total ? t("Walk into a monster to battle it. {n} of {total} cleared here.", { n: fmtNum(x.cleared), total: fmtNum(x.total) })
-        : t("No lessons in this region yet: nothing to battle here.")))),
+      h("div", { class: "sub" }, !x.total ? t("No lessons in this region yet: nothing to battle here.")
+        : m.studying ? t("Walk into a monster and answer its question: each lesson you understand fills your readiness for its module.")
+        : t("Walk into a monster to battle it. {n} of {total} cleared here.", { n: fmtNum(x.cleared), total: fmtNum(x.total) })))),
     h("div", { class: "head-actions" }, goldChip(m.gold),
       h("a", { class: "btn small", href: `#/innerlatch/adventure/town/${attr}` }, icon("home"), townName(m, attr)),
       h("a", { class: "btn small", href: "#/innerlatch/adventure" }, icon("map"), t("World map"))));
   const host = h("div", { class: "fd-host" });
   const page = h("div", { class: "party-page adv-page field" }, head, host,
-    h("p", { class: "muted small adv-note" }, t("Battles don't change levels: an agent's XP comes from its lessons. A win marks the encounter cleared.")));
+    h("p", { class: "muted small adv-note" }, m.studying
+      ? t("Your answers count only toward your own readiness, kept on this computer; your agents' levels come from their lessons.")
+      : t("Battles don't change levels: an agent's XP comes from its lessons. A win marks the encounter cleared.")));
   whenShown(host, () => {
     let field;
     try {
@@ -1579,8 +1603,11 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
         onHover: (item, at) => {
           if (!item) { hideTip(); return; }
           const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 }, l = item.lesson;
-          if (item.type === "monster") showTip(where, plainTitle(l.title), [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),
-            t("Walk into it to battle"));
+          if (item.type === "monster") { // its kind and module, never its title: that can give the answer away
+            const mod = region.modules.find((x) => x.id === l.modules?.[0]);
+            showTip(where, [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), mod?.name].filter(Boolean).join(" · "),
+              [l.project, agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "), t("Walk into it to battle"));
+          }
           else if (item.type === "town") showTip(where, item.name, region.name, t("Walk into its gate to shop"));
           else if (item.type === "sign") showTip(where, item.zone.name, region.name, !item.zone.lessons ? t("Unexplored: no lessons here yet")
             : item.zone.open ? t("{n} to battle here", { n: fmtNum(item.zone.open) }) : t("All cleared here"));

@@ -29,8 +29,8 @@ HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub
             "/api/hub/withdraw")
 # POSTs any person signed in to a hub may make, not only admins: their own Party quest log, goal, cleared encounters,
 # bag and decks (routes.PARTY decides)
-PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/cleared", "/api/party/buy", "/api/party/sell",
-             "/api/party/equip", "/api/party/use", "/api/party/deck")
+PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/cleared", "/api/party/judge", "/api/party/buy",
+             "/api/party/sell", "/api/party/equip", "/api/party/use", "/api/party/deck")
 
 log = logging.getLogger("interlatch.server")
 SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "

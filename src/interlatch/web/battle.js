@@ -7,6 +7,12 @@
    onWin); the victory text says the XP was earned when the agent learned the lesson. A boss can't be beaten here at
    all: it holds at 1 HP until the person marks the milestone done on the Quests page.
 
+   Study: when the page has a question for the lesson (opts.study: its scene and question, at once or as a promise),
+   the fight is a study battle. The lesson's title stays hidden until it's answered; Answer, the first command, lets
+   the person write what they know, the page has it judged (opts.onAnswer) and the verdict lands as the fight's best
+   move: "got it" a large share of the monster's HP and every later blow harder, "partly" less, "not yet" nothing but
+   the answer shown. One answer a fight; Attack and the rest still finish it either way.
+
    Art is drawn on a <canvas> (Sprites for the agents, Scene.art for the monsters, with a pixel blob if either is
    missing); the menu, the party's bars and the battle log are DOM. CSP: no inline styles (CSSOM only), no eval, no
    data:/blob: images.
@@ -26,6 +32,9 @@
                                (a lesson that paid out before: "no gold this time") or of false (saving the win failed:
                                "try it again from the map"); undefined, or no promise, shows no reward line
      opts.onUseItem(id)        an item was used (once per use; the page POSTs /api/party/use); the battle counts it down
+     opts.study                {scene, question} | a Promise of it (or of null: no study battle this time)
+     opts.onAnswer(text)       -> Promise of {verdict: "got_it"|"partly"|"not_yet", feedback, principle, answer};
+                               a rejection's message is said, and the person may answer again
      opts.onLose()             Retry pressed on the defeat screen (the page remounts with attempt + 1)
      opts.onRun()              Run chosen (no confirmation); the page goes back to the map
      opts.onExit()             "Back to the map" on any end screen
@@ -48,8 +57,10 @@
      setup(encounter, attempt, labels?) -> state   (state.events: the intro to play, state.log: every line said)
      skillOptions(state, heroIndex) -> [{id, name, level, own, gear, cost, usable}]   level = own + gear
      itemOptions(state) -> [{id, name, kind, count, target, usable}]   what the Item command offers the active hero
-     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"item"|"defend"|"run", module?, id?,
-                                                    target?}; an item uses the hero's turn and counts down by one:
+     ask(state, study) -> events           make it a study battle (its scene and question said), before it's answered
+     heroAction(state, action, rng?) -> events      action {type: "attack"|"skill"|"item"|"answer"|"defend"|"run", module?,
+                                                    id?, target?, verdict?, feedback?, principle?, answer?}; an answer
+                                                    is the judged one; an item uses the hero's turn and counts down by one:
          c:potion +40% HP (the active hero), c:ether +50% MP (the active hero), c:phoenix revives the first knocked-out
          hero at 30% HP (not usable when nobody is down), c:smoke a sure escape, l:patch +25% HP everyone, l:sign 40% less
          damage for 2 monster turns, l:adr the monster loses its next turn, l:insight +30% MP everyone, l:template the
@@ -59,7 +70,8 @@
    Balance: the monster is sized to the party without gear plus half of what gear adds, so an ungeared party meets the
    same fight as before gear existed and gear makes fights easier without making them instant.
      simulate(encounter, attempt, policy?, maxRounds?) -> state
-     summary(state, labels?, formatDate?) -> {title, text, quoteTitle, quote}   the end screen's words
+     summary(state, labels?, formatDate?) -> {title, text, note, feedback, quoteTitle, quote, principle}   the end screen's
+                                           words (note, feedback, principle: the study battle's, "" without one)
      rewardLines(result, labels?) -> [{kind: "gold"|"loot"|"none"|"failed", text}]   the win screen's reward lines
    Battle.LABELS, Battle.LABEL_VARS (the placeholders each label may use), Battle.format(template, vars)
 
@@ -79,7 +91,11 @@
   //   level / hp / mp / hpValue   the party window                      {n} / – / – / {hp} {max}
   //   taught       the tag on the hero who taught the lesson
   //   prompt       the menu's heading                                    {hero}
-  //   attack / skill / item / defend / run / back   the commands
+  //   attack / skill / item / answer / defend / run / back   the commands
+  //   introStudy {monster}: the opening line of a study battle (no title: it would give the answer away); studyAsk
+  //     {question}: the question; answerHint, submit, judging, answerAgain {error}: the answer box; weakTag: under the
+  //     damage a good answer deals; lineAnswer {hero}; lineGot / linePartly {monster} {n}; lineNotYet; lineBreak {monster}
+  //   studyGot {module}, studyPartly, studyNot, studyNone; principleTitle: the end screen's study lines
   //   skillLevel / skillGear / skillNone / skillCost   a skill's row: its level, what gear adds ({n}), its MP cost
   //   itemCount / itemTarget   an item's row: how many are left ({n}), who it will be used on ({hero})
   //   itemNone     the bag is empty
@@ -108,7 +124,7 @@
     region: "Battle: {monster}", scene: "{monster} faces {heroes}", epithet: "«{title}»",
     bossEpithet: "Milestone {n}: {text}", round: "Round {n}", level: "Lv {n}", hp: "HP", mp: "MP", hpValue: "{hp}/{max}",
     taught: "Taught it", prompt: "What will {hero} do?", log: "Battle log", commands: "Commands",
-    attack: "Attack", skill: "Skill", item: "Item", defend: "Defend", run: "Run", back: "Back",
+    attack: "Attack", skill: "Skill", item: "Item", answer: "Answer", defend: "Defend", run: "Run", back: "Back",
     skillLevel: "Lv {n}", skillGear: "+{n} gear", skillNone: "untrained", skillCost: "{n} MP", attrSkill: "{attr} lore",
     itemCount: "×{n}", itemTarget: "→ {hero}", itemNone: "The bag is empty.", itemNoTarget: "Nobody is knocked out.",
     itemFullHp: "Everyone is at full HP.", itemFullMp: "Everyone is at full MP.", more: "More below",
@@ -129,6 +145,14 @@
     lineHit: "{hero} takes {n} damage.", lineGuarded: "{hero} blocks: only {n} damage.", lineDodge: "{hero} dodges!",
     lineDrain: "{hero} loses {mp} MP.", lineHeal: "{monster} recovers {n} HP.", lineKo: "{hero} is knocked out!",
     lineCharged: "{monster} is gathering strength. Defend!",
+    introStudy: "A wild {monster} appears! It's a lesson from your own sessions.", studyAsk: "{question}",
+    answerHint: "In your own words: what happened, and why?", submit: "Submit", judging: "Judging your answer…",
+    answerAgain: "Couldn't judge it: {error}", weakTag: "weak spot", lineAnswer: "You answer for {hero}.",
+    lineGot: "You got it! {monster}'s weak spot is exposed: {n} damage.", linePartly: "Partly there: {n} damage.",
+    lineNotYet: "Not yet. The answer is on the end screen.", lineBreak: "{monster}'s charge breaks.",
+    studyGot: "You understood it: it counts toward your readiness in {module}.",
+    studyPartly: "Partly there: it will come back so you can try again.", studyNot: "Not yet: it will come back.",
+    studyNone: "You didn't answer this one: it stays open for you.", principleTitle: "The principle",
     lineWin: "{monster} is beaten!", lineLose: "The party falls back.",
     lineHold: "{monster} holds at 1 HP: only you can defeat this boss.",
     win: "{monster} is beaten!", winText: "{agent} learned this on {date}: +{xp} XP then. Battles don't change levels.",
@@ -181,7 +205,8 @@
     rewardGold: ["n"], rewardLoot: ["item"], lineNoMp: ["hero", "skill"], lineHit: ["hero", "n"], lineGuarded: ["hero", "n"],
     lineDodge: ["hero"], lineDrain: ["hero", "mp"], lineHeal: ["monster", "n"], lineKo: ["hero"], lineCharged: ["monster"],
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
-    bossDone: ["monster"], bossDoneText: ["text"],
+    bossDone: ["monster"], bossDoneText: ["text"], introStudy: ["monster"], studyAsk: ["question"], answerAgain: ["error"],
+    lineAnswer: ["hero"], lineGot: ["monster", "n"], linePartly: ["monster", "n"], lineBreak: ["monster"], studyGot: ["module"],
   };
   for (const k of Object.keys(LABELS)) if (k.startsWith("move.")) LABEL_VARS[k] = ["monster"];
   for (const k of Object.keys(LABELS)) if (!LABEL_VARS[k]) LABEL_VARS[k] = [];
@@ -205,6 +230,8 @@
   const WIPE_ROUNDS = 10;   // the monster deals the party's whole HP in ~10/d^0.7 rounds (a boss: 10/d^0.5)
   const SKILL_COST = 6, CRIT = 1 / 16, GUARD = 0.45;
   const GEAR_SHARE = 0.5;   // the part of the party's gear the monster is sized to
+  const STUDY_HIT = { got_it: 0.6, partly: 0.3, not_yet: 0 };     // a judged answer: this share of the monster's HP...
+  const STUDY_WEAK = { got_it: 1.5, partly: 1.2, not_yet: 1 };    // ...and every later blow of the party's this much harder
 
   function rng(seed) {
     let a = seed >>> 0;
@@ -324,7 +351,8 @@
     const enc = encounter || {}, s = stats(enc, labels), seed = seedOf(enc, attempt);
     const state = { seed, attempt: Math.max(0, Math.floor(num(attempt))), boss: !!enc.boss, attr: s.attr, modules: s.modules,
       heroes: s.heroes, foe: s.foe, round: 1, phase: "hero", active: 0, log: [], events: [],
-      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false };
+      lessonId: enc.lesson ? enc.lesson.id : null, rng: rng(seed), labels, items: bagOf(enc), ward: 0, template: false,
+      study: null, weak: 1 };
     const ev = state.events, foe = state.foe;
     if (enc.boss && enc.boss.status === "done") {
       state.phase = "done";
@@ -332,11 +360,29 @@
       return state;
     }
     const scene = !enc.boss && enc.lesson && enc.lesson.case && typeof enc.lesson.case.scene === "string" ? enc.lesson.case.scene.trim() : "";
-    if (scene) say(state, ev, null, { text: scene });
+    const study = studyOf(enc.study);
+    if (scene && !study && !enc.studyPending) say(state, ev, null, { text: scene }); // a question brings its own
     if (enc.boss) say(state, ev, "introBoss", { monster: foe.name, text: foe.title });
+    else if (study || enc.studyPending) say(state, ev, "introStudy", { monster: foe.name });
     else say(state, ev, "intro", { monster: foe.name, title: foe.title });
+    if (study) ev.push(...ask(state, study));
     ev.push({ t: "round", n: 1 });
     return state;
+  }
+  // a study battle's question: {scene, question}, both text; null otherwise (a boss is never one)
+  function studyOf(s) {
+    const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    return s && typeof s === "object" && str(s.question) ? { scene: str(s.scene), question: str(s.question) } : null;
+  }
+  // make it a study battle: say its scene and question (once, before it's answered)
+  function ask(state, s) {
+    const ev = [], study = studyOf(s);
+    if (!study || state.boss || state.study) return ev;
+    state.study = { ...study, verdict: null, feedback: "", principle: "", answer: "" };
+    if (study.scene) say(state, ev, null, { text: study.scene });
+    say(state, ev, "studyAsk", { question: study.question });
+    ev.push({ t: "ask" });
+    return ev;
   }
   // the consumables and loot the person owns (encounter.items), those the battle knows how to use, with counts
   const ITEMS = ["c:potion", "c:ether", "c:phoenix", "c:smoke", "l:patch", "l:sign", "l:adr", "l:insight", "l:template", "l:script"];
@@ -418,6 +464,7 @@
       return ev;
     }
     if (a.type === "item") return useItem(state, h, a, ev);
+    if (a.type === "answer") return answer(state, h, a, ev);
     let mult = 1, skill = null;
     if (a.type === "skill") {
       skill = skillOptions(state, h.i).find((o) => o.id === a.module) || null;
@@ -429,7 +476,7 @@
     h.guard = false;
     const boost = state.template ? 1.6 : 1;
     state.template = false;
-    let n = Math.max(1, Math.round(h.atk * mult * boost * (0.85 + 0.3 * roll())));
+    let n = Math.max(1, Math.round(h.atk * mult * boost * state.weak * (0.85 + 0.3 * roll())));
     const crit = roll() < CRIT;
     if (crit) n = Math.round(n * 1.6);
     const before = foe.hp;
@@ -455,6 +502,32 @@
       say(state, ev, "lineWin", { monster: foe.name });
       ev.push({ t: "end", phase: "won" });
     } else advance(state, ev);
+  }
+  // the person's judged answer, as the active hero's move: once a fight. "got it" and "partly" take a share of the
+  // monster's HP, break a charge and make later blows harder; "not yet" uses the turn and nothing else
+  function answer(state, h, a, ev) {
+    const st = state.study, verdict = a && STUDY_HIT[a.verdict] != null ? a.verdict : null, foe = state.foe;
+    if (!st || st.verdict || !verdict) return ev;
+    const text = (v) => (typeof v === "string" ? v.trim() : "");
+    Object.assign(st, { verdict, feedback: text(a.feedback), principle: text(a.principle), answer: text(a.answer) });
+    h.guard = false;
+    ev.push({ t: "answered", verdict });
+    say(state, ev, "lineAnswer", { hero: h.name });
+    if (verdict === "not_yet") {
+      say(state, ev, "lineNotYet", {});
+      if (st.feedback) say(state, ev, null, { text: st.feedback });
+      advance(state, ev);
+      return ev;
+    }
+    state.weak = STUDY_WEAK[verdict];
+    const n = Math.max(1, Math.round(foe.maxHp * STUDY_HIT[verdict])), before = foe.hp;
+    foe.hp = Math.max(0, foe.hp - n);
+    ev.push({ t: "strike", hero: h.i, n, crit: false, skill: null, lv: 0, study: true, hp: foe.hp, mp: h.mp, was: before });
+    say(state, ev, verdict === "got_it" ? "lineGot" : "linePartly", { monster: foe.name, n });
+    if (st.feedback) say(state, ev, null, { text: st.feedback });
+    if (foe.charged) { foe.charged = false; ev.push({ t: "uncharge" }); say(state, ev, "lineBreak", { monster: foe.name }); }
+    settle(state, ev);
+    return ev;
   }
   // an item uses the hero's turn; its count goes down by one (the page is told through onUseItem)
   function useItem(state, h, a, ev) {
@@ -652,24 +725,29 @@
   }
   function summary(state, labels = LABELS, formatDate = null, encounter = null) {
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
-    const foe = state.foe, lesson = (encounter && encounter.lesson) || {};
+    const foe = state.foe, lesson = (encounter && encounter.lesson) || {}, st = state.study;
+    const studied = st && ["won", "lost", "ran"].includes(state.phase);
+    const note = !studied ? "" : st.verdict === "got_it" ? fill(lab("studyGot"), { module: (state.modules[0] && state.modules[0].name) || "" })
+      : st.verdict === "partly" ? lab("studyPartly") : st.verdict === "not_yet" ? lab("studyNot") : lab("studyNone");
+    const extra = { note, feedback: studied && st.verdict ? st.feedback : "", principle: studied && st.verdict ? st.principle : "" };
     if (state.phase === "won") {
       const lead = state.heroes[0] || { name: "" };
       const at = String(lesson.at || "").slice(0, 10);
       const date = typeof formatDate === "function" ? formatDate(at) : at;
       const c = lesson.case && typeof lesson.case.answer === "string" && lesson.case.answer.trim() ? lesson.case.answer.trim() : "";
+      const said = st && st.verdict && st.answer ? st.answer : c; // the answer the judge held the person's against
       return { title: fill(lab("win"), { monster: foe.name }),
-        text: fill(lab("winText"), { agent: lead.name, date, xp: Math.max(0, Math.round(num(lesson.xp))) }),
-        quoteTitle: c ? lab("winAnswer") : lab("winExcerpt"), quote: c || excerpt(lesson.body) };
+        text: fill(lab("winText"), { agent: lead.name, date, xp: Math.max(0, Math.round(num(lesson.xp))) }), ...extra,
+        quoteTitle: said ? lab("winAnswer") : lab("winExcerpt"), quote: said || excerpt(lesson.body) };
     }
-    if (state.phase === "lost") return { title: lab("lose"), text: lab("loseText"), quoteTitle: "", quote: "" };
-    if (state.phase === "held") return { title: fill(lab("hold"), { monster: foe.name }), text: lab("holdText"), quoteTitle: "", quote: "" };
-    if (state.phase === "done") return { title: fill(lab("bossDone"), { monster: foe.name }), text: fill(lab("bossDoneText"), { text: foe.title }), quoteTitle: "", quote: "" };
-    return { title: "", text: "", quoteTitle: "", quote: "" };
+    if (state.phase === "lost") return { title: lab("lose"), text: lab("loseText"), ...extra, quoteTitle: "", quote: "" };
+    if (state.phase === "held") return { title: fill(lab("hold"), { monster: foe.name }), text: lab("holdText"), ...extra, quoteTitle: "", quote: "" };
+    if (state.phase === "done") return { title: fill(lab("bossDone"), { monster: foe.name }), text: fill(lab("bossDoneText"), { text: foe.title }), ...extra, quoteTitle: "", quote: "" };
+    return { title: "", text: "", ...extra, quoteTitle: "", quote: "" };
   }
 
-  const RULES = Object.freeze({ rng, seedOf, difficulty, gearOf, heroStats, pickParty, stats, setup, skillOptions, itemOptions,
-    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS });
+  const RULES = Object.freeze({ rng, seedOf, difficulty, gearOf, heroStats, pickParty, stats, setup, ask, skillOptions, itemOptions,
+    heroAction, monsterTurn, policy, simulate, summary, rewardLines, excerpt, MOVES, SKILL_COST, ITEMS, STUDY_HIT, STUDY_WEAK });
 
   // =====================================================================================
   // Colour and theme: read from the page's tokens, like scene.js, tinted toward the region's hue
@@ -770,7 +848,11 @@
     const lab = (k, vars) => fill(labels[k] != null ? labels[k] : LABELS[k] != null ? LABELS[k] : k, vars || {});
     const still = !!opts.reducedMotion;
     const enc = opts.encounter || {};
-    const st = setup(enc, opts.attempt, labels);
+    // a study battle: its question now, or on its way (the page asks the model for one when the lesson has no case file)
+    const studyLater = !!opts.study && typeof opts.study.then === "function";
+    const st = setup({ ...enc, study: studyLater ? null : opts.study, studyPending: studyLater }, opts.attempt, labels);
+    const hideTitle = () => !!st.study && !st.study.verdict || (studyLater && !st.study && !studyDone);
+    let studyDone = !studyLater;
     const call = (k, ...args) => {
       if (typeof opts[k] !== "function") return undefined;
       try { return opts[k](...args); } catch (e) { setTimeout(() => { throw e; }); return undefined; }
@@ -787,9 +869,15 @@
     canvas.setAttribute("aria-label", plain(lab("scene", { monster: st.foe.name, heroes: st.heroes.map((x) => x.name).join(", ") })));
     const foeWin = el("div", "bt-win bt-foe");
     const foeName = el("div", "bt-foe-name", st.foe.name);
-    const foeTitle = rich(el("div", "bt-foe-title"), st.boss ? lab("bossEpithet", { n: st.foe.n, text: st.foe.title, track: (enc.boss && enc.boss.track_name) || "" })
-      : lab("epithet", { title: st.foe.title }));
-    foeTitle.title = plain(st.foe.title);
+    const foeTitle = el("div", "bt-foe-title");
+    // the lesson's title would give a study battle's answer away: its roadmap module until it's answered
+    function paintEpithet() {
+      const hidden = hideTitle(), title = hidden ? ((st.modules[0] && st.modules[0].name) || "?") : st.foe.title;
+      rich(foeTitle, st.boss ? lab("bossEpithet", { n: st.foe.n, text: st.foe.title, track: (enc.boss && enc.boss.track_name) || "" })
+        : lab("epithet", { title }));
+      foeTitle.title = plain(title);
+    }
+    paintEpithet();
     const foeBar = bar("hp");
     foeWin.append(foeName, foeTitle, foeBar.el);
     const roundTag = el("div", "bt-round");
@@ -874,9 +962,12 @@
       logEl.scrollTop = Math.min(logEl.scrollHeight - logEl.clientHeight, li.offsetTop);
     }
 
-    // ---- the menu: Attack, Skill, Defend, Run; Skill opens the lesson's modules; arrows move, Esc goes back
-    let mode = "main", busy = true;
-    const main = [["attack", lab("attack")], ["skill", lab("skill")], ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
+    // ---- the menu: Answer (a study battle, until it's answered), Attack, Skill, Item, Defend, Run; Answer, Skill and
+    // Item open their own panels; arrows move, Esc goes back
+    let mode = "main", busy = true, judging = false, judgeError = "", draft = "";
+    const answering = () => (!!st.study && !st.study.verdict) || (studyLater && !studyDone);
+    const main = () => [...(answering() ? [["answer", lab("answer")]] : []), ["attack", lab("attack")], ["skill", lab("skill")],
+      ["item", lab("item")], ["defend", lab("defend")], ["run", lab("run")]];
     function button(label, onClick, extra) {
       const b = el("button", "bt-cmd");
       b.type = "button";
@@ -887,6 +978,9 @@
     function renderMenu() {
       cmds.textContent = "";
       cmds.classList.toggle("bt-sub", mode !== "main");
+      if (mode === "answer" && !(st.study && !st.study.verdict)) mode = "main";
+      menuHead.classList.toggle("bt-ask", mode === "answer");
+      root.classList.toggle("bt-asking", mode === "answer");
       const hero = st.heroes[st.active];
       // a submenu: its rows in a list that scrolls by whole rows, Back pinned under it
       const sub = () => {
@@ -895,7 +989,49 @@
         wrap.append(list, cue);
         return { wrap, list };
       };
-      if (mode === "item" && hero) {
+      if (mode === "answer" && hero) {
+        rich(menuHead, st.study.question); // the question over the answer box, whole: it wraps
+        const box = el("textarea", "bt-answer");
+        box.rows = 3;
+        box.maxLength = 2000;
+        box.placeholder = lab("answerHint");
+        box.setAttribute("aria-label", plain(st.study.question));
+        box.value = draft;
+        box.disabled = judging;
+        box.addEventListener("input", () => { draft = box.value; });
+        const send = () => {
+          const text = box.value.trim();
+          if (!text || judging || busy) { box.focus(); return; }
+          judging = true; judgeError = "";
+          renderMenu();
+          Promise.resolve(call("onAnswer", text)).then((r) => {
+            judging = false;
+            if (!alive_) return;
+            if (!r || !r.verdict) throw new Error("no verdict");
+            draft = "";
+            command({ type: "answer", verdict: r.verdict, feedback: r.feedback, principle: r.principle, answer: r.answer });
+          }).catch((e) => {
+            judging = false;
+            if (!alive_) return;
+            judgeError = fill(lab("answerAgain"), { error: (e && e.message) || "?" });
+            renderMenu();
+          });
+        };
+        box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } });
+        const row = el("div", "bt-answer-row");
+        const go_ = el("button", "bt-btn bt-primary", judging ? lab("judging") : lab("submit"));
+        go_.type = "button";
+        go_.disabled = judging;
+        go_.addEventListener("click", send);
+        const back = el("button", "bt-btn", lab("back"));
+        back.type = "button";
+        back.disabled = judging;
+        back.addEventListener("click", () => { mode = "main"; renderMenu(); focusFirst(true, "answer"); });
+        row.append(go_, back);
+        if (judgeError) row.append(el("span", "bt-answer-error", judgeError));
+        cmds.append(box, row);
+        if (!judging) setTimeout(() => { if (alive_ && box.isConnected) box.focus({ preventScroll: true }); });
+      } else if (mode === "item" && hero) {
         menuHead.textContent = lab("item");
         const { wrap, list } = sub();
         for (const o of itemOptions(st)) {
@@ -945,13 +1081,15 @@
       } else {
         mode = "main";
         menuHead.textContent = hero ? lab("prompt", { hero: hero.name }) : "";
-        for (const [id, text] of main) {
+        for (const [id, text] of main()) {
           const b = button(text, () => {
-            if (id === "skill" || id === "item") { mode = id; renderMenu(); focusFirst(true); return; }
+            if (id === "answer" && !(st.study && !st.study.verdict)) return; // its question is still on its way
+            if (id === "skill" || id === "item" || id === "answer") { mode = id; renderMenu(); focusFirst(true); return; }
             command({ type: id });
           });
           b.dataset.cmd = id;
           if (id === "item" && !itemOptions(st).length) b.classList.add("bt-dim");
+          if (id === "answer") { b.classList.add("bt-answer-cmd"); if (!st.study) b.setAttribute("aria-disabled", "true"); }
           cmds.append(b);
         }
         const hgt = cmds.getBoundingClientRect().height;
@@ -997,13 +1135,14 @@
       if (force || inside) { reveal(menuWin); b.focus({ preventScroll: true }); }
     }
     cmds.addEventListener("keydown", (e) => {
+      if (e.target && e.target.tagName === "TEXTAREA" && e.key !== "Escape") return; // typing an answer
       const list = items(), i = list.indexOf(document.activeElement);
       let to = -1;
       if (e.key === "ArrowDown" || e.key === "ArrowRight") to = (i + 1) % list.length;
       else if (e.key === "ArrowUp" || e.key === "ArrowLeft") to = (i - 1 + list.length) % list.length;
       else if (e.key === "Home") to = 0;
       else if (e.key === "End") to = list.length - 1;
-      else if (e.key === "Escape" && mode !== "main") { e.preventDefault(); const was = mode; mode = "main"; renderMenu(); focusFirst(true, was); return; }
+      else if (e.key === "Escape" && mode !== "main" && !judging) { e.preventDefault(); const was = mode; mode = "main"; renderMenu(); focusFirst(true, was); return; }
       if (to < 0 || !list.length) return;
       e.preventDefault();
       roving(list[to]);
@@ -1026,6 +1165,7 @@
       const used = evs.find((e) => e.t === "item");
       if (used) call("onUseItem", used.id); // the page spends it (POST /api/party/use); the battle counts it down itself
       mode = "main";
+      if (action.type === "answer") renderMenu(); // the party is back in view for what the answer does
       if (st.phase === "hero" && evs.every((e) => e.t === "say")) { // nothing happened (no MP): stay on this hero
         play(evs, () => {});
         return;
@@ -1067,10 +1207,17 @@
       head.tabIndex = -1;
       card.append(head);
       if (sum.text) card.append(rich(el("p", "bt-card-text"), sum.text));
+      if (sum.note) card.append(el("p", "bt-card-note" + (st.study && st.study.verdict === "got_it" ? " bt-solved" : ""), sum.note));
+      if (sum.feedback) card.append(rich(el("p", "bt-card-feedback"), sum.feedback));
       if (st.phase === "won" && reward !== undefined) card.append(rewardBox());
       if (sum.quote) {
         const fig = el("figure", "bt-quote");
         fig.append(el("figcaption", "", sum.quoteTitle), el("blockquote", "", sum.quote));
+        card.append(fig);
+      }
+      if (sum.principle) {
+        const fig = el("figure", "bt-quote bt-principle");
+        fig.append(el("figcaption", "", lab("principleTitle")), el("blockquote", "", sum.principle));
         card.append(fig);
       }
       const acts = el("div", "bt-actions");
@@ -1154,15 +1301,15 @@
         case "strike": {
           const s = shown.heroes[ev.hero];
           s.guard = false; s.mp = ev.mp;
-          const skill = !!ev.skill, hitAt = skill ? 330 : 170;
+          const skill = !!ev.skill || !!ev.study, hitAt = skill ? 330 : 170, big = ev.crit || !!ev.study;
           spawn({ kind: "lunge", who: ev.hero, t0, dur: skill ? 520 : 360, dx: skill ? -10 : -18 });
           if (skill) spawn({ kind: "pillar", who: ev.hero, t0, dur: 420 });
-          spawn({ kind: skill ? "burst" : "slash", t0: t0 + hitAt, dur: skill ? 520 : 260, big: ev.crit || ev.lv >= 3, seed: ev.n + ev.hero });
+          spawn({ kind: skill ? "burst" : "slash", t0: t0 + hitAt, dur: skill ? 520 : 260, big: big || ev.lv >= 3, seed: ev.n + ev.hero });
           spawn({ kind: "flash", who: "foe", t0: t0 + hitAt, dur: 110 });
-          spawn({ kind: "shake", who: "foe", t0: t0 + hitAt, dur: ev.crit ? 380 : 260, amp: ev.crit ? 4 : 2 });
-          if (ev.crit || (skill && ev.lv >= 3)) spawn({ kind: "quake", t0: t0 + hitAt, dur: 260, amp: 2 });
-          spawn({ kind: "num", who: "foe", t0: t0 + hitAt, dur: 1000, text: String(ev.n), color: ev.crit ? "gold" : skill ? "accent" : "ink",
-            size: ev.crit ? 27 : skill ? 24 : 20, sub: skill && ev.lv > 0 ? lab("skillLevel", { n: ev.lv }) : ev.crit ? "!" : "" });
+          spawn({ kind: "shake", who: "foe", t0: t0 + hitAt, dur: big ? 380 : 260, amp: big ? 4 : 2 });
+          if (big || (skill && ev.lv >= 3)) spawn({ kind: "quake", t0: t0 + hitAt, dur: 260, amp: 2 });
+          spawn({ kind: "num", who: "foe", t0: t0 + hitAt, dur: 1000, text: String(ev.n), color: big ? "gold" : skill ? "accent" : "ink",
+            size: big ? 27 : skill ? 24 : 20, sub: ev.study ? lab("weakTag") : skill && ev.lv > 0 ? lab("skillLevel", { n: ev.lv }) : ev.crit ? "!" : "" });
           later(t0 + hitAt, () => { shown.foe.hp = ev.hp; paintStatus(); });
           if (still) shown.foe.hp = ev.hp;
           return hitAt + 520;
@@ -1213,6 +1360,9 @@
         }
         case "skip": spawn({ kind: "ring", t0, dur: 600 }); spawn({ kind: "shake", who: "foe", t0, dur: 260, amp: 1 }); return 650;
         case "charge": shown.foe.charged = true; spawn({ kind: "ring", t0, dur: 700 }); return 720;
+        case "uncharge": shown.foe.charged = false; return 0;
+        case "answered": paintEpithet(); return 0; // the title shows once it can't give the answer away
+        case "ask": if (!busy) renderMenu(); return 0;
         case "heal": {
           spawn({ kind: "crosses", t0, dur: 800 });
           spawn({ kind: "num", who: "foe", t0: t0 + 120, dur: 1000, text: "+" + ev.n, color: "good", size: 20 });
@@ -1720,6 +1870,18 @@
       showResult();
     } else {
       play(st.events, () => { ready(); if (opts.autofocus !== false) focusFirst(true); });
+    }
+    // a question on its way: said when it comes (Answer turns on); none after all, and the title shows as usual
+    if (studyLater) {
+      const arrive = (sv) => {
+        studyDone = true;
+        if (!alive_ || st.phase !== "hero" && st.phase !== "monster") return;
+        const evs = ask(st, sv);
+        if (!evs.length) evs.push({ t: "say", key: "intro", vars: { monster: st.foe.name, title: st.foe.title } });
+        paintEpithet();
+        play(evs, () => { if (!busy) renderMenu(); });
+      };
+      opts.study.then(arrive, () => arrive(null));
     }
     wake();
     return { destroy, redraw };

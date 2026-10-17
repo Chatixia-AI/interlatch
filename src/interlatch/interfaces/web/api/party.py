@@ -137,6 +137,54 @@ def action_party_cleared(ctx: Context, viewer: dict | None, body: dict, *, here:
     return {"cleared": log, "reward": reward, "bag": bag.bag(ctx.conn, viewer)}, 200
 
 
+# ------------------------------------------------------------------ study battles (knowledge/study.py): the person
+# answers a lesson's question in their own words and the analysis model judges it; only at their own computer
+def ask(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
+    """GET /api/party/ask?id=<lesson id>: the question a study battle asks (its scene and question, never the answer),
+    or {available: false, reason} where there is none (on a hub; no model)."""
+    from ....knowledge import party as pt
+    from ....knowledge import study
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    try:
+        lesson_id = int(q.get("id") or "")
+    except ValueError:
+        return {"error": tr("not found")}, 404
+    if not pt.owns(ctx.conn, _here_id(ctx), viewer, lesson_id):
+        return {"error": tr("not found")}, 404
+    if viewer is not None:
+        return {"available": False, "reason": tr(study.NOT_HERE)}, 200
+    try:
+        got = study.ask(ctx.conn, ctx.cfg, lesson_id)
+    except study.StudyError as exc:
+        return {"available": False, "reason": tr(str(exc))}, 200
+    except Exception as exc:  # the model's call failed: no study battle this time, the fight still runs
+        return {"available": False, "reason": tr(study.NO_MODEL, reason=str(exc)[:200])}, 200
+    return {"available": True, "scene": got["scene"], "question": got["question"], "source": got["source"]}, 200
+
+
+def action_party_judge(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/judge {"id", "answer"}: the person's answer, judged; the verdict is kept on this computer. Answers
+    the verdict, the feedback, the principle, the lesson's answer and what the person has understood now."""
+    from ....knowledge import party as pt
+    from ....knowledge import study
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    lesson_id = body.get("id")
+    if not pt.owns(ctx.conn, _here_id(ctx), viewer, lesson_id):
+        return {"error": tr("no such lesson")}, 400
+    try:
+        got = study.judge(ctx.conn, ctx.cfg, pt.scope_key(viewer), lesson_id, body.get("answer"), here=viewer is None)
+    except study.StudyError as exc:
+        return {"error": tr(str(exc))}, 400
+    except Exception as exc:  # the model's call failed: nothing was kept
+        return {"error": tr(study.NO_MODEL, reason=str(exc)[:200])}, 502
+    m = pt.adventure_map(ctx.conn, _here_id(ctx), viewer)
+    return {**got, "understood": m["understood"], "readiness": m["readiness"]}, 200
+
+
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
 def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
     """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""
