@@ -5,7 +5,8 @@
    page opens its battle; walk into the town's gate and it opens the town. The monsters are the lessons worth studying:
    each zone's open ones with study material first, never the agents' own friction (study.py), more of them in the
    main quest's zones. Open: where the person studies (data.studying), not yet understood (a win without a good answer
-   leaves it out there); elsewhere, not yet cleared. Each zone shows how many of its lessons the person understood, out
+   leaves it out there) or back for another look (data.back: understood a while ago, first in its zone, marked ↻);
+   elsewhere, not yet cleared. Each zone shows how many of its lessons the person understood, out
    of what makes it ready for its gate.
 
    The art is the Adventure's (adventure.js: Adventure.art, its biomes, props and town), the agents' (sprites.js) and the
@@ -23,7 +24,7 @@
        opts.onEncounter(lesson)   the party walked into a monster (once; the page opens its battle)
        opts.onTown(region)        the party walked into the town's gate
        opts.onMove({x, y})        where the party stands now (now and then, for the page to keep)
-       opts.onHover(item, at)     item = {type: "monster", lesson} | {type: "town", name} | {type: "sign", zone} | null;
+       opts.onHover(item, at)     item = {type: "monster", lesson, back} | {type: "town", name} | {type: "sign", zone} | null;
                                   at = {x, y} in client pixels
      layout(data, regionId, seed = 1) -> the field, pure and deterministic (no DOM): see layout() below
      path(field, from, to) -> [[x, y], …] tiles from one walkable tile to another (A*), [] when there is no way
@@ -288,7 +289,9 @@
     const goal = new Set((data && data.goal && Array.isArray(data.goal.modules)) ? data.goal.modules : []);
     const ready = (data && data.readiness) || {};
     const known = new Set((Array.isArray(data && data.understood) ? data.understood : []).map(String));
-    const studyable = (l) => !l.friction && (data && data.studying ? !known.has(String(l.id)) : !cleared.has(String(l.id)));
+    const back = new Set((Array.isArray(data && data.back) ? data.back : []).map(String));
+    const studyable = (l) => !l.friction && (data && data.studying ? !known.has(String(l.id)) || back.has(String(l.id))
+      : !cleared.has(String(l.id)));
     const zones = mods.map((m, i) => ({ index: i, id: m.id, name: m.name || m.id, lessons: byZone[i].length,
       open: byZone[i].filter(studyable).length, goal: goal.has(m.id), you: Number(ready[m.id]) || 0,
       site: { x: sites[i].x, y: sites[i].y }, sign: sites[i].sign }));
@@ -302,15 +305,21 @@
         if (d < 2 || d > 9 || Math.hypot(x - spawn.x, y - spawn.y) < 6) continue;
         homes.push({ x, y });
       }
-      // the lessons worth studying first (study material), the newest first; the agents' friction never
-      const want = byZone[z.index].filter(studyable).sort((a, b) => (b.study ? 1 : 0) - (a.study ? 1 : 0) || b.id - a.id)
+      // those back for another look first, then the lessons worth studying (study material), the newest first; the
+      // agents' friction never
+      const rank = (l) => (back.has(String(l.id)) ? 2 : 0) + (l.study ? 1 : 0);
+      const want = byZone[z.index].filter(studyable).sort((a, b) => rank(b) - rank(a) || b.id - a.id)
         .slice(0, PER_ZONE[z.goal ? 1 : 0]);
       const taken = [];
       for (const l of want) {
         const start = strHash("home" + l.id) % Math.max(1, homes.length);
         for (let k = 0; k < homes.length; k++) {
           const h = homes[(start + k * 7) % homes.length];
-          if (taken.every((t) => Math.hypot(t.x - h.x, t.y - h.y) >= 2.5)) { taken.push(h); monsters.push({ id: l.id, zone: z.index, x: h.x, y: h.y }); break; }
+          if (taken.every((t) => Math.hypot(t.x - h.x, t.y - h.y) >= 2.5)) {
+            taken.push(h);
+            monsters.push({ id: l.id, zone: z.index, x: h.x, y: h.y, back: back.has(String(l.id)) });
+            break;
+          }
         }
       }
     });
@@ -790,9 +799,10 @@
       const cv = propImg(p);
       if (p.type === "tree") shadow(fx, fy, 10);
       else if (p.type !== "sign") shadow(fx, fy, 6);
-      // a crown in front of the party lets it show through
-      const over = (p.type === "tree" || p.type === "pine" || p.type === "house") && members.some((m) =>
-        fy > m.y + 2 && fy - cv.height < m.y && Math.abs(fx - m.x) < cv.width / 2 + 6);
+      // a crown in front of the party, or of a monster, lets it show through
+      const hides = (x, y) => fy > y + 2 && fy - cv.height < y && Math.abs(fx - x) < cv.width / 2 + 6;
+      const over = (p.type === "tree" || p.type === "pine" || p.type === "house")
+        && (members.some((m) => hides(m.x, m.y)) || monsters.some((m) => hides(m.px, m.py)));
       if (over) ctx.globalAlpha = 0.5;
       put(cv, fx, fy + (p.type === "house" ? 2 : 0));
       ctx.globalAlpha = 1;
@@ -809,7 +819,22 @@
         ctx.ellipse(X(m.px), Y(m.py + 2), 10 * S, 4 * S, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
+      if (m.back) { // back for another look: a ring of light under it, ↻ over it
+        ctx.strokeStyle = "rgba(140, 220, 255, 0.9)";
+        ctx.lineWidth = Math.max(1, Math.round(S * 0.6));
+        ctx.beginPath();
+        ctx.ellipse(X(m.px), Y(m.py + 2), 9 * S, 3.5 * S, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       put(cv, m.px, m.py + 3 + bob, 1, m.face > 0); // the Cast's monsters face left
+      if (m.back && !m.alert) {
+        ctx.font = `700 ${Math.round(9 * S)}px "IBM Plex Mono", ui-monospace, monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.lineWidth = Math.max(2, S); ctx.strokeStyle = "rgba(10, 20, 40, 0.8)";
+        ctx.strokeText("↻", X(m.px), Y(m.py - cv.height - 1));
+        ctx.fillStyle = "#8cdcff";
+        ctx.fillText("↻", X(m.px), Y(m.py - cv.height - 1));
+      }
       if (m.alert) { // a "!" over its head
         const top = m.py - cv.height - 4 + (reduced ? 0 : Math.round(Math.abs(Math.sin(t * 6)) * -2));
         ctx.fillStyle = "#ff5a5a";
@@ -892,7 +917,7 @@
       const th = thingAt(worldAt(e)), was = hover;
       hover = th && th.type === "monster" ? th.m : null;
       canvas.style.cursor = th ? "pointer" : "";
-      const item = !th ? null : th.type === "monster" ? { type: "monster", lesson: th.m.lesson } : th.type === "town" ? { type: "town", name: F.town.name }
+      const item = !th ? null : th.type === "monster" ? { type: "monster", lesson: th.m.lesson, back: !!th.m.back } : th.type === "town" ? { type: "town", name: F.town.name }
         : { type: "sign", zone: th.zone };
       if (item || was) call("onHover", item, { x: e.clientX, y: e.clientY });
     }

@@ -9,6 +9,11 @@ written once by the model for a lesson without a case file, is the lesson's, not
 Which lessons are worth studying: a lesson with study material (a case file's question, or a principle) first; a trap
 the agents keep hitting in this setup (an aliased rm, zsh, where screenshots land) is friction for the agents' rules,
 not the person's career, and is never offered (friction()).
+
+Coming back (schedule()): a lesson understood rests, then returns as it would start to fade: 3 days after the first
+"got it", then 10, 30 and 90 as it is got right again on separate days; "partly" or "not yet" puts it back at once. Got
+right on two separate days in a row, it is owned. Nothing is ever overdue: a returning lesson just waits on the field,
+and time away builds no backlog (docs/design/learning.md).
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 from ..core.config import Config
 from ..core.util import loads, utcnow
@@ -31,6 +36,8 @@ READY_AT = 5  # lessons understood in a module: it is ready for its gate
 ANSWER_MAX = 2000  # characters of a typed answer the model reads
 BODY_MAX = 2500
 VERDICTS = ("got_it", "partly", "not_yet")
+RETURN_DAYS = (3, 10, 30, 90)  # rest after the 1st, 2nd, 3rd, 4th+ "got it" in a row (on separate days)
+OWNED_AT = 2  # "got it" on this many separate days in a row: owned
 TOOLING_TAGS = frozenset({"shell", "zsh", "bash", "alias", "playwright", "mcp", "tooling", "sandbox", "scratchpad", "excalidraw"})
 NOT_HERE = "study battles run on your own computer"
 NO_MODEL = "the analysis model isn't available: {reason}"
@@ -96,6 +103,31 @@ def understood(log_: list[dict]) -> list[int]:
     for x in log_:
         last[x["id"]] = x["verdict"]
     return [i for i, v in last.items() if v == "got_it"]
+
+
+def schedule(log_: list[dict], today: date) -> dict[int, dict]:
+    """Each lesson answered "got it" last: {streak (separate days in a row it was got right), owned, due (the day it
+    comes back, ISO), resting (not back yet)}. A lesson answered otherwise last isn't here: it is out on the field."""
+    days: dict[int, list] = {}
+    for x in log_:  # per lesson, oldest first: (day, verdict), one a day (the day's last answer counts)
+        seq = days.setdefault(x["id"], [])
+        if seq and seq[-1][0] == x["on"]:
+            seq[-1] = (x["on"], x["verdict"])
+        else:
+            seq.append((x["on"], x["verdict"]))
+    out = {}
+    for lid, seq in days.items():
+        if seq[-1][1] != "got_it":
+            continue
+        streak = 0
+        for _, v in reversed(seq):
+            if v != "got_it":
+                break
+            streak += 1
+        rest = RETURN_DAYS[min(streak, len(RETURN_DAYS)) - 1]
+        due = date.fromisoformat(seq[-1][0]) + timedelta(days=rest)
+        out[lid] = {"streak": streak, "owned": streak >= OWNED_AT, "due": due.isoformat(), "resting": today < due}
+    return out
 
 
 def readiness(lessons, catalog, log_: list[dict]) -> dict[str, int]:
@@ -220,9 +252,11 @@ def judge(conn: sqlite3.Connection, cfg: Config, scope_key: str, lesson_id: int,
     res = r.run(prompt, JUDGE_SCHEMA, system=_system(cfg, JUDGE_SYSTEM.replace("{form}", form)),
                 model=cfg.analysis.screen_model, effort="low", timeout=120)
     verdict = res.data.get("verdict") if res.data.get("verdict") in VERDICTS else "not_yet"
-    on = (today or utcnow().date()).isoformat()
+    day = today or utcnow().date()
     with kv_transaction(conn):
-        kept = studied_of(conn, scope_key)
-        kv_set(conn, STUDY_KEY + scope_key, json.dumps((kept + [{"id": lesson_id, "on": on, "verdict": verdict}])[-STUDY_MAX:]))
+        kept = studied_of(conn, scope_key) + [{"id": lesson_id, "on": day.isoformat(), "verdict": verdict}]
+        kv_set(conn, STUDY_KEY + scope_key, json.dumps(kept[-STUDY_MAX:]))
+    sched = schedule(kept, day).get(lesson_id)
     return {"verdict": verdict, "feedback": str(res.data.get("feedback") or "").strip(),
-            "principle": str(res.data.get("principle") or m.get("principle") or "").strip(), "answer": q["answer"], "recorded": True}
+            "principle": str(res.data.get("principle") or m.get("principle") or "").strip(), "answer": q["answer"], "recorded": True,
+            "back_in": (date.fromisoformat(sched["due"]) - day).days if sched else 0, "owned": bool(sched and sched["owned"])}

@@ -1428,6 +1428,8 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "linePartly": t("Partly there: {n} damage."), "lineNotYet": t("Not yet. The answer is on the end screen."),
     "lineBreak": t("{monster}'s charge breaks."),
     "studyGot": t("You understood it: it counts toward your readiness in {module}."),
+    "studyBack": t("It comes back in {n} days for another look."),
+    "studyOwned": t("Got it again on another day: it's yours now ({module}). Next look in {n} days."),
     "studyPartly": t("Partly there: it will come back so you can try again."), "studyNot": t("Not yet: it will come back."),
     "studyNone": t("You didn't answer this one: it stays open for you."), "principleTitle": t("The principle") };
 }
@@ -1606,7 +1608,8 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
           if (item.type === "monster") { // its kind and module, never its title: that can give the answer away
             const mod = region.modules.find((x) => x.id === l.modules?.[0]);
             showTip(where, [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), mod?.name].filter(Boolean).join(" · "),
-              [l.project, agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "), t("Walk into it to battle"));
+              [l.project, agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),
+              item.back ? t("Back for another look: walk into it to battle") : t("Walk into it to battle"));
           }
           else if (item.type === "town") showTip(where, item.name, region.name, t("Walk into its gate to shop"));
           else if (item.type === "sign") showTip(where, item.zone.name, region.name, !item.zone.lessons ? t("Unexplored: no lessons here yet")

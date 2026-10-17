@@ -114,6 +114,11 @@ const S = data(6, 5, [5, 4, 3]);
 Object.assign(S, {studying: true, understood: [5, 1]});
 assert.deepEqual(zonesOf(F_.layout(S, 'craft')).get(0), [4, 3]);
 assert.equal(F_.layout(S, 'craft').zones[0].open, 3);
+// back for another look: out again, first in its zone, marked
+S.back = [1];
+const B = F_.layout(S, 'craft');
+assert.deepEqual(zonesOf(B).get(0), [1, 4]);
+assert.deepEqual(B.monsters.filter((m) => m.zone === 0).map((m) => m.back), [true, false]);
 // no two monsters share a home; none starts right by the spawn
 const homes = new Set(F.monsters.map((m) => m.x + ',' + m.y));
 assert.equal(homes.size, F.monsters.length);

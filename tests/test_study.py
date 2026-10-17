@@ -104,7 +104,7 @@ def test_answers_are_judged_kept_here_only_and_counted_per_module(home):  # noqa
                       {"verdict": "who knows", "feedback": "", "principle": ""})
     got = study.judge(conn, cfg, "here", lid, "something shared?", here=True, runner=model, today=date(2026, 10, 17))
     assert got == {"verdict": "partly", "feedback": "Close.", "principle": "Isolate shared state", "answer": "A shared token",
-                   "recorded": True}
+                   "recorded": True, "back_in": 0, "owned": False}
     assert "something shared?" in model.prompts[0] and "Flaky network" in model.prompts[0] and "A shared token" in model.prompts[0]
     study.judge(conn, cfg, "here", lid, "a shared token", here=True, runner=model, today=date(2026, 10, 18))
     assert study.studied_of(conn, "here") == [{"id": lid, "on": "2026-10-17", "verdict": "partly"},
@@ -123,6 +123,51 @@ def test_answers_are_judged_kept_here_only_and_counted_per_module(home):  # noqa
     with pytest.raises(study.StudyError, match="your own computer"):
         study.judge(conn, cfg, "person:1", lid, "a shared token", here=False, runner=FakeModel())
     assert kv_get(conn, "party.study:person:1") is None
+
+
+# ------------------------------------------------------------------ coming back
+def _log(*answers, lid=1):
+    return [{"id": lid, "on": on, "verdict": v} for on, v in answers]
+
+
+def test_a_lesson_got_right_rests_then_comes_back_and_is_owned_after_two_days():
+    day = date(2026, 10, 20)
+    assert study.schedule(_log(("2026-10-17", "got_it")), day) == {
+        1: {"streak": 1, "owned": False, "due": "2026-10-20", "resting": False}}  # 3 days: back today
+    assert study.schedule(_log(("2026-10-18", "got_it")), day)[1]["resting"] is True
+    two = study.schedule(_log(("2026-10-10", "got_it"), ("2026-10-14", "got_it")), day)[1]
+    assert two == {"streak": 2, "owned": True, "due": "2026-10-24", "resting": True}  # then 10 days
+    many = _log(*[(f"2026-0{m}-01", "got_it") for m in range(1, 7)])
+    assert study.schedule(many, day)[1]["due"] == "2026-08-30"  # 90 days, at most
+    # partly or not yet: back on the field at once, and the streak starts over
+    assert study.schedule(_log(("2026-10-10", "got_it"), ("2026-10-14", "partly")), day) == {}
+    again = study.schedule(_log(("2026-10-01", "got_it"), ("2026-10-05", "not_yet"), ("2026-10-19", "got_it")), day)[1]
+    assert again["streak"] == 1 and again["owned"] is False and again["due"] == "2026-10-22"
+    # two answers on one day are one: the day's last counts
+    same = study.schedule(_log(("2026-10-19", "got_it"), ("2026-10-19", "got_it")), day)[1]
+    assert same["streak"] == 1 and not same["owned"]
+    assert study.schedule(_log(("2026-10-19", "got_it"), ("2026-10-19", "not_yet")), day) == {}
+    assert study.schedule([], day) == {}
+
+
+def test_the_map_brings_back_what_is_due_and_names_what_is_owned(home):  # noqa: F811
+    conn, cfg, here = home["conn"], home["cfg"], home["here"]
+    sid = _session(conn)
+    a, b = _lesson(conn, sid, "pytest one", kind="fix"), _lesson(conn, sid, "pytest two", kind="fix")
+    for lid in (a, b):
+        _case(conn, lid, scene="s", question="q?", answer="x")
+    yes = lambda: FakeModel({"verdict": "got_it", "feedback": "", "principle": ""})  # noqa: E731
+    got = study.judge(conn, cfg, "here", a, "x", here=True, runner=yes(), today=date(2026, 10, 1))
+    assert got["back_in"] == 3 and got["owned"] is False
+    got = study.judge(conn, cfg, "here", a, "x", here=True, runner=yes(), today=date(2026, 10, 4))
+    assert got["back_in"] == 10 and got["owned"] is True
+    study.judge(conn, cfg, "here", b, "x", here=True, runner=yes(), today=date(2026, 10, 10))
+    m = party.adventure_map(conn, here, today=date(2026, 10, 14))
+    assert m["understood"] == [a, b] and m["owned"] == [a] and m["back"] == [a, b]  # a: back on the 14th; b: on the 13th
+    m = party.adventure_map(conn, here, today=date(2026, 10, 12))
+    assert m["back"] == [] and m["readiness"] == {"M-python": 2}
+    no = FakeModel({"verdict": "not_yet", "feedback": "", "principle": ""})
+    assert study.judge(conn, cfg, "here", a, "?", here=True, runner=no, today=date(2026, 10, 15))["back_in"] == 0
 
 
 # ------------------------------------------------------------------ the dashboard

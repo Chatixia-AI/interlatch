@@ -525,6 +525,10 @@ assert.match(sum.note, /^You understood it: it counts toward your readiness in M
 assert.equal(sum.feedback, 'Close.');
 assert.equal(sum.principle, 'Isolate state');
 assert.equal(sum.quote, 'A shared token');
+assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.verdict ? {type: 'answer', verdict: 'got_it', back_in: 3} : R.policy(st)))).note,
+  'You understood it: it counts toward your readiness in Module 0. It comes back in 3 days for another look.');
+assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.verdict ? {type: 'answer', verdict: 'got_it', back_in: 10, owned: true} : R.policy(st)))).note,
+  "Got it again on another day: it's yours now (Module 0). Next look in 10 days.");
 assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('partly'))).note, 'Partly there: it will come back so you can try again.');
 assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('not_yet'))).note, 'Not yet: it will come back.');
 assert.equal(R.summary(R.simulate(studied(2), 0)).note, "You didn't answer this one: it stays open for you.");

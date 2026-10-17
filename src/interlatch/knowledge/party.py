@@ -1160,8 +1160,9 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     whose best module it is, and their XP), every counted lesson oldest first (`study`: it has study material;
     `friction`: a trap for the agents' rules, never offered to study: study.py), the lessons cleared, the bosses (the
     main quest's milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag, a
-    town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood and
-    how many per module (study.py; empty for a person on a hub: their record stays on their computer)."""
+    town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood, those
+    back for another look and those owned, and how many are understood per module (study.py; empty for a person on a
+    hub: their record stays on their computer)."""
     from . import bag, study
 
     cat = catalog or load_catalog()
@@ -1170,6 +1171,7 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     counted = [k for k in lessons_in(conn, cat, sc) if k.modules]
     flags = study.flags(conn, [k.id for k in counted])
     studied = study.studied_of(conn, sc.key)
+    sched = study.schedule(studied, today or utcnow().date())
     goal = data.get("goal")
     there: dict[int, list[int]] = {}  # module index: [lessons, xp] of the lessons that stand in it
     for k in counted:
@@ -1197,6 +1199,8 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "towns": bag.towns(cat),
         "goal": {**goal, "modules": list(cat.track[goal["id"]].get("modules") or [])} if goal else None,
         "understood": study.understood(studied),
+        "back": [i for i, x in sched.items() if not x["resting"]],  # understood, and come back for another look
+        "owned": [i for i, x in sched.items() if x["owned"]],
         "readiness": study.readiness(counted, cat, studied),
         "ready_at": study.READY_AT,
         "studying": viewer is None,  # study battles (and their record) only at the person's own computer

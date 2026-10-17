@@ -33,7 +33,8 @@
                                "try it again from the map"); undefined, or no promise, shows no reward line
      opts.onUseItem(id)        an item was used (once per use; the page POSTs /api/party/use); the battle counts it down
      opts.study                {scene, question} | a Promise of it (or of null: no study battle this time)
-     opts.onAnswer(text)       -> Promise of {verdict: "got_it"|"partly"|"not_yet", feedback, principle, answer};
+     opts.onAnswer(text)       -> Promise of {verdict: "got_it"|"partly"|"not_yet", feedback, principle, answer, back_in
+                               (days until a lesson got right comes back), owned};
                                a rejection's message is said, and the person may answer again
      opts.onLose()             Retry pressed on the defeat screen (the page remounts with attempt + 1)
      opts.onRun()              Run chosen (no confirmation); the page goes back to the map
@@ -95,7 +96,8 @@
   //   introStudy {monster}: the opening line of a study battle (no title: it would give the answer away); studyAsk
   //     {question}: the question; answerHint, submit, judging, answerAgain {error}: the answer box; weakTag: under the
   //     damage a good answer deals; lineAnswer {hero}; lineGot / linePartly {monster} {n}; lineNotYet; lineBreak {monster}
-  //   studyGot {module}, studyPartly, studyNot, studyNone; principleTitle: the end screen's study lines
+  //   studyGot {module}, studyBack {n}, studyOwned {module} {n}, studyPartly, studyNot, studyNone; principleTitle: the
+  //     end screen's study lines
   //   skillLevel / skillGear / skillNone / skillCost   a skill's row: its level, what gear adds ({n}), its MP cost
   //   itemCount / itemTarget   an item's row: how many are left ({n}), who it will be used on ({hero})
   //   itemNone     the bag is empty
@@ -151,6 +153,8 @@
     lineGot: "You got it! {monster}'s weak spot is exposed: {n} damage.", linePartly: "Partly there: {n} damage.",
     lineNotYet: "Not yet. The answer is on the end screen.", lineBreak: "{monster}'s charge breaks.",
     studyGot: "You understood it: it counts toward your readiness in {module}.",
+    studyBack: "It comes back in {n} days for another look.",
+    studyOwned: "Got it again on another day: it's yours now ({module}). Next look in {n} days.",
     studyPartly: "Partly there: it will come back so you can try again.", studyNot: "Not yet: it will come back.",
     studyNone: "You didn't answer this one: it stays open for you.", principleTitle: "The principle",
     lineWin: "{monster} is beaten!", lineLose: "The party falls back.",
@@ -207,6 +211,7 @@
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
     bossDone: ["monster"], bossDoneText: ["text"], introStudy: ["monster"], studyAsk: ["question"], answerAgain: ["error"],
     lineAnswer: ["hero"], lineGot: ["monster", "n"], linePartly: ["monster", "n"], lineBreak: ["monster"], studyGot: ["module"],
+    studyBack: ["n"], studyOwned: ["module", "n"],
   };
   for (const k of Object.keys(LABELS)) if (k.startsWith("move.")) LABEL_VARS[k] = ["monster"];
   for (const k of Object.keys(LABELS)) if (!LABEL_VARS[k]) LABEL_VARS[k] = [];
@@ -509,7 +514,8 @@
     const st = state.study, verdict = a && STUDY_HIT[a.verdict] != null ? a.verdict : null, foe = state.foe;
     if (!st || st.verdict || !verdict) return ev;
     const text = (v) => (typeof v === "string" ? v.trim() : "");
-    Object.assign(st, { verdict, feedback: text(a.feedback), principle: text(a.principle), answer: text(a.answer) });
+    Object.assign(st, { verdict, feedback: text(a.feedback), principle: text(a.principle), answer: text(a.answer),
+      backIn: Math.max(0, Math.floor(num(a.back_in))), owned: a.owned === true });
     h.guard = false;
     ev.push({ t: "answered", verdict });
     say(state, ev, "lineAnswer", { hero: h.name });
@@ -727,7 +733,9 @@
     const lab = (k) => (labels && labels[k] != null ? labels[k] : LABELS[k]);
     const foe = state.foe, lesson = (encounter && encounter.lesson) || {}, st = state.study;
     const studied = st && ["won", "lost", "ran"].includes(state.phase);
-    const note = !studied ? "" : st.verdict === "got_it" ? fill(lab("studyGot"), { module: (state.modules[0] && state.modules[0].name) || "" })
+    const module = (state.modules[0] && state.modules[0].name) || "";
+    const note = !studied ? "" : st.verdict === "got_it" ? (st.owned ? fill(lab("studyOwned"), { module, n: st.backIn })
+      : fill(lab("studyGot"), { module }) + (st.backIn ? " " + fill(lab("studyBack"), { n: st.backIn }) : ""))
       : st.verdict === "partly" ? lab("studyPartly") : st.verdict === "not_yet" ? lab("studyNot") : lab("studyNone");
     const extra = { note, feedback: studied && st.verdict ? st.feedback : "", principle: studied && st.verdict ? st.principle : "" };
     if (state.phase === "won") {
@@ -1009,7 +1017,8 @@
             if (!alive_) return;
             if (!r || !r.verdict) throw new Error("no verdict");
             draft = "";
-            command({ type: "answer", verdict: r.verdict, feedback: r.feedback, principle: r.principle, answer: r.answer });
+            command({ type: "answer", verdict: r.verdict, feedback: r.feedback, principle: r.principle, answer: r.answer,
+              back_in: r.back_in, owned: r.owned });
           }).catch((e) => {
             judging = false;
             if (!alive_) return;

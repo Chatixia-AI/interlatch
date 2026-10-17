@@ -2545,4 +2545,7 @@ window.INTERLATCH_JA = {
   "You understood {n}/{of}": "理解した教訓 {n}/{of}",
   "Walk into a monster and answer its question: each lesson you understand fills your readiness for its module.": "モンスターにぶつかって問いに答えましょう。理解した教訓が、そのモジュールの準備度になります。",
   "Your answers count only toward your own readiness, kept on this computer; your agents' levels come from their lessons.": "答えはあなた自身の準備度にだけ数えられ、このコンピューターにだけ残ります。エージェントのレベルは教訓から決まります。",
+  "It comes back in {n} days for another look.": "{n} 日後にもう一度出てきます。",
+  "Got it again on another day: it's yours now ({module}). Next look in {n} days.": "別の日にもまた正解：もうあなたのものです（{module}）。次は {n} 日後。",
+  "Back for another look: walk into it to battle": "もう一度の出番：ぶつかると戦闘",
 };
