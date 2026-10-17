@@ -1422,10 +1422,9 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
     "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map."),
     "answer": t("Answer"), "introStudy": t("A wild {monster} appears! It's a lesson from your own sessions."),
-    "studyAsk": t("{question}"), "answerHint": t("In your own words: what happened, and why?"), "submit": t("Submit"),
-    "judging": t("Judging your answer…"), "answerAgain": t("Couldn't judge it: {error}"), "weakTag": t("weak spot"),
+    "studyAsk": t("{question}"), "checking": t("Checking…"), "answerAgain": t("Couldn't check it: {error}"), "weakTag": t("weak spot"),
     "lineAnswer": t("You answer for {hero}."), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."),
-    "linePartly": t("Partly there: {n} damage."), "lineNotYet": t("Not yet. The answer is on the end screen."),
+    "linePartly": t("Partly there: {n} damage."), "lineNotYet": t("Not this one: the right answer is on the end screen."),
     "lineBreak": t("{monster}'s charge breaks."),
     "studyGot": t("You understood it: it counts toward your readiness in {module}."),
     "studyBack": t("It comes back in {n} days for another look."),
@@ -1482,11 +1481,11 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     return r ? r.reward || null : false; // false: the win wasn't saved (the battle says so)
   };
   markFought(Number(id)); // off the field until tomorrow (a lesson got right rests longer anyway: study.py)
-  // a study battle: the lesson's question (asked once; the model may write one, which can take a few seconds), the
-  // person's answer judged and kept on this computer (knowledge/study.py)
-  const study = api("/api/party/ask", { id }).then((r) => (r?.available ? { scene: r.scene, question: r.question } : null), () => null);
-  const onAnswer = async (text) => {
-    const r = await post("/api/party/judge", { id: Number(id), answer: text });
+  // a study battle: the lesson's question and its options (written once by the model, which can take a few seconds
+  // the first time), the person's first pick kept on this computer (knowledge/study.py)
+  const study = api("/api/party/ask", { id }).then((r) => (r?.available ? { scene: r.scene, question: r.question, options: r.options } : null), () => null);
+  const onAnswer = async (choice) => {
+    const r = await post("/api/party/pick", { id: Number(id), choice });
     if (!r || r.error) throw new Error(r?.error || t("no verdict came back"));
     if (mapCache) { mapCache.understood = r.understood; mapCache.readiness = r.readiness; }
     return r;

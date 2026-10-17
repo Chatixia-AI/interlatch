@@ -1,10 +1,12 @@
-"""Study battles (Innerlatch): one of the person's own lessons as a question they answer in their own words, judged by
-the analysis model against the lesson. What they understood fills their readiness for the lesson's roadmap module, the
-step before that module's gate. The agents' levels never move: their XP is coverage, never the person's level (party.py).
+"""Study battles (Innerlatch): one of the person's own lessons as a multiple-choice question, its options written for
+that lesson by the analysis model (the right one, and plausible wrong ones about the same problem: the leads its
+session ruled out first). The first pick in a fight is the one kept. What they understood fills their readiness for the
+lesson's roadmap module, the step before that module's gate. The agents' levels never move: their XP is coverage, never
+the person's level (party.py).
 
 Per-person learning data stays on the person's own computer (docs/design/learning.md): only someone at this computer
-(viewer None) is judged and recorded; a person signed in to a hub gets no study battles there. A lesson's question,
-written once by the model for a lesson without a case file, is the lesson's, not anyone's answer, and is kept with it.
+(viewer None) is recorded; a person signed in to a hub gets no study battles there. A lesson's question and options,
+written once, are the lesson's, not anyone's answer, and are kept with it.
 
 Which lessons are worth studying: a lesson with study material (a case file's question, or a principle) first; a trap
 the agents keep hitting in this setup (an aliased rm, zsh, where screenshots land) is friction for the agents' rules,
@@ -29,11 +31,12 @@ from ..storage.kv import kv_get, kv_set, kv_transaction
 
 log = logging.getLogger("interlatch.study")
 
-ASK_KEY = "party.ask:"  # + lesson id: {scene, question, answer}, written once for a lesson without a case file
-STUDY_KEY = "party.study:"  # + scope key: [{"id", "on", "verdict"}], each judged answer, oldest first
+ASK_KEY = "party.ask:"  # + lesson id: {v, scene, question, options, principle}, written once for the lesson
+ASK_VERSION = 2  # what's kept under ASK_KEY; another version is written again
+OPTIONS = 4
+STUDY_KEY = "party.study:"  # + scope key: [{"id", "on", "verdict"}], each first pick, oldest first
 STUDY_MAX = 20_000
 READY_AT = 5  # lessons understood in a module: it is ready for its gate
-ANSWER_MAX = 2000  # characters of a typed answer the model reads
 BODY_MAX = 2500
 VERDICTS = ("got_it", "partly", "not_yet")
 RETURN_DAYS = (3, 10, 30, 90)  # rest after the 1st, 2nd, 3rd, 4th+ "got it" in a row (on separate days)
@@ -41,7 +44,7 @@ OWNED_AT = 2  # "got it" on this many separate days in a row: owned
 TOOLING_TAGS = frozenset({"shell", "zsh", "bash", "alias", "playwright", "mcp", "tooling", "sandbox", "scratchpad", "excalidraw"})
 NOT_HERE = "study battles run on your own computer"
 NO_MODEL = "the analysis model isn't available: {reason}"
-NO_ANSWER = "write an answer first"
+NO_CHOICE = "pick one of the answers"
 
 
 class StudyError(ValueError):
@@ -91,14 +94,14 @@ def flags(conn: sqlite3.Connection, ids) -> dict[int, tuple[bool, bool]]:
 
 # ------------------------------------------------------------------ the person's record (their own computer only)
 def studied_of(conn: sqlite3.Connection, key: str) -> list[dict]:
-    """The scope `key`'s judged answers, oldest first: {"id": lesson id, "on": "YYYY-MM-DD", "verdict": VERDICTS}."""
+    """The scope `key`'s first picks, oldest first: {"id": lesson id, "on": "YYYY-MM-DD", "verdict": VERDICTS}."""
     got = loads(kv_get(conn, STUDY_KEY + key), [])
     return [x for x in got if isinstance(x, dict) and isinstance(x.get("id"), int) and not isinstance(x["id"], bool)
             and isinstance(x.get("on"), str) and x.get("verdict") in VERDICTS] if isinstance(got, list) else []
 
 
 def understood(log_: list[dict]) -> list[int]:
-    """The lessons whose newest answer was judged "got it", in the order first understood."""
+    """The lessons whose newest pick was "got it", in the order first understood."""
     last: dict[int, str] = {}
     for x in log_:
         last[x["id"]] = x["verdict"]
@@ -141,45 +144,43 @@ def readiness(lessons, catalog, log_: list[dict]) -> dict[str, int]:
     return out
 
 
-# ------------------------------------------------------------------ the question, and the judge
+# ------------------------------------------------------------------ the question and its options
 FORMS = {
     "fix": "what caused it and what fixed it",
     "gotcha": "what the trap is and how to avoid it",
     "decision": "what was chosen and why, over the alternative",
-    "learning": "the insight, in their own words",
+    "learning": "the insight",
     "pattern": "when to use it and its key steps",
     "command": "the command (or its key part) that does it",
 }
 ASK_SCHEMA = {
-    "type": "object", "additionalProperties": False, "required": ["scene", "question", "answer"],
+    "type": "object", "additionalProperties": False, "required": ["scene", "question", "options", "principle"],
     "properties": {
         "scene": {"type": "string", "description": "1-2 sentences: the situation as the developer met it, before the "
                                                    "answer was known. Never give the answer away."},
         "question": {"type": "string", "description": "One question, at most 20 words, whose answer is the lesson's key point"},
-        "answer": {"type": "string", "description": "The expected answer, at most 2 sentences"},
-    },
-}
-ASK_SYSTEM = ("You turn a lesson from a developer's own past work into one question they can answer from memory, so "
-              "they learn it. Ask for {form}. The scene sets up the moment without revealing the answer; the question "
-              "is answerable in a sentence or two; the answer is what the lesson says, nothing invented.")
-JUDGE_SCHEMA = {
-    "type": "object", "additionalProperties": False, "required": ["verdict", "feedback", "principle"],
-    "properties": {
-        "verdict": {"type": "string", "enum": list(VERDICTS)},
-        "feedback": {"type": "string", "description": "At most 2 sentences to the developer (\"you\"): what they got "
-                                                      "right and what was missing"},
+        "options": {"type": "array", "minItems": OPTIONS, "maxItems": OPTIONS, "items": {
+            "type": "object", "additionalProperties": False, "required": ["text", "right", "why"],
+            "properties": {
+                "text": {"type": "string", "description": "One answer, at most 20 words"},
+                "right": {"type": "boolean", "description": "True for exactly one option: what the lesson says"},
+                "why": {"type": "string", "description": "One sentence, from the lesson: why this one is wrong (or, for "
+                                                         "the right one, why it is right)"},
+            }}},
         "principle": {"type": "string", "description": "The transferable takeaway in one sentence, true beyond this project"},
     },
 }
-JUDGE_SYSTEM = (
-    "You check a developer's own answer to a question about a lesson from their past work. Judge understanding, not "
-    "wording or spelling.\n"
-    "- got_it: they state the core of the expected answer ({form}); missing details are fine.\n"
-    "- partly: on the right track, but the key part is missing or vague.\n"
-    "- not_yet: wrong, empty, unrelated, or a guess.\n"
-    "The expected answer was written by an AI from a session transcript and can be incomplete: when their answer is "
-    "right by the lesson's own text, count it even if it differs from the expected answer. Never invent facts beyond "
-    "the lesson. Be warm and brief.")
+ASK_SYSTEM = (
+    "You turn a lesson from a developer's own past work into one multiple-choice question they answer from memory, so "
+    "they learn it. Ask for {form}.\n"
+    "- The scene sets up the moment without revealing the answer. When the lesson has a case file, keep its scene and "
+    "question.\n"
+    "- Exactly one option is right: what the lesson says. The others are plausible for the same situation and wrong by "
+    "the lesson's own text: the leads the session ruled out first, then likely misconceptions. Never an option that is "
+    "also true, never \"all\" or \"none of the above\".\n"
+    "- All options alike in length and form, so the wording never gives the answer away: the right one is never the "
+    "longest.\n"
+    "- Nothing invented beyond the lesson.")
 
 
 def _runner(cfg: Config, runner):
@@ -201,62 +202,76 @@ def _system(cfg: Config, system: str) -> str:
     return written_in(cfg, system)
 
 
+def _clean(got) -> dict | None:
+    """A written question as kept: {scene, question, options: [{text, right, why}], principle}, or None when it isn't
+    one (no scene or question, not OPTIONS options with text, not exactly one right, two alike)."""
+    if not isinstance(got, dict):
+        return None
+    text = lambda v: v.strip() if isinstance(v, str) and v.strip() else ""  # noqa: E731
+    opts = [{"text": text(o.get("text")), "right": o.get("right") is True, "why": text(o.get("why"))}
+            for o in got.get("options") or [] if isinstance(o, dict)]
+    if not text(got.get("scene")) or not text(got.get("question")) or len(opts) != OPTIONS:
+        return None
+    if sum(o["right"] for o in opts) != 1 or not all(o["text"] for o in opts):
+        return None
+    if len({" ".join(o["text"].casefold().split()) for o in opts}) != OPTIONS:
+        return None
+    return {"scene": text(got["scene"]), "question": text(got["question"]), "options": opts, "principle": text(got.get("principle"))}
+
+
 def ask(conn: sqlite3.Connection, cfg: Config, lesson_id: int, *, runner=None) -> dict:
-    """The question a study battle asks: the case file's scene and question when the lesson has one; otherwise one
-    written by the model once and kept with the lesson. {scene, question, answer, source: "case" | "written"}."""
+    """The question a study battle asks, with OPTIONS options written for this lesson: the right one and plausible wrong
+    ones about the same problem (its ruled-out leads first), each with why. Written once by the analysis model and kept
+    with the lesson. {scene, question, options: [{text, right, why}], principle}."""
     row = _lesson_row(conn, lesson_id)
     if row is None:
         raise StudyError("no such lesson")
-    m = material(row["case_json"])
-    if m.get("scene") and m.get("question") and m.get("answer"):
-        return {"scene": m["scene"], "question": m["question"], "answer": m["answer"], "source": "case"}
     kept = loads(kv_get(conn, ASK_KEY + str(lesson_id)), None)
-    if isinstance(kept, dict) and all(isinstance(kept.get(k), str) and kept[k].strip() for k in ("scene", "question", "answer")):
-        return {**{k: kept[k] for k in ("scene", "question", "answer")}, "source": "written"}
+    if isinstance(kept, dict) and kept.get("v") == ASK_VERSION and (got := _clean(kept)) is not None:
+        return got
+    m = material(row["case_json"])
     r = _runner(cfg, runner)
     form = FORMS.get(row["kind"], FORMS["learning"])
+    case = "".join(f"<{k}>{m[k]}</{k}>\n" for k in ("scene", "question", "answer", "principle") if m.get(k))
+    leads = "".join(f"<ruled_out lead=\"{x['lead']}\">{x.get('why') or ''}</ruled_out>\n" for x in m.get("ruled_out", []))
     prompt = (f"<lesson kind=\"{row['kind']}\" project=\"{row['project_name'] or ''}\">\n<title>{row['title']}</title>\n"
               f"<body>\n{(row['body'] or '')[:BODY_MAX]}\n</body>\n"
-              + (f"<principle>{m['principle']}</principle>\n" if m.get("principle") else "")
-              + "</lesson>\n\nWrite the scene, the question and its answer.")
-    res = r.run(prompt, ASK_SCHEMA, system=_system(cfg, ASK_SYSTEM.replace("{form}", form)),
-                model=cfg.analysis.screen_model, effort="low", timeout=120)
-    got = {k: str(res.data.get(k) or "").strip() for k in ("scene", "question", "answer")}
-    if not all(got.values()):
-        raise StudyError(NO_MODEL.replace("{reason}", "no question came back"))
-    kv_set(conn, ASK_KEY + str(lesson_id), json.dumps(got, ensure_ascii=False))
+              + (f"<case_file>\n{case}{leads}</case_file>\n" if case or leads else "")
+              + f"</lesson>\n\nWrite the scene, the question, its {OPTIONS} options and the principle.")
+    got = None
+    for _ in range(2):  # one more try when the options don't hold together
+        res = r.run(prompt, ASK_SCHEMA, system=_system(cfg, ASK_SYSTEM.replace("{form}", form)),
+                    model=cfg.analysis.screen_model, effort="low", timeout=120)
+        got = _clean(res.data)
+        if got is not None:
+            break
+    if got is None:
+        raise StudyError(NO_MODEL.replace("{reason}", "no usable question came back"))
+    if not got["principle"] and m.get("principle"):
+        got["principle"] = m["principle"]
+    kv_set(conn, ASK_KEY + str(lesson_id), json.dumps({"v": ASK_VERSION, **got}, ensure_ascii=False))
     conn.commit()
-    return {**got, "source": "written"}
+    return got
 
 
-def judge(conn: sqlite3.Connection, cfg: Config, scope_key: str, lesson_id: int, answer: str, *, here: bool,
-          runner=None, today: date | None = None) -> dict:
-    """Judge the person's answer to a lesson's question and keep the verdict in their own record (on this computer
-    only: `here` False refuses). {verdict, feedback, principle, answer (the lesson's), recorded}. The lesson must be
-    one the caller checked is the person's."""
+def pick(conn: sqlite3.Connection, cfg: Config, scope_key: str, lesson_id: int, choice, *, here: bool,
+         runner=None, today: date | None = None) -> dict:
+    """The person's pick among a lesson's options, kept in their own record (on this computer only: `here` False
+    refuses): the right one is "got it", any other "not yet". {verdict, right (its index), answer (the right option),
+    feedback (why the pick is right or wrong), principle, back_in, owned}. The lesson must be one the caller checked is
+    the person's."""
     if not here:
         raise StudyError(NOT_HERE)
-    text = (answer or "").strip() if isinstance(answer, str) else ""
-    if not text:
-        raise StudyError(NO_ANSWER)
     q = ask(conn, cfg, lesson_id, runner=runner)
-    row = _lesson_row(conn, lesson_id)
-    m = material(row["case_json"])
-    r = _runner(cfg, runner)
-    form = FORMS.get(row["kind"], FORMS["learning"])
-    leads = "".join(f"<ruled_out lead=\"{x['lead']}\">{x.get('why') or ''}</ruled_out>\n" for x in m.get("ruled_out", []))
-    prompt = (f"<lesson kind=\"{row['kind']}\">\n<title>{row['title']}</title>\n<body>\n{(row['body'] or '')[:BODY_MAX]}\n</body>\n"
-              + (f"<principle>{m['principle']}</principle>\n" if m.get("principle") else "") + leads
-              + f"</lesson>\n<question>{q['question']}</question>\n<expected_answer>{q['answer']}</expected_answer>\n"
-              f"<developer_answer>\n{text[:ANSWER_MAX]}\n</developer_answer>\n\nJudge the developer's answer.")
-    res = r.run(prompt, JUDGE_SCHEMA, system=_system(cfg, JUDGE_SYSTEM.replace("{form}", form)),
-                model=cfg.analysis.screen_model, effort="low", timeout=120)
-    verdict = res.data.get("verdict") if res.data.get("verdict") in VERDICTS else "not_yet"
+    if not isinstance(choice, int) or isinstance(choice, bool) or not 0 <= choice < len(q["options"]):
+        raise StudyError(NO_CHOICE)
+    right = next(i for i, o in enumerate(q["options"]) if o["right"])
+    verdict = "got_it" if choice == right else "not_yet"
     day = today or utcnow().date()
     with kv_transaction(conn):
         kept = studied_of(conn, scope_key) + [{"id": lesson_id, "on": day.isoformat(), "verdict": verdict}]
         kv_set(conn, STUDY_KEY + scope_key, json.dumps(kept[-STUDY_MAX:]))
     sched = schedule(kept, day).get(lesson_id)
-    return {"verdict": verdict, "feedback": str(res.data.get("feedback") or "").strip(),
-            "principle": str(res.data.get("principle") or m.get("principle") or "").strip(), "answer": q["answer"], "recorded": True,
-            "back_in": (date.fromisoformat(sched["due"]) - day).days if sched else 0, "owned": bool(sched and sched["owned"])}
+    return {"verdict": verdict, "right": right, "answer": q["options"][right]["text"], "feedback": q["options"][choice]["why"],
+            "principle": q["principle"], "back_in": (date.fromisoformat(sched["due"]) - day).days if sched else 0,
+            "owned": bool(sched and sched["owned"])}

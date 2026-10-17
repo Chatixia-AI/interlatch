@@ -1,6 +1,7 @@
-"""Study battles (knowledge/study.py; GET /api/party/ask, POST /api/party/judge): a lesson's question (its case file's,
-or one the model writes once and the lesson keeps), the person's answer judged by the model, the verdict kept on their
-own computer only, and what they understood counted per roadmap module. The agents' levels never move."""
+"""Study battles (knowledge/study.py; GET /api/party/ask, POST /api/party/pick): a lesson's question with options
+written for it by the model once and kept with the lesson (the right one and plausible wrong ones, each with why), the
+person's first pick kept on their own computer only, and what they understood counted per roadmap module and brought
+back as it would fade. The agents' levels never move."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import pytest
 
 from interlatch.analysis.runners import factory
 from interlatch.knowledge import party, study
-from interlatch.storage.kv import kv_get
+from interlatch.storage.kv import kv_get, kv_set
 
 from conftest import SID
 from test_leaderboard import _joined
@@ -38,6 +39,14 @@ class FakeModel:
     def run(self, prompt, schema, **kw):
         self.prompts.append(prompt)
         return SimpleNamespace(data=self.replies.pop(0))
+
+
+def QUESTION(right=1, **over):
+    """A written question as the model returns it: four options, `right` the right one."""
+    opts = [{"text": t, "right": i == right, "why": f"why {t}"} for i, t in enumerate(("A flaky network", "A shared token",
+                                                                                     "A stale cache", "A slow disk"))]
+    return {"scene": "Tests pass alone", "question": "Why do they fail together?", "options": opts,
+            "principle": "Isolate shared state", **over}
 
 
 def _case(conn, lid, **case):
@@ -72,56 +81,66 @@ def test_study_material_and_the_agents_friction(home):  # noqa: F811
     assert study.friction("fix", "global", "canonical", ["shell"]) is False  # only gotchas are the agents' traps
 
 
-# ------------------------------------------------------------------ the question
-def test_a_case_file_asks_its_own_question_and_a_written_one_is_kept(home):  # noqa: F811
+# ------------------------------------------------------------------ the question and its options
+def test_a_lessons_question_and_options_are_written_once_from_its_own_material(home):  # noqa: F811
     conn, cfg = home["conn"], home["cfg"]
     sid = _session(conn)
-    cased = _lesson(conn, sid, "pytest flakes", kind="fix")
-    _case(conn, cased, scene="Tests pass alone", question="Why do they fail together?", answer="A shared token")
-    model = FakeModel({"scene": "A deploy hung", "question": "What did the job miss?", "answer": "The env var"})
-    assert study.ask(conn, cfg, cased, runner=model) == {"scene": "Tests pass alone", "question": "Why do they fail together?",
-                                                         "answer": "A shared token", "source": "case"}
-    assert model.prompts == []
-    plain = _lesson(conn, sid, "launchd jobs miss shell env", "Exported only in .zshrc.", kind="gotcha")
-    first = study.ask(conn, cfg, plain, runner=model)
-    assert first == {"scene": "A deploy hung", "question": "What did the job miss?", "answer": "The env var", "source": "written"}
-    assert "launchd jobs miss shell env" in model.prompts[0] and "what the trap is" not in model.prompts[0]
-    assert study.ask(conn, cfg, plain, runner=FakeModel()) == first  # kept: no second call
+    lid = _lesson(conn, sid, "pytest flakes on a token", "Two tests shared one token.", kind="gotcha")
+    _case(conn, lid, scene="Tests pass alone", question="Why?", answer="A shared token", principle="Isolate state",
+          ruled_out=[{"lead": "A flaky network", "why": "Offline runs failed too"}])
+    model = FakeModel(QUESTION())
+    got = study.ask(conn, cfg, lid, runner=model)
+    assert got == {"scene": "Tests pass alone", "question": "Why do they fail together?", "options": QUESTION()["options"],
+                   "principle": "Isolate shared state"}
+    prompt = model.prompts[0]
+    assert "pytest flakes on a token" in prompt and "A flaky network" in prompt and "Offline runs failed too" in prompt
+    assert study.ask(conn, cfg, lid, runner=FakeModel()) == got  # kept: no second call
+    assert json.loads(kv_get(conn, f"party.ask:{lid}"))["v"] == study.ASK_VERSION
+    # a question kept in another shape (the typed-answer one) is written again
+    kv_set(conn, f"party.ask:{lid}", json.dumps({"scene": "s", "question": "q", "answer": "a"}))
+    assert study.ask(conn, cfg, lid, runner=FakeModel(QUESTION(right=2)))["options"][2]["right"] is True
     with pytest.raises(study.StudyError, match="no such lesson"):
         study.ask(conn, cfg, 999999, runner=model)
 
 
-# ------------------------------------------------------------------ the judge and the record
-def test_answers_are_judged_kept_here_only_and_counted_per_module(home):  # noqa: F811
+def test_options_that_dont_hold_together_are_asked_for_once_more_then_refused(home):  # noqa: F811
+    conn, cfg = home["conn"], home["cfg"]
+    lid = _lesson(conn, _session(conn), "pytest flakes", kind="fix")
+    two_right = QUESTION()
+    two_right["options"][0]["right"] = True
+    three = QUESTION(options=QUESTION()["options"][:3])
+    alike = QUESTION()
+    alike["options"][3]["text"] = " a SHARED  token "
+    for bad in (two_right, three, alike, QUESTION(scene=" "), QUESTION(right=9)):
+        model = FakeModel(bad, QUESTION())
+        assert study.ask(conn, cfg, lid, runner=model)["options"][1]["right"] is True and len(model.prompts) == 2
+        conn.execute("DELETE FROM kv WHERE key = ?", (f"party.ask:{lid}",))
+    with pytest.raises(study.StudyError, match="no usable question"):
+        study.ask(conn, cfg, lid, runner=FakeModel(two_right, two_right))
+
+
+# ------------------------------------------------------------------ the pick and the record
+def test_the_first_pick_is_kept_here_only_and_counted_per_module(home):  # noqa: F811
     conn, cfg, here = home["conn"], home["cfg"], home["here"]
-    sid = _session(conn)
-    lid = _lesson(conn, sid, "pytest and a token", kind="gotcha")
-    _case(conn, lid, scene="Tests pass alone", question="Why?", answer="A shared token", principle="Isolate state",
-          ruled_out=[{"lead": "Flaky network", "why": "Offline runs failed too"}])
+    lid = _lesson(conn, _session(conn), "pytest and a token", kind="gotcha", stage="established")
     before = party.compute(conn, here)["agents"]
-    model = FakeModel({"verdict": "partly", "feedback": "Close.", "principle": "Isolate shared state"},
-                      {"verdict": "got_it", "feedback": "Yes.", "principle": "Isolate shared state"},
-                      {"verdict": "who knows", "feedback": "", "principle": ""})
-    got = study.judge(conn, cfg, "here", lid, "something shared?", here=True, runner=model, today=date(2026, 10, 17))
-    assert got == {"verdict": "partly", "feedback": "Close.", "principle": "Isolate shared state", "answer": "A shared token",
-                   "recorded": True, "back_in": 0, "owned": False}
-    assert "something shared?" in model.prompts[0] and "Flaky network" in model.prompts[0] and "A shared token" in model.prompts[0]
-    study.judge(conn, cfg, "here", lid, "a shared token", here=True, runner=model, today=date(2026, 10, 18))
-    assert study.studied_of(conn, "here") == [{"id": lid, "on": "2026-10-17", "verdict": "partly"},
+    model = FakeModel(QUESTION())
+    got = study.pick(conn, cfg, "here", lid, 0, here=True, runner=model, today=date(2026, 10, 17))
+    assert got == {"verdict": "not_yet", "right": 1, "answer": "A shared token", "feedback": "why A flaky network",
+                   "principle": "Isolate shared state", "back_in": 0, "owned": False}
+    got = study.pick(conn, cfg, "here", lid, 1, here=True, runner=FakeModel(), today=date(2026, 10, 18))
+    assert got["verdict"] == "got_it" and got["feedback"] == "why A shared token" and got["back_in"] == 3
+    assert study.studied_of(conn, "here") == [{"id": lid, "on": "2026-10-17", "verdict": "not_yet"},
                                               {"id": lid, "on": "2026-10-18", "verdict": "got_it"}]
-    m = party.adventure_map(conn, here)
+    m = party.adventure_map(conn, here, today=date(2026, 10, 18))
     assert m["understood"] == [lid] and m["readiness"] == {"M-python": 1} and m["ready_at"] == study.READY_AT
-    # a verdict the model made up reads as "not yet"; the newest answer decides
-    assert study.judge(conn, cfg, "here", lid, "no idea", here=True, runner=model)["verdict"] == "not_yet"
-    assert party.adventure_map(conn, here)["understood"] == []
     party.clear_cache()
     assert party.compute(conn, here)["agents"] == before  # no level moved
-    # nothing for an empty answer, or away from the person's computer
-    for answer in ("", "   ", None, 3):
-        with pytest.raises(study.StudyError, match="write an answer"):
-            study.judge(conn, cfg, "here", lid, answer, here=True, runner=FakeModel())
+    for bad in (None, -1, 4, "1", 1.0, True):
+        with pytest.raises(study.StudyError, match="pick one"):
+            study.pick(conn, cfg, "here", lid, bad, here=True, runner=FakeModel())
     with pytest.raises(study.StudyError, match="your own computer"):
-        study.judge(conn, cfg, "person:1", lid, "a shared token", here=False, runner=FakeModel())
+        study.pick(conn, cfg, "person:1", lid, 1, here=False, runner=FakeModel())
     assert kv_get(conn, "party.study:person:1") is None
 
 
@@ -154,42 +173,43 @@ def test_the_map_brings_back_what_is_due_and_names_what_is_owned(home):  # noqa:
     conn, cfg, here = home["conn"], home["cfg"], home["here"]
     sid = _session(conn)
     a, b = _lesson(conn, sid, "pytest one", kind="fix"), _lesson(conn, sid, "pytest two", kind="fix")
-    for lid in (a, b):
-        _case(conn, lid, scene="s", question="q?", answer="x")
-    yes = lambda: FakeModel({"verdict": "got_it", "feedback": "", "principle": ""})  # noqa: E731
-    got = study.judge(conn, cfg, "here", a, "x", here=True, runner=yes(), today=date(2026, 10, 1))
+    model = FakeModel(QUESTION(), QUESTION())
+    got = study.pick(conn, cfg, "here", a, 1, here=True, runner=model, today=date(2026, 10, 1))
     assert got["back_in"] == 3 and got["owned"] is False
-    got = study.judge(conn, cfg, "here", a, "x", here=True, runner=yes(), today=date(2026, 10, 4))
+    got = study.pick(conn, cfg, "here", a, 1, here=True, runner=model, today=date(2026, 10, 4))
     assert got["back_in"] == 10 and got["owned"] is True
-    study.judge(conn, cfg, "here", b, "x", here=True, runner=yes(), today=date(2026, 10, 10))
+    study.pick(conn, cfg, "here", b, 1, here=True, runner=model, today=date(2026, 10, 10))
     m = party.adventure_map(conn, here, today=date(2026, 10, 14))
     assert m["understood"] == [a, b] and m["owned"] == [a] and m["back"] == [a, b]  # a: back on the 14th; b: on the 13th
     m = party.adventure_map(conn, here, today=date(2026, 10, 12))
     assert m["back"] == [] and m["readiness"] == {"M-python": 2}
-    no = FakeModel({"verdict": "not_yet", "feedback": "", "principle": ""})
-    assert study.judge(conn, cfg, "here", a, "?", here=True, runner=no, today=date(2026, 10, 15))["back_in"] == 0
+    assert study.pick(conn, cfg, "here", a, 0, here=True, runner=model, today=date(2026, 10, 15))["back_in"] == 0
 
 
 # ------------------------------------------------------------------ the dashboard
-def test_the_endpoints_ask_without_the_answer_and_judge_at_this_computer(hubweb, catalog, monkeypatch):  # noqa: F811
+def test_the_endpoints_ask_without_saying_which_is_right_and_keep_the_pick_here(hubweb, catalog, monkeypatch):  # noqa: F811
     url, cfg, conn = hubweb["url"], hubweb["cfg"], hubweb["conn"]
     lid = _lesson(conn, SID, "pytest secrets", kind="fix")
-    _case(conn, lid, scene="Tests pass alone", question="Why?", answer="A shared token")
-    model = FakeModel({"verdict": "got_it", "feedback": "Yes.", "principle": "Isolate state"})
+    model = FakeModel(QUESTION())
     monkeypatch.setattr(factory, "make_runner", lambda cfg: model)
-    for path, body in ((f"/api/party/ask?id={lid}", None), ("/api/party/judge", {"id": lid, "answer": "token"})):
+    for path, body in ((f"/api/party/ask?id={lid}", None), ("/api/party/pick", {"id": lid, "choice": 1})):
         status, r = _http(url, path, body)
         assert status == 403 and r["signin"] is True, path
     _joined(cfg, board=False)
     status, r = _http(url, f"/api/party/ask?id={lid}")
-    assert status == 200 and r == {"available": True, "scene": "Tests pass alone", "question": "Why?", "source": "case"}
+    assert status == 200 and r == {"available": True, "scene": "Tests pass alone", "question": "Why do they fail together?",
+                                   "options": ["A flaky network", "A shared token", "A stale cache", "A slow disk"]}
     for q in ("999999", "abc", ""):
         assert _http(url, f"/api/party/ask?id={q}")[0] == 404, q
-    status, r = _http(url, "/api/party/judge", {"id": lid, "answer": "a shared token"})
+    status, r = _http(url, "/api/party/pick", {"id": lid, "choice": 1})
     assert status == 200 and r["verdict"] == "got_it" and r["answer"] == "A shared token" and r["understood"] == [lid]
     assert r["readiness"] == {"M-python": 1}
-    assert _http(url, "/api/party/judge", {"id": 999999, "answer": "x"})[0] == 400
-    assert _http(url, "/api/party/judge", {"id": lid, "answer": ""})[1]["error"] == "write an answer first"
+    assert _http(url, "/api/party/pick", {"id": 999999, "choice": 1})[0] == 400
+    assert _http(url, "/api/party/pick", {"id": lid, "choice": 7})[1]["error"] == "pick one of the answers"
+    monkeypatch.setattr(factory, "make_runner", lambda cfg: FakeModel(QUESTION(right=9), QUESTION(right=9)))
+    other = _lesson(conn, SID, "pytest again", kind="fix")
+    status, r = _http(url, f"/api/party/ask?id={other}")
+    assert status == 200 and r["available"] is False and "no usable question" in r["reason"]
 
 
 def test_a_hub_person_gets_no_study_battle_and_nothing_is_kept(team, catalog, monkeypatch):  # noqa: F811
@@ -199,11 +219,10 @@ def test_a_hub_person_gets_no_study_battle_and_nothing_is_kept(team, catalog, mo
     conn.execute("INSERT INTO machines(id, name, role, person_id) VALUES (?, 'bob-pc', 'spoke', ?)", (BOB_PC, bob["id"]))
     conn.commit()
     bobs = _lesson(conn, _session(conn, machine=BOB_PC, source="remote"), "SQL query on bob's computer")
-    _case(conn, bobs, scene="s", question="q?", answer="a")
     monkeypatch.setattr(factory, "make_runner", lambda cfg: pytest.fail("no model call for a hub person"))
     status, r = _http(url, f"/api/party/ask?id={bobs}", headers=_as(s["Bob"]))
     assert status == 200 and r["available"] is False and "your own computer" in r["reason"]
-    status, r = _http(url, "/api/party/judge", {"id": bobs, "answer": "a"}, _as(s["Bob"]))
+    status, r = _http(url, "/api/party/pick", {"id": bobs, "choice": 1}, _as(s["Bob"]))
     assert status == 400 and "your own computer" in r["error"]
     assert kv_get(conn, f"party.study:person:{bob['id']}") is None
     assert _http(url, "/api/party/map", headers=_as(s["Bob"]))[1]["understood"] == []

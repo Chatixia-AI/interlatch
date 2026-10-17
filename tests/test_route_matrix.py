@@ -163,7 +163,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/party/quest"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/goal"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/cleared"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
-    ("POST", "/api/party/judge"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
+    ("POST", "/api/party/pick"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     ("POST", "/api/party/buy"): POST_SIGNED_IN.ok(400).but(here=403),  # no such item
     ("POST", "/api/party/sell"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/equip"): POST_SIGNED_IN.ok(400).but(here=403),
@@ -294,7 +294,7 @@ BODY = {
     "/api/update/notify": {"on": False},
     "/api/party/goal": {"track": "no-such-track"},
     "/api/party/cleared": {"id": 999999, "cleared": True},
-    "/api/party/judge": {"id": 999999, "answer": "a guess"},
+    "/api/party/pick": {"id": 999999, "choice": 0},
     "/api/party/buy": {"id": "c:nothing"},
     "/api/party/sell": {"id": "c:nothing"},
     "/api/party/equip": {"agent": "claude", "slot": "weapon", "id": "g:nothing"},

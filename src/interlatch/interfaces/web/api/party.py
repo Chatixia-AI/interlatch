@@ -138,10 +138,10 @@ def action_party_cleared(ctx: Context, viewer: dict | None, body: dict, *, here:
 
 
 # ------------------------------------------------------------------ study battles (knowledge/study.py): the person
-# answers a lesson's question in their own words and the analysis model judges it; only at their own computer
+# picks the answer to a lesson's question among options written for it; only at their own computer
 def ask(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
-    """GET /api/party/ask?id=<lesson id>: the question a study battle asks (its scene and question, never the answer),
-    or {available: false, reason} where there is none (on a hub; no model)."""
+    """GET /api/party/ask?id=<lesson id>: the question a study battle asks: its scene, question and the options' texts
+    (never which is right), or {available: false, reason} where there is none (on a hub; no model)."""
     from ....knowledge import party as pt
     from ....knowledge import study
 
@@ -161,12 +161,13 @@ def ask(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
         return {"available": False, "reason": tr(str(exc))}, 200
     except Exception as exc:  # the model's call failed: no study battle this time, the fight still runs
         return {"available": False, "reason": tr(study.NO_MODEL, reason=str(exc)[:200])}, 200
-    return {"available": True, "scene": got["scene"], "question": got["question"], "source": got["source"]}, 200
+    return {"available": True, "scene": got["scene"], "question": got["question"], "options": [o["text"] for o in got["options"]]}, 200
 
 
-def action_party_judge(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
-    """POST /api/party/judge {"id", "answer"}: the person's answer, judged; the verdict is kept on this computer. Answers
-    the verdict, the feedback, the principle, the lesson's answer and what the person has understood now."""
+def action_party_pick(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/pick {"id", "choice"}: the person's first pick among a lesson's options (an index into those
+    /api/party/ask sent), kept on this computer. Answers the verdict, the right option, why the pick is right or
+    wrong, the principle, when the lesson comes back, and what the person has understood now."""
     from ....knowledge import party as pt
     from ....knowledge import study
 
@@ -176,7 +177,7 @@ def action_party_judge(ctx: Context, viewer: dict | None, body: dict, *, here: b
     if not pt.owns(ctx.conn, _here_id(ctx), viewer, lesson_id):
         return {"error": tr("no such lesson")}, 400
     try:
-        got = study.judge(ctx.conn, ctx.cfg, pt.scope_key(viewer), lesson_id, body.get("answer"), here=viewer is None)
+        got = study.pick(ctx.conn, ctx.cfg, pt.scope_key(viewer), lesson_id, body.get("choice"), here=viewer is None)
     except study.StudyError as exc:
         return {"error": tr(str(exc))}, 400
     except Exception as exc:  # the model's call failed: nothing was kept

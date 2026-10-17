@@ -455,7 +455,7 @@ assert.deepEqual(b.items.map((it) => it.count), ALL_ITEMS.map(() => 3));
 
 
 STUDY = r'''
-const Q = {scene: 'The tests pass alone.', question: 'Why do they fail together?'};
+const Q = {scene: 'The tests pass alone.', question: 'Why do they fail together?', options: ['A flaky network', 'A shared token', 'A stale cache', 'A slow disk']};
 const studied = (i, q = Q) => ({...lesson(i), study: q});
 const answerFirst = (verdict) => (s) => (s.study && !s.study.verdict ? {type: 'answer', verdict, feedback: 'Close.', principle: 'Isolate state', answer: 'A shared token'} : R.policy(s));
 '''
@@ -475,7 +475,16 @@ const later = R.setup({...lesson(3), studyPending: true}, 0);
 assert.deepEqual(later.log.map((l) => l.key), ['introStudy']);
 assert.equal(R.ask(later, Q).filter((e) => e.t === 'say').length, 2);
 assert.deepEqual(R.ask(later, Q), []);
-assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: '  '}), []);
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: '  ', options: Q.options}), []);
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: 'Why?', options: ['only one']}), []);  // a choice needs two at least
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: 'Why?', options: ['one', ' ']}), []);
+// the options show in an order of the fight's own: every one once, the same for a seed, another for another try
+const order = (i, at) => R.setup(studied(i), at).study.order;
+assert.deepEqual(order(3, 0).slice().sort(), [0, 1, 2, 3]);
+assert.deepEqual(order(3, 0), order(3, 0));
+let moved = 0;
+for (let i = 0; i < 20; i++) if (JSON.stringify(order(i, 0)) !== JSON.stringify(order(i, 1))) moved++;
+assert.ok(moved >= 10, 'the order barely changes between tries: ' + moved);
 // the dice are the same with a question or without, when nobody answers
 for (let i = 0; i < 30; i++) {
   const a = R.simulate(studied(i), 1), b = R.simulate(lesson(i), 1);

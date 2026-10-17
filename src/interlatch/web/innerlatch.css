@@ -837,19 +837,17 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :lang(ja) .bt-menu-head { letter-spacing: 0.02em; text-transform: none; }
 /* a study battle: Answer in gold; its panel takes the deck's whole width (the party is back once it's answered), the
-   question over a box to write in */
+   question over its options, each whole (they wrap), numbered for the keys */
 .bt-cmd.bt-answer-cmd { color: var(--gold); }
 .bt-menu-head.bt-ask { white-space: normal; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0;
   font: 600 14px/1.45 var(--sans); color: var(--ink); }
 .bt-asking .bt-deck { grid-template-columns: minmax(0, 1fr); }
 .bt-asking .bt-party { display: none; }
-.bt-answer { display: block; width: 100%; min-height: 4.6em; margin: 2px 0 8px; padding: 8px 10px; resize: vertical; border: 0; border-radius: 0;
-  color: var(--ink); background: var(--surface); font: 500 14px/1.45 var(--sans);
-  box-shadow: inset 0 0 0 2px var(--border-strong); }
-.bt-answer:focus { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
-.bt-answer:disabled { opacity: 0.6; }
-.bt-answer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.bt-answer-error { font: 500 12.5px/1.4 var(--sans); color: var(--critical-ink); }
+.bt-cmd.bt-choice { align-items: flex-start; }
+.bt-cmd.bt-choice .bt-cmd-name { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; text-overflow: clip;
+  overflow-wrap: anywhere; font: 500 14px/1.4 var(--sans); }
+.bt-cmd.bt-choice .bt-cmd-meta { color: var(--gold); }
+.bt-answer-error { margin: 4px 10px; font: 500 12.5px/1.4 var(--sans); color: var(--critical-ink); }
 .bt-cmds { display: grid; gap: 2px; }
 /* a submenu (skills, items): its rows scroll by whole rows inside the main menu's height (battle.js sets the list's
    max-height), Back stays pinned under them, and a fade with "▼ more" shows while rows are hidden below or above */
