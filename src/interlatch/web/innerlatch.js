@@ -1481,6 +1481,7 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     if (sbSection === "adventure") buildSidebar("adventure");
     return r ? r.reward || null : false; // false: the win wasn't saved (the battle says so)
   };
+  markFought(Number(id)); // off the field until tomorrow (a lesson got right rests longer anyway: study.py)
   // a study battle: the lesson's question (asked once; the model may write one, which can take a few seconds), the
   // person's answer judged and kept on this computer (knowledge/study.py)
   const study = api("/api/party/ask", { id }).then((r) => (r?.available ? { scene: r.scene, question: r.question } : null), () => null);
@@ -1559,6 +1560,19 @@ function fieldSpot(attr) {
   catch (e) { return null; }
 }
 function keepFieldSpot(attr, at) { try { sessionStorage.setItem(FIELD_SPOT_KEY + attr, JSON.stringify(at)); } catch (e) { /* this page only */ } }
+// the lessons fought today, in this browser: they stay off the field until tomorrow (a convenience: lost, they just come
+// back early)
+const FOUGHT_KEY = "interlatch.innerlatch.fought";
+function localDay() { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+function foughtToday() {
+  try { const v = JSON.parse(localStorage.getItem(FOUGHT_KEY) || "null"); return v?.on === localDay() && Array.isArray(v.ids) ? v.ids : []; }
+  catch (e) { return []; }
+}
+function markFought(id) {
+  const ids = foughtToday();
+  if (!ids.includes(id)) ids.push(id);
+  try { localStorage.setItem(FOUGHT_KEY, JSON.stringify({ on: localDay(), ids })); } catch (e) { /* comes back early */ }
+}
 // the region the party stands in on the map: the newest lesson's
 function partyRegion(m) {
   const newest = (m.lessons || []).find((l) => l.id === m.newest), mod = newest?.modules?.[0];
@@ -1598,7 +1612,7 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
   whenShown(host, () => {
     let field;
     try {
-      field = Field.mountField(host, { data: m, region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
+      field = Field.mountField(host, { data: { ...m, today: foughtToday() }, region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
         onMove: (at) => keepFieldSpot(attr, at),
         onEncounter: (lesson) => { hideTip(); go(`#/innerlatch/adventure/battle/${lesson.id}?field=${attr}`); },
         onTown: () => { hideTip(); go(`#/innerlatch/adventure/town/${attr}?field=1`); },

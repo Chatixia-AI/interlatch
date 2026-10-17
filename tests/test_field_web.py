@@ -119,6 +119,9 @@ S.back = [1];
 const B = F_.layout(S, 'craft');
 assert.deepEqual(zonesOf(B).get(0), [1, 4]);
 assert.deepEqual(B.monsters.filter((m) => m.zone === 0).map((m) => m.back), [true, false]);
+// a lesson fought today rests until tomorrow, whatever else holds: the next one takes its place
+S.today = [1, 4];
+assert.deepEqual(zonesOf(F_.layout(S, 'craft')).get(0), [3, 2]);
 // no two monsters share a home; none starts right by the spawn
 const homes = new Set(F.monsters.map((m) => m.x + ',' + m.y));
 assert.equal(homes.size, F.monsters.length);

@@ -6,8 +6,9 @@
    each zone's open ones with study material first, never the agents' own friction (study.py), more of them in the
    main quest's zones. Open: where the person studies (data.studying), not yet understood (a win without a good answer
    leaves it out there) or back for another look (data.back: understood a while ago, first in its zone, marked ↻);
-   elsewhere, not yet cleared. Each zone shows how many of its lessons the person understood, out
-   of what makes it ready for its gate.
+   elsewhere, not yet cleared. A lesson fought today (data.today) rests until tomorrow: trying again right after its
+   answer was shown would be copying, not remembering. Each zone shows how many of its lessons the person understood,
+   out of what makes it ready for its gate.
 
    The art is the Adventure's (adventure.js: Adventure.art, its biomes, props and town), the agents' (sprites.js) and the
    monsters' (scene.js: Scene.art): pixel maps, no images, styles only through the CSSOM, no eval. The ground is painted
@@ -290,8 +291,9 @@
     const ready = (data && data.readiness) || {};
     const known = new Set((Array.isArray(data && data.understood) ? data.understood : []).map(String));
     const back = new Set((Array.isArray(data && data.back) ? data.back : []).map(String));
-    const studyable = (l) => !l.friction && (data && data.studying ? !known.has(String(l.id)) || back.has(String(l.id))
-      : !cleared.has(String(l.id)));
+    const today = new Set((Array.isArray(data && data.today) ? data.today : []).map(String));
+    const studyable = (l) => !l.friction && !today.has(String(l.id))
+      && (data && data.studying ? !known.has(String(l.id)) || back.has(String(l.id)) : !cleared.has(String(l.id)));
     const zones = mods.map((m, i) => ({ index: i, id: m.id, name: m.name || m.id, lessons: byZone[i].length,
       open: byZone[i].filter(studyable).length, goal: goal.has(m.id), you: Number(ready[m.id]) || 0,
       site: { x: sites[i].x, y: sites[i].y }, sign: sites[i].sign }));
