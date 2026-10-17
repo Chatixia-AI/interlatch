@@ -69,7 +69,9 @@ def main() -> int:
     command = wrapped.get("command") if isinstance(wrapped, dict) else None
     if command:
         try:
-            done = subprocess.run(command, shell=True, input=raw, capture_output=True, timeout=30, check=False)
+            argv = shell_argv(command)
+            done = subprocess.run(argv, shell=isinstance(argv, str), input=raw, capture_output=True, timeout=30,
+                                  check=False)
         except (OSError, subprocess.SubprocessError) as exc:
             print(f"interlatch statusline: {exc}", file=sys.stderr)
             return 0
@@ -78,6 +80,18 @@ def main() -> int:
         return done.returncode
     sys.stdout.write(default_line(payload if isinstance(payload, dict) else {}))
     return 0
+
+
+def shell_argv(command: str) -> str | list[str]:
+    """The user's own status line command, run as Claude Code runs it: by the shell, and on Windows by Git Bash, else
+    PowerShell (as it runs hooks). cmd.exe, which shell=True means there, reads neither's commands."""
+    if sys.platform != "win32":
+        return command
+    bash = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH") or str(
+        Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Git" / "bin" / "bash.exe")
+    if Path(bash).is_file():
+        return [bash, "-c", command]
+    return ["powershell", "-NoProfile", "-Command", command]
 
 
 def default_line(payload: dict) -> str:

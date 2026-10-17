@@ -641,12 +641,12 @@ def install_mcp(cfg: Config, exe: str, *, dry_run: bool = False) -> list[str]:
     cmd = [claude, "mcp", "add", "--scope", "user", "--transport", "stdio", MCP_NAME, "--", *args]
     if dry_run:
         return ["would run: " + " ".join(shlex.quote(c) for c in cmd)]
-    from ..core.process import internal_env
+    from ..core.process import internal_env, run_program
 
     legacy = LEGACY_MCP_NAME in mcp_servers()
     for name in (MCP_NAME, LEGACY_MCP_NAME) if legacy else (MCP_NAME,):
-        subprocess.run([claude, "mcp", "remove", "--scope", "user", name], capture_output=True, text=True)
-    proc = subprocess.run(cmd, capture_output=True, text=True, env=internal_env())
+        run_program([claude, "mcp", "remove", "--scope", "user", name])
+    proc = run_program(cmd, env=internal_env())
     if proc.returncode != 0:
         return [tr("MCP registration failed: {error}", error=(proc.stderr or proc.stdout).strip()[:300])]
     return [tr("registered MCP server '{name}' (user scope)", name=MCP_NAME)] + (
@@ -654,13 +654,15 @@ def install_mcp(cfg: Config, exe: str, *, dry_run: bool = False) -> list[str]:
 
 
 def uninstall_mcp(cfg: Config) -> list[str]:
+    from ..core.process import run_program
+
     claude = cfg.claude_bin()
     servers = mcp_servers()
     out = []
     for name in (MCP_NAME, LEGACY_MCP_NAME):
         if not claude or name not in servers:
             continue
-        proc = subprocess.run([claude, "mcp", "remove", "--scope", "user", name], capture_output=True, text=True)
+        proc = run_program([claude, "mcp", "remove", "--scope", "user", name])
         out.append(tr("removed MCP server '{name}'", name=name) if proc.returncode == 0
                    else tr("MCP removal failed: {error}", error=proc.stderr.strip()[:200]))
     return out

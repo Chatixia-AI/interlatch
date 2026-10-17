@@ -117,9 +117,14 @@ Windows 10 と 11 では、Interlatch はコマンドライン版を使います
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # uv, if you don't have it yet
+$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"   # where uv and interlatch go; new windows know it already
 uv tool install --python 3.13 interlatch
 interlatch install
 ```
+
+uv のインストーラーが `%USERPROFILE%\.local\bin` を PATH に加えるのは新しく開くウィンドウだけなので、2 行目で今のウィンドウに
+教えます。これがないと次の行が「用語 'uv' は、コマンドレット、関数、スクリプト ファイル、または操作可能なプログラムの名前として
+認識されません」で止まります。
 
 `interlatch install` は Mac と同じことを尋ねます。launchd の代わりに、タスク スケジューラの **Interlatch** フォルダーに、
 あなたのアカウントでサインイン中に動く 2 つのタスクを登録します：
@@ -130,14 +135,17 @@ interlatch install
 | `\Interlatch\Dashboard` | ダッシュボードを <http://127.0.0.1:11524/> で動かし続けます。サインイン時に起動し、止まっても 5 分以内に再起動 |
 
 どちらもウィンドウを開きません。タスクは `pythonw.exe` を起動し、それがウィンドウのないコンソールでコマンドを実行します。
-出力は `%USERPROFILE%\.interlatch\logs` の `sync.out.log` や `ui.err.log` などに残ります。バッテリー駆動中も動きます。
+出力は `%USERPROFILE%\.interlatch\logs` の `sync.out.log` や `ui.err.log` などに残ります（UTF-8 です。Windows PowerShell では
+`Get-Content -Encoding UTF8` で読みます）。バッテリー駆動中も動きます。
 `interlatch uninstall` はタスクを終了して削除し、ダッシュボードも止めます。
 
 Claude Code に追加するフックは `C:/Users/<you>/.local/bin/interlatch.exe hook session-end` を実行します。Claude Code は
 フックを Git Bash で（Git for Windows がなければ PowerShell で）実行し、スラッシュ区切りのパスはどちらでも同じに読まれます。
 名前に空白を含むフォルダーは短い形式（`C:/Users/ADALOV~1/…`）で書きます。
 
-Interlatch は、Windows の表示言語にかかわらず、コーディングエージェントが書くのと同じ UTF-8 でテキストを読み書きします。
+Interlatch は、Windows の表示言語にかかわらず、コーディングエージェントが書くのと同じ UTF-8 でテキストを読み書きし、
+Windows 自身のメッセージ（タスク スケジューラや PowerShell のもの）はその言語のまま表示します。Windows 10 のコンソール
+ウィンドウ（Windows Terminal ではないもの）には ✓ や › がないため、出力では代わりに `+` や `>` を使います。
 Windows のパスは、エージェントや VS Code の書き方（`C:\work\app`、`c:/work/app`）にかかわらず同じものとして扱うので、
 [VS Code 拡張](vscode.md)のファイル履歴とフォルダーの一覧も使えます。
 

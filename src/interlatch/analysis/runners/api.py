@@ -31,6 +31,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from ...core.config import Config
+from ...core.process import run_program
 from . import process  # its POLL_S and SLEEP_GRACE_S, read when a request runs
 from .base import CLAUDE_MODEL, LIMIT_MARKERS, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
 from .settings import PROVIDERS, key_source, settings
@@ -170,7 +171,7 @@ def aws_credentials(profile: str = "") -> dict:
     def make() -> dict:
         cmd = [aws, "configure", "export-credentials", "--format", "process"] + (["--profile", profile] if profile else [])
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            proc = run_program(cmd, timeout=60)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise UsageLimitError(f"aws configure export-credentials failed: {exc}") from exc
         if proc.returncode != 0:
@@ -200,7 +201,7 @@ def entra_token() -> str:
     def make() -> str:
         cmd = [az, "account", "get-access-token", "--resource", AZURE_SCOPE, "--query", "accessToken", "-o", "tsv"]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            proc = run_program(cmd, timeout=60)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise UsageLimitError(f"az account get-access-token failed: {exc}") from exc
         if proc.returncode != 0 or not proc.stdout.strip():

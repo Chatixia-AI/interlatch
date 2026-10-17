@@ -42,13 +42,17 @@ def short_path(path: str) -> str:
 def shell_word(arg: str) -> str:
     """`arg` as one word that Git Bash and PowerShell both read the same way. A path gets forward slashes (Bash takes a
     backslash for an escape), and a folder with a space in it its 8.3 name: PowerShell reads a quoted first word as a
-    string, not a command, so quotes are the last resort, for a path whose folder has no short name."""
+    string, not a command, so quotes are the last resort, for a path whose folder has no short name. Any space counts
+    for the short name, the full-width one (U+3000) of a Japanese folder name too."""
+    def spaced(s: str) -> bool:
+        return any(c.isspace() for c in s)
+
     if "\\" in arg or (len(arg) > 2 and arg[1] == ":"):
-        if " " in arg:
+        if spaced(arg):
             head, _, name = arg.replace("/", "\\").rpartition("\\")
-            arg = (short_path(head) if " " in head else head) + "\\" + name
+            arg = (short_path(head) if spaced(head) else head) + "\\" + name
         arg = arg.replace("\\", "/")
-    return f'"{arg}"' if " " in arg or not arg else arg
+    return f'"{arg}"' if " " in arg or "\t" in arg or not arg else arg
 
 
 def shell_command(argv: list[str]) -> str:
@@ -61,10 +65,53 @@ def task_name(name: str) -> str:
 
 
 def _user() -> str:
+    """Who the tasks run as: this account's SID, which Task Scheduler resolves for every kind of account (a name such
+    as AzureAD\\TaroYamada, on a PC joined to Microsoft Entra ID, it may not); DOMAIN\\name when the SID can't be read."""
     import getpass
 
+    sid = user_sid()
+    if sid:
+        return sid
     domain = os.environ.get("USERDOMAIN")
     return f"{domain}\\{getpass.getuser()}" if domain else getpass.getuser()
+
+
+def user_sid() -> str | None:
+    """The SID of the account this process runs as (S-1-5-21-…), from its token; None when it can't be read (or not on
+    Windows)."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.LocalFree.argtypes = (ctypes.c_void_p,)
+    advapi32.OpenProcessToken.argtypes = (wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE))
+    advapi32.GetTokenInformation.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+                                             ctypes.POINTER(wintypes.DWORD))
+    advapi32.ConvertSidToStringSidW.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):  # TOKEN_QUERY
+        return None
+    try:
+        size = wintypes.DWORD()
+        advapi32.GetTokenInformation(token, 1, None, 0, ctypes.byref(size))  # TokenUser: how big it is
+        buf = ctypes.create_string_buffer(max(size.value, 1))
+        if not advapi32.GetTokenInformation(token, 1, buf, size, ctypes.byref(size)):
+            return None
+        sid = ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0]  # TOKEN_USER: SID_AND_ATTRIBUTES, its Sid first
+        text = ctypes.c_void_p()
+        if not advapi32.ConvertSidToStringSidW(sid, ctypes.byref(text)):
+            return None
+        try:
+            return ctypes.wstring_at(text.value)
+        finally:
+            kernel32.LocalFree(text)
+    finally:
+        kernel32.CloseHandle(token)
 
 
 def pythonw() -> Path:
@@ -146,7 +193,11 @@ def task_xml(*, description: str, command: str, arguments: str, every_minutes: i
 
 
 def schtasks(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["schtasks", *args], capture_output=True, text=True, errors="replace")
+    """schtasks, its output as text. It writes in Windows' language and its console's code page (cp932 on Japanese
+    Windows), so an error it gives is readable only when decoded in that."""
+    from ...core.process import run_program
+
+    return run_program(["schtasks", *args])
 
 
 def install_task(name: str, xml: str) -> str | None:

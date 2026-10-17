@@ -3,9 +3,47 @@ command's function."""
 
 from __future__ import annotations
 
+import os
 import sys
 
 from .parser import build_parser
+
+# What the old Windows console (conhost: Windows 10's default window, not Windows Terminal's or VS Code's) can't draw:
+# its fonts (MS Gothic on Japanese Windows, Consolas) have no ✓ or ›, and in code page 932 the rest take two cells.
+PLAIN = str.maketrans({"✓": "+", "✗": "x", "•": "*", "·": "-", "›": ">", "–": "-", "—": "-", "…": "...",
+                       "→": "->", "←": "<-", "⋮": ":", "⌘": "Ctrl+"})
+
+
+class PlainConsole:
+    """A console stream that writes PLAIN's stand-ins; everything else passes through to the stream."""
+
+    def __init__(self, stream):
+        self._stream = stream
+
+    def write(self, text: str) -> int:
+        self._stream.write(text.translate(PLAIN))
+        return len(text)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def old_windows_console(stream, env=os.environ, platform: str = sys.platform) -> bool:
+    """Whether `stream` is the old Windows console window. Windows Terminal (WT_SESSION), VS Code's terminal and
+    ConEmu (TERM_PROGRAM, ConEmuANSI) draw every character; a pipe or a file gets the text as it is."""
+    if platform != "win32" or env.get("WT_SESSION") or env.get("TERM_PROGRAM") or env.get("ConEmuANSI") == "ON":
+        return False
+    try:
+        return stream.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def plain_old_console() -> None:
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if old_windows_console(stream):
+            setattr(sys, name, PlainConsole(stream))
 
 
 def _rerun_in_utf8_mode(argv: list[str]) -> int:
@@ -35,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         from ...runtime.statusline import main as statusline_main
 
         return statusline_main()
+    plain_old_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:

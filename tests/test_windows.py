@@ -111,6 +111,37 @@ def test_status_reads_the_columns_position_not_their_words(monkeypatch):
     assert answer("0", rc=1) == {"installed": False, "loaded": False}
 
 
+def test_program_output_in_the_consoles_code_page_reads_as_written(monkeypatch):
+    """Japanese Windows' own programs write cp932; the agents, git and uv write UTF-8, whatever the code page."""
+    from interlatch.core import process
+
+    monkeypatch.setattr(process, "console_codepage", lambda: 932)
+    message = "エラー: アクセスが拒否されました。"
+    assert process.program_text(message.encode("cp932")) == message
+    assert process.program_text(message.encode("utf-8")) == message
+    assert process.program_text(b"") == "" and process.program_text(None) == ""
+    monkeypatch.setattr(process, "console_codepage", lambda: 65001)  # chcp 65001, and a stray byte
+    assert process.program_text(b"ok \xff") == "ok �"
+    monkeypatch.setattr(process, "console_codepage", lambda: None)  # not Windows
+    assert process.program_text(b"ok \xff") == "ok �"
+
+
+def test_a_task_scheduler_error_on_japanese_windows_is_readable(cfg, monkeypatch):
+    """`interlatch install` shows schtasks' own message when it refuses a task; on Japanese Windows that message is in
+    cp932, and read as UTF-8 it came out as "�G���[: �A�N�Z�X�����ۂ���܂����B"."""
+    from interlatch.core import process
+
+    monkeypatch.setattr(process, "console_codepage", lambda: 932)
+    refusal = "エラー: アクセスが拒否されました。\r\n"
+
+    def run(argv, **kw):
+        assert "text" not in kw and "encoding" not in kw  # bytes: decoded by program_text
+        return subprocess.CompletedProcess(argv, 1 if argv[1] == "/Create" else 0, b"", refusal.encode("cp932"))
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert windows.install_task("Sync", "<Task/>") == "エラー: アクセスが拒否されました。"
+
+
 def test_hook_commands_read_the_same_in_git_bash_and_powershell(cfg, monkeypatch):
     """Claude Code runs hooks with Git Bash, or PowerShell without Git for Windows: forward slashes (Bash takes a
     backslash for an escape), and no quotes around the program (PowerShell reads that as a string)."""
@@ -134,6 +165,120 @@ def test_a_folder_with_a_space_gets_its_short_name(monkeypatch):
     monkeypatch.setattr(windows, "short_path", lambda p: p)  # a volume that keeps no short names: quotes, for Bash
     assert windows.shell_word(exe) == '"C:/Users/Ada Lovelace/.local/bin/interlatch.exe"'
     assert windows.shell_word("hook") == "hook"
+
+
+def test_a_japanese_folder_with_a_full_width_space_gets_its_short_name(monkeypatch):
+    monkeypatch.setattr(windows, "short_path", lambda p: "C:\\Users\\5C71~1\\.local\\bin" if "\u3000" in p else p)
+    exe = "C:\\Users\\山田\u3000太郎\\.local\\bin\\interlatch.exe"
+    assert windows.shell_word(exe) == "C:/Users/5C71~1/.local/bin/interlatch.exe"
+    assert windows.shell_word("C:\\Users\\山田太郎\\.local\\bin\\interlatch.exe") == "C:/Users/山田太郎/.local/bin/interlatch.exe"
+
+
+def test_a_log_rotation_another_process_blocks_keeps_logging(tmp_path, capsys, monkeypatch):
+    """Windows can't rename a log another process (the dashboard, the sync) has open: no "--- Logging error ---", the
+    lines go on in the same file."""
+    import logging
+
+    from interlatch.core.util import SharedRotatingFileHandler
+
+    path = tmp_path / "chronicle.log"
+    handler = SharedRotatingFileHandler(path, maxBytes=60, backupCount=2, encoding="utf-8")
+    held = open(path, "a", encoding="utf-8")  # another process's handle: on Windows, renaming the file now fails
+    if sys.platform != "win32":
+        monkeypatch.setattr(handler, "rotate", lambda src, dst: (_ for _ in ()).throw(PermissionError(32, "in use")))
+    log = logging.getLogger("test.shared-rotation")
+    log.propagate = False
+    log.addHandler(handler)
+    try:
+        for i in range(4):
+            log.warning("ログ %d %s", i, "x" * 40)
+    finally:
+        log.removeHandler(handler)
+        handler.close()
+        held.close()
+    assert "Logging error" not in capsys.readouterr().err
+    assert path.read_text(encoding="utf-8").count("ログ") == 4
+
+
+def test_an_npm_installs_claude_cmd_gets_the_system_prompt_from_a_file(cfg, monkeypatch):
+    """cmd.exe, which runs claude.cmd, ends a command line at its first newline: the prompt and the flags after it
+    were cut off. claude.exe (the native install) takes it on the command line as elsewhere."""
+    from interlatch.analysis.runners import claude as runner
+
+    seen = {}
+
+    def fake_run(cmd, prompt, **kw):
+        flag = "--system-prompt-file" if "--system-prompt-file" in cmd else "--system-prompt"
+        value = cmd[cmd.index(flag) + 1]
+        seen.update(cmd=cmd, flag=flag, value=value,
+                    text=Path(value).read_text(encoding="utf-8") if flag.endswith("file") else value)
+        return json.dumps({"result": "{}", "total_cost_usd": 0}), "", 0
+
+    monkeypatch.setattr(runner, "run_sleep_aware", fake_run)
+    system = "あなたは分析者です。\n\n二段落目。"
+    r = runner.ClaudeRunner(cfg)
+    monkeypatch.setattr(runner.sys, "platform", "win32")
+    r.bin = "C:\\Users\\ada\\AppData\\Roaming\\npm\\claude.cmd"
+    r._call("prompt", system=system, model=None, effort=None, timeout=None, max_budget_usd=None)
+    assert seen["flag"] == "--system-prompt-file" and seen["text"] == system and not Path(seen["value"]).exists()
+    assert "--max-budget-usd" in seen["cmd"]
+    r.bin = "C:\\Users\\ada\\.local\\bin\\claude.exe"
+    r._call("prompt", system=system, model=None, effort=None, timeout=None, max_budget_usd=None)
+    assert seen["flag"] == "--system-prompt" and seen["value"] == system
+
+
+def test_the_old_windows_console_gets_plain_stand_ins():
+    """conhost's fonts have no ✓ or ›, and Japanese Windows draws · … – two cells wide; Windows Terminal, VS Code and a
+    pipe get the characters as they are. Japanese text passes through."""
+    import io
+
+    from interlatch.interfaces.cli import main
+
+    class Console(io.StringIO):
+        def isatty(self):
+            return True
+
+    assert main.old_windows_console(Console(), env={}, platform="win32")
+    assert not main.old_windows_console(Console(), env={"WT_SESSION": "1"}, platform="win32")
+    assert not main.old_windows_console(Console(), env={"TERM_PROGRAM": "vscode"}, platform="win32")
+    assert not main.old_windows_console(io.StringIO(), env={}, platform="win32")  # a pipe or a file
+    assert not main.old_windows_console(Console(), env={}, platform="darwin")
+    out = Console()
+    stream = main.PlainConsole(out)
+    assert stream.write("  ✓ MCP · Status › Updates… ⌘K 記録中") == len("  ✓ MCP · Status › Updates… ⌘K 記録中")
+    assert out.getvalue() == "  + MCP - Status > Updates... Ctrl+K 記録中" and stream.isatty()
+
+
+def test_the_dashboards_files_keep_their_types_whatever_the_registry_says(synced, monkeypatch):
+    """mimetypes reads Windows' registry, where an editor's installer can map .js to text/plain: served as that, with
+    nosniff, the browser ran none of the page's scripts."""
+    import mimetypes
+    import urllib.request
+
+    from test_hub import _serve
+
+    real = mimetypes.guess_type
+    monkeypatch.setattr(mimetypes, "guess_type", lambda url, strict=True:
+                        ("text/plain", None) if str(url).endswith((".js", ".css", ".svg")) else real(url, strict))
+    _app, httpd, url = _serve(synced["cfg"])
+    try:
+        for name, want in (("app.js", "text/javascript"), ("app.css", "text/css"), ("index.html", "text/html"),
+                           ("agent-claude.svg", "image/svg+xml"), ("plex-sans-400.woff2", "font/woff2")):
+            with urllib.request.urlopen(f"{url}/{name}", timeout=10) as r:
+                assert r.headers["Content-Type"].split(";")[0] == want, name
+                assert r.headers["X-Content-Type-Options"] == "nosniff"
+    finally:
+        httpd.shutdown()
+
+
+@on_windows
+def test_the_tasks_run_as_this_accounts_sid():
+    """The SID, not DOMAIN\\name, which Task Scheduler may not resolve for an Entra ID (AzureAD\\...) account."""
+    sid = windows.user_sid()
+    whoami = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True).stdout.decode("ascii", "replace")
+    assert sid and sid.startswith("S-1-5-") and sid in whoami
+    xml = windows.task_xml(description="d", command="c", arguments="a", every_minutes=15, keep_alive=False)
+    assert xml.count(f"<UserId>{sid}</UserId>") == 2
 
 
 def test_the_runner_starts_the_command_again_when_an_update_asks(tmp_path, monkeypatch):

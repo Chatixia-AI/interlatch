@@ -15,9 +15,21 @@ WEB_DIR = Path(__file__).parents[2] / "web"  # the package's web/: interlatch/we
 # new Function.
 PAGE_CSP = "default-src 'self'; script-src 'self'{eval}; object-src 'none'; base-uri 'none'; form-action 'self'"
 
-mimetypes.add_type("application/manifest+json", ".webmanifest")
-mimetypes.add_type("font/woff2", ".woff2")
-mimetypes.add_type("image/webp", ".webp")
+# The types of the dashboard's own files, fixed. mimetypes reads Windows' registry, where an editor's installer can
+# map .js to text/plain: with nosniff, the browser then ran none of the page's scripts.
+WEB_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+             ".css": "text/css; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".png": "image/png",
+             ".svg": "image/svg+xml", ".webp": "image/webp", ".woff2": "font/woff2",
+             ".webmanifest": "application/manifest+json"}
+
+
+def web_type(name: str) -> str:
+    """The Content-Type of the dashboard's file `name`."""
+    ext = Path(name).suffix.lower()
+    if ext in WEB_TYPES:
+        return WEB_TYPES[ext]
+    ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    return ctype + "; charset=utf-8" if ctype.startswith("text/") else ctype
 
 # The page is served from the files as they were when this process started, so it always matches the code
 # answering its API calls: an upgrade (or an edit to an editable install) takes effect with the restart.

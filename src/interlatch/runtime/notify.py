@@ -72,7 +72,8 @@ def _post_windows(title: str, message: str) -> bool:
     if not ps:
         return False
     try:  # no console window flashes up when the background sync (pythonw) posts it
-        proc = subprocess.run(windows_command(ps), input=json.dumps({"title": title, "message": message}), text=True,
+        # bytes both ways: PowerShell's own errors come back in the console's code page (cp932 on Japanese Windows)
+        proc = subprocess.run(windows_command(ps), input=json.dumps({"title": title, "message": message}).encode("ascii"),
                               capture_output=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.SubprocessError):
         return False
