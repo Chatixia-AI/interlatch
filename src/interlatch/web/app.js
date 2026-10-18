@@ -5879,7 +5879,7 @@ route(/^\/status$/, async () => {
 // The Queue's Analyze now: the sessions ready now, or (none ready) the ones that may still be going, analyzed at once
 // instead of on the background run. It runs with automatic analysis off, and through a usage-limit pause that may be over.
 function queueRunRow(st) {
-  if (st.hub_url) return null; // its sessions are analyzed on the hub
+  if (st.analysis?.on_hub) return null; // its sessions are analyzed on the hub (one that only shares knowledge analyzes them here)
   const ready = st.pending.ready || 0, active = st.pending.reasons?.active || 0;
   const which = ready ? "ready" : active ? "active" : null;
   if (!which) return null;
