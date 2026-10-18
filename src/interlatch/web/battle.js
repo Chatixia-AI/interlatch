@@ -1159,12 +1159,34 @@
       const inside = root.contains(document.activeElement) || document.activeElement === document.body || !document.activeElement;
       if (force || inside) { reveal(menuWin); b.focus({ preventScroll: true }); }
     }
-    cmds.addEventListener("keydown", (e) => {
-      if (mode === "answer" && /^[1-9]$/.test(e.key) && st.study) { // 1-4 choose an option (Answer locks it in)
-        const i = st.study.order[Number(e.key) - 1];
-        if (i != null && !judging) { e.preventDefault(); chosen = i; renderMenu(); focusChoice(); }
+    // the keys work wherever the focus is while the battle shows (pageKey, below), not only inside the menu
+    const typing = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
+    function pageKey(e) {
+      if (!alive_ || !root.isConnected || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (!menuWin.hidden && mode === "answer" && st.study && !st.study.verdict) { // a question: choose, move, answer
+        const order = st.study.order, at = chosen == null ? -1 : order.indexOf(chosen);
+        let pick = null;
+        if (/^[1-9]$/.test(e.key)) pick = order[Number(e.key) - 1];
+        else if (e.key === "ArrowDown" || e.key === "ArrowRight") pick = order[(at + 1) % order.length];
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") pick = order[at < 0 ? order.length - 1 : (at - 1 + order.length) % order.length];
+        else if (e.key === "Home") pick = order[0];
+        else if (e.key === "End") pick = order[order.length - 1];
+        else if (e.key === "Enter" || e.key === " ") { // Answer, once one is chosen (and not a click on the focused row too)
+          e.preventDefault();
+          if (chosen != null) choose(chosen);
+          return;
+        }
+        if (pick == null) return;
+        e.preventDefault();
+        if (!judging) { chosen = pick; renderMenu(); focusChoice(); }
         return;
       }
+      // the commands: the arrows bring the focus into the menu when it's elsewhere (the menu's own keys take it from there)
+      if (!menuWin.hidden && !root.contains(document.activeElement) && /^Arrow/.test(e.key)) { e.preventDefault(); focusFirst(true); }
+    }
+    document.addEventListener("keydown", pageKey);
+    cmds.addEventListener("keydown", (e) => {
+      if (mode === "answer") return; // a question's keys are the page's (pageKey)
       const list = items(), i = list.indexOf(document.activeElement);
       let to = -1;
       if (e.key === "ArrowDown" || e.key === "ArrowRight") to = (i + 1) % list.length;
@@ -1888,6 +1910,7 @@
       ro && ro.disconnect();
       scheme && scheme.removeEventListener && scheme.removeEventListener("change", redraw);
       document.removeEventListener("visibilitychange", wake);
+      document.removeEventListener("keydown", pageKey);
       root.remove();
       art.clear();
     }

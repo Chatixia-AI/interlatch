@@ -1234,7 +1234,7 @@ async function adventureSidebar(box) {
   if (!m) { box.replaceChildren(head, h("div", { class: "sb-empty" }, t("Sign in to meet your party."))); return; }
   const tally = advTally(m);
   box.replaceChildren(head, h("div", { class: "sb-scroll" },
-    sbRow(t("World map"), "#/innerlatch/adventure", "map", null, ["/innerlatch/adventure", "view", ""]),
+    sbRow(t("World map"), "#/innerlatch/adventure?view=map", "map", null, ["/innerlatch/adventure", "view", "map"]),
     sbRow(t("Encounter list"), "#/innerlatch/adventure?view=list", "todo", tally.total - tally.cleared, ["/innerlatch/adventure", "view", "list"]),
     Object.assign(sbRow(t("Bag"), "#/innerlatch/adventure/bag", "artifacts", m.gold || 0, ["/innerlatch/adventure/bag"]),
       { title: t("{n} gold", { n: fmtNum(m.gold || 0) }) }),
@@ -1280,6 +1280,12 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
   const p = await partyGet();
   if (!p.signed_in) return partyGate(p, token);
   const m = await mapLoad(true);
+  // the Adventure opens on a field to explore: the region explored last, else where the party stands; the world map
+  // and the list are their own views (?view=map, ?view=list)
+  if (!params.view && !params.lesson && !params.region && window.Field && typeof window.Field.mountField === "function") {
+    location.replace(`#/innerlatch/adventure/field/${lastField(m) || partyRegion(m)}`);
+    return h("div", { class: "party-page adv-page" });
+  }
   const tally = advTally(m);
   const list = params.view === "list" || !window.Adventure || typeof window.Adventure.mountMap !== "function";
   const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon("journey", 3),
@@ -1287,10 +1293,10 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
       h("div", { class: "sub" }, tally.total ? t("Every lesson your agents learned is out there. {n} of {total} cleared.", { n: fmtNum(tally.cleared), total: fmtNum(tally.total) })
         : t("No lessons on the roadmap yet: the world is still under fog.")))),
     h("div", { class: "head-actions" }, goldChip(m.gold),
-      h("a", { class: "btn small primary", href: `#/innerlatch/adventure/field/${partyRegion(m)}` }, icon("map"), t("Explore")),
+      h("a", { class: "btn small primary", href: `#/innerlatch/adventure/field/${lastField(m) || partyRegion(m)}` }, icon("map"), t("Explore")),
       h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Bag")),
       segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
-      (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure"))));
+      (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure?view=map"))));
   if (list) return h("div", { class: "party-page adv-page" }, head, advList(m, params));
   const host = h("div", { class: "adv-world" }); // the engine names its own canvas (labels.map)
   const page = h("div", { class: "party-page adv-page map" }, head, host,
@@ -1469,7 +1475,7 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     if (e.handled || e.status !== 404) throw e;
     setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [t("Battle")]], token);
     return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("This lesson isn't in your party's archive."), " ",
-      h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+      h("a", { href: "#/innerlatch/adventure?view=map" }, t("Back to the map"))));
   }
   const field = /^\w+$/.test(params.field || "") ? params.field : null; // walked into it on a region's field
   if (field) await mapLoad().catch(() => null); // the region's name, for the crumbs
@@ -1506,7 +1512,7 @@ route(/^\/innerlatch\/adventure\/boss\/(\d)$/, async (params, n) => {
   if (!p.signed_in) return partyGate(p, token);
   const m = await mapLoad();
   const boss = (m.bosses || []).find((b) => String(b.n) === n);
-  if (!boss) return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("No such boss on your main quest."), " ", h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+  if (!boss) return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("No such boss on your main quest."), " ", h("a", { href: "#/innerlatch/adventure?view=map" }, t("Back to the map"))));
   return advBattlePage(async (cb) => { // a boss fight brings the party's gear and supplies too, as they are at each try
     const bag = await bagLoad(true).catch(() => null);
     const party = (m.agents || []).map((a) => ({ ...a, gear: bag?.gear?.[a.agent] }));
@@ -1554,6 +1560,12 @@ async function bagAct(path, body, done, btn = null) {
 // region; walking into a monster opens its battle, into the town's gate the town. Where the party stands is kept for this
 // tab, so a battle or the town comes back to the same spot.
 const FIELD_SPOT_KEY = "interlatch.innerlatch.field.";
+const LAST_FIELD_KEY = "interlatch.innerlatch.lastField"; // the region explored last, where the Adventure opens
+function lastField(m) {
+  let attr = null;
+  try { attr = localStorage.getItem(LAST_FIELD_KEY); } catch (e) { /* none kept */ }
+  return attr && (m.regions || []).some((r) => r.id === attr) ? attr : null;
+}
 function fieldSpot(attr) {
   try { const v = JSON.parse(sessionStorage.getItem(FIELD_SPOT_KEY + attr) || "null"); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null; }
   catch (e) { return null; }
@@ -1590,9 +1602,10 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
   const m = await mapLoad(true);
   const region = (m.regions || []).find((r) => r.id === attr);
   setCrumbs([["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [region?.name || attr]], token);
+  if (region) try { localStorage.setItem(LAST_FIELD_KEY, attr); } catch (e) { /* opens where the party stands */ }
   if (!region || !window.Field || typeof window.Field.mountField !== "function") {
     return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, region ? t("The field didn't load.") : t("No such region."), " ",
-      h("a", { href: "#/innerlatch/adventure" }, t("Back to the map"))));
+      h("a", { href: "#/innerlatch/adventure?view=map" }, t("Back to the map"))));
   }
   const x = advTally(m).by[attr] || { total: 0, cleared: 0 };
   const head = h("div", { class: "page-head adv-head" }, h("div", { class: "head-title" }, pxIcon(attr, 3),
@@ -1602,7 +1615,7 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
         : t("Walk into a monster to battle it. {n} of {total} cleared here.", { n: fmtNum(x.cleared), total: fmtNum(x.total) })))),
     h("div", { class: "head-actions" }, goldChip(m.gold),
       h("a", { class: "btn small", href: `#/innerlatch/adventure/town/${attr}` }, icon("home"), townName(m, attr)),
-      h("a", { class: "btn small", href: "#/innerlatch/adventure" }, icon("map"), t("World map"))));
+      h("a", { class: "btn small", href: "#/innerlatch/adventure?view=map" }, icon("map"), t("World map"))));
   const host = h("div", { class: "fd-host" });
   const page = h("div", { class: "party-page adv-page field" }, head, host,
     h("p", { class: "muted small adv-note" }, m.studying

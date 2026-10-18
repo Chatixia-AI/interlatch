@@ -925,20 +925,24 @@
     }
     function onLeave() { hover = null; call("onHover", null, { x: 0, y: 0 }); }
     const KEYS = { ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown", a: "a", d: "d", w: "w", s: "s", A: "a", D: "d", W: "w", S: "s" };
+    // the keys steer the party wherever the focus is while the field shows, except while typing (the search box)
+    const typing = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
     function onKey(e) {
       const k = KEYS[e.key];
-      if (!k || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!k) return;
+      if (e.type === "keyup") { keys.delete(k); return; } // a key let go is always let go
+      if (!alive || !wrap.isConnected || busy || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       e.preventDefault();
-      if (e.type === "keydown") keys.add(k); else keys.delete(k);
+      keys.add(k);
       wake();
     }
     function onBlur() { keys.clear(); }
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerleave", onLeave);
-    canvas.addEventListener("keydown", onKey);
-    canvas.addEventListener("keyup", onKey);
-    canvas.addEventListener("blur", onBlur);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("keyup", onKey);
+    window.addEventListener("blur", onBlur);
     // the town: walking into its gate opens it
     const townCheck = setInterval(() => {
       if (busy || !armed) return;
@@ -966,6 +970,9 @@
       io && io.disconnect();
       ro && ro.disconnect();
       document.removeEventListener("visibilitychange", onVis);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keyup", onKey);
+      window.removeEventListener("blur", onBlur);
       wrap.remove();
       art.clear();
     }
