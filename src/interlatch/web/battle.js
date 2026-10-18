@@ -1027,8 +1027,17 @@
         wrap.append(list, cue);
         return { wrap, list };
       };
+      // Run (or Esc) leaves a study battle at any time, its question still being written included
+      const flee = () => {
+        const b = button(lab("run"), () => { if (!judging) command({ type: "run" }); }, el("span", "bt-cmd-meta", "Esc"));
+        b.classList.add("bt-back", "bt-flee");
+        b.dataset.cmd = "run";
+        if (judging) b.setAttribute("aria-disabled", "true");
+        return b;
+      };
       if (mode === "answer" && !st.study) { // its question is still being written
         menuHead.textContent = lab("preparing");
+        cmds.append(flee());
       } else if (mode === "answer") {
         // the case: its scene, then its question, over the options, each whole (they wrap)
         menuHead.replaceChildren(...(st.study.scene ? [rich(el("p", "bt-ask-scene"), st.study.scene)] : []),
@@ -1037,6 +1046,7 @@
         st.study.order.forEach((i, k) => {
           const b = button(st.study.options[i], () => { if (!judging) { chosen = i; renderMenu(); focusChoice(); } },
             el("span", "bt-cmd-meta", String(k + 1)));
+          rich(b.querySelector(".bt-cmd-name"), st.study.options[i]); // `code` in an option shows as code
           b.classList.add("bt-skill", "bt-choice");
           b.classList.toggle("bt-chosen", chosen === i);
           b.setAttribute("aria-pressed", chosen === i ? "true" : "false");
@@ -1050,7 +1060,9 @@
         if (chosen == null || judging) go_.setAttribute("aria-disabled", "true");
         if (judgeError) wrap.append(el("p", "bt-answer-error", judgeError));
         else if (chosen == null) wrap.append(el("p", "bt-answer-hint", lab("choose")));
-        cmds.append(wrap, go_); // every option in full: the panel has the deck's whole width and height
+        const row = el("div", "bt-answer-row");
+        row.append(go_, flee());
+        cmds.append(wrap, row); // every option in full: the panel has the deck's whole width and height
       } else if (mode === "item" && hero) {
         menuHead.textContent = lab("item");
         const { wrap, list } = sub();
@@ -1163,6 +1175,11 @@
     const typing = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
     function pageKey(e) {
       if (!alive_ || !root.isConnected || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.key === "Escape" && !menuWin.hidden && mode === "answer" && !judging && st.phase === "hero") { // run away
+        e.preventDefault();
+        command({ type: "run" });
+        return;
+      }
       if (!menuWin.hidden && mode === "answer" && st.study && !st.study.verdict) { // a question: choose, move, answer
         const order = st.study.order, at = chosen == null ? -1 : order.indexOf(chosen);
         let pick = null;
