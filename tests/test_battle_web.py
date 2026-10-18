@@ -452,3 +452,104 @@ assert.ok(a.items.some((it) => it.count < 3), 'the first fight used nothing');
 const b = R.setup(e, 1);
 assert.deepEqual(b.items.map((it) => it.count), ALL_ITEMS.map(() => 3));
 """)
+
+
+STUDY = r'''
+const Q = {scene: 'The tests pass alone.', question: 'Why do they fail together?', options: ['A flaky network', 'A shared token', 'A stale cache', 'A slow disk']};
+const studied = (i, q = Q) => ({...lesson(i), study: q});
+const answerFirst = (verdict) => (s) => (s.study && !s.study.verdict ? {type: 'answer', verdict, feedback: 'Close.', principle: 'Isolate state', answer: 'A shared token'} : R.policy(s));
+'''
+
+
+def test_a_study_battle_hides_the_title_and_asks_its_question():
+    check(STUDY + '''
+const s = R.setup(studied(3), 0);
+assert.deepEqual(s.log.map((l) => l.key), ['introStudy']);  // the scene and question show over the options
+assert.ok(!JSON.stringify(s.log).includes('Lesson 3'), 'the title is in the log');
+assert.deepEqual([s.study.scene, s.study.question], ['The tests pass alone.', 'Why do they fail together?']);
+// no question: an ordinary fight; a boss never studies; a question asked later is said once
+assert.equal(R.setup(lesson(3), 0).study, null);
+assert.equal(R.setup({...boss(1, 1), study: Q}, 0).study, null);
+const later = R.setup({...lesson(3), studyPending: true}, 0);
+assert.deepEqual(later.log.map((l) => l.key), ['introStudy']);
+assert.deepEqual(R.ask(later, Q), [{t: 'ask'}]);
+assert.deepEqual(R.ask(later, Q), []);
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: '  ', options: Q.options}), []);
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: 'Why?', options: ['only one']}), []);  // a choice needs two at least
+assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: 'Why?', options: ['one', ' ']}), []);
+// the options show in an order of the fight's own: every one once, the same for a seed, another for another try
+const order = (i, at) => R.setup(studied(i), at).study.order;
+assert.deepEqual(order(3, 0).slice().sort(), [0, 1, 2, 3]);
+assert.deepEqual(order(3, 0), order(3, 0));
+let moved = 0;
+for (let i = 0; i < 20; i++) if (JSON.stringify(order(i, 0)) !== JSON.stringify(order(i, 1))) moved++;
+assert.ok(moved >= 10, 'the order barely changes between tries: ' + moved);
+// the dice are the same with a question or without, when nobody answers
+for (let i = 0; i < 30; i++) {
+  const a = R.simulate(studied(i), 1), b = R.simulate(lesson(i), 1);
+  assert.equal(a.phase, b.phase);
+  assert.equal(a.round, b.round);
+}
+''')
+
+
+def test_the_answer_ends_a_study_battle_right_or_wrong():
+    check(STUDY + '''
+// right: the finishing blow, and the monster is beaten at once
+const s = R.setup(studied(5), 0);
+const ev = R.heroAction(s, {type: 'answer', verdict: 'got_it', feedback: 'Close.'});
+assert.deepEqual(ev.find((x) => x.t === 'answered'), {t: 'answered', verdict: 'got_it'});
+assert.equal(s.foe.hp, 0);
+assert.equal(s.phase, 'won');
+assert.ok(s.log.some((l) => l.key === 'lineGot') && s.log.some((l) => l.key === null && l.vars.text === 'Close.'));
+assert.deepEqual(R.heroAction(s, {type: 'answer', verdict: 'got_it'}), []);  // one answer a fight
+// wrong (or partly): nothing beaten, it slips away; no monster turn, no retry in the fight
+for (const verdict of ['not_yet', 'partly']) {
+  const n = R.setup(studied(5), 0), hp = n.foe.hp;
+  const evs = R.heroAction(n, {type: 'answer', verdict, feedback: 'A stale cache would not explain it.'});
+  assert.equal(n.foe.hp, hp);
+  assert.equal(n.phase, 'missed');
+  assert.deepEqual(evs.filter((e) => e.t === 'end'), [{t: 'end', phase: 'missed'}]);
+  assert.deepEqual(n.log.slice(-3).map((l) => l.key), ['lineNotYet', null, 'lineMiss']);
+  assert.deepEqual(R.monsterTurn(n), []);
+}
+for (const bad of [{type: 'answer'}, {type: 'answer', verdict: 'maybe'}]) assert.deepEqual(R.heroAction(R.setup(studied(5), 0), bad), []);
+assert.deepEqual(R.heroAction(R.setup(lesson(5), 0), {type: 'answer', verdict: 'got_it'}), []);  // no question asked
+// a right answer wins every fight, in its first round
+for (let i = 0; i < 100; i++) {
+  const q = R.simulate(studied(i), 0, answerFirst('got_it'));
+  assert.equal(q.phase, 'won');
+  assert.equal(q.round, 1);
+}
+''')
+
+
+def test_the_end_screen_says_what_was_understood_and_every_line_fills():
+    check(STUDY + '''
+const won = R.simulate(studied(2), 0, answerFirst('got_it'));
+const sum = R.summary(won, B.LABELS, null, studied(2));
+assert.match(sum.note, /^You understood it: it counts toward your readiness in Module 0\\.$/);
+assert.equal(sum.feedback, 'Close.');
+assert.equal(sum.principle, 'Isolate state');
+assert.equal(sum.quote, 'A shared token');
+assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.verdict ? {type: 'answer', verdict: 'got_it', back_in: 3} : R.policy(st)))).note,
+  'You understood it: it counts toward your readiness in Module 0. It comes back in 3 days for another look.');
+assert.equal(R.summary(R.simulate(studied(2), 0, (st) => (st.study && !st.study.verdict ? {type: 'answer', verdict: 'got_it', back_in: 10, owned: true} : R.policy(st)))).note,
+  "Got it again on another day: it's yours now (Module 0). Next look in 10 days.");
+const missed = R.summary(R.simulate(studied(2), 0, answerFirst('not_yet')));
+assert.deepEqual([missed.title, missed.note, missed.quoteTitle, missed.quote, missed.principle],
+  ['Breaker slipped away', 'Not yet: it comes back tomorrow.', 'The answer', 'A shared token', 'Isolate state'].map((x, i) => (i ? x : missed.title)));
+assert.match(missed.title, / slipped away$/);
+assert.equal(R.summary(R.simulate(studied(2), 0, answerFirst('partly'))).note, 'Partly there: it comes back tomorrow so you can try again.');
+assert.equal(R.summary(R.simulate(studied(2), 0)).note, "You didn't answer this one: it stays open for you.");
+assert.equal(R.summary(R.simulate(lesson(2), 0)).note, '');
+for (let i = 0; i < 120; i++) {
+  const s = R.simulate(studied(i), i % 3, answerFirst(['got_it', 'partly', 'not_yet'][i % 3]));
+  for (const line of s.log) {
+    const text = line.key ? B.format(B.LABELS[line.key], line.vars) : line.vars.text;
+    assert.ok(line.key == null || line.key in B.LABELS, 'no label ' + line.key);
+    assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(text), 'unfilled: ' + text);
+  }
+  for (const t of Object.values(R.summary(s))) assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(t), 'unfilled: ' + t);
+}
+''')

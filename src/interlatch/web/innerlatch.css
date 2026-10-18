@@ -676,6 +676,39 @@
 @media (max-width: 600px) { .adv-world { height: calc(100vh - 250px); } .adv-rows li { flex-wrap: wrap; }
   .adv-rows .kind-chip { width: auto; } .adv-row-main { flex-basis: 100%; order: 3; } .adv-row-main a { white-space: normal; } }
 
+/* ------------------------------------------------------------------ a region's field (field.js) */
+/* The field is the game's own daylight scene in every theme (a dusk tint at night); its HUD is the game's too: dark glass
+   panels over the art, like a handheld RPG's, whatever the page's colours */
+.fd-host { position: relative; height: calc(100vh - 220px); min-height: 380px; }
+.fd { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: var(--radius); background: #24331f;
+  box-shadow: 0 0 0 2px var(--border-strong); user-select: none; -webkit-user-select: none; touch-action: none; }
+.fd-canvas { display: block; outline: none; }
+.fd-canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.fd-party { position: absolute; top: 10px; left: 10px; display: grid; gap: 4px; pointer-events: none; }
+.fd-member { display: flex; align-items: center; gap: 7px; padding: 2px 10px 2px 2px; border-radius: 4px; color: #ffffff;
+  background: rgba(18, 22, 40, 0.72); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16); }
+.fd-face { width: 32px; height: 32px; image-rendering: pixelated; }
+.fd-member-txt { display: grid; font: 600 11px/1.25 var(--mono); }
+.fd-member-txt b { font-size: 12px; }
+.fd-member-txt span { color: #ffd27a; }
+.fd-zone { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; max-width: 44%;
+  padding: 5px 14px 6px; border-radius: 4px; text-align: center; pointer-events: none; color: #ffe2a0; background: rgba(42, 30, 18, 0.82);
+  box-shadow: 0 0 0 2px rgba(255, 226, 160, 0.25); font: 700 13px/1.3 var(--mono); }
+.fd-zone span { font-weight: 500; font-size: 11px; color: #f3ead6; }
+.fd-zone.fd-goal { box-shadow: 0 0 0 2px #ffd27a; }
+.fd-mini { position: absolute; top: 10px; right: 10px; border-radius: 3px; image-rendering: pixelated; pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 2px 10px rgba(0, 0, 0, 0.35); }
+.fd-hint { position: absolute; right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 4px; pointer-events: none; color: #eef2ff;
+  background: rgba(18, 22, 40, 0.62); font: 500 11px var(--mono); }
+.fd-empty { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); padding: 8px 14px; border-radius: 4px; color: #ffffff;
+  background: rgba(18, 22, 40, 0.78); font: 600 13px var(--mono); pointer-events: none; }
+@media (max-width: 600px) {
+  .fd-host { height: calc(100vh - 250px); }
+  .fd-zone { top: auto; bottom: 10px; max-width: 72%; }
+  .fd-hint, .fd-member-txt { display: none; }
+  .fd-member { padding: 2px; }
+}
+
 /* ------------------------------------------------------------------ the world map (adventure.js) */
 /* The Adventure page's overworld map (adventure.js). Colours come from the page's tokens only, so light, dark and
    Innerlatch's violet (:root.in-realm) all apply; the map itself is a canvas that reads the same tokens. */
@@ -758,7 +791,7 @@
 .bt-log li::before { content: "· "; color: var(--baseline); }
 .bt-log li:last-child { color: var(--ink); }
 .bt-log li:last-child::before { content: "▸ "; color: var(--gold); }
-.bt-log li.bt-case { font-family: var(--sans); font-style: italic; color: var(--ink-2); }
+.bt-log li.bt-case { font: 500 14.5px/1.55 var(--sans); color: var(--ink); }
 .bt code { padding: 0 0.25em; font: inherit; font-family: var(--mono); font-size: 0.92em; font-style: normal; background: var(--code-bg); color: var(--ink);
   box-shadow: 0 0 0 1px var(--grid); }
 .bt-log li:last-child { animation: bt-type 0.32s steps(6) both; }
@@ -803,6 +836,39 @@
 .bt-menu-head { padding: 2px 10px 6px 12px; font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :lang(ja) .bt-menu-head { letter-spacing: 0.02em; text-transform: none; }
+/* a study battle: Answer in gold; its panel takes the deck's whole width (the party is back once it's answered), the
+   question over its options, each whole (they wrap), numbered for the keys */
+.bt-cmd.bt-answer-cmd { color: var(--gold); }
+/* the battle in a column you can read: never wider than this, centred; while a question is open the stage and the
+   log make room for it, so its options and Answer fit on the screen */
+.adv-battle .bt { max-width: 800px; margin-inline: auto; }
+.bt-asking .bt-stage { height: clamp(150px, 28cqi, 230px); }
+.bt-asking .bt-log { height: auto; max-height: 3.2em; }
+.bt-menu-head.bt-ask { display: grid; gap: 8px; padding: 6px 12px 10px; white-space: normal; overflow-wrap: anywhere; text-transform: none;
+  letter-spacing: 0; color: var(--ink); }
+.bt-ask-scene { margin: 0; font: 400 15px/1.6 var(--sans); color: var(--ink-2); }
+.bt-ask-q { margin: 0; font: 650 16.5px/1.45 var(--sans); color: var(--ink); }
+.bt-asking .bt-deck { grid-template-columns: minmax(0, 1fr); }
+.bt-asking .bt-party { display: none; }
+.bt-cmd.bt-choice { align-items: flex-start; min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+.bt-cmd.bt-choice .bt-cmd-name { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; text-overflow: clip;
+  overflow-wrap: anywhere; font: 500 15.5px/1.5 var(--sans); }
+.bt-cmd.bt-choice .bt-cmd-meta { padding-top: 2px; font-size: 12px; }
+.bt-cmd.bt-choice .bt-cmd-meta { color: var(--gold); }
+.bt-cmd.bt-choice.bt-chosen { background: var(--accent-wash-2); box-shadow: inset 3px 0 0 var(--gold); }
+.bt-cmd.bt-choice.bt-chosen::before { opacity: 1; }
+.bt-answer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 6px; }
+.bt-answer-row .bt-cmd.bt-answer-go, .bt-answer-row .bt-cmd.bt-flee { margin-top: 0; }
+.bt-cmd.bt-flee { justify-content: center; gap: 8px; padding: 6px 16px; color: var(--ink-2); box-shadow: inset 0 0 0 2px var(--grid); }
+.bt-cmd.bt-flee::before { display: none; }
+.bt-cmd.bt-flee .bt-cmd-meta { color: var(--muted); }
+.bt-cmd.bt-answer-go { justify-content: center; margin-top: 6px; padding-left: 10px; font-weight: 700; color: var(--cta-ink); background: var(--cta);
+  box-shadow: 0 -2px 0 0 var(--gold), 0 2px 0 0 var(--gold), -2px 0 0 0 var(--gold), 2px 0 0 0 var(--gold); }
+.bt-cmd.bt-answer-go::before { display: none; }
+.bt-cmd.bt-answer-go:hover { background: var(--cta-hover); }
+.bt-cmd.bt-answer-go[aria-disabled="true"] { color: var(--muted); background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--grid); }
+.bt-answer-hint { margin: 4px 10px; font: 500 12.5px/1.4 var(--sans); color: var(--muted); }
+.bt-answer-error { margin: 4px 10px; font: 500 12.5px/1.4 var(--sans); color: var(--critical-ink); }
 .bt-cmds { display: grid; gap: 2px; }
 /* a submenu (skills, items): its rows scroll by whole rows inside the main menu's height (battle.js sets the list's
    max-height), Back stays pinned under them, and a fade with "▼ more" shows while rows are hidden below or above */
@@ -858,6 +924,10 @@
 .bt-won .bt-card-title, .bt-done .bt-card-title { color: var(--gold); }
 .bt-held .bt-card-title { color: var(--critical-ink); }
 .bt-card-text { margin: 0 0 12px; max-width: 62ch; color: var(--ink-2); line-height: 1.5; }
+.bt-card-note { margin: -4px 0 8px; font: 600 13px/1.5 var(--mono); color: var(--ink-2); }
+.bt-card-note.bt-solved { color: var(--gold); }
+.bt-card-feedback { margin: 0 0 12px; max-width: 62ch; color: var(--ink); line-height: 1.5; }
+.bt-principle { box-shadow: inset 3px 0 0 var(--gold); }
 .bt-quote { margin: 4px 0 16px; padding: 10px 14px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
 /* the spoils of a first win: gold in gold, each piece of loot; or why there is none this time */
 .bt-reward { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 12px; }

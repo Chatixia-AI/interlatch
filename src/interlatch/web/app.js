@@ -909,7 +909,7 @@ function loadRealm() {
   // the art and the Adventure's engines first: without them the pages fall back (initials on a still stage, the
   // encounters as a list), so only innerlatch.js itself must load
   realmLoading ||= Promise.all([script("sprites.js").catch(() => {}), script("scene.js").catch(() => {}),
-    script("adventure.js").catch(() => {}), script("battle.js").catch(() => {}), script("innerlatch.js"), style])
+    script("adventure.js").catch(() => {}), script("field.js").catch(() => {}), script("battle.js").catch(() => {}), script("innerlatch.js"), style])
     .finally(() => { if (!window.Innerlatch) realmLoading = null; }); // a failed load is tried again on the next visit
   return realmLoading;
 }

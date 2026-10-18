@@ -1157,15 +1157,22 @@ def _boss_attr(cat: Catalog, track_id: str) -> str | None:
 def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = None, *,
                   catalog: Catalog | None = None, today: date | None = None) -> dict:
     """GET /api/party/map: the regions (every attr, every module of it, how many counted lessons stand there: those
-    whose best module it is, and their XP), every counted lesson oldest first, the lessons cleared, the bosses (the
-    main quest's milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag
-    and a town per region (bag.py)."""
-    from . import bag
+    whose best module it is, and their XP), every counted lesson oldest first (`study`: it has study material;
+    `friction`: a trap for the agents' rules, never offered to study: study.py), the lessons cleared, the bosses (the
+    main quest's milestones), the newest lesson (where the party stands), the agents, the gold in the viewer's bag, a
+    town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood, those
+    back for another look and those owned, and how many are understood per module (study.py; empty for a person on a
+    hub: their record stays on their computer)."""
+    from . import bag, study
 
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
     data = _computed(conn, cat, sc, today or utcnow().date())
     counted = [k for k in lessons_in(conn, cat, sc) if k.modules]
+    flags = study.flags(conn, [k.id for k in counted])
+    studied = study.studied_of(conn, sc.key)
+    sched = study.schedule(studied, today or utcnow().date())
+    goal = data.get("goal")
     there: dict[int, list[int]] = {}  # module index: [lessons, xp] of the lessons that stand in it
     for k in counted:
         got = there.setdefault(k.modules[0], [0, 0])
@@ -1180,7 +1187,8 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "regions": regions,
         "lessons": [{"id": k.id, "title": k.title[:MAP_TITLE_MAX], "kind": k.kind, "stage": k.stage, "agent": k.agent,
                      "at": k.at[:10], "xp": k.xp * len(k.modules), "modules": [cat.modules[i]["id"] for i in k.modules],
-                     "session_id": k.session_id, "project": k.project_name} for k in counted],
+                     "session_id": k.session_id, "project": k.project_name, "study": flags.get(k.id, (False, False))[0],
+                     "friction": flags.get(k.id, (False, False))[1]} for k in counted],
         "cleared": cleared_of(conn, sc.key),
         "bosses": [{"id": q["id"], "n": q["n"], "text": q["text"], "track": q["track"], "track_name": q["track_name"],
                     "attr": _boss_attr(cat, q["track"]), "status": q["status"]}
@@ -1189,7 +1197,22 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "agents": [{x: a[x] for x in ("agent", "name", "short", "level", "tier")} for a in data["agents"]],
         "gold": bag.load(conn, sc.key)["gold"],
         "towns": bag.towns(cat),
+        "goal": {**goal, "modules": list(cat.track[goal["id"]].get("modules") or [])} if goal else None,
+        "understood": study.understood(studied),
+        "back": [i for i, x in sched.items() if not x["resting"]],  # understood, and come back for another look
+        "owned": [i for i, x in sched.items() if x["owned"]],
+        "readiness": study.readiness(counted, cat, studied),
+        "ready_at": study.READY_AT,
+        "studying": viewer is None,  # study battles (and their record) only at the person's own computer
     }
+
+
+def owns(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, *, catalog: Catalog | None = None) -> bool:
+    """The lesson is one of the viewer's (counted or not), as an encounter would show it."""
+    if not isinstance(lesson_id, int) or isinstance(lesson_id, bool):
+        return False
+    cat = catalog or load_catalog()
+    return any(k.id == lesson_id for k in lessons_in(conn, cat, _scope_of(conn, here_id, viewer)))
 
 
 def _case(raw) -> dict | None:
