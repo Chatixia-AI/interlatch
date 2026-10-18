@@ -3,6 +3,23 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.3 (2026-10-18)
+
+- **Windows in Japanese (and other languages):** Task Scheduler's and PowerShell's own messages now read in Windows'
+  language instead of coming out garbled, and a `claude.cmd` (npm) or another tool that reports an error in the console's
+  code page no longer ends `interlatch install` in a traceback. The tasks name your account by its SID, so a PC joined to
+  Microsoft Entra ID registers them too; a folder name with a full-width space works in hooks; an npm-installed Claude
+  Code gets the whole analysis prompt; the shared log no longer prints "Logging error" when another process holds it;
+  and the dashboard's scripts keep their type where Windows' registry calls .js plain text, which left the page blank.
+  The old console window prints `+` and `>` for ✓ and ›, the dashboard says Ctrl for ⌘ off a Mac, and the install steps
+  set PATH in the same window, where uv's installer left "uv is not recognized" ([Windows](docs/install.md#windows)).
+- **Adventure, rebuilt for learning:** the Adventure opens on a field to walk around in, one region at a time, its
+  roadmap modules as zones and your lessons worth studying as monsters (main quest first, your agents' own setup traps
+  left out). A battle is now a question from your own sessions: four answers written for the lesson, choose one and
+  Answer. Right beats the monster and fills your readiness for that module; wrong shows why, the answer and the
+  principle, and the lesson comes back tomorrow. Lessons you got right come back as you'd forget them (3, 10, 30, 90
+  days). Your answers stay on your own computer ([Adventure](docs/party.md#adventure)).
+
 ## 0.27.2 (2026-10-16)
 
 - **One row per browser on Team › People:** opening the hub from your own dashboard again no longer leaves the
