@@ -167,7 +167,13 @@ sessions, knowledge base and hub sharing.
   like an architecture sketch: a service many lines meet (a Langfuse, a database, a cloud) is one the projects share,
   and dashed arcs are the links the [Systems map](#systems-map) found between the projects themselves (one edits the
   other's files, or its glossary names it). Click a part or a line to see where it was found, in manifests or in the
-  commands sessions ran, and **Excalidraw** downloads it to edit. **Knowledge bases** shows each project's own side by
+  commands sessions ran, and **Excalidraw** downloads it to edit. Next to it, **Mindmap** and **Connections** stay
+  empty until you press **Analyze** there: the analyzer then checks the links the glossary lists between the group's
+  terms (one call per 150 links), keeps the real ones and names each relation ("stores data in", "runs on"). It never
+  adds a link, and the result is kept until you analyze again. **Mindmap** is the [Map](#map) for just this group's
+  projects, the group in the middle. **Connections** puts one thing in the middle with its neighbours round it: first
+  the group, its projects and the terms more than one of them uses; click a project or a term to put it in the middle,
+  with its checked links labelled. **Knowledge bases** shows each project's own side by
   side, with each one's architecture sketch where it has one (nothing is written for the group as a whole), and the
   glossary terms more than one project uses first. The Knowledge, Sessions, Artifacts and Usage tabs cover every
   project in the group; Usage adds each project's active time week by week and the group's activity calendar. As on a

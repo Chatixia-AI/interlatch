@@ -159,6 +159,13 @@ if "imported chat history" in system:  # screening (screen.py): the verdict foll
     data = {"chats": [{"n": int(n), "verdict": "analyze" if "deploy" in t.lower() else "maybe" if "maybe" in t.lower() else "skip",
                        "topic": t.lower()[:20], "reason": f"because: {t}"} for n, t in found if "unanswered" not in t]
             + [{"n": 999, "verdict": "analyze", "topic": "x", "reason": "out of range"}, {"n": 1, "verdict": "bogus"}]}
+elif "links between terms" in system:  # keeps link 0 read from its b side, drops 1, keeps 2 (a repeat, an unknown id and a stray `from` are ignored)
+    links = [json.loads(x) for x in __import__("re").findall(r'^(\{"id": \d+, "a": \d+, "b": \d+\})$', prompt, __import__("re").M)]
+    data = {"links": [{"id": 0, "keep": True, "from": links[0]["b"], "label": "stores data in"},
+                      {"id": 0, "keep": True, "from": links[0]["a"], "label": "a repeat is ignored"},
+                      {"id": 1, "keep": False, "from": links[1]["a"], "label": ""},
+                      {"id": 2, "keep": True, "from": 999999, "label": "  part of  "},
+                      {"id": 999, "keep": True, "from": 1, "label": "unknown id"}][: 5 if len(links) > 2 else 1]}
 elif "into themes" in system:
     ids = [int(x) for x in __import__("re").findall(r'"id": (\d+)', prompt)]
     data = {"themes": [{"name": "Testing", "description": "How tests run", "term_ids": ids[:1] + [999999]},

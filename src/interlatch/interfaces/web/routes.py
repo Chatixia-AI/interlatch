@@ -152,6 +152,19 @@ def _group_map_file(h, ctx, m, q):  # a download: the group's map as an .excalid
     return h._download(*f) if f else h._json({"error": tr("not found")}, 404)
 
 
+def _group_graph(h, ctx, m, q):  # the group's Mindmap and Connections, once analyzed
+    found = api.projects.group_graph(ctx, _group_id(q)) if _group_id(q) is not None else None
+    return h._json(found) if found else h._json({"error": tr("not found")}, 404)
+
+
+def _group_graph_analyze(h, ctx, m, b):  # the Analyze button: the analyzer checks the group's links
+    try:
+        started = api.projects.action_group_graph(ctx, int(b.get("id")))
+    except (TypeError, ValueError):
+        started = None
+    return h._json({"started": started}) if started is not None else h._json({"error": tr("not found")}, 404)
+
+
 def _diagram(h, ctx, m, q):  # a download: the project's architecture sketch as an .excalidraw file
     f = api.knowledge.diagram_file(ctx, q.get("path", ""))
     return h._download(*f) if f else h._json({"error": tr("no architecture sketch for this project")}, 404)
@@ -222,6 +235,7 @@ GET: list[Route] = [
     Route("/api/group", ANYONE, _group),
     Route("/api/group/map", ANYONE, _group_map),
     Route("/api/group/map.excalidraw", ANYONE, _group_map_file),
+    Route("/api/group/graph", ANYONE, _group_graph),
     Route("/api/diagram", ANYONE, _diagram),
     # parse_qs has decoded the path already: a second unquote would mangle a literal %
     Route("/api/file", ANYONE, lambda h, ctx, m, q: h._json(
@@ -439,6 +453,7 @@ POST: list[Route] = [
     Route(r"/api/sessions/([\w-]+)/analyze", ANYONE,
           lambda h, ctx, m, b: h._json({"started": api.status.action_analyze(ctx, m.group(1))})),
     Route(r"/api/connectors/([\w-]+)/(connect|disconnect)", ANYONE, _connector),
+    Route("/api/group/graph/analyze", ANYONE, _group_graph_analyze),
     Route("/api/map/themes", ANYONE,
           lambda h, ctx, m, b: h._json({"started": api.knowledge.action_themes(ctx, bool(b.get("force")))})),
     Route("/api/glossary/rebuild", ANYONE,

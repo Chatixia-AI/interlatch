@@ -2547,3 +2547,54 @@ td.pg-cell { width: 1%; text-align: right; }
   to { clip-path: circle(150% at 0 100%); }
 }
 :root[data-motion="off"] .stage.portal-in { animation: none; }
+
+/* A group's Map tab: Services, Mindmap and Connections (groupGraphPane) */
+.gmap-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.gmap-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gmap .mm-card { height: min(76vh, 780px); min-height: 480px; }
+.gmap-stamp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; margin-bottom: -6px; }
+.gmap-new { color: var(--warning-ink); }
+.gmap-analyze p { max-width: 68ch; line-height: 1.55; color: var(--ink-2); margin: 8px 0 12px; }
+@media (max-width: 900px) { .gmap .mm-card { height: auto; } }
+
+/* Connections: the focus in the middle, its neighbours in a ring. Marks carry the category colour (--c); text stays in ink tokens. */
+.cx-canvas { cursor: default; display: flex; }
+.cx-svg { display: block; width: 100%; height: 100%; flex: 1; user-select: none; }
+.cx-trail { position: absolute; top: 12px; left: 14px; display: flex; align-items: center; gap: 6px; font-size: 13px; z-index: 1;
+  background: var(--surface); padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border); max-width: calc(100% - 28px); }
+.cx-trail .link-btn.on { color: var(--ink); font-weight: 600; text-decoration: none; }
+.cx-trail b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-legend { top: auto; bottom: 12px; }
+.cx-key { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 5px; }
+.cx-key.proj { border: 1.5px solid var(--border-strong); background: var(--surface-2); border-radius: 2px; }
+.cx-key.term { border-radius: 50%; background: color-mix(in srgb, var(--series-1) 30%, var(--surface)); border: 1.5px solid var(--series-1); }
+.cx-key.line { height: 0; width: 16px; border-top: 1.6px solid var(--ink-2); vertical-align: 3px; }
+.cx-key.uses { height: 0; width: 16px; border-top: 1.2px dashed var(--baseline); vertical-align: 3px; }
+.cx-edge { stroke: var(--baseline); stroke-width: 1.2; transition: opacity .15s; }
+.cx-edge.member { stroke: var(--border); stroke-width: 1; }
+.cx-edge.uses { stroke-dasharray: 4 3; }
+.cx-edge.link { stroke: color-mix(in srgb, var(--c, var(--ink-2)) 70%, var(--ink-2)); stroke-width: 1.6; }
+.cx-edge.chord { stroke: color-mix(in srgb, var(--c, var(--baseline)) 45%, var(--surface)); stroke-width: 1.1; }
+.cx-arrowhead { fill: var(--ink-2); }
+.cx-elabel { font-size: 11px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.cx-elabel.chord { opacity: 0; }
+.cx-svg.overview .cx-edge.chord:not(.on) { opacity: 0; } /* the group at a glance: links between terms show on pointing */
+.cx-node.focus text { font-size: 14px; }
+.cx-svg.lit .cx-edge:not(.on) { opacity: .25; }
+.cx-svg.lit .cx-elabel:not(.on) { opacity: 0; }
+.cx-elabel.on, .cx-edge.on { opacity: 1; }
+.cx-edge.on { stroke-width: 2; }
+.cx-node { cursor: pointer; outline: none; }
+.cx-node circle { fill: color-mix(in srgb, var(--c, var(--baseline)) 28%, var(--surface)); stroke: var(--c, var(--baseline)); stroke-width: 1.6; }
+.cx-node rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.cx-node text { fill: var(--ink); font-size: 12.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.cx-node.project text, .cx-node.root text { font-weight: 600; }
+.cx-node.root circle { fill: var(--cta); stroke: var(--cta-ink); stroke-width: 1; }
+.cx-node.focus circle, .cx-node.focus rect { stroke-width: 2.5; }
+.cx-node.focus text { font-weight: 600; }
+.cx-node.hover circle, .cx-node:focus-visible circle, .cx-node.hover rect, .cx-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
+.cx-rels { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cx-rel { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 6px; border-radius: 5px; cursor: pointer; color: var(--ink); font: inherit; }
+.cx-rel:hover, .cx-rel:focus-visible { background: var(--surface-2); }
+.cx-rel-label { color: var(--muted); font-size: 12px; min-width: 0; flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-tchip.proj .icon { width: 13px; height: 13px; }

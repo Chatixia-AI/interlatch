@@ -468,11 +468,13 @@ def build_themes(cfg: Config, categories: list[str] | None = None, *, force: boo
         conn.close()
     return results
 
-def map_data(conn: sqlite3.Connection) -> dict:
+def map_data(conn: sqlite3.Connection, paths: list[str] | None = None) -> dict:
     """Everything the dashboard's Map draws: projects, glossary terms with the projects that use them, and the
-    knowledge items each term was distilled from. The browser builds the tree from this."""
+    knowledge items each term was distilled from. The browser builds the tree from this. paths: only these projects
+    (a group's), each term with just its uses there and only the terms they use."""
     from ..projects.labels import project_labels
 
+    inside = set(paths) if paths is not None else None
     labels = project_labels(conn)
     kinds: dict[str, dict] = {}
     for r in conn.execute("SELECT project_path, kind, COUNT(*) n FROM knowledge WHERE status = 'active' GROUP BY 1, 2"):
@@ -483,12 +485,15 @@ def map_data(conn: sqlite3.Connection) -> dict:
         for r in conn.execute(
             "SELECT project_path, project_name, COUNT(*) n, SUM(active_s) active_s, MAX(started_at) last FROM sessions "
             "WHERE project_path IN (SELECT project_path FROM glossary_usage) GROUP BY project_path ORDER BY n DESC")
+        if inside is None or r["project_path"] in inside
     ]
-    if conn.execute("SELECT 1 FROM glossary_usage WHERE project_path = ? LIMIT 1", (GLOBAL,)).fetchone():
+    if inside is None and conn.execute("SELECT 1 FROM glossary_usage WHERE project_path = ? LIMIT 1", (GLOBAL,)).fetchone():
         projects.insert(0, {"path": GLOBAL, "label": tr("Everywhere"), "sessions": None, "active_s": None, "last": None,
                             "knowledge": kinds.get(GLOBAL, {})})
     usage: dict[int, list] = {}
     for u in conn.execute("SELECT term_id, project_path, context, sources_json FROM glossary_usage"):
+        if inside is not None and u["project_path"] not in inside:
+            continue
         usage.setdefault(u["term_id"], []).append(
             {"path": u["project_path"], "context": u["context"], "sources": loads(u["sources_json"], []) or []})
     sessions = {r["id"]: {"id": r["id"], "title": r["title"], "agent": r["agent"] or "claude", "started_at": r["started_at"],
@@ -498,6 +503,8 @@ def map_data(conn: sqlite3.Connection) -> dict:
     for r in conn.execute("SELECT id, term, category, definition, aliases_json, related_json, n_sessions, n_mentions, "
                           "first_seen, last_seen, theme, top_sessions_json FROM glossary"):
         uses = usage.get(r["id"], [])
+        if inside is not None and not uses:
+            continue
         sources = sorted({s for u in uses for s in u["sources"]})
         wanted.update(sources)
         terms.append({"id": r["id"], "term": r["term"], "category": r["category"] or "other",
