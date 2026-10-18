@@ -237,6 +237,13 @@ def action_sync(ctx: Context) -> bool:
     return ctx.jobs.start("sync", job)
 
 
+def analysis_queue(ctx: Context) -> dict:
+    """What the status bar's queue line opens: the queued sessions with their reasons and when each is analyzed."""
+    from ....analysis.queue import queue_list
+
+    return queue_list(ctx.conn, ctx.cfg)
+
+
 def action_analyze(ctx: Context, sid: str) -> bool:
     from ....application.workflows import run_worker
     from ...exports.vault import export_markdown

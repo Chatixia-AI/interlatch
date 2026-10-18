@@ -129,3 +129,48 @@ def test_analyze_the_queue_now(synced):
     assert conn.execute("SELECT analysis_status FROM sessions WHERE id = ?", (SID,)).fetchone()[0] == "done"
     assert not kv_get(conn, PAUSE_KEY)
     assert not api.status.action_analyze_queue(app.context(), "ready")["started"]  # nothing left
+
+
+def test_queue_list_plays_the_runs_forward(synced):
+    """The queue the status bar opens: queued sessions only, in the worker's order, each with when a background run
+    should reach it; a pause moves the times, a block that needs a change leaves them out."""
+    from interlatch.analysis.queue import queue_list, typical_analysis_s
+    from interlatch.core.util import parse_ts
+
+    conn, cfg = synced["conn"], synced["cfg"]
+    conn.execute("DELETE FROM sessions")
+    conn.execute("DELETE FROM analyses")
+    now = utcnow()
+    _add(conn, "r1", ended_at=to_iso(now - timedelta(hours=1)))
+    _add(conn, "r2", ended_at=to_iso(now - timedelta(hours=2)))
+    _add(conn, "r3", ended_at=to_iso(now - timedelta(hours=3)))
+    _add(conn, "active", ended_flag=0, ended_at=to_iso(now - timedelta(minutes=1)))
+    _add(conn, "retry", analysis_status="error", analysis_attempts=1, analysis_not_before=to_iso(now + timedelta(hours=2)))
+    _add(conn, "too_short", n_prompts=0)  # held: not in the queue
+    for took in (30, 40, 500):
+        conn.execute("INSERT INTO analyses(kind, target, started_at, finished_at, status) VALUES ('session', 'x', ?, ?, 'done')",
+                     (to_iso(now), to_iso(now + timedelta(seconds=took))))
+    kv_set(conn, "last_sync", to_iso(now - timedelta(minutes=5)))
+    conn.commit()
+    cfg = replace(cfg, analysis=replace(cfg.analysis, idle_minutes=20, max_per_run=2))
+    assert typical_analysis_s(conn) == 40
+
+    def mins(q):  # minutes from now until each session is analyzed
+        return {s["id"]: round((parse_ts(s["eta"]) - now).total_seconds() / 60) if s["eta"] else None for s in q["sessions"]}
+
+    q = queue_list(conn, cfg)
+    assert [s["id"] for s in q["sessions"]] == ["r1", "r2", "r3", "active", "retry"]
+    assert (q["total"], q["ready"], q["active"], q["block"]) == (5, 3, 1, None)
+    # runs at +10m (r1, r2), +25m (r3, and active, idle from +19m), then the first run after the retry time (+130m)
+    assert mins(q) == {"r1": 11, "r2": 11, "r3": 26, "active": 26, "retry": 131}
+    assert round((parse_ts(q["next_run"]) - now).total_seconds() / 60) == 10
+
+    kv_set(conn, PAUSE_KEY, to_iso(now + timedelta(minutes=35)))
+    conn.commit()
+    q = queue_list(conn, cfg)
+    assert "paused" in q["block"] and mins(q)["r1"] == 41  # the first run after the pause ends
+
+    kv_set(conn, PAUSE_KEY, None)
+    conn.commit()
+    off = queue_list(conn, replace(cfg, analysis=replace(cfg.analysis, auto=False)))
+    assert "automatic analysis is off" in off["block"] and set(mins(off).values()) == {None} and off["next_run"] is None

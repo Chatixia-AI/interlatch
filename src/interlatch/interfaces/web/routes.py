@@ -247,6 +247,7 @@ GET: list[Route] = [
     Route("/api/systems", ANYONE, lambda h, ctx, m, q: h._json(api.knowledge.systems(ctx))),
     Route("/api/system", ANYONE, _system),
     Route("/api/jobs", ANYONE, lambda h, ctx, m, q: h._json(api.status.status_small(ctx, limited=h.limited))),
+    Route("/api/analysis/queue", ANYONE, lambda h, ctx, m, q: h._json(api.status.analysis_queue(ctx))),
     Route("/api/update", ANYONE, lambda h, ctx, m, q: h._json(api.settings.update_info(ctx, remote=False))),
     Route("/api/imports", ANYONE, lambda h, ctx, m, q: h._json(api.sources.imports(ctx))),
     Route("/api/devices", ANYONE, _devices),

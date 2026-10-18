@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from ..core.config import Config
 from ..core.i18n import tr
-from ..core.util import local_str, one_line, to_iso, utcnow
+from ..core.util import local_str, one_line, parse_ts, to_iso, utcnow
 from ..storage.kv import kv_get
 from .runners.base import Runner
 from .runners.factory import make_runner
@@ -130,3 +130,72 @@ def queued_ids(conn, cfg: Config, code: str, limit: int) -> list[str]:
             if len(ids) >= limit:
                 break
     return ids
+
+
+RUN_INTERVAL_S = 900  # the background agent: `interlatch sync --work` every 15 minutes (runtime/install.py)
+
+
+def typical_analysis_s(conn) -> float:
+    """How long one session's analysis takes on this computer: the median of the last 20 that got through."""
+    took = sorted(r[0] for r in conn.execute(
+        "SELECT (julianday(finished_at) - julianday(started_at)) * 86400 FROM analyses WHERE kind = 'session' "
+        "AND status = 'done' AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 20")
+        if r[0] and r[0] > 0)
+    return round(took[len(took) // 2], 1) if took else 60.0
+
+
+def queue_list(conn, cfg: Config, limit: int = 200) -> dict:
+    """The sessions queued for analysis (the ones the status bar counts), each with its reason and `eta`: when it
+    should be analyzed. The background runs are played forward: one every RUN_INTERVAL_S after the last sync, each
+    taking max_per_run sessions in pending_sessions() order, a session joining the first run after it is ready.
+    No eta while the whole queue is stopped by something that needs a change (automatic analysis off, no agent)."""
+    now = utcnow()
+    block = queue_block(conn, cfg)
+    paused = kv_get(conn, PAUSE_KEY)
+    paused = parse_ts(paused) if paused and paused > to_iso(now) else None
+    each = typical_analysis_s(conn)
+    items = []
+    for s in conn.execute(
+            "SELECT id, title, project_name, project_path, agent, analysis_status, source, analysis_attempts, analysis_reason, "
+            "analysis_not_before, n_prompts, started_at, ended_at, ended_flag FROM sessions WHERE source NOT IN ('history', 'remote') "
+            "AND analysis_status IN ('pending','stale','error') ORDER BY ended_flag DESC, ended_at DESC"):
+        got = waiting_reason(conn, cfg, s)
+        if not got or got[0] not in QUEUED_CODES:
+            continue
+        code, why = got
+        ready_at = (parse_ts(s["analysis_not_before"]) if code == "retry"
+                    else (parse_ts(s["ended_at"]) or now) + timedelta(minutes=cfg.analysis.idle_minutes) if code == "active"
+                    else now)
+        items.append({"id": s["id"], "title": s["title"], "project": s["project_name"], "agent": s["agent"],
+                      "prompts": s["n_prompts"], "ended_at": s["ended_at"], "code": code,
+                      "label": tr(QUEUE_REASON_LABEL[code]), "why": why, "stale": s["analysis_status"] == "stale",
+                      "ready_at": max(ready_at or now, now), "eta": None})
+
+    next_run = None
+    if not cfg.sends_files and (not block or paused):  # a pause ends by itself; the other blocks need a change
+        last = parse_ts(kv_get(conn, "last_sync"))
+        slot = max(last + timedelta(seconds=RUN_INTERVAL_S), now) if last else now + timedelta(seconds=RUN_INTERVAL_S)
+        while paused and slot < paused:
+            slot += timedelta(seconds=RUN_INTERVAL_S)
+        next_run = slot
+        left, per_run = list(items), max(1, cfg.analysis.max_per_run)
+        for _ in range(2000):  # a guard: a few thousand queued sessions is weeks of runs
+            if not left:
+                break
+            due = [x for x in left if x["ready_at"] <= slot][:per_run]
+            if not due:  # nothing ready by this run: skip to the first run after the next one is
+                first = min(x["ready_at"] for x in left)
+                while slot < first:
+                    slot += timedelta(seconds=RUN_INTERVAL_S)
+                continue
+            for i, x in enumerate(due):
+                x["eta"] = to_iso(slot + timedelta(seconds=each * (i + 1)))
+            left = [x for x in left if x["eta"] is None]
+            slot += timedelta(seconds=RUN_INTERVAL_S)
+        items.sort(key=lambda x: x["eta"] or "~")  # stable: the worker's order within one run
+    for x in items:
+        x["ready_at"] = to_iso(x["ready_at"])
+    return {"sessions": items[:limit], "total": len(items), "ready": sum(x["code"] == "ready" for x in items),
+            "active": sum(x["code"] == "active" for x in items), "each_s": each, "per_run": cfg.analysis.max_per_run,
+            "interval_s": RUN_INTERVAL_S, "next_run": to_iso(next_run), "block": block,
+            "paused_until": to_iso(paused), "on_hub": bool(cfg.sends_files)}

@@ -118,6 +118,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/knowledge/hub"): SIGNED_IN,
     ("GET", "/api/search"): SIGNED_IN,
     ("GET", "/api/status"): SIGNED_IN,
+    ("GET", "/api/analysis/queue"): SIGNED_IN,
     ("GET", "/api/reviews"): SIGNED_IN,
     ("GET", "/api/glossary"): SIGNED_IN,
     ("GET", "/api/glossary/terms"): SIGNED_IN,
