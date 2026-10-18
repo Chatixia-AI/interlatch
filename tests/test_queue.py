@@ -174,3 +174,16 @@ def test_queue_list_plays_the_runs_forward(synced):
     conn.commit()
     off = queue_list(conn, replace(cfg, analysis=replace(cfg.analysis, auto=False)))
     assert "automatic analysis is off" in off["block"] and set(mins(off).values()) == {None} and off["next_run"] is None
+
+
+def test_a_spoke_that_shares_knowledge_analyzes_here(synced):
+    """Analyze now hides only where the hub analyzes the sessions: joining a hub to share knowledge keeps it."""
+    from interlatch.interfaces.web.app import App
+
+    cfg = synced["cfg"]
+    for share, on_hub in (("knowledge", False), ("everything", True)):
+        app = App(replace(cfg, hub_url="https://hub.example.com", hub_share=share))
+        st = api.status.status_small(app.context())
+        assert st["hub_url"] and st["analysis"]["on_hub"] is on_hub
+        assert api.status.analysis_queue(app.context())["on_hub"] is on_hub
+    assert api.status.status_small(App(cfg).context())["analysis"]["on_hub"] is False

@@ -166,7 +166,8 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
         "pending": pending,
         "analysis": {"auto": ctx.cfg.analysis.auto, "max_per_run": ctx.cfg.analysis.max_per_run,
                      "label": BACKENDS.get(ctx.cfg.analysis.backend, BACKENDS["claude"]),
-                     "billed": _billed(ctx)},  # an API provider off this computer: every call costs
+                     "billed": _billed(ctx),  # an API provider off this computer: every call costs
+                     "on_hub": ctx.cfg.sends_files},  # the hub analyzes its sessions; a hub_url alone doesn't mean that
         "paused_until": kv_get(ctx.conn, PAUSE_KEY),
         "last_sync": kv_get(ctx.conn, "last_sync"),
         "jobs": ctx.jobs.snapshot(),
