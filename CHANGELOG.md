@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.5 (2026-10-18)
+
+- **Analyze now on a computer that shares knowledge with a hub:** the analysis queue window and **Settings › Status**
+  showed no **Analyze now** button on a computer that joined a hub to share only what it learned, though that
+  computer analyzes its own sessions. The button is back there; it stays hidden only where the hub does the analysis.
+
 ## 0.27.4 (2026-10-18)
 
 - **See the analysis queue:** click "N sessions queued for analysis" in the status bar to see which sessions are
