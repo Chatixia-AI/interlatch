@@ -66,20 +66,47 @@ once is one line. Every join, level, class and quest stays on the list; of the s
 
 ## Adventure
 
-**Adventure** is a world map with every lesson that counts on it. Each of the six attributes is a region (Craft a forge
-town, Data lakes and canals, Ops mountains and server towers, Guard walls and a keep, Arcana a wizard tower, Lore an old
-forest with a library), and each roadmap module is a territory in its region. Every lesson stands in the territory of
-its best-matching module as a monster of its kind (a fix is Glitch the bug, a gotcha is Mal, and so on). Territories no
-lesson has reached yet lie under fog. Your party stands where the newest lesson was learned, and the main quest's
-milestones guard their region's gate as bosses. Drag to look around, scroll or pinch to zoom, and use the minimap or the
-sidebar's regions to jump; **List** shows the same encounters as a list you can filter by region, kind and agent.
+**Adventure** opens on a field to explore: one region at a time, seen from above like a handheld RPG. It's the region
+you explored last (or, the first time, the one where your party stands); the sidebar's **Regions** open the others.
+Each roadmap module of the region is a zone with its sign, the zones joined by dirt paths and cut apart by lines of
+trees, with the region's town in the middle. Click or tap where to walk, or use the arrow keys or WASD; your party
+follows the leader. The zone's banner at the top says which module you're in, how many of its lessons are left to
+battle, and how many you've understood; ★ marks the zones of your main quest. The minimap in the corner shows where you
+are and the monsters around.
 
-Click a monster to battle it, turn by turn: the agent that taught the lesson leads, with up to two others. Each turn
-choose **Attack**, **Skill** (one of the lesson's roadmap modules, stronger the higher that agent's level in it),
-**Defend** or **Run**; the monster's strength comes from the lesson's XP and trust stage. Win, and the encounter is
-cleared: it becomes a flag on the map, kept in your archive for this party. Lose, and **Retry** rolls new dice.
-Battles never change levels or XP: those come only from the lessons. A boss can be fought, but it only falls when you
-mark its milestone done under **Quests**.
+The monsters are your lessons worth studying: in each zone, the ones with the most to learn from first (a case file or
+a principle), four at a time in your main quest's zones and two elsewhere. The traps your agents keep hitting in your
+setup (an aliased `rm`, zsh, where screenshots land) never show up: they belong in your agents' rules, not your career.
+Walk into a monster to battle it, or into the town's gate to shop.
+
+**World map** in the sidebar shows the whole continent: every region and its territories, fog where no lesson has
+reached yet. **Encounter list** shows the lessons as a list you can filter by region, kind and agent.
+
+### Study battles
+
+A battle is one lesson from your own sessions as a question. It opens on the scene and the question, with four answers
+to choose from; the lesson's title stays hidden, since it often gives the answer away. Choose one (click it, or press 1
+to 4; the arrow keys move your choice), then **Answer** (or Enter). **Run** (or Esc) leaves at any time.
+
+- **Right**: your answer is the finishing blow. The monster is beaten, the first win pays gold, and the lesson counts
+  toward your readiness in its module.
+- **Wrong**: the monster slips away. The end screen says why that answer is wrong, then shows the right one and the
+  principle behind it.
+
+The question and its answers are written once for each lesson by your analysis model, from the lesson itself: the
+wrong answers are the leads your session ruled out, then likely mistakes. The first time you meet a lesson that takes
+a few seconds; after that it's kept.
+
+A lesson you fought today and didn't get right stays off the field until tomorrow, so trying again means remembering,
+not copying the answer you just saw. A lesson you got right rests, then comes back for another look as you'd start to
+forget it: 3 days later, then 10, 30 and 90 as you keep getting it right, marked ↻ on the field. Got right on two
+separate days, it's yours. Nothing is ever overdue: a lesson that's back just waits on the field.
+
+Your answers count toward your own readiness, never your agents' levels, which come only from their lessons. They're
+kept on your own computer: signed in to a hub, battles are the plain turn-based kind (**Attack**, **Skill**, **Item**,
+**Defend**, **Run**), and nothing about your answers is kept there. The same plain battles stand in when no question
+can be written (the analysis model isn't reachable). A boss can be fought, but it only falls when you mark its
+milestone done under **Quests**.
 
 ## Towns and gear
 
