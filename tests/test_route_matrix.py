@@ -109,6 +109,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/group"): SIGNED_IN.ok(404),  # no such group
     ("GET", "/api/group/map"): SIGNED_IN.ok(404),
     ("GET", "/api/group/map.excalidraw"): SIGNED_IN.ok(404),
+    ("GET", "/api/group/graph"): SIGNED_IN.ok(404),
     ("GET", "/api/artifacts"): SIGNED_IN,
     ("GET", "/api/artifacts/{n}/open"): SIGNED_IN.ok(404),
     ("GET", "/api/artifacts/{n}/file"): SIGNED_IN.ok(404),
@@ -210,6 +211,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/screen/queue"): POST_ADMIN,
     ("POST", "/api/connectors/{id}/connect"): POST_ADMIN,
     ("POST", "/api/connectors/{id}/disconnect"): POST_ADMIN,
+    ("POST", "/api/group/graph/analyze"): POST_ADMIN.ok(404),  # no such group
     ("POST", "/api/map/themes"): POST_ADMIN,
     ("POST", "/api/glossary/rebuild"): POST_ADMIN,
     ("POST", "/api/review"): POST_ADMIN,
@@ -271,6 +273,7 @@ QUERY = {
     "/api/group": "?id=999999",
     "/api/group/map": "?id=999999",
     "/api/group/map.excalidraw": "?id=999999",
+    "/api/group/graph": "?id=999999",
     "/api/file": f"?path={CWD}/auth.py",
     "/api/files": f"?root={CWD}",
     "/api/export": f"?ids={SID}&format=md&check=1",
@@ -282,6 +285,7 @@ QUERY = {
     "/api/party/shop": "?region=nowhere",
 }
 BODY = {
+    "/api/group/graph/analyze": {"id": 999999},
     "/api/team-store/save": {"enabled": False},
     "/api/mirror/save": {"enabled": False},
     "/api/team/settings": {"name": "Matrix hub"},

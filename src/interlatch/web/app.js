@@ -3372,6 +3372,74 @@ function groupGlossary(g) { // the terms more than one of the group's projects u
       h("dl", { class: "kv" }, own.map(term))) : null];
 }
 
+// A group's Map tab: the services its projects use (from the Systems map), and once someone presses Analyze, its
+// glossary as a mindmap and its terms' connections (group_graph.py: the glossary's related links, checked and named by
+// the analyzer). Before that, nothing is drawn: only what an analysis would check.
+const GROUP_MAP_VIEWS = [["services", t("Services")], ["mindmap", t("Mindmap")], ["connections", t("Connections")]];
+function groupGraphPane(g, params, servicesPane, loadServices) {
+  const views = GROUP_MAP_VIEWS.filter(([k]) => k !== "services" || servicesPane);
+  const keep = { id: g.id, tab: "map" };
+  let current = views.some(([k]) => k === params.view) ? params.view : views[0][0], graph = null, asked = false;
+  const slot = h("div", { class: "grid" });
+  const seg = h("div", { class: "seg", role: "group", "aria-label": t("Map view") }, views.map(([k, name]) =>
+    h("button", { type: "button", "data-view": k, onclick: () => { current = k; draw({ ...keep, view: k === "services" ? "" : k }); } }, name)));
+  const actions = h("div", { class: "head-actions gmap-actions" });
+  const bar = h("div", { class: "gmap-bar" }, seg, actions);
+  const pane = h("div", { class: "grid gmap" }, bar, slot);
+  const job = `group-graph:${g.id}`;
+  const analyzeBtn = (label, primary) => {
+    const b = h("button", { type: "button", class: `btn admin-only${primary ? " primary" : " small"}`, onclick: async () => {
+      b.disabled = true;
+      try {
+        const r = await post("/api/group/graph/analyze", { id: g.id });
+        toast(r.started ? t("{agent} is checking the links between this group's terms…", { agent: analyzerShort() }) : t("Already running"));
+        watchJob(job);
+      } catch (e) { b.disabled = false; toast(e.message); }
+    } }, label);
+    if (lastStatus?.jobs?.[job]?.state === "running") b.disabled = true;
+    return b;
+  };
+  function analyzeCard() {
+    const n = graph;
+    return h("section", { class: "card gmap-analyze" },
+      cardHead(t("Mindmap and connections"), { iconName: "map" }),
+      h("p", null, t("The group's glossary as a mindmap, and the links between its terms as a graph you can walk through. The links come from the glossary itself, which lists related terms; many are only things the same sessions talked about.")),
+      h("p", null, n.candidates ? t("Analyze sends the {links} candidate links between this group's {terms} terms to {agent} ({calls} calls), which keeps the real ones and names each relation. It never adds a link. Nothing is drawn until then.",
+        { links: fmtNum(n.candidates), terms: fmtNum(n.terms), agent: analyzerShort(), calls: fmtNum(n.calls) })
+        : t("This group's glossary has no links between its terms yet: Analyze still draws the mindmap, with no model call.")),
+      analyzeBtn(t("Analyze"), true));
+  }
+  function stamp() {
+    const a = graph.analysis;
+    return h("div", { class: "gmap-stamp muted" },
+      t("Links checked by {model} {ago}: {kept} of {checked} kept", { model: a.model || analyzerShort(), ago: ago(a.analyzed_at), kept: fmtNum(graph.links.length), checked: fmtNum(a.checked) }),
+      a.unchecked ? h("span", { class: "gmap-new" }, tn(a.unchecked, "{n} new since", "{n} new since")) : null,
+      analyzeBtn(t("Analyze again")));
+  }
+  function draw(next) {
+    if (next) setParams(next);
+    const p = next || params;
+    seg.querySelectorAll("button").forEach((b) => { const on = b.dataset.view === current; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+    actions.replaceChildren();
+    if (current === "services") { loadServices(); slot.replaceChildren(servicesPane); return; }
+    if (!graph) { slot.replaceChildren(h("section", { class: "card empty" }, t("Loading…"))); return; }
+    if (!graph.analysis) { slot.replaceChildren(analyzeCard()); return; }
+    const opts = { params: p, keep: { ...keep, view: current }, root: g.name, title: g.name, scope: `group:${g.id}`,
+      levels: ["project", "category", "theme"], refresh: (q) => { if (q.view) current = q.view; draw(q); } };
+    const v = current === "mindmap" ? mindmapView(graph, opts) : connectionsView(graph, opts);
+    actions.append(...[v.actions].flat());
+    slot.replaceChildren(stamp(), v.body);
+  }
+  pane.open = async () => {
+    draw();
+    if (asked) return;
+    asked = true;
+    try { graph = await api("/api/group/graph", { id: g.id }); } catch (e) { slot.replaceChildren(h("section", { class: "card empty" }, e.message)); return; }
+    draw();
+  };
+  return pane;
+}
+
 route(/^\/group$/, async (params) => {
   const token = renderSeq;
   const g = await api("/api/group", { id: params.id || "" });
@@ -3409,20 +3477,22 @@ route(/^\/group$/, async (params) => {
     planCard({ knowledge: g.knowledge })].filter(Boolean);
   const leftOff = leftOffCard(g.recent), side = [foldersCard(g.repos), ...plans].filter(Boolean);
   const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
-  // the map is drawn from the Systems map, which may take a few seconds to build: asked for when its tab opens
-  const mapPane = window.rough ? h("div", { class: "grid" }, h("section", { class: "card empty" }, t("Drawing the map…"))) : null;
+  // the services map is drawn from the Systems map, which may take a few seconds to build: asked for when its tab
+  // opens. The mindmap and the connections wait for someone to press Analyze (groupGraphPane).
+  const servicesPane = window.rough ? h("div", { class: "grid" }, h("section", { class: "card empty" }, t("Drawing the map…"))) : null;
   let mapAsked = false;
   const loadMap = async () => {
-    if (mapAsked || !mapPane) return;
+    if (mapAsked || !servicesPane) return;
     mapAsked = true;
     try {
       const m = await api("/api/group/map", { id: g.id });
-      mapPane.replaceChildren(groupMapCard(g, m),
+      servicesPane.replaceChildren(groupMapCard(g, m),
         m.missing.length ? h("p", { class: "lo-foot" }, t("Not on the map, with no repository of their own: {projects}", { projects: m.missing.join(", ") })) : null);
     } catch {
-      mapPane.replaceChildren(h("section", { class: "card empty" }, t("Nothing to map yet: none of these projects is in a repository the Systems map knows.")));
+      servicesPane.replaceChildren(h("section", { class: "card empty" }, t("Nothing to map yet: none of these projects is in a repository the Systems map knows.")));
     }
   };
+  const mapPane = groupGraphPane(g, params, servicesPane, loadMap);
   const series = groupSeries(g);
   const weeksCard = series.length ? chartCard(t("Active time by project"), t("Week by week, the last {n} weeks", { n: g.weekly.weeks.length }),
     (el, w) => stackedWeeks(el, w, g.weekly.weeks, series),
@@ -3454,7 +3524,7 @@ route(/^\/group$/, async (params) => {
     for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
     tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
     if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
-    if (name === "map") loadMap();
+    if (name === "map") mapPane.open();
   };
   showTab(panes[params.tab] ? params.tab : "overview", false);
   const edit = canGroup() ? h("button", { class: "btn", type: "button", onclick: async () => {
@@ -3922,16 +3992,17 @@ const mapNeutral = (kind) => kind === "project" || kind === "agent" || kind === 
 const mapState = { open: new Set(["root"]), pinned: new Set(), only: null, view: null }; // survives re-renders in this tab
 const reducedMotion = () => document.documentElement.dataset.motion === "off"; // Appearance › Animations, or the system setting (boot.js)
 
-function mapLevels(params, data) {
+function mapLevels(params, data, fallback) {
   if (params.levels != null) {
     const picked = [...new Set(String(params.levels).split(",").filter((d) => MAP_DIMS.includes(d)))];
     if (picked.length) return picked;
   }
   if (params.by === "project") return ["project", "category", "theme"]; // links from before levels existed
+  if (fallback) return fallback;
   return Object.keys(data.themes || {}).length ? ["category", "theme"] : ["category"];
 }
 
-function mapTree(data, levels, withHidden, projectName) {
+function mapTree(data, levels, withHidden, projectName, rootLabel = t("Your work")) {
   const terms = data.terms.filter((t) => withHidden || !MAP_HIDDEN.has(t.category))
     .sort((a, b) => b.n_sessions - a.n_sessions || a.term.localeCompare(b.term));
   const DIMS = {
@@ -3963,7 +4034,7 @@ function mapTree(data, levels, withHidden, projectName) {
           count: ts.length, terms: ts, children: build(ts, rest, id, own) };
       });
   }
-  const root = { id: "root", kind: "root", label: t("Your work"), count: terms.length, terms, children: build(terms, levels, "root", undefined) };
+  const root = { id: "root", kind: "root", label: rootLabel, count: terms.length, terms, children: build(terms, levels, "root", undefined) };
   (function link(n, parent) { n.parent = parent; n.children.forEach((c) => link(c, n)); })(root, null);
   return root;
 }
@@ -4058,19 +4129,34 @@ const MAP_TOOL_ICONS = {
 };
 
 route(/^\/map$/, async (params) => {
-  const withHidden = params.all === "1";
   const data = await api("/api/map");
-  const levels = mapLevels(params, data);
+  const mm = mindmapView(data, { params, refresh: (changes) => { setParams(changes); render(); } });
+  return h("div", { class: "mm-page" },
+    h("div", { class: "page-head" },
+      titled("globe", h("h1", null, t("Map")), h("div", { class: "sub" }, mm.subtitle)),
+      h("div", { class: "head-actions" }, mm.actions, h("a", { class: "btn", href: "#/glossary" }, t("Glossary list")))),
+    mm.body);
+});
+
+// The glossary as a mindmap, for the Map page and a group's Map tab. data: glossary.map_data (a group's: only its
+// projects). opts: params (the page's), keep (the page's own params, kept in the URL), scope (a different map: what
+// was open is forgotten), root and title (the centre's name and the side panel's), levels (the stack to start with),
+// refresh(params) to draw it again with new params. Returns its subtitle, its controls and the map itself.
+function mindmapView(data, opts) {
+  const params = opts.params, scope = opts.scope || "";
+  if (mapState.scope !== scope) Object.assign(mapState, { scope, open: new Set(["root"]), pinned: new Set(), view: null });
+  const withHidden = params.all === "1";
+  const levels = mapLevels(params, data, opts.levels);
   const projectsByPath = Object.fromEntries(data.projects.map((p) => [p.path, p]));
   const projectName = (path) => (path === "__global__" ? t("Everywhere") : projectsByPath[path]?.label || shortPath(path));
-  const tree = mapTree(data, levels, withHidden, projectName);
+  const tree = mapTree(data, levels, withHidden, projectName, opts.root);
   const shown = tree.terms;
   const realProjects = (tm) => new Set(tm.projects.map((u) => u.path).filter((p) => p !== "__global__")).size;
   const themeOf = (cat, name) => (data.themes[cat] || []).find((tm) => tm.name === name);
   let query = "", hits = null; // hits: what the search box found, drawn highlighted and listed in the side panel
   mapState.only = null;
-  const urlState = (extra = {}) => ({ levels: levels.join(","), all: withHidden ? "1" : "", q: query, ...extra });
-  const refresh = (changes) => { setParams(urlState(changes)); render(); };
+  const urlState = (extra = {}) => ({ ...opts.keep, levels: levels.join(","), all: withHidden ? "1" : "", q: query, ...extra });
+  const refresh = (changes) => opts.refresh(urlState(changes));
 
   const svg = s("svg", { class: "mm-svg", role: "tree", "aria-label": t("Mindmap of glossary terms") });
   const viewG = s("g"), linkG = s("g", { class: "mm-links" }), nodeG = s("g", { class: "mm-nodes" });
@@ -4451,9 +4537,9 @@ route(/^\/map$/, async (params) => {
     const cats = new Set(shown.map((tm) => tm.category)).size;
     const presetLabel = (p) => p.map((d) => MAP_DIM_NAMES[d]).join(" › ");
     return [
-      h("h3", null, t("Your map")),
+      h("h3", null, opts.title || t("Your map")),
       h("div", { class: "hero-facts" }, fact(t("terms"), fmtNum(tree.count)), fact(t("projects"), fmtNum(data.projects.filter((p) => p.path !== "__global__").length)),
-        fact(t("categories"), fmtNum(cats)), fact(t("themes"), fmtNum(Object.values(data.themes || {}).reduce((a, l) => a + l.length, 0)))),
+        fact(t("categories"), fmtNum(cats)), fact(t("themes"), fmtNum(new Set(shown.filter((tm) => tm.theme).map((tm) => `${tm.category}${MAP_SEP}${tm.theme}`)).size))),
       themesNote(),
       h("h4", null, t("Views")), h("div", { class: "mm-chips" }, MAP_PRESETS.map((p) => h("button", { type: "button",
         class: `mm-tchip preset${p.join(",") === levels.join(",") ? " on" : ""}`, onclick: () => refresh({ levels: p.join(","), term: "" }) }, presetLabel(p)))),
@@ -4592,16 +4678,11 @@ route(/^\/map$/, async (params) => {
       mapState.open = new Set(["root"]); mapState.pinned.clear(); selected = null; draw(); fit(); aside.replaceChildren(...overview());
     }));
   box.append(levelBar(), legend, tools);
-  const page = h("div", { class: "mm-page" },
-    h("div", { class: "page-head" },
-      titled("globe", h("h1", null, t("Map")),
-        h("div", { class: "sub" }, data.terms.length ? t("Your glossary as a mindmap: {terms} terms across {projects} projects.", { terms: fmtNum(tree.count), projects: fmtNum(data.projects.filter((p) => p.path !== "__global__").length) }) : t("No glossary yet"))),
-      h("div", { class: "head-actions" },
-        h("button", { type: "button", class: `chip ${withHidden ? "on" : ""}`, "aria-pressed": String(withHidden), onclick: () => refresh({ all: withHidden ? "" : "1" }) }, t("Files & commands")),
-        search, datalist,
-        h("a", { class: "btn", href: "#/glossary" }, t("Glossary list")))),
-    !data.terms.length ? h("div", { class: "card empty" }, t("The map is drawn from the glossary. Build it on the Glossary page first."))
-      : h("section", { class: "card flush mm-card" }, box, aside));
+  const subtitle = data.terms.length ? t("Your glossary as a mindmap: {terms} terms across {projects} projects.", { terms: fmtNum(tree.count), projects: fmtNum(data.projects.filter((p) => p.path !== "__global__").length) }) : t("No glossary yet");
+  const actions = [h("button", { type: "button", class: `chip ${withHidden ? "on" : ""}`, "aria-pressed": String(withHidden), onclick: () => refresh({ all: withHidden ? "" : "1" }) }, t("Files & commands")),
+    search, datalist];
+  const body = !data.terms.length ? h("div", { class: "card empty" }, t("The map is drawn from the glossary. Build it on the Glossary page first."))
+    : h("section", { class: "card flush mm-card" }, box, aside);
 
   if (data.terms.length) {
     const ro = new ResizeObserver(() => {
@@ -4613,8 +4694,266 @@ route(/^\/map$/, async (params) => {
     });
     ro.observe(box);
   }
-  return page;
-});
+  return { subtitle, actions, body };
+}
+
+// =====================================================================================
+// Connections: a group's terms as a graph. The lines between terms are the glossary's own "related" links that the
+// analyzer kept and named (group_graph.py); a term's line to a project means the project uses it. One focus at a
+// time, its neighbours in a ring, so it never turns into a hairball: the group first (its projects, and the terms
+// more than one of them use), then any project or term clicked.
+// =====================================================================================
+const CX_RING = 18; // neighbours drawn round a focus; the rest are listed in the side panel
+function connectionsView(data, opts) {
+  const params = opts.params;
+  const terms = data.terms.filter((tm) => !MAP_HIDDEN.has(tm.category));
+  const termById = new Map(terms.map((tm) => [tm.id, tm]));
+  const projects = data.projects.filter((p) => p.path !== "__global__");
+  const projectByPath = new Map(projects.map((p) => [p.path, p]));
+  const usesOf = (tm) => tm.projects.map((u) => u.path).filter((p) => projectByPath.has(p));
+  const linksOf = new Map(); // term id -> [{ other, label, out }]: out when the label reads from this term
+  for (const l of data.links) {
+    if (!termById.has(l.from) || !termById.has(l.to)) continue;
+    (linksOf.get(l.from) || linksOf.set(l.from, []).get(l.from)).push({ other: l.to, label: l.label, out: true });
+    (linksOf.get(l.to) || linksOf.set(l.to, []).get(l.to)).push({ other: l.from, label: l.label, out: false });
+  }
+  const degree = (tm) => (linksOf.get(tm.id) || []).length;
+  const byWeight = (a, b) => b.n_sessions - a.n_sessions || degree(b) - degree(a) || a.term.localeCompare(b.term);
+  const linkBetween = (a, b) => (linksOf.get(a) || []).find((x) => x.other === b);
+  const projLabel = (path) => projectByPath.get(path)?.label || shortPath(path);
+  const focus = String(params.focus || "");
+  const focusTerm = focus.startsWith("t:") ? termById.get(Number(focus.slice(2))) : null;
+  const focusProject = focus.startsWith("p:") ? projectByPath.get(focus.slice(2)) : null;
+  const go = (f) => opts.refresh({ ...opts.keep, focus: f || "" });
+  const termKey = (tm) => `t:${tm.id}`, projKey = (p) => `p:${p.path}`;
+
+  // ------------------------------------------------------------------ who goes in the ring
+  let center, ring, more = [];
+  const asTerm = (tm) => ({ key: termKey(tm), kind: "term", label: tm.term, cat: tm.category, tm });
+  const asProject = (p) => ({ key: projKey(p), kind: "project", label: p.label || shortPath(p.path), p });
+  const bridges = terms.filter((tm) => usesOf(tm).length > 1).sort(byWeight);
+  if (focusTerm) {
+    center = asTerm(focusTerm);
+    const linked = (linksOf.get(focusTerm.id) || []).map((x) => termById.get(x.other)).sort(byWeight);
+    ring = [...usesOf(focusTerm).map((p) => asProject(projectByPath.get(p))), ...linked.slice(0, CX_RING).map(asTerm)];
+    more = linked.slice(CX_RING);
+  } else if (focusProject) {
+    center = asProject(focusProject);
+    const own = terms.filter((tm) => usesOf(tm).includes(focusProject.path));
+    const ranked = [...own.filter((tm) => degree(tm) || usesOf(tm).length > 1).sort(byWeight), ...own.filter((tm) => !degree(tm) && usesOf(tm).length < 2).sort(byWeight)];
+    ring = ranked.slice(0, CX_RING).map(asTerm);
+    more = ranked.slice(CX_RING);
+  } else {
+    center = { key: "", kind: "root", label: opts.root };
+    ring = projects.map(asProject);
+  }
+  const outer = focusTerm || focusProject ? [] : (bridges.length >= 4 ? bridges : [...bridges, ...terms.filter((tm) => usesOf(tm).length < 2 && degree(tm)).sort((a, b) => degree(b) - degree(a) || byWeight(a, b))])
+    .slice(0, 24).map(asTerm);
+  if (!focusTerm && !focusProject) more = (bridges.length >= 4 ? bridges : []).slice(24);
+
+  // ------------------------------------------------------------------ layout: the focus in the middle, rings round it
+  mapCtx ||= document.createElement("canvas").getContext("2d");
+  const font = getComputedStyle(document.body).fontFamily;
+  const textW = (str, size, weight = 400) => { mapCtx.font = `${weight} ${size}px ${font}`; return mapCtx.measureText(str).width; };
+  const clip = (str, n = 30) => (str.length > n ? str.slice(0, n - 1) + "…" : str);
+  const placeRing = (nodes, r, angles) => nodes.forEach((n, i) => {
+    const step = (2 * Math.PI) / Math.max(1, nodes.length), a = angles ? angles[i] : -Math.PI / 2 + step * (i + 0.5); // none straight up: labels there collide
+    Object.assign(n, { x: r * Math.cos(a), y: r * Math.sin(a), a });
+  });
+  Object.assign(center, { x: 0, y: 0, a: 0 });
+  const r1 = Math.max(130, ring.length * 12);
+  placeRing(ring, r1);
+  let r2 = 0;
+  if (outer.length) { // each bridge near the projects that use it: order by the mean angle of those, then spread evenly
+    r2 = Math.max(r1 + 170, outer.length * 15);
+    const want = (n) => {
+      const ps = ring.filter((p) => usesOf(n.tm).includes(p.p.path));
+      if (!ps.length) return 0;
+      return Math.atan2(ps.reduce((s0, p) => s0 + Math.sin(p.a), 0), ps.reduce((s0, p) => s0 + Math.cos(p.a), 0));
+    };
+    outer.forEach((n) => { n.want = want(n); });
+    outer.sort((a, b) => a.want - b.want);
+    const step = (2 * Math.PI) / outer.length;
+    let best = 0, bestErr = Infinity; // the rotation that keeps them closest to where they want to be
+    for (let k = 0; k < 36; k++) {
+      const off = (k / 36) * step - Math.PI;
+      const err = outer.reduce((e, n, i) => { const d = Math.atan2(Math.sin(off + i * step - n.want), Math.cos(off + i * step - n.want)); return e + d * d; }, 0);
+      if (err < bestErr) { bestErr = err; best = off; }
+    }
+    placeRing(outer, r2, outer.map((_, i) => best + i * step));
+  }
+  const nodes = [center, ...ring, ...outer];
+  const edges = [];
+  const add = (a, b, kind, label = "", out = true) => edges.push({ a, b, kind, label, out });
+  const nodeOf = new Map(nodes.map((n) => [n.key, n]));
+  if (focusTerm) {
+    for (const n of ring) {
+      if (n.kind === "project") add(center, n, "uses");
+      else { const l = linkBetween(focusTerm.id, n.tm.id); add(center, n, "link", l.label, l.out); }
+    }
+  } else if (focusProject) {
+    for (const n of ring) add(center, n, "uses");
+  } else {
+    for (const n of ring) add(center, n, "member");
+    for (const n of outer) for (const p of usesOf(n.tm)) if (nodeOf.has(`p:${p}`)) add(nodeOf.get(`p:${p}`), n, "uses");
+  }
+  const around = [...ring, ...outer].filter((n) => n.kind === "term");
+  for (let i = 0; i < around.length; i++) for (let j = i + 1; j < around.length; j++) { // links among the ring itself
+    const l = linkBetween(around[i].tm.id, around[j].tm.id);
+    if (l) add(around[i], around[j], "chord", l.label, l.out);
+  }
+
+  // ------------------------------------------------------------------ drawing
+  const R = { root: 30, project: 9, term: 6 };
+  const radius = (n) => (n === center ? (n.kind === "term" ? 12 : n.kind === "project" ? 14 : R.root) : n.kind === "term" ? 4 + Math.min(5, Math.sqrt(n.tm.n_sessions || 0)) : R[n.kind]);
+  const labelOf = (n) => { // beside the node, away from the middle; the focus's under it
+    const text = clip(n.label, n === center ? 36 : 28), size = n === center ? 14 : 12.5, w = textW(text, size, n.kind === "term" ? 400 : 600);
+    if (n === center) return { text, size, x: 0, y: radius(n) + 18, anchor: "middle", w };
+    if (outer.length && n.kind === "project") return { text, size, x: n.x, y: n.y + radius(n) + 14, anchor: "middle", w }; // under it: the outer ring stays clear
+    const c = Math.cos(n.a), sn = Math.sin(n.a), gap = radius(n) + 6;
+    const anchor = c > 0.15 ? "start" : c < -0.15 ? "end" : "middle";
+    return { text, size, w, anchor, x: n.x + c * gap, y: n.y + sn * gap + (anchor === "middle" ? (sn > 0 ? 10 : -4) : 4) };
+  };
+  nodes.forEach((n) => { n.lab = labelOf(n); });
+  const xs = nodes.flatMap((n) => [n.x - radius(n), n.x + radius(n), n.lab.anchor === "start" ? n.lab.x + n.lab.w : n.lab.anchor === "end" ? n.lab.x - n.lab.w : n.lab.x - n.lab.w / 2, n.lab.anchor === "start" ? n.lab.x : n.lab.anchor === "end" ? n.lab.x : n.lab.x + n.lab.w / 2]);
+  const ys = nodes.flatMap((n) => [n.y - radius(n) - 16, n.y + radius(n) + 22]);
+  const pad = 24, minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad;
+  const svg = s("svg", { class: `cx-svg${focusTerm || focusProject ? "" : " overview"}`, role: "img", "aria-label": t("Connections around {name}", { name: center.label }),
+    viewBox: `${minX} ${minY} ${Math.max(...xs) + pad - minX} ${Math.max(...ys) + pad - minY}`, preserveAspectRatio: "xMidYMid meet" });
+  const defs = s("defs", null, s("marker", { id: "cx-arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
+    s("path", { d: "M0,1L9,5L0,9z", class: "cx-arrowhead" })));
+  const edgeG = s("g", { class: "cx-edges" }), labelG = s("g", { class: "cx-elabels" }), nodeG = s("g", { class: "cx-nodes" });
+  svg.append(defs, edgeG, labelG, nodeG);
+  const edgeEls = edges.map((e) => {
+    const [from, to] = e.out ? [e.a, e.b] : [e.b, e.a];
+    const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy) || 1;
+    const x1 = from.x + (dx / len) * radius(from), y1 = from.y + (dy / len) * radius(from);
+    const x2 = to.x - (dx / len) * (radius(to) + 2), y2 = to.y - (dy / len) * (radius(to) + 2);
+    const line = s("line", { x1, y1, x2, y2, class: `cx-edge ${e.kind}`, "marker-end": e.kind === "link" || (e.kind === "chord" && e.label) ? "url(#cx-arrow)" : null });
+    if (e.kind === "link" || e.kind === "chord") line.style.setProperty("--c", mapColor(e.b.cat));
+    edgeG.append(line);
+    let lab = null;
+    if (e.label && (e.kind === "link" || e.kind === "chord")) {
+      const at = e.kind === "link" ? 0.62 : 0.5; // a spoke's label toward its far end, clear of the crowded middle
+      const lx = e.a.x + (e.b.x - e.a.x) * at, ly = e.a.y + (e.b.y - e.a.y) * at;
+      lab = s("text", { x: lx, y: ly - 3, class: `cx-elabel ${e.kind}`, "text-anchor": "middle" }, clip(e.label, 26));
+      labelG.append(lab);
+    }
+    return { e, line, lab };
+  });
+  const lit = (n, on) => { // a node's own lines (and their labels) stand out while it is pointed at
+    svg.classList.toggle("lit", on);
+    for (const x of edgeEls) {
+      const mine = on && (x.e.a === n || x.e.b === n);
+      x.line.classList.toggle("on", mine);
+      x.lab?.classList.toggle("on", mine);
+    }
+  };
+  for (const n of nodes) {
+    const isCenter = n === center;
+    const g = s("g", { class: `cx-node ${n.kind}${isCenter ? " focus" : ""}`, transform: `translate(${n.x},${n.y})`, tabindex: "0", role: "button",
+      "aria-label": isCenter ? n.label : t("Focus on {name}", { name: n.label }) });
+    if (n.cat) g.style.setProperty("--c", mapColor(n.cat));
+    g.append(n.kind === "project" ? s("rect", { x: -radius(n), y: -radius(n), width: radius(n) * 2, height: radius(n) * 2, rx: 3 }) : s("circle", { r: radius(n) }));
+    g.append(s("text", { x: n.lab.x - n.x, y: n.lab.y - n.y, "text-anchor": n.lab.anchor }, n.lab.text));
+    hoverable(g, () => tipOf(n), { focusable: false });
+    g.addEventListener("pointerenter", () => lit(n, true));
+    g.addEventListener("pointerleave", () => lit(n, false));
+    g.addEventListener("focus", () => lit(n, true));
+    g.addEventListener("blur", () => lit(n, false));
+    const open = () => (isCenter ? show(n) : go(n.key));
+    g.addEventListener("click", open);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    nodeG.append(g);
+  }
+  function tipOf(n) {
+    if (n.kind === "term") {
+      const tm = n.tm, l = !focusTerm || n === center ? null : linkBetween(focusTerm.id, tm.id);
+      return [tm.term, tm.definition || "", [catLabel(tm.category), tn(usesOf(tm).length, "{n} project", "{n} projects"), tn(degree(tm), "{n} link", "{n} links"),
+        l?.label ? (l.out ? `${focusTerm.term} → ${l.label} → ${tm.term}` : `${tm.term} → ${l.label} → ${focusTerm.term}`) : null].filter(Boolean).join(" · ")];
+    }
+    if (n.kind === "project") return [n.label, shortPath(n.p.path), tn(terms.filter((tm) => usesOf(tm).includes(n.p.path)).length, "{n} term", "{n} terms")];
+    return [n.label, "", tn(projects.length, "{n} project", "{n} projects")];
+  }
+
+  // ------------------------------------------------------------------ side panel
+  const aside = h("aside", { class: "mm-detail" });
+  const chip = (tm) => {
+    const b = h("button", { type: "button", class: "mm-tchip", title: tm.definition || "", onclick: () => go(termKey(tm)) }, h("i", { class: "mm-cdot" }), tm.term);
+    b.style.setProperty("--c", mapColor(tm.category));
+    return b;
+  };
+  const projBtn = (path) => h("button", { type: "button", class: "mm-tchip proj", onclick: () => go(`p:${path}`) }, icon("folder"), projLabel(path));
+  const relRow = (x, self) => {
+    const other = termById.get(x.other);
+    const b = h("button", { type: "button", class: "cx-rel", onclick: () => go(termKey(other)), title: other.definition || "" },
+      h("span", { class: "cx-rel-label" }, x.label ? (x.out ? `→ ${x.label}` : `← ${x.label}`) : t("related")), h("i", { class: "mm-cdot" }), h("span", null, other.term));
+    b.style.setProperty("--c", mapColor(other.category));
+    b.title = x.label ? (x.out ? `${self} → ${x.label} → ${other.term}` : `${other.term} → ${x.label} → ${self}`) : "";
+    return h("li", null, b);
+  };
+  function show(n) {
+    let body;
+    if (n.kind === "term") {
+      const tm = n.tm, rels = (linksOf.get(tm.id) || []).slice().sort((a, b) => byWeight(termById.get(a.other), termById.get(b.other)));
+      const ks = tm.knowledge.map((id) => data.knowledge[id]).filter(Boolean);
+      const cat = h("span", { class: "mm-cat" }, icon(ICONS[tm.category] ? tm.category : "dot"), catLabel(tm.category));
+      cat.style.setProperty("--c", mapColor(tm.category));
+      body = [cat, h("h3", null, tm.term), h("p", { class: "mm-def gloss" }, tm.definition || ""),
+        h("h4", null, t("Used in")), h("div", { class: "mm-chips" }, usesOf(tm).map(projBtn)),
+        h("h4", null, t("Linked terms · {n}", { n: rels.length })),
+        rels.length ? h("ul", { class: "cx-rels" }, rels.map((x) => relRow(x, tm.term))) : h("p", { class: "mm-def muted" }, t("The analyzer kept no links for this term.")),
+        ks.length ? [h("h4", null, t("Learned from · {n}", { n: ks.length })), h("ul", { class: "mm-klist" }, ks.slice(0, 6).map((k) => h("li", null, kindChip(k.kind),
+          k.session_id ? h("a", { href: `#/session/${k.session_id}` }, k.title) : h("span", null, k.title))))] : null,
+        h("div", { class: "mm-links-row" },
+          h("button", { type: "button", class: "btn small", onclick: () => opts.refresh({ ...opts.keep, view: "mindmap", focus: "", term: tm.term }) }, t("Show in the mindmap")),
+          h("a", { class: "btn small", href: `#/glossary?term=${encodeURIComponent(tm.term)}` }, t("Glossary entry")))];
+    } else if (n.kind === "project") {
+      const own = terms.filter((tm) => usesOf(tm).includes(n.p.path)).sort(byWeight);
+      const shared = own.filter((tm) => usesOf(tm).length > 1);
+      body = [h("span", { class: "mm-cat neutral" }, icon("projects"), t("project")), h("h3", null, n.label),
+        h("p", { class: "mm-def muted" }, shortPath(n.p.path)),
+        h("div", { class: "hero-facts" }, fact(t("terms"), fmtNum(own.length)), fact(t("shared"), fmtNum(shared.length)),
+          n.p.sessions ? fact(t("sessions"), fmtNum(n.p.sessions)) : null),
+        shared.length ? [h("h4", null, t("Shared with other projects")), h("div", { class: "mm-chips" }, shared.slice(0, 16).map(chip))] : null,
+        h("h4", null, t("Most discussed here")), h("div", { class: "mm-chips" }, own.slice(0, 16).map(chip)),
+        h("div", { class: "mm-links-row" }, h("a", { class: "btn small", href: `#/project?path=${encodeURIComponent(n.p.path)}` }, t("Open project")))];
+    } else {
+      const top = terms.filter(degree).sort((a, b) => degree(b) - degree(a) || byWeight(a, b)).slice(0, 12);
+      body = [h("span", { class: "mm-cat neutral" }, icon("folder"), t("group")), h("h3", null, n.label),
+        h("div", { class: "hero-facts" }, fact(t("projects"), fmtNum(projects.length)), fact(t("terms"), fmtNum(terms.length)), fact(t("links"), fmtNum(data.links.length))),
+        h("p", { class: "mm-def" }, bridges.length ? t("Round the middle: the group's projects. Outside: the terms more than one of them use, each near the projects that use it.")
+          : t("Round the middle: the group's projects. Outside: the most linked terms, as no term is used by more than one project.")),
+        bridges.length ? [h("h4", null, t("Used by more than one project · {n}", { n: bridges.length })), h("div", { class: "mm-chips" }, bridges.slice(0, 20).map(chip))] : null,
+        top.length ? [h("h4", null, t("Most linked")), h("div", { class: "mm-chips" }, top.map(chip))] : null];
+    }
+    const extra = more.length ? [h("h4", null, t("Not drawn · {n}", { n: more.length })), h("div", { class: "mm-chips" }, more.slice(0, 40).map(chip))] : null;
+    aside.replaceChildren(...[body, extra, h("p", { class: "mm-tip" }, t("Click a project or a term to put it in the middle. Lines between terms are the links the analyzer kept; the arrow reads with the label."))]
+      .flat(Infinity).filter(Boolean));
+    aside.querySelectorAll(".gloss").forEach((el) => glossify(el));
+  }
+  show(center);
+
+  // ------------------------------------------------------------------ the way back, and a search to jump anywhere
+  const trail = h("div", { class: "cx-trail" },
+    h("button", { type: "button", class: `link-btn${!focus ? " on" : ""}`, onclick: () => go("") }, opts.root),
+    focusTerm || focusProject ? [h("span", { class: "mm-sep" }, "›"), h("b", null, center.label)] : null);
+  const find = h("input", { class: "input mm-search", type: "search", placeholder: t("Find a term or project…"), list: "cx-names",
+    "aria-label": t("Find a term or project to put in the middle"),
+    onchange: (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!q) return;
+      const p = projects.find((x) => (x.label || "").toLowerCase() === q);
+      const tm = p ? null : mapFindTerm(terms, q);
+      if (p) go(projKey(p)); else if (tm) go(termKey(tm)); else toast(t("Nothing called {q} here", { q: e.target.value }));
+    } });
+  const names = h("datalist", { id: "cx-names" }, [...projects.map((p) => p.label), ...terms.map((tm) => tm.term)].map((v) => h("option", { value: v })));
+  const legend = h("div", { class: "mm-legend cx-legend" },
+    h("span", null, h("i", { class: "cx-key proj" }), t("project")), h("span", null, h("i", { class: "cx-key term" }), t("term, by category")),
+    h("span", null, h("i", { class: "cx-key line" }), t("checked link")), h("span", null, h("i", { class: "cx-key uses" }), t("used in")));
+  const canvas = h("div", { class: "mm-canvas cx-canvas" }, trail, legend, svg);
+  return { actions: [find, names], body: h("section", { class: "card flush mm-card" }, canvas, aside) };
+}
 
 // =====================================================================================
 // Systems: every folder your agents worked in as a system, grouped by where it lives, and each system's parts in
@@ -8148,7 +8487,7 @@ function jobLabel(name) {
   const [kind, arg] = name.split(/:(.*)/);
   const tail = (p) => (p || "").replace(/\/+$/, "").split("/").pop();
   return {
-    sync: t("Sync"), mirror: t("Writing the mirror"), push: t("Sending to the hub"), import: t("Importing chats"), screen: t("Screening imported chats"), update: t("Updating Interlatch"), "menu-bar": t("Setting up the menu-bar icon"), themes: t("Grouping glossary themes"),
+    sync: t("Sync"), mirror: t("Writing the mirror"), push: t("Sending to the hub"), import: t("Importing chats"), screen: t("Screening imported chats"), update: t("Updating Interlatch"), "menu-bar": t("Setting up the menu-bar icon"), themes: t("Grouping glossary themes"), "group-graph": t("Checking a group's links"),
     analyze: arg === "selection" ? t("Analyzing selected sessions") : arg === "queue" ? t("Analyzing the queue") : t("Analyzing session {id}", { id: (arg || "").slice(0, 8) }),
     glossary: arg ? t("Glossary: {name}", { name: tail(arg) }) : t("Glossary"), review: t("Weekly review"),
     synthesize: arg === "__global__" ? t("Global playbook") : t("Knowledge base: {name}", { name: tail(arg) }),

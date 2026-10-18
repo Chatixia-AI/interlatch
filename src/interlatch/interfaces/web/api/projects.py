@@ -391,6 +391,37 @@ def group_map_file(ctx: Context, group_id: int) -> tuple[str, str, bytes] | None
     return f"{slug}-map.excalidraw", "application/vnd.excalidraw+json", json.dumps(scene, ensure_ascii=False, indent=1).encode()
 
 
+def group_graph(ctx: Context, group_id: int) -> dict | None:
+    """A group's Mindmap and Connections (knowledge.group_graph): drawn only once someone has analyzed it."""
+    from ....knowledge import group_graph as gg
+    from ....projects.groups import groups, paths_in
+
+    g = next((g for g in groups(ctx.conn) if g["id"] == group_id), None)
+    paths = paths_in(ctx.conn, group_id) if g else []
+    return {"name": g["name"], **gg.graph(ctx.conn, group_id, paths)} if paths else None
+
+
+def action_group_graph(ctx: Context, group_id: int) -> bool | None:
+    """Analyze a group's links in the background (one job per group). None: no such group, or one with no projects."""
+    from ....knowledge import group_graph as gg
+    from ....projects.groups import groups, paths_in
+    from ....storage.sqlite import connect
+
+    if not any(g["id"] == group_id for g in groups(ctx.conn)) or not paths_in(ctx.conn, group_id):
+        return None
+
+    def job(progress):
+        conn = connect(ctx.cfg.db_path)
+        try:
+            rec = gg.analyze(ctx.cfg, conn, group_id, paths_in(conn, group_id),
+                             concurrency=ctx.cfg.analysis.concurrency + 1, progress=progress)
+        finally:
+            conn.close()
+        return f"kept {len(rec['links'])} of {len(rec['checked'])} links"
+
+    return ctx.jobs.start(f"group-graph:{group_id}", job)
+
+
 def file_sessions(ctx: Context, path: str, limit: int = 50) -> dict:
     """The sessions that read or changed one file, newest first (the VS Code extension's per-file history)."""
     path = clean_abs_path(path)
