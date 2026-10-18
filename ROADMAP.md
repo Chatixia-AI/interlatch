@@ -60,6 +60,11 @@ carefully.
   getting every lesson. Whether it works is measured by recall and by whether the same gotcha comes back in your
   sessions, not by asking, and every per-person measure stays on your computer
   ([design](docs/design/learning.md)).
+- **Your own level in a module, from real work.** In Innerlatch's Adventure, the lessons you answer right in study
+  battles already count toward your readiness in each roadmap module, kept on your computer. Still to come: five
+  understood open the module's gate, where you link one of your own pull requests or commits and say in two or three
+  sentences how it meets the module's check. The analysis model judges it, and passing marks the module as shown by
+  you, apart from your agents' levels ([design](docs/design/innerlatch.md#6-next-gate-bosses)).
 - **Teammates' lessons, by person and side by side.** They show on project pages and in **All knowledge**, marked
   with the computers they came from. Still to come: the person's name instead of the computer's, teammates' lessons
   in the weekly review, and a lesson two people stated shown as both their cases
