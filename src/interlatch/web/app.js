@@ -8089,7 +8089,9 @@ async function pollStatus() {
     pill.className = busy ? "busy" : paused ? "warn" : "";
     pill.replaceChildren(h("span", { class: "dot" }), busy ? (running[0][1].message || jobLabel(running[0][0])) : paused ? t("Analysis paused until {time}", { time: fmtTime(st.paused_until) }) : t("Up to date"));
     const waiting = st.pending.queued || 0; // ready is part of queued
+    $("#status-queue").hidden = !waiting;
     $("#status-queue").textContent = waiting ? tn(waiting, "{n} session queued for analysis", "{n} sessions queued for analysis", { n: fmtNum(waiting) }) : "";
+    refreshQueueDialog(); // when it is open: the queue and its times move with the runs
     $("#status-sync").textContent = dedicated() ? "" // nothing of its own to sync: the status bar's hub line says what it is
       : st.hub_url ? t("Sends its sessions to {host}", { host: st.hub_url.replace(/^https?:\/\//, "") })
       : st.last_sync ? t("Synced {ago}", { ago: ago(st.last_sync) }) : t("Not synced yet");
@@ -8248,6 +8250,69 @@ async function analyzeQueueNow() { // the palette's way to the Queue's Analyze n
   toast(tn(r.count, "Analyzing {n} session; the status bar shows progress", "Analyzing {n} sessions; the status bar shows progress", { n: fmtNum(r.count) }), 7000);
   watchJob("analyze:queue");
 }
+// The queue: what the status bar's "N sessions queued" opens. Each queued session with why it waits and when the
+// background runs should get to it (the server plays them forward), and the Queue's Analyze now to run them at once.
+function untilText(ts) { // "in 12m", or "any minute" once it is due
+  const sec = (Date.parse(ts) - Date.now()) / 1000;
+  return sec < 90 ? t("any minute") : t("in {time}", { time: fmtDur(sec) });
+}
+function clockText(ts) { return localDate(ts) === localDate(Date.now()) ? fmtTime(ts) : fmtDT(ts); }
+function closeQueueDialog(refocus = true) {
+  if (!$("#queue-dialog")) return;
+  $("#queue-dialog").remove();
+  $("#status-queue").setAttribute("aria-expanded", "false");
+  if (refocus) $("#status-queue").focus();
+}
+function openQueueDialog() {
+  if ($("#queue-dialog")) return;
+  const card = h("div", { class: "gd card qd", role: "dialog", "aria-modal": "true", "aria-labelledby": "qd-title", tabindex: "-1" },
+    h("div", { class: "gd-head" }, h("h2", { id: "qd-title" }, t("Analysis queue")),
+      h("button", { type: "button", class: "icon-btn", "aria-label": t("Close"), onclick: () => closeQueueDialog() }, icon("x"))),
+    h("div", { class: "qd-body" }, h("div", { class: "muted" }, t("Loading…"))));
+  const back = h("div", { id: "queue-dialog", class: "gd-back", onclick: (e) => { if (e.target === back) closeQueueDialog(); },
+    onkeydown: (e) => { if (e.key === "Escape") closeQueueDialog(); } }, card);
+  document.body.append(back);
+  $("#status-queue").setAttribute("aria-expanded", "true");
+  card.focus();
+  refreshQueueDialog();
+}
+async function refreshQueueDialog() {
+  if (!$("#queue-dialog")) return;
+  let q;
+  try { q = await api("/api/analysis/queue"); } catch (e) { q = { error: e.message }; }
+  const body = $("#queue-dialog .qd-body");
+  if (!body) return; // closed while it loaded
+  if (q.error) { body.replaceChildren(h("div", { class: "muted" }, q.error)); return; }
+  const top = body.querySelector(".qd-list")?.scrollTop || 0;
+  const n = q.ready || q.active; // what Analyze now covers: the ready ones, or (none ready) the still active
+  const run = lastStatus && !q.on_hub ? queueRunRow(lastStatus) : null;
+  const list = h("ol", { class: "qd-list" }, q.sessions.map((s) => h("li", { class: "qd-row" },
+    h("div", { class: "qd-main" },
+      h("a", { href: `#/session/${s.id}`, onclick: () => closeQueueDialog(false) }, s.title || s.id.slice(0, 8)),
+      h("div", { class: "muted qd-meta" }, [s.project, agentName(s.agent), tn(s.prompts, "{n} prompt", "{n} prompts", { n: fmtNum(s.prompts) }),
+        s.stale ? t("continued after it was analyzed") : null].filter(Boolean).join(" · "))),
+    h("span", { class: `tag qd-code ${s.code}`, title: s.why }, s.label),
+    h("div", { class: "qd-eta", title: s.why }, s.eta
+      ? [h("b", null, untilText(s.eta)), h("span", { class: "muted" }, clockText(s.eta))]
+      : h("span", { class: "muted" }, "–")))));
+  body.replaceChildren(...[
+    q.on_hub ? h("p", { class: "muted" }, t("This computer's sessions are analyzed on the hub.")) : null,
+    // the server words why the queue is stopped as a clause: a sentence in English, 「。」 in Japanese
+    q.block ? h("div", { class: "warn-line" }, icon("pause"), " ", LANG === "en"
+      ? `${q.block[0].toUpperCase()}${q.block.slice(1)}.` : `${q.block}。`) : null,
+    !q.total ? h("p", { class: "muted" }, t("Nothing waiting for analysis.")) : null,
+    q.total && q.next_run ? h("p", { class: "qd-summary" },
+      t("The background agent analyzes up to {n} sessions every {m} minutes; its next run is {when} ({time}).",
+        { n: fmtNum(q.per_run), m: Math.round(q.interval_s / 60), when: untilText(q.next_run), time: clockText(q.next_run) }), " ",
+      h("span", { class: "muted" }, t("One analysis takes about {time} here, so the times are estimates.", { time: fmtDur(q.each_s) }))) : null,
+    run ? h("div", { class: "qd-run" }, run,
+      n ? h("div", { class: "muted qd-took" }, tn(n, "Analyzing it now takes about {time}.", "Analyzing them now takes about {time}.",
+        { time: fmtDur(n * q.each_s) })) : null) : null,
+    q.total ? list : null,
+    q.total > q.sessions.length ? h("p", { class: "muted" }, t("Showing the first {n} of {total}.", { n: fmtNum(q.sessions.length), total: fmtNum(q.total) })) : null,
+  ].filter(Boolean));
+  list.scrollTop = top;
+}
 async function syncNow() {
   drawSyncBtn(true); // at once: the next status poll puts the sync icon back if it didn't start
   const r = await post("/api/sync").catch((e) => { drawSyncBtn(false); throw e; });
@@ -8320,6 +8385,10 @@ $("#status-pill").title = t("Background work: click for progress");
 document.addEventListener("mousedown", (e) => { if (!$("#activity").hidden && !e.target.closest("#activity, #status-pill")) toggleActivity(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#activity").hidden) toggleActivity(false); });
 $("#status-update").addEventListener("click", () => go("#/status?focus=updates"));
+$("#status-queue").addEventListener("click", openQueueDialog);
+$("#status-queue").setAttribute("aria-haspopup", "dialog");
+$("#status-queue").setAttribute("aria-expanded", "false");
+$("#status-queue").title = t("See the queued sessions and when each is analyzed");
 $("#theme-btn").addEventListener("click", flipTheme);
 $("#lang-btn")?.addEventListener("click", () => setLang(LANG === "ja" ? "en" : "ja"));
 themeChanged();
