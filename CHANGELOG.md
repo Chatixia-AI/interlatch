@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.4 (2026-10-18)
+
+- **See the analysis queue:** click "N sessions queued for analysis" in the status bar to see which sessions are
+  waiting, why each one waits, and about when the background runs will analyze it. **Analyze now** in the same window
+  runs them at once.
+
 ## 0.27.3 (2026-10-18)
 
 - **Windows in Japanese (and other languages):** Task Scheduler's and PowerShell's own messages now read in Windows'
