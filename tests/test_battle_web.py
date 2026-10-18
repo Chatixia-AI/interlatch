@@ -464,16 +464,15 @@ const answerFirst = (verdict) => (s) => (s.study && !s.study.verdict ? {type: 'a
 def test_a_study_battle_hides_the_title_and_asks_its_question():
     check(STUDY + '''
 const s = R.setup(studied(3), 0);
-assert.deepEqual(s.log.map((l) => l.key), ['introStudy', null, 'studyAsk']);
+assert.deepEqual(s.log.map((l) => l.key), ['introStudy']);  // the scene and question show over the options
 assert.ok(!JSON.stringify(s.log).includes('Lesson 3'), 'the title is in the log');
-assert.equal(s.log[1].vars.text, 'The tests pass alone.');
-assert.equal(s.log[2].vars.question, 'Why do they fail together?');
+assert.deepEqual([s.study.scene, s.study.question], ['The tests pass alone.', 'Why do they fail together?']);
 // no question: an ordinary fight; a boss never studies; a question asked later is said once
 assert.equal(R.setup(lesson(3), 0).study, null);
 assert.equal(R.setup({...boss(1, 1), study: Q}, 0).study, null);
 const later = R.setup({...lesson(3), studyPending: true}, 0);
 assert.deepEqual(later.log.map((l) => l.key), ['introStudy']);
-assert.equal(R.ask(later, Q).filter((e) => e.t === 'say').length, 2);
+assert.deepEqual(R.ask(later, Q), [{t: 'ask'}]);
 assert.deepEqual(R.ask(later, Q), []);
 assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: '  ', options: Q.options}), []);
 assert.deepEqual(R.ask(R.setup(lesson(3), 0), {question: 'Why?', options: ['only one']}), []);  // a choice needs two at least

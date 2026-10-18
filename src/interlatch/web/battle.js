@@ -95,8 +95,8 @@
   //   taught       the tag on the hero who taught the lesson
   //   prompt       the menu's heading                                    {hero}
   //   attack / skill / item / answer / defend / run / back   the commands
-  //   introStudy {monster}: the opening line of a study battle (no title: it would give the answer away); studyAsk
-  //     {question}: the question; choose, preparing: under the options, or while they're written; checking, answerAgain
+  //   introStudy {monster}: the opening line of a study battle (no title: it would give the answer away; its scene and
+  //     question show over the options); choose, preparing: under the options, or while they're written; checking, answerAgain
   //     {error}: while an answer is checked, or when it couldn't be; weakTag: under the finishing blow; lineGot {monster}
   //     {n}; lineNotYet, lineMiss {monster}, missTitle {monster}: a wrong answer, the monster slipping away
   //   studyGot {module}, studyBack {n}, studyOwned {module} {n}, studyPartly, studyNot, studyNone; principleTitle: the
@@ -150,7 +150,7 @@
     lineHit: "{hero} takes {n} damage.", lineGuarded: "{hero} blocks: only {n} damage.", lineDodge: "{hero} dodges!",
     lineDrain: "{hero} loses {mp} MP.", lineHeal: "{monster} recovers {n} HP.", lineKo: "{hero} is knocked out!",
     lineCharged: "{monster} is gathering strength. Defend!",
-    introStudy: "A wild {monster} appears! It's a lesson from your own sessions.", studyAsk: "{question}",
+    introStudy: "A wild {monster} appears! It's a lesson from your own sessions.",
     checking: "Checking…", answerAgain: "Couldn't check it: {error}", weakTag: "weak spot",
     lineGot: "You got it! {monster}'s weak spot is exposed: {n} damage.",
     lineNotYet: "Not this one: the right answer is on the end screen.", lineMiss: "{monster} slips away.",
@@ -212,7 +212,7 @@
     rewardGold: ["n"], rewardLoot: ["item"], lineNoMp: ["hero", "skill"], lineHit: ["hero", "n"], lineGuarded: ["hero", "n"],
     lineDodge: ["hero"], lineDrain: ["hero", "mp"], lineHeal: ["monster", "n"], lineKo: ["hero"], lineCharged: ["monster"],
     lineWin: ["monster"], lineHold: ["monster"], win: ["monster"], winText: ["agent", "date", "xp"], hold: ["monster"],
-    bossDone: ["monster"], bossDoneText: ["text"], introStudy: ["monster"], studyAsk: ["question"], answerAgain: ["error"],
+    bossDone: ["monster"], bossDoneText: ["text"], introStudy: ["monster"], answerAgain: ["error"],
     lineGot: ["monster", "n"], studyGot: ["module"],
     lineMiss: ["monster"], missTitle: ["monster"],
     studyBack: ["n"], studyOwned: ["module", "n"],
@@ -384,7 +384,8 @@
     return s && typeof s === "object" && str(s.question) && options.length >= 2 && options.every(Boolean)
       ? { scene: str(s.scene), question: str(s.question), options } : null;
   }
-  // make it a study battle: say its scene and question (once, before it's answered)
+  // make it a study battle (once, before it's answered): its scene and question are shown over its options, in the
+  // menu, not said in the log
   function ask(state, s) {
     const ev = [], study = studyOf(s);
     if (!study || state.boss || state.study) return ev;
@@ -392,8 +393,6 @@
     const order = study.options.map((_, i) => i), r = rng((state.seed ^ 0x9e3779b9) >>> 0);
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
     state.study = { ...study, order, verdict: null, feedback: "", principle: "", answer: "" };
-    if (study.scene) say(state, ev, null, { text: study.scene });
-    say(state, ev, "studyAsk", { question: study.question });
     ev.push({ t: "ask" });
     return ev;
   }
@@ -1031,7 +1030,9 @@
       if (mode === "answer" && !st.study) { // its question is still being written
         menuHead.textContent = lab("preparing");
       } else if (mode === "answer") {
-        rich(menuHead, st.study.question); // the question over its options, whole: it wraps
+        // the case: its scene, then its question, over the options, each whole (they wrap)
+        menuHead.replaceChildren(...(st.study.scene ? [rich(el("p", "bt-ask-scene"), st.study.scene)] : []),
+          rich(el("p", "bt-ask-q"), st.study.question));
         const { wrap, list } = sub();
         st.study.order.forEach((i, k) => {
           const b = button(st.study.options[i], () => { if (!judging) { chosen = i; renderMenu(); focusChoice(); } },

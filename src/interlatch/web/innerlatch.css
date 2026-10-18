@@ -791,7 +791,7 @@
 .bt-log li::before { content: "· "; color: var(--baseline); }
 .bt-log li:last-child { color: var(--ink); }
 .bt-log li:last-child::before { content: "▸ "; color: var(--gold); }
-.bt-log li.bt-case { font-family: var(--sans); font-style: italic; color: var(--ink-2); }
+.bt-log li.bt-case { font: 500 14.5px/1.55 var(--sans); color: var(--ink); }
 .bt code { padding: 0 0.25em; font: inherit; font-family: var(--mono); font-size: 0.92em; font-style: normal; background: var(--code-bg); color: var(--ink);
   box-shadow: 0 0 0 1px var(--grid); }
 .bt-log li:last-child { animation: bt-type 0.32s steps(6) both; }
@@ -839,13 +839,21 @@
 /* a study battle: Answer in gold; its panel takes the deck's whole width (the party is back once it's answered), the
    question over its options, each whole (they wrap), numbered for the keys */
 .bt-cmd.bt-answer-cmd { color: var(--gold); }
-.bt-menu-head.bt-ask { white-space: normal; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0;
-  font: 600 14px/1.45 var(--sans); color: var(--ink); }
+/* the battle in a column you can read: never wider than this, centred; while a question is open the stage and the
+   log make room for it, so its options and Answer fit on the screen */
+.adv-battle .bt { max-width: 800px; margin-inline: auto; }
+.bt-asking .bt-stage { height: clamp(150px, 28cqi, 230px); }
+.bt-asking .bt-log { height: auto; max-height: 3.2em; }
+.bt-menu-head.bt-ask { display: grid; gap: 8px; padding: 6px 12px 10px; white-space: normal; overflow-wrap: anywhere; text-transform: none;
+  letter-spacing: 0; color: var(--ink); }
+.bt-ask-scene { margin: 0; font: 400 15px/1.6 var(--sans); color: var(--ink-2); }
+.bt-ask-q { margin: 0; font: 650 16.5px/1.45 var(--sans); color: var(--ink); }
 .bt-asking .bt-deck { grid-template-columns: minmax(0, 1fr); }
 .bt-asking .bt-party { display: none; }
-.bt-cmd.bt-choice { align-items: flex-start; }
+.bt-cmd.bt-choice { align-items: flex-start; min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
 .bt-cmd.bt-choice .bt-cmd-name { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; text-overflow: clip;
-  overflow-wrap: anywhere; font: 500 14px/1.4 var(--sans); }
+  overflow-wrap: anywhere; font: 500 15.5px/1.5 var(--sans); }
+.bt-cmd.bt-choice .bt-cmd-meta { padding-top: 2px; font-size: 12px; }
 .bt-cmd.bt-choice .bt-cmd-meta { color: var(--gold); }
 .bt-cmd.bt-choice.bt-chosen { background: var(--accent-wash-2); box-shadow: inset 3px 0 0 var(--gold); }
 .bt-cmd.bt-choice.bt-chosen::before { opacity: 1; }

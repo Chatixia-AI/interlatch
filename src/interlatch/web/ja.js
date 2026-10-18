@@ -2525,7 +2525,6 @@ window.INTERLATCH_JA = {
   // study battles: the person answers a lesson's question, judged by the model
   "Answer": "答える",
   "A wild {monster} appears! It's a lesson from your own sessions.": "{monster} が現れた！ あなた自身のセッションの教訓です。",
-  "{question}": "{question}",
   "weak spot": "弱点",
   "You got it! {monster}'s weak spot is exposed: {n} damage.": "正解！ {monster} の弱点があらわになった：{n} のダメージ。",
   "You understood it: it counts toward your readiness in {module}.": "理解できました：{module} の準備度に加わります。",

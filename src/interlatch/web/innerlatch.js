@@ -1422,7 +1422,7 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "rewardLoot": t("Found: {item}"), "rewardPaid": t("Already cleared before: no gold this time."),
     "itemFullHp": t("Everyone is at full HP."), "itemFullMp": t("Everyone is at full MP."), "more": t("More below"), "hint.l:script.boss": t("Hits a boss for 10% of its HP"), "rewardFailed": t("The win wasn't saved: try it again from the map."),
     "answer": t("Answer"), "introStudy": t("A wild {monster} appears! It's a lesson from your own sessions."),
-    "studyAsk": t("{question}"), "checking": t("Checking…"), "answerAgain": t("Couldn't check it: {error}"), "weakTag": t("weak spot"), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."), "lineNotYet": t("Not this one: the right answer is on the end screen."),
+    "checking": t("Checking…"), "answerAgain": t("Couldn't check it: {error}"), "weakTag": t("weak spot"), "lineGot": t("You got it! {monster}'s weak spot is exposed: {n} damage."), "lineNotYet": t("Not this one: the right answer is on the end screen."),
     "lineMiss": t("{monster} slips away."), "missTitle": t("{monster} slipped away"),
     "choose": t("Choose an answer, then Answer."), "preparing": t("Preparing the question…"),
     "studyGot": t("You understood it: it counts toward your readiness in {module}."),
