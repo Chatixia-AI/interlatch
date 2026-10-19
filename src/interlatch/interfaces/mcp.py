@@ -9,6 +9,7 @@ from datetime import timedelta
 
 from .. import __version__
 from ..core.config import Config
+from ..core.profiles import WAITING
 from ..core.agents import AGENTS, short_name, speaker
 from ..core.artifact_records import KINDS as ARTIFACT_KINDS
 from ..artifacts.queries import STATUS as ARTIFACT_STATUS
@@ -159,12 +160,21 @@ TOOLS = [
     },
 ]
 
+# a folder that waits for you to choose its profile (two could claim it, or its profile let it go): agents get
+# nothing from the archive until you do
+WAITING_TEXT = ("Interlatch shows nothing for this folder: it waits for you to choose which of your profiles it belongs "
+                "to (`interlatch profile waiting`, then `interlatch profile choose <folder> <profile|personal>`).")
+
 
 class Tools:
     def __init__(self, cfg: Config):
+        from ..projects.scope import scoped_for
+
         self.cfg = cfg
         self.conn = connect(cfg.db_path)
         self.cwd = os.getcwd()
+        # named profiles: only what the agent's folder owns (Personal's, a profile's, or nothing while it waits)
+        self.owner = scoped_for(cfg, self.conn, self.cwd)
 
     def _resolve_project(self, project: str | None) -> str | None:
         if not project:
@@ -387,6 +397,8 @@ def _handle(msg, handlers) -> dict | None:
             fn = handlers.get(name)
             if not fn:
                 result = {"content": [{"type": "text", "text": f"Unknown tool {name}"}], "isError": True}
+            elif getattr(fn, "__self__", None) is not None and getattr(fn.__self__, "owner", None) == WAITING:
+                result = {"content": [{"type": "text", "text": WAITING_TEXT}], "isError": False}
             else:
                 try:
                     # results go into the client's conversation, i.e. to its model provider: same redaction as digests

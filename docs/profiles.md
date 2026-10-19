@@ -12,9 +12,9 @@ most one hub.
   pattern. Its sessions stay off Personal's hub, and later go to Acme's hub only.
 
 !!! note "Being built in stages"
-    This first stage decides who owns each session and keeps a named profile's sessions off Personal's hub. Named
-    profiles don't send to their own hub yet, and agents in a Personal folder can still see a profile's sessions
-    through the MCP server. Both come next ([What comes next](#what-comes-next)).
+    So far, Interlatch decides who owns each session, keeps a named profile's sessions off Personal's hub, and shows
+    agents only what their folder's profile owns. Named profiles don't send to their own hub yet
+    ([What comes next](#what-comes-next)).
 
 ## Make a profile
 
@@ -80,6 +80,22 @@ inside it.
 folder isn't shared with your Personal hub by mistake. `remove` keeps the profile's folder unless you pass
 `--delete-data`.
 
+## What agents see
+
+Once you have named profiles, what Interlatch gives an agent depends on the folder it runs in: the
+[MCP server](mcp.md)'s tools and the notes at the start of each session.
+
+- **In a Personal folder:** Personal's sessions, lessons and knowledge bases only.
+- **In a profile's folder:** that profile's only.
+- **In a waiting folder:** nothing. The MCP tools say the folder waits for you to choose.
+
+What is made from every project at once (the global playbook, glossary terms seen in another profile's projects,
+themes and weekly reviews) isn't shown to agents while you have named profiles. The dashboard still shows everything.
+
+Lines Interlatch proposes for your user-level instruction files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`), which
+agents read in every folder, come only from Personal's lessons. A lesson a profile's sessions learned is proposed for
+that project's own files instead ([Suggestions](suggestions.md)).
+
 ## Sharing with profiles
 
 - **Knowledge only.** Every profile shares summaries and project lessons, never transcripts. A transcript upload
@@ -99,10 +115,8 @@ An archive without profiles is never changed.
 
 ## What comes next
 
-1. **Agents see only their profile.** The MCP server and the context at session start show agents in a Personal
-   folder only Personal's sessions, and agents in a profile's folder only that profile's.
-2. **Each profile shares with its own hub.** A named profile copies its sessions from Personal and shares them with
+1. **Each profile shares with its own hub.** A named profile copies its sessions from Personal and shares them with
    its hub (`interlatch --profile Acme hub join …`). Moving a folder takes its sessions back from the hub that had
    them.
-3. **Windows and the dashboard.** A labelled window per profile, the menu bar, and Profiles and Waiting cards in the
+2. **Windows and the dashboard.** A labelled window per profile, the menu bar, and Profiles and Waiting cards in the
    dashboard.

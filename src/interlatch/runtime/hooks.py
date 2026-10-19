@@ -106,8 +106,14 @@ def build_session_context(cfg, cwd: str) -> str | None:
     from ..knowledge.synthesize import kb_for_path, kb_sections
     from ..core.util import local_str, one_line
 
+    from ..core.profiles import WAITING
+    from ..projects.scope import scoped_for
+
     conn = connect(cfg.db_path, readonly=True)
     try:
+        # named profiles: only what this folder's owner has; nothing while it waits for you to choose
+        if scoped_for(cfg, conn, cwd) == WAITING:
+            return None
         kb = kb_for_path(conn, cwd)
         cwd = _project_here(conn, cwd)  # a folder inside a project set up on this hub belongs to that project
         lines: list[str] = []
