@@ -293,5 +293,6 @@ def test_redaction_keeps_placeholders_and_prose():
     from interlatch.core.redact import redact
 
     for prose in ("interlatch hub join <hub address> --code <code>", "a code=1 review", "the --code flag",
-                  "use ?code= in the link", "MIT-2026-X is a ticket"):
+                  "use ?code= in the link", "MIT-2026-X is a ticket", "session 11111111-2222-3333-4444-555555555555",
+                  "GUID 9A3B4C5D-2222-3333-4444-ABCDEF234567"):
         assert redact(prose) == prose, prose

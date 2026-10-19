@@ -47,7 +47,8 @@ _PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)(--code(?:=|\s+)[\"']?)([a-z0-9]{4}-?[a-z0-9]{4}-?[a-z0-9]{4})\b"), r"\1[REDACTED]"),
     (re.compile(r"(?i)(--token\s+[\"']?)([A-Za-z0-9_\-]{12,})"), r"\1[REDACTED]"),
     (re.compile(r"(?i)([?&]code=)([A-Za-z0-9_\-%.~]{8,})"), r"\1[REDACTED]"),
-    (re.compile(r"\b[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}\b"), "[REDACTED:invite-code]"),
+    # a code on its own, but never three groups of a longer id (a UUID's 2222-3333-4444)
+    (re.compile(r"(?<![\w-])[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}(?![\w-])"), "[REDACTED:invite-code]"),
 ]
 
 
