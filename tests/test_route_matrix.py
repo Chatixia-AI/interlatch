@@ -87,6 +87,7 @@ HUB_PUSH = Access("a computer that may send", {**dict.fromkeys(BROWSER, 401), "s
 # request in REQUESTS. {id} and {n} are path parameters.
 ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/signin"): ANYONE.ok(400),  # an unknown code: refused for everyone alike
+    ("POST", "/signin"): POST_ANYONE.ok(403),  # no Origin: another site's form, refused for everyone alike
     # signed in, also people limited to projects (access.LIMITED_GET and the session page)
     ("GET", "/api/me"): LIMITED_OK,
     ("GET", "/api/overview"): LIMITED_OK,

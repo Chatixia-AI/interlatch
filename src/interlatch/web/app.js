@@ -8372,7 +8372,7 @@ function renderHubFrame() {
   foot.title = notes.join(" · ");
 }
 // A hub with people answered 401: nothing shows until this browser signs in, with a link from the person's own
-// Interlatch or an invite code (GET /signin?code=… sets the session cookie and comes back here).
+// Interlatch or an invite code (POST /signin, from this page, sets the session cookie and comes back here).
 function showSignin(note) {
   if (signinShown) return;
   signinShown = true;
@@ -8380,10 +8380,9 @@ function showSignin(note) {
   document.documentElement.classList.add("signed-out");
   const code = h("input", { class: "input", name: "code", placeholder: "XXXX-XXXX-XXXX", autocomplete: "one-time-code", autocapitalize: "characters",
     spellcheck: "false", "aria-label": t("Invite code") });
-  const form = h("form", { class: "signin-form", onsubmit: (e) => {
-    e.preventDefault();
-    const c = code.value.trim();
-    if (c) location.href = `/signin?code=${encodeURIComponent(c)}`; else code.focus();
+  const form = h("form", { class: "signin-form", method: "post", action: "/signin", onsubmit: (e) => {
+    code.value = code.value.trim();
+    if (!code.value) { e.preventDefault(); code.focus(); }
   } }, code, h("button", { class: "btn primary", type: "submit" }, t("Sign in")));
   const theme = h("button", { class: "btn small", type: "button", onclick: () => { flipTheme(); theme.replaceChildren(icon(isDark() ? "sun" : "moon")); },
     "aria-label": t("Toggle theme"), title: t("Toggle theme") }, icon(isDark() ? "sun" : "moon"));
