@@ -563,6 +563,27 @@ network or over the company VPN. Say the hub should be reached at `https://inter
 With Tailscale instead, `interlatch tailnet on --anyone` lets everyone in your tailnet reach the hub over HTTPS
 ([Your phone](#your-phone)). Once the hub has people, they still sign in.
 
+### One name per hub
+
+A browser keeps cookies by host name, not by port: what it holds for `hub.example.com` it also sends to
+`hub.example.com:8443`, and every port of `127.0.0.1` shares one set. Each hub names its sign-in cookie for itself
+(`interlatch_session_` and a random id the hub makes once and keeps in its database, with `__Host-` in front over
+HTTPS), so two hubs under one name no longer overwrite each other's sign-in. But the browser still sends each hub's
+cookie to the other, and whoever runs one of them could use yours to sign in to the other as you. No cookie name can
+stop that; only a different host name does. So give every hub a host name of its own, even two hubs on one server:
+
+- **With DNS names:** one each, such as `team-a.example.com` and `team-b.example.com`, each in its own hub's
+  `[server] allowed_hosts` and `[hub] address`.
+- **With only the server's IP address:** sslip.io names. Any name that ends in the address with dashes points at it, so
+  `team-a.172-207-25-249.sslip.io` and `team-b.172-207-25-249.sslip.io` are two names for `172.207.25.249`. A proxy on
+  ports 80 and 443 sends each name to its own hub's port.
+- **Trying two hubs on one computer:** open each in its own browser profile, or one as `127.0.0.1` and the other as
+  `localhost`, which a browser keeps apart.
+
+A browser signed in before a hub had its own cookie name stays signed in: on its next visit, the hub moves the sign-in
+to its own name. Until then, that cookie has the name every hub used, which is why the old name is still taken for
+now.
+
 ### Company sign-in
 
 If your company signs people in through an auth proxy (oauth2-proxy, Azure App Service authentication and the like)
