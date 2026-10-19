@@ -64,6 +64,30 @@ def other_hub(cfg: Config, url: str) -> str | None:
     return cfg.hub_url if cfg.is_spoke and not same_hub(cfg.hub_url, url) else None
 
 
+def hub_of_another_profile(cfg: Config, url: str) -> str | None:
+    """The profile (Personal or a named one, core.profiles) other than this one that already sends to the hub at `url`,
+    by its label; None when none does. A hub gets one profile's sessions: joining it from a second one is refused
+    before anything goes out."""
+    from ..core.config import load_config
+    from ..core.profiles import load_registry
+
+    home = cfg.home.expanduser()
+    personal = home.parent.parent if home.parent.name == "profiles" else home
+    try:
+        reg = load_registry(personal)
+    except Exception:  # an unreadable registry: refuse rather than guess (RegistryError)
+        return "another profile (profiles.toml can't be read)"
+    if not reg or not reg.profiles:
+        return None
+    for label, other in [("Personal", personal), *((p.label, p.home) for p in reg.profiles.values())]:
+        if other.expanduser() == home or not (other / "config.toml").exists():
+            continue
+        ocfg = load_config(other, create=False)
+        if ocfg.is_spoke and same_hub(ocfg.hub_url, url):
+            return label
+    return None
+
+
 def stash_path(cfg: Config, url: str) -> Path:
     """Where leaving the hub at `url` puts what this computer kept for it: no address in the name (no colons, for
     Windows), its sha256 instead."""

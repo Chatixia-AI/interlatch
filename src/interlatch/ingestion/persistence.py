@@ -227,6 +227,10 @@ def store_parsed(
         f"ON CONFLICT(id) DO UPDATE SET {updates}",
         [row[c] for c in cols],
     )
+    if not machine or machine == me:  # which profile it belongs to, once named profiles exist (projects.owners)
+        from ..projects.owners import assign
+
+        assign(conn, cfg, sid, recorded_path, ps.git_remote)
     if prev is None and machine and machine != me and source != "history":  # the Team page's news (news.py)
         news.record(conn, machine, project_path, sessions=1)
     return "new" if prev is None else "updated"

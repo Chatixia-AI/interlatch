@@ -248,6 +248,13 @@ def sync(cfg: Config, conn: sqlite3.Connection, *, only: Path | None = None, end
                 conn.rollback()
                 log.exception("applying analyses from other computers failed")
                 report.errors.append(f"imported analyses: {exc}")
+            try:  # owners for what came in without one (history stubs), and waiting sessions a new rule settles
+                from ..core.profiles import RegistryError
+                from ..projects.owners import assign_all
+
+                assign_all(conn, cfg)
+            except RegistryError as exc:
+                report.errors.append(str(exc))
             kv_set(conn, "last_sync", utcnow_iso())
         conn.commit()
     report.seconds = time.monotonic() - t0

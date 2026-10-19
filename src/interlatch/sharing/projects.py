@@ -310,7 +310,7 @@ def hub_project_of(cfg: Config, paths, conn=None) -> dict[str, dict]:
     routes = group_routes(cfg, conn)
     out = {}
     for path in paths:
-        if not path or cfg.is_excluded(path):
+        if not path or cfg.off_hub(path):
             continue
         top = max((f for f in repos if under(path, f)), key=len, default=None)
         via = None if top else routes.decide(path, cfg.hub_folders)

@@ -51,6 +51,7 @@ EXPECTED_COMMANDS = {
     "tailnet": [],
     "hub": [],
     "push": [],
+    "profile": [],
     "container": [],
     "hook": [],
     "ingest-session": [],

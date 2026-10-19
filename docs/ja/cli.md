@@ -46,6 +46,9 @@
 | `interlatch hub people` / `hub role <email\|id> <role>` / `hub remove <email\|id>` / `hub shared-token on\|off` | ハブで：全員のロール、見えるプロジェクト、コンピューターの一覧／ロールを変える／人を外す／共有トークンを許すか拒むか（[利用者とロール](devices.md#利用者とロール)） |
 | `interlatch hub add-folder <folder> --project <name>` / `hub remove-folder <folder>` / `hub folders [--list]` | ハブに参加したコンピューターで：フォルダーのセッションをハブのプロジェクトに入れる／間違えて追加したフォルダーを外す／どこに入るかを表示（`--list`：ハブのプロジェクト一覧）（[同じプロジェクト、別のフォルダー](devices.md#同じプロジェクト別のフォルダー)）。ナレッジを共有しているときは、`remove-folder` でそのフォルダーから共有したものもハブが削除します（[やめるとき](devices.md#やめるとき)） |
 | `interlatch hub leave --project <name>` / `hub rejoin --project <name>` | ナレッジを共有するコンピューターで：ハブのプロジェクトの一つへの共有とチームメイトのナレッジの受け取りをやめる（すでに共有したものは残る）、または再開する（[やめるとき](devices.md#やめるとき)） |
+| `interlatch profile create <name> [--owns <folder>]… [--remotes <pattern>]…` / `profile list` / `profile where <folder>` | それぞれにハブを持つ名前付きプロファイル：フォルダーとリポジトリを持つプロファイルを作る（これまでのセッションも移る）、一覧する、フォルダーの持ち主とその理由を表示する（[プロファイル](profiles.md)） |
+| `interlatch profile own <folder> <profile>` / `disown <folder>` / `waiting` / `choose <folder> <profile\|personal>` / `remove <profile> [--delete-data]` | フォルダーをこれまでのセッションごとプロファイルに移す、外す（セッションは選択待ちに）、選択待ちのフォルダーを一覧して決める、プロファイルを削除する。`--dry-run` は移るものの表示だけ、`--leave-on-hub` は Personal のハブがすでに持つセッションも移す |
+| `interlatch --profile <name> <command>` | 任意のコマンドを名前付きプロファイル（専用のフォルダー、設定、ハブ）で実行する |
 | `interlatch push` | ハブに参加したコンピューターで：新しいセッションを今すぐ送る（フックとバックグラウンド同期も送ります） |
 | `interlatch container` | ハブの Docker イメージが実行するコマンド：`INTERLATCH_*` 変数からハブを設定し、ダッシュボードを提供して 15 分ごとに同期（[Docker でハブを動かす](docker.md)） |
 | `interlatch config [edit]` | `~/.interlatch/config.toml` を表示または編集 |

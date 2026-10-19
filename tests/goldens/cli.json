@@ -16,6 +16,22 @@
    ],
    "required": false,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "const": null,
+   "default": null,
+   "dest": "profile",
+   "exclusive_group": null,
+   "help_suppressed": false,
+   "metavar": "NAME",
+   "nargs": null,
+   "option_strings": [
+    "--profile"
+   ],
+   "required": false,
+   "type": null
   }
  ],
  "subcommands": {
@@ -1722,6 +1738,146 @@
       "nargs": 0,
       "option_strings": [
        "--full"
+      ],
+      "required": false,
+      "type": null
+     }
+    ]
+   },
+   "profile": {
+    "aliases": [],
+    "defaults": {
+     "fn": "<fn cmd_profile>"
+    },
+    "hidden": false,
+    "options": [
+     {
+      "action": "_StoreAction",
+      "choices": [
+       "create",
+       "list",
+       "where",
+       "own",
+       "disown",
+       "waiting",
+       "choose",
+       "remove"
+      ],
+      "const": null,
+      "default": null,
+      "dest": "action",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": null,
+      "option_strings": [],
+      "required": true,
+      "type": null
+     },
+     {
+      "action": "_StoreAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "target",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": "?",
+      "option_strings": [],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "name",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": "?",
+      "option_strings": [],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_AppendAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "owns",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": "FOLDER",
+      "nargs": null,
+      "option_strings": [
+       "--owns"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_AppendAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "remotes",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": "PATTERN",
+      "nargs": null,
+      "option_strings": [
+       "--remotes"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "leave_on_hub",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--leave-on-hub"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "dry_run",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--dry-run"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "delete_data",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--delete-data"
       ],
       "required": false,
       "type": null

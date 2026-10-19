@@ -72,9 +72,10 @@ def root_files(root: Root):
 
 
 class _Exclusions:
-    """cfg.exclude_projects, applied on the spoke so excluded projects never leave it: their transcripts stay here,
-    the files that mix projects (Claude Code's history.jsonl, Codex's thread index and imports) go without their
-    lines, and Codex's own memory notes, which don't say which project they came from, stay here altogether."""
+    """cfg.exclude_projects and the folders named profiles own (cfg.off_hub), applied on the spoke so those projects
+    never leave it: their transcripts stay here, the files that mix projects (Claude Code's history.jsonl, Codex's
+    thread index and imports) go without their lines, and Codex's own memory notes, which don't say which project
+    they came from, stay here altogether."""
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -82,7 +83,7 @@ class _Exclusions:
         self.threads: dict[str, set[str]] = {}  # per Codex root: the threads that ran in an excluded project
 
     def excluded(self, root: Root, rel: str, path: Path) -> bool:
-        if not self.cfg.exclude_projects:
+        if not self.cfg.hub_filters:
             return False
         from ..sources.codex.parser import read_meta
 
@@ -90,7 +91,7 @@ class _Exclusions:
         if root.kind == "claude" and parts[0] == "projects" and len(parts) > 2:
             return self._claude_project(root, parts[1])
         if root.kind == "codex" and parts[0] == "sessions" and path.suffix == ".jsonl":
-            return self.cfg.is_excluded(read_meta(path).get("cwd"))
+            return self.cfg.off_hub(read_meta(path).get("cwd"))
         return root.kind == "codex" and parts[0] == "memories"
 
     def _claude_project(self, root: Root, name: str) -> bool:
@@ -103,7 +104,7 @@ class _Exclusions:
         key = str(proj)
         if key not in self.cache:
             cwd = peek_cwd(proj) if proj.is_dir() else None
-            self.cache[key] = self.cfg.is_excluded(cwd or decode_project_dir(proj.name))
+            self.cache[key] = self.cfg.off_hub(cwd or decode_project_dir(proj.name))
         return self.cache[key]
 
     def _excluded_threads(self, root: Root) -> set[str]:
@@ -111,16 +112,16 @@ class _Exclusions:
 
         if root.name not in self.threads:
             self.threads[root.name] = {rollout_id(f) or f.stem for f in rollout_files(root.path)
-                                       if self.cfg.is_excluded(read_meta(f).get("cwd"))}
+                                       if self.cfg.off_hub(read_meta(f).get("cwd"))}
         return self.threads[root.name]
 
     def filtered(self, root: Root, rel: str, path: Path) -> bytes | None:
         """The file as it may leave this computer, without what belongs to an excluded project, read once: what is
         sent is what was checked, never lines added since. None when nothing is excluded, or it is no such file."""
-        if not self.cfg.exclude_projects:
+        if not self.cfg.hub_filters:
             return None
         if root.kind == "claude" and rel == "history.jsonl":  # each prompt names its project
-            return _keep_lines(path, lambda d: not self.cfg.is_excluded(d.get("project")))
+            return _keep_lines(path, lambda d: not self.cfg.off_hub(d.get("project")))
         if root.kind == "codex" and rel == "session_index.jsonl":  # thread titles, by thread id
             gone = self._excluded_threads(root)
             return _keep_lines(path, lambda d: d.get("id") not in gone)
@@ -173,6 +174,9 @@ def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
     """{project folder: [git top level, normalized remote]} for the Claude Code projects here, cached for a day."""
     from ..sources.claude.files import decode_project_dir, peek_cwd
 
+    from ..projects.owners import HubFilter
+
+    off = HubFilter(cfg).off
     cache_path = cfg.home / "repos-cache.json"
     try:
         cache = json.loads(cache_path.read_text())
@@ -188,13 +192,13 @@ def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
             if not proj.is_dir():
                 continue
             cwd = peek_cwd(proj) or decode_project_dir(proj.name)
-            if cfg.is_excluded(cwd):  # an excluded project: not even its folder or remote leaves this computer
+            if off(cwd, lookup=False):  # an excluded project (or a profile's): not even its folder or remote leaves here
                 continue
             hit = cache.get(cwd)
             if not hit or now - hit.get("at", 0) > REPOS_CACHE_S:
                 info = routing.git_info(cwd)
                 hit = cache[cwd] = {"at": now, "info": list(info) if info else None}
-            if hit.get("info") and not cfg.is_excluded(hit["info"][0]):
+            if hit.get("info") and not off(hit["info"][0], hit["info"][1]) and not off(cwd, hit["info"][1]):
                 out[cwd] = hit["info"]
     try:
         cache_path.write_text(json.dumps(cache))
@@ -310,7 +314,10 @@ def hello_info(cfg: Config, roots: list[Root], routes: GroupRoutes | None = None
     if remotes is None:
         remotes, seen = known_remotes(cfg), last_folders(cfg) or {}
         scope = seen.get("scope") if isinstance(seen.get("scope"), list) else None
-    folders = {f: p for f, p in sent_folders(cfg, routes).items() if not cfg.is_excluded(f)}
+    from ..projects.owners import HubFilter
+
+    off = HubFilter(cfg).off
+    folders = {f: p for f, p in sent_folders(cfg, routes).items() if not off(f)}
     return {"protocol": PROTOCOL, "machine": me["id"], "name": me["name"], "key": machine_key(cfg),
             "platform": platform_label(), "version": __version__, "roots": [r.name for r in roots],
             "repos": hub_repos(cfg, repos, routes, remotes, scope), "folders": folders, "left": cfg.hub_left,
@@ -398,10 +405,12 @@ def redeem_invite(cfg: Config, url: str, code: str, client: HubClient | None = N
     sends to another hub is refused before anything goes out: the join sends this computer's key, which is how a hub
     recognises it (people.may_claim), and another hub's operator has no business with it.
     """
-    from .membership import other_hub, same_hub
+    from .membership import hub_of_another_profile, other_hub, same_hub
 
     if joined := other_hub(cfg, url):
         raise HubError(f"this computer sends to the hub at {joined}; leave it first (`interlatch hub leave`)")
+    if elsewhere := hub_of_another_profile(cfg, url):
+        raise HubError(f"{elsewhere} already sends to the hub at {url}: a hub gets one profile's sessions")
     me = local_machine(cfg)
     client = client or HubClient(url, "")
     if read_token(cfg) and cfg.hub_url and same_hub(cfg.hub_url, client.url):
