@@ -38,6 +38,8 @@ from interlatch.interfaces.web import routes as route_table
 from conftest import CWD, SID
 from test_hub import _serve
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 REMOTE = {"X-Forwarded-For": "203.0.113.5"}  # not this computer: test requests all come from 127.0.0.1
 LIMITED_TO = CWD  # Sam, a member who sees only this project
 SHARED_PC = "aaaaaaaa-0000-4000-8000-000000000001"  # a computer sending with the hub's shared token
@@ -242,6 +244,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/devices/projects/leave"): POST_HERE,
     ("POST", "/api/devices/projects/rejoin"): POST_HERE,
     ("POST", "/api/menu-bar"): POST_HERE,
+    ("POST", "/api/game"): POST_ADMIN,
     ("POST", "/api/artifacts/{n}/reveal"): POST_HERE,
     ("POST", "/api/leaderboard/signin"): POST_HERE,
     ("POST", "/api/leaderboard/finish"): POST_HERE,

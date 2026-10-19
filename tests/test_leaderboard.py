@@ -20,6 +20,8 @@ from interlatch.core.machine import local_machine
 from test_people_web import TAILNET, hubweb  # noqa: F401  (the fixture)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 OTHER = "99999999-2222-4333-8444-555555555555"
 PHOTO = "https://lh3.googleusercontent.com/a/ACg8ocK-photo=s96-c"
 

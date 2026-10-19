@@ -174,6 +174,16 @@ def action_weekly_day(ctx: Context, day: str) -> dict:
     return reanalysis(ctx)
 
 
+def action_game(ctx: Context, on: bool) -> dict:
+    """Settings › Appearance's switch: game mode ([game] enabled), Innerlatch and its door. Off keeps what was played
+    (the Party, the sign-in) and sends nothing more to the leaderboard."""
+    from ....core.config import load_config, set_config_value
+
+    set_config_value(ctx.cfg, "game", "enabled", "true" if on else "false")
+    ctx.cfg = load_config(ctx.cfg.home)
+    return {"game": ctx.cfg.game_enabled}
+
+
 def action_menu_bar(ctx: Context, on: bool) -> dict:
     """Status › Recording's switch: the macOS menu-bar icon on or off, adding the `app` extra when it is missing."""
     from ....core.config import load_config

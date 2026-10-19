@@ -4,7 +4,7 @@
 
 | コマンド | |
 | --- | --- |
-| `interlatch install [--yes] [--analyze all\|N\|later] [--[no-]notify-updates] [--[no-]menu-bar] [--dry-run]` | セットアップ：見つかったエージェントを一覧にし、記録するものを尋ね、取り込み、今すぐ進捗付きで分析するか尋ね（用語集とマップはここから作られます）、ダッシュボードを起動し、macOS では[メニューバーアイコン](install.md#メニューバーアイコン)を表示するか一度だけ尋ねます（y と答えない限りオフ）（[インストール](install.md#コマンドライン)） |
+| `interlatch install [--yes] [--analyze all\|N\|later] [--[no-]notify-updates] [--[no-]menu-bar] [--[no-]game] [--dry-run]` | セットアップ：見つかったエージェントを一覧にし、記録するものを尋ね、取り込み、今すぐ進捗付きで分析するか尋ね（用語集とマップはここから作られます）、ダッシュボードを起動し、macOS では[メニューバーアイコン](install.md#メニューバーアイコン)を表示するか一度だけ尋ね（y と答えない限りオフ）、[ゲームモード](party.md#開き方)をオンにするかも一度だけ尋ねます（こちらも y と答えない限りオフ）（[インストール](install.md#コマンドライン)） |
 | `interlatch app` | デスクトップアプリ（ウインドウ＋メニューバー）。`app` エクストラが必要 |
 | `interlatch ui [--open] [--menu-bar]` | ダッシュボード（インストール後は :11524 で常時稼働。稼働中なら `interlatch ui` がそう表示し、`--open` でそれを開きます）。macOS でログイン時に起動するものは、インストール時にオンにしていれば[メニューバーアイコン](install.md#メニューバーアイコン)も表示します。`--menu-bar`/`--no-menu-bar` で切り替えられます。Sessions、Knowledge、Projects、Glossary は Cards と List（並べ替え可能な表。行をクリックで詳細）を切り替えられ、ページごとに記憶されます |
 | `interlatch sessions [-p project] [--since 7d]` | セッションの一覧 |

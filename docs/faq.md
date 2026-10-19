@@ -65,7 +65,7 @@ writes only inside its own block, and every change can be undone ([Suggestions](
 good with `interlatch forget <id>`.
 
 **What is the leaderboard, and does it send my usage?** The **Leaderboard** compares your hours, sessions and
-tokens with other people's. It is in Innerlatch, behind the door at the bottom of the dashboard's rail. Nothing is sent until you sign in there with Google. From then on, each sync sends your
+tokens with other people's. It is in Innerlatch, behind the door at the bottom of the dashboard's rail once you turn on game mode ([Getting there](party.md#getting-there)). Nothing is sent until you sign in there with Google. From then on, each sync sends your
 totals for the last 7, 30 and 90 days, with the name and picture you show: no email, project, prompt or title.
 `interlatch leaderboard leave` deletes your row and stops sending.
 

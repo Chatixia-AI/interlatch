@@ -30,6 +30,8 @@ from test_leaderboard import _joined, net  # noqa: F401  (net: the fixture)
 from test_people_web import REMOTE, TAILNET, _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 OTHER_CWD = "/Users/test/Projects/other-app"
 TEAMMATE_PC = "99999999-2222-4333-8444-555555555555"
 BOB_PC = "bbbbbbbb-0000-4000-8000-000000000002"

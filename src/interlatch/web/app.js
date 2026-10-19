@@ -900,6 +900,22 @@ async function walkIn(to = "#" + REALM) {
   Innerlatch.threshold(to);
 }
 function enterRealm(to) { setRealmOpen(true); go(to); } // the door opened
+// Settings › Appearance's switch, and the one on Innerlatch's addresses while it's off
+async function setGame(on) {
+  const r = await post("/api/game", { on });
+  if (r.error) { toast(r.error, 6000); return; }
+  if (!on) setRealmOpen(false); // the door shows again when it comes back
+  await loadMe(); // the rail's door and the command palette
+  render();
+}
+function gameOffPage() {
+  return h("div", { class: "narrow-page" },
+    h("div", { class: "page-head" }, h("div", null, h("h1", null, t("Game mode is off")),
+      h("div", { class: "sub" }, t("Innerlatch and everything in it are part of game mode.")))),
+    h("section", { class: "card" }, ME?.can_admin
+      ? h("button", { class: "btn primary", type: "button", onclick: () => setGame(true) }, t("Turn on game mode"))
+      : h("div", { class: "muted" }, t("An admin of this hub turns it on."))));
+}
 function leaveRealm() { setRealmOpen(false); go(realmReturn); } // signed out in there
 function loadRealm() {
   if (window.Innerlatch) return Promise.resolve();
@@ -935,6 +951,12 @@ async function render() {
   const { path, params } = parseHash();
   const app = $("#app");
   const seq = ++renderSeq;
+  if (inRealm(path) && !gameOn()) { // game mode off: no door, and Innerlatch's addresses say so
+    loadFinished();
+    updateShell(path, params);
+    app.replaceChildren(gameOffPage());
+    return;
+  }
   if (inRealm(path) && (!realmOpen() || params.lb_token)) { // the door first, over the page underneath
     const to = location.hash;
     history.replaceState(null, "", realmReturn);
@@ -7953,13 +7975,15 @@ route(/^\/appearance$/, async () => {
       row(t("Animations"), t("System follows your Mac's Reduce motion setting. Off stops loading shimmers, slides and fades; spinners turn slowly."),
         segControl([["system", t("System")], ["on", t("On")], ["off", t("Off")]], motion, setMotion)),
       row(t("Sidebar"), t("The button at the top left, ⌘B, or the rail icon of the page you're on shows or hides it. While it's hidden, pointing at the rail brings it out until the pointer moves away."),
-        h("button", { class: "btn", type: "button", onclick: toggleSidebar }, t("Toggle sidebar"))),
-      row(t("The door"), t("A door at the bottom of the rail leads to Innerlatch. Hidden, Innerlatch still opens from its address."),
-        segControl([["on", t("Shown")], ["off", t("Hidden")]], doorShown() ? "on" : "off", (v) => {
-          try { v === "on" ? localStorage.removeItem(DOOR_KEY) : localStorage.setItem(DOOR_KEY, "off"); } catch (e) { /* this tab only */ }
-          renderRail();
-          render();
-        }))));
+        h("button", { class: "btn", type: "button", onclick: toggleSidebar }, t("Toggle sidebar")))),
+    // not this browser's: config.toml's, so the app window and every browser agree (on a hub, for everyone)
+    h("section", { class: "card set-card" },
+      row(t("Game mode"), ME?.hub?.team
+        ? t("Innerlatch, behind a door at the bottom of the rail: each person's agents as a party. For everyone signed in to this hub.")
+        : t("Innerlatch, behind a door at the bottom of the rail: your agents as a party, study battles from your own lessons, and the usage leaderboard if you join it. Off, nothing is sent to the leaderboard. Saved in Interlatch's settings, not this browser."),
+        ME?.can_admin
+          ? segControl([["on", t("On")], ["off", t("Off")]], gameOn() ? "on" : "off", (v) => { if ((v === "on") !== gameOn()) setGame(v === "on"); })
+          : h("span", { class: "muted" }, gameOn() ? t("On") : t("Off")))));
 });
 
 // =====================================================================================
@@ -7985,9 +8009,8 @@ const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamproject
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 let shellRealm = false, realmReturn = "#/"; // in Innerlatch; the page its door leads back to
-// the door at the bottom of the rail, unless Appearance hid it (this browser)
-const DOOR_KEY = "interlatch-door";
-function doorShown() { try { return localStorage.getItem(DOOR_KEY) !== "off"; } catch (e) { return true; } }
+// game mode ([game] enabled; on a hub, its admins decide for everyone): the door at the bottom of the rail, and Innerlatch
+function gameOn() { return ME?.game === true; }
 
 function shellSections() { return shellRealm && window.Innerlatch ? Innerlatch.sections() : SECTIONS; }
 function sectionOf(path, params) {
@@ -8032,7 +8055,7 @@ function renderRail() {
       h("a", { class: "rail-door out", href: realmReturn, "data-section": "door", "aria-label": t("Back to Interlatch"), title: t("Back to Interlatch") }, icon("door")));
     return;
   }
-  const door = doorShown() ? [h("a", { class: "rail-door", href: "#/innerlatch", "data-section": "door", "aria-label": "Innerlatch", title: "Innerlatch",
+  const door = gameOn() ? [h("a", { class: "rail-door", href: "#/innerlatch", "data-section": "door", "aria-label": "Innerlatch", title: "Innerlatch",
     onclick: (e) => { e.preventDefault(); walkIn(); } }, icon("door"))] : [];
   const settings = SECTIONS.find((x) => x.key === "settings");
   const shown = SECTIONS.filter((x) => (!x.team || ME?.hub?.team) && !(dedicated() && DEDICATED_HIDDEN.has(x.key)));
@@ -8327,9 +8350,9 @@ function crossRealm(realm) {
   }
 }
 function updateShell(path, params) {
-  const realm = inRealm(path) && !!window.Innerlatch;
+  const realm = inRealm(path) && !!window.Innerlatch && gameOn();
   if (realm !== shellRealm) crossRealm(realm);
-  if (!realm) realmReturn = location.hash || "#/"; // where Innerlatch's door leads back to
+  if (!inRealm(path)) realmReturn = location.hash || "#/"; // where Innerlatch's door leads back to
   const section = sectionOf(path, params);
   document.querySelectorAll("#rail a").forEach((a) => {
     const on = a.dataset.section === (path === "/search" ? "search" : section); // search has no sidebar of its own
@@ -8361,7 +8384,7 @@ function paletteCommands() {
     nav(t("Global playbook"), `#/project?path=${encodeURIComponent("__global__")}`, "playbook"), nav(t("Weekly reviews"), "#/reviews", "reviews"),
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
-      : doorShown() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
+      : gameOn() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
     nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),

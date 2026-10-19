@@ -296,9 +296,10 @@ def _plain_value(v: dict):
 # ------------------------------------------------------------------ sending, renaming and leaving
 def send(cfg: Config, conn, *, force: bool = False) -> dict | None:
     """Send this computer's totals, once signed in and on the board; None when not signed in. Another computer that
-    signed in to the same account since takes over: this one stops sending (state "paused") until it signs in again."""
+    signed in to the same account since takes over: this one stops sending (state "paused") until it signs in again.
+    Game mode off ([game] enabled), nothing is sent."""
     state = read_state(cfg)
-    if state is None or state.get("paused") or not on_board(state):
+    if state is None or state.get("paused") or not on_board(state) or not cfg.game_enabled:
         return state
     if not force and state.get("last_sent"):
         last = parse_ts(state["last_sent"])

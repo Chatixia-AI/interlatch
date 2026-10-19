@@ -21,6 +21,8 @@ from test_party import BOB_PC, _lesson, _session, catalog, home  # noqa: F401  (
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 
 class FakeModel:
     """Answers each call with the next reply, and keeps the prompts."""

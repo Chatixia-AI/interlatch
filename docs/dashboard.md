@@ -10,13 +10,13 @@ navy blueprint paper in the dark theme, a whiteprint in the light one, IBM Plex 
 it holds), and the sidebar beside it lists that section:
 recent sessions grouped by the day they were last active, with agent filters, knowledge kinds with counts plus Glossary, Map, Global playbook
 and Weekly reviews, projects, suggestions by status plus What goes wrong, or Status, Sources, MCP, Devices, Storage, Re-analysis and Appearance.
-The door at the bottom of the rail opens **Innerlatch**, drawn in violet, where the [Party](party.md), the Leaderboard
+With game mode on, the door at the bottom of the rail opens **Innerlatch**, drawn in violet, where the [Party](party.md), the Leaderboard
 and the Arena live ([Getting there](party.md#getting-there)). **⌘K** (also ⌘P or `/`) opens a palette that jumps
 to any session, knowledge item, project, glossary term or page and runs commands (sync, rebuild the glossary, group
 themes, switch theme); **⌘B** hides the sidebar. The status bar shows background work, the analysis queue, the
 last sync and, once one is found, an available update ([Updating](install.md#updating)).
 **Settings › Appearance** picks the theme, the language and whether the dashboard animates (System follows macOS Reduce motion),
-and **The door** hides the door to Innerlatch in this browser (Innerlatch still opens from its address). The fonts ship with Interlatch, so the dashboard never
+and **Game mode** turns Innerlatch on or off (off by default; saved in config.toml, so for every browser, and on a hub for everyone signed in to it). The fonts ship with Interlatch, so the dashboard never
 calls out to a font service. **Settings › Devices** shows whether this computer is a hub or sends to
 one (then also the hub's projects it is in, to join, leave or rejoin), and how to open the dashboard on your phone. **Settings › Storage**
 sets up a copy of your archive in Postgres ([A copy in Postgres](postgres.md)). **Settings › Re-analysis** picks the

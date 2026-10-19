@@ -23,12 +23,20 @@ from . import api
 
 NOT_HERE = "change this on the computer itself, not from another device"
 NOT_ADMIN = "only an admin of this hub can do this"
+GAME_OFF = "game mode is off: turn it on in Settings › Appearance"
 
 
 @dataclass(frozen=True)
 class Access:
     allows: Callable  # (handler, ctx) -> bool
     refusal: str  # why not, as the page shows it (translated)
+    game: bool = False  # Innerlatch's: refused to everyone while game mode is off ([game] enabled)
+
+    def refused(self, h, ctx) -> str | None:
+        """Why the request may not go on (untranslated), or None when it may."""
+        if self.game and not ctx.cfg.game_enabled:
+            return GAME_OFF
+        return None if self.allows(h, ctx) else self.refusal
 
 
 ANYONE = Access(lambda h, ctx: True, "")  # whoever passed the request's checks
@@ -37,10 +45,11 @@ ADMIN = Access(lambda h, ctx: h._can_admin(), NOT_ADMIN)  # at the hub itself, o
 OWNER = Access(lambda h, ctx: h._can_admin(), NOT_HERE)
 ADMIN_PERSON = Access(lambda h, ctx: h.viewer is None or h._can_admin(), NOT_ADMIN)  # refuses only people who aren't admins
 HERE = Access(lambda h, ctx: h._from_here(), NOT_HERE)  # what leaves this computer, or changes it: only from here
-LEADERBOARD = Access(lambda h, ctx: h._from_here(), "the leaderboard is on the dashboard of your own computer")
+LEADERBOARD = Access(lambda h, ctx: h._from_here(), "the leaderboard is on the dashboard of your own computer", game=True)
 # the Party: this computer's own (behind its Google sign-in), or a hub person's own (api/party.py)
 PARTY = Access(lambda h, ctx: h._from_here() or h.viewer is not None,
-               "the Party opens on the dashboard of your own computer, or of a hub you're signed in to")
+               "the Party opens on the dashboard of your own computer, or of a hub you're signed in to", game=True)
+PARTY_SIGNIN = Access(lambda h, ctx: h._from_here(), NOT_HERE, game=True)  # a Google sign-in kept on this computer
 LOCAL_FILES = Access(lambda h, ctx: h._local(), "files open only on the computer Interlatch runs on")
 # a dedicated hub has no sessions of its own, so there its admins may set up (by name) and remove projects too
 HERE_OR_HUB_ADMIN = Access(lambda h, ctx: h._from_here() or (ctx.cfg.hub_dedicated and h._can_admin()), NOT_HERE)
@@ -395,7 +404,7 @@ POST: list[Route] = [
     Route(r"/api/leaderboard/(signin|finish|cancel|join|send|name|leave)", LEADERBOARD, _leaderboard),
     Route(r"/api/leaderboard/arena/(join|leave|deck)", LEADERBOARD, _arena),
     # a Google sign-in kept on this computer: only from here
-    Route(r"/api/party/(signin|signout)", HERE, _party_sign),
+    Route(r"/api/party/(signin|signout)", PARTY_SIGNIN, _party_sign),
     # the viewer's own quest log: from here, or any person signed in to a hub, not only admins (handler.PARTY_OWN)
     Route(r"/api/party/(quest|goal|cleared|pick|buy|sell|equip|use|deck)", PARTY, _party_own),
     Route(r"/api/artifacts/(\d+)/reveal", LOCAL_FILES, _reveal),
@@ -448,6 +457,8 @@ POST: list[Route] = [
     Route("/api/update", ANYONE, lambda h, ctx, m, b: h._json(api.settings.action_update(ctx))),
     # installs software and restarts the dashboard: only from this computer
     Route("/api/menu-bar", HERE, lambda h, ctx, m, b: h._json(api.settings.action_menu_bar(ctx, bool(b.get("on"))))),
+    # game mode: on a hub, for everyone signed in to it
+    Route("/api/game", ADMIN, lambda h, ctx, m, b: h._json(api.settings.action_game(ctx, b.get("on") is True))),
     # the Queue's Analyze now
     Route("/api/analysis/run", ANYONE,
           lambda h, ctx, m, b: h._json(api.status.action_analyze_queue(ctx, str(b.get("which") or "ready")))),

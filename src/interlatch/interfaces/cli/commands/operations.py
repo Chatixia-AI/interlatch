@@ -90,6 +90,10 @@ def cmd_leaderboard(args) -> int:
 
     cfg = load_cfg()
     console = new_console()
+    if not cfg.game_enabled and args.action in ("join", "send"):  # leaving still works: the row is deleted
+        console.print("Game mode is off, and the leaderboard is part of it. Turn it on in Settings › Appearance, or: "
+                      "`interlatch config set game.enabled true`.", highlight=False)
+        return 1
     try:
         if args.action == "join" and lb.status(cfg)["signed_in"]:  # signed in already (for the Party): join from here
             conn = open_archive(cfg)
