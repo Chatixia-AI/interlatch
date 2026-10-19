@@ -88,8 +88,7 @@ def spoke(tmp_path, monkeypatch):
         [hub]
         url = "https://hub.example"
         share = "knowledge"
-        [hub.folders]
-        "/w/clients/acme" = "/hub/acme"
+        folders = {{ "/w/clients/acme" = "/hub/acme" }}
         """))
     cfg = load_config(home)
     cfg.ensure_dirs()
@@ -150,6 +149,26 @@ def test_a_left_project_or_one_outside_the_persons_projects_names_nothing(spoke)
     hub = RecordingHub(scope=["/hub/known-lib"])
     push(cfg, client=hub)  # the scope the hub said last time holds from the first hello on
     assert [sorted(h["repos"]) for h in hub.bodies("/api/hub/hello")] == [[KNOWN]]
+
+
+def test_a_hub_joined_after_leaving_hears_nothing_by_the_first_hubs_remotes(spoke):
+    """Leaving clears hub-folders.json (membership.leave): the next hub's first hello names no repository by the
+    remotes the first hub filed by, and its folders are gone too."""
+    from interlatch.core.config import set_config_value
+    from interlatch.sharing.client import leave_hub
+
+    cfg = spoke["cfg"]
+    push(cfg, client=RecordingHub())
+    assert KNOWN in hello_info(cfg, spoke_roots(cfg))["repos"]  # hub A filed it by its remote
+    cfg = leave_hub(cfg)
+    set_config_value(cfg, "hub", "url", '"https://other-hub.example"')
+    cfg = load_config(cfg.home)
+    write_token(cfg, "token-b")
+    hub_b = RecordingHub(remotes={})
+    push(cfg, client=hub_b)
+    hellos = hub_b.bodies("/api/hub/hello")
+    assert len(hellos) == 1 and hellos[0]["repos"] == {} and hellos[0]["folders"] == {}
+    _no_canary(hub_b, *CANARIES, "known-lib", "acme")
 
 
 @pytest.mark.parametrize("extra", ["all_folders", "everything"])
