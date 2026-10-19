@@ -42,6 +42,12 @@ _PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)(\bcurl\b[^\n]*?\s(?:-u|--user)[=\s]\s*[\"']?[^\s:\"']+:)([^\s\"']+)"), r"\1[REDACTED]"),
     (re.compile(r"(?i)(\b(?:set-)?cookie[\"']?\s*:\s*[\"']?)([^\s=;:\"']+=[^\r\n\"']*)"), r"\1[REDACTED]"),
     (re.compile(r"(?i)(--cookie[=\s]\s*[\"']?)([^\s=;\"']+=[^\r\n\"']*)"), r"\1[REDACTED]"),
+    # a hub's credentials: an invite code (`interlatch hub join … --code XXXX-XXXX-XXXX`, or on its own), a join
+    # token given as `--token <token>`, and the code of an invite or sign-in link (…/signin?code=…)
+    (re.compile(r"(?i)(--code(?:=|\s+)[\"']?)([a-z0-9]{4}-?[a-z0-9]{4}-?[a-z0-9]{4})\b"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(--token\s+[\"']?)([A-Za-z0-9_\-]{12,})"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)([?&]code=)([A-Za-z0-9_\-%.~]{8,})"), r"\1[REDACTED]"),
+    (re.compile(r"\b[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}\b"), "[REDACTED:invite-code]"),
 ]
 
 

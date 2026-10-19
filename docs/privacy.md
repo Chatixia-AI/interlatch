@@ -35,7 +35,10 @@ default) it sends its **raw session files, unredacted** like the archive: secret
 pasted in a prompt, a `.env` an agent read) reach the hub and its admins as they are. With `share = "knowledge"` it
 sends only titles, summaries and project lessons, made from the redacted digest and redacted again as they go;
 never a session's mood or friction notes, or lessons about you. Pick `knowledge` for a hub you don't run
-yourself. Inside a tailnet, or behind a proxy with HTTPS, the files travel encrypted; over plain `http://` they don't.
+yourself. Either way, nothing of an excluded project goes, and a computer that shares knowledge of the hub's
+projects only tells the hub only of the repositories it can file sessions from ([What the hub learns about this
+computer](devices.md#what-the-hub-learns-about-this-computer)). Inside a tailnet, or behind a proxy with HTTPS, the
+files travel encrypted; over plain `http://` they don't.
 
 **With a copy in Postgres** ([A copy in Postgres](postgres.md)), which is off unless you set it up, Interlatch writes
 your archive to the database you chose after every background run. With `include = "knowledge"` (the default) that is
@@ -123,6 +126,8 @@ it is on your computer, an **Original transcript** download, or the session file
   (`Basic`, `Bearer`, `token`), a password in a URL (`postgres://user:password@host`) or in `curl -u user:password`,
   and cookies (`Cookie:` and `Set-Cookie:` lines, `curl --cookie`).
 - Azure keys: `AccountKey=`, `SharedAccessKey=` and a SAS token's `sig=`.
+- A hub's credentials: invite codes (`XXXX-XXXX-XXXX`, and whatever follows `--code`), a token after `--token`, and
+  the code in an invite or sign-in link (`…/signin?code=…`).
 
 **Not caught:**
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import io
 import json
 import os
 import tempfile
@@ -19,11 +20,11 @@ from ..core.machine import local_machine
 from ..core.paths import normalize_project_path
 from ..core.util import parse_ts, utcnow, utcnow_iso
 from ..projects import routing  # git_info through routing: one patch there reaches every caller
-from .client import PUSH_WAIT_S, HubClient, _Exclusions, hello_info, root_files, sharing, spoke_roots
+from .client import PUSH_WAIT_S, HubClient, _Exclusions, root_files, say_hello, sharing, spoke_roots
 from .identity import read_token
-from .projects import GroupRoutes, _record_folders, destination, group_routes
+from .projects import GroupRoutes, destination, group_routes
 from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_ANALYSIS_COLS, SHARED_COLS,
-                       HubError, HubUnauthorized, HubUnreachable, _check_protocol, shared_analysis, shared_lesson)
+                       HubError, HubUnauthorized, HubUnreachable, shared_analysis, shared_lesson)
 from .pull import pull_team_lessons
 
 
@@ -55,11 +56,13 @@ class PushReport:
         return f"to {self.hub}: " + ", ".join(parts) + f" in {self.seconds:.1f}s"
 
 
-def _gzip_to_temp(path: Path) -> tuple[tempfile.SpooledTemporaryFile, int, str]:
-    """(gzip of the file in a spooled temp file, raw size, raw sha256). Reads the file once, as it is now."""
+def _gzip_to_temp(path: Path | bytes) -> tuple[tempfile.SpooledTemporaryFile, int, str]:
+    """(gzip of the file in a spooled temp file, raw size, raw sha256). Reads the file once, as it is now; given
+    bytes (a file filtered for exclusions), those."""
     out = tempfile.SpooledTemporaryFile(max_size=16 << 20)
     h, size = hashlib.sha256(), 0
-    with open(path, "rb") as fin, gzip.GzipFile(fileobj=out, mode="wb", compresslevel=6, mtime=0) as gz:
+    with (io.BytesIO(path) if isinstance(path, bytes) else open(path, "rb")) as fin, \
+            gzip.GzipFile(fileobj=out, mode="wb", compresslevel=6, mtime=0) as gz:
         while chunk := fin.read(1 << 20):
             h.update(chunk)
             size += len(chunk)
@@ -101,12 +104,7 @@ def _push_files(cfg: Config, *, progress=None, client: HubClient | None = None) 
     client = client or HubClient(cfg.hub_url, token)
     me = local_machine(cfg)
     try:
-        routes = group_routes(cfg)
-        info = hello_info(cfg, roots, routes)
-        hello = client.request("POST", "/api/hub/hello", body=info)
-        _check_protocol(hello)
-        routes.remember(cfg)
-        _record_folders(cfg, hello, info["repos"])
+        hello, _ = say_hello(cfg, client, roots, group_routes(cfg))
         inventory = hello.get("inventory") or {}
         if hello.get("wants_analyses"):
             blob, n = export_analyses(cfg)
@@ -122,17 +120,20 @@ def _push_files(cfg: Config, *, progress=None, client: HubClient | None = None) 
                     st = path.stat()
                 except OSError:
                     continue
-                if _same(have.get(rel), st.st_size, st.st_mtime):
+                # a file that mixes projects goes without an excluded one's lines: the hub holds that copy, so its
+                # size is what tells whether the hub has it already
+                data = exclusions.filtered(root, rel, path)
+                if _same(have.get(rel), st.st_size if data is None else len(data), st.st_mtime):
                     report.unchanged += 1
-                elif exclusions.excluded(root, rel, path):
+                elif exclusions.excluded(root, rel, path) or (data == b"" and rel not in have):
                     report.skipped += 1
                 else:
-                    todo.append((root, rel, path, st))
-        for i, (root, rel, path, st) in enumerate(todo, 1):
+                    todo.append((root, rel, path, st, data))
+        for i, (root, rel, path, st, data) in enumerate(todo, 1):
             if progress:
                 progress(f"sending {i} of {len(todo)}: {rel}")
             try:
-                body, size, sha = _gzip_to_temp(path)
+                body, size, sha = _gzip_to_temp(path if data is None else data)
             except OSError as exc:
                 report.errors.append(f"{path}: {exc}")
                 continue
@@ -245,11 +246,7 @@ def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = No
     me = local_machine(cfg)
     try:
         routes = group_routes(cfg)
-        info = hello_info(cfg, spoke_roots(cfg), routes)
-        hello = client.request("POST", "/api/hub/hello", body=info)
-        _check_protocol(hello)
-        routes.remember(cfg)
-        _record_folders(cfg, hello, info["repos"])
+        hello, info = say_hello(cfg, client, spoke_roots(cfg), routes)
         have = hello.get("knowledge")
         if not isinstance(have, dict):
             raise HubError(f"the hub runs version {hello.get('version')}, which can't take knowledge only; update it")
@@ -386,16 +383,20 @@ def _notify(cfg: Config, failure: dict) -> bool:
 
 
 def export_analyses(cfg: Config) -> tuple[bytes, int]:
-    """gzip JSON of this computer's finished analyses and the knowledge they produced (not memory notes)."""
+    """gzip JSON of this computer's finished analyses and the knowledge they produced (not memory notes), but none
+    of an excluded project's."""
     from ..storage.sqlite import connect
 
     sessions: list[dict] = []
     if cfg.db_path.exists():
         conn = connect(cfg.db_path, readonly=True)
         try:
-            cols = ", ".join(("id",) + ANALYSIS_COLS)
+            cols = ", ".join(("id", "project_path AS _project", "machine_path AS _ran") + ANALYSIS_COLS)
             for r in conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done'").fetchall():
                 rec = dict(r)
+                ran = (rec.pop("_project"), rec.pop("_ran"))
+                if any(cfg.is_excluded(p) for p in ran):
+                    continue  # an excluded project's analysis stays here, as its transcript does
                 rec["knowledge"] = [dict(k) for k in conn.execute(
                     f"SELECT {', '.join(KNOWLEDGE_COLS)} FROM knowledge WHERE session_id = ? AND source = 'analysis'",
                     (rec["id"],)).fetchall()]
