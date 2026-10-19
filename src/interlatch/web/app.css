@@ -2321,19 +2321,24 @@ table.team-projects td { vertical-align: middle; }
 .pg-menu .menu-list button span { font-size: 11.5px; color: var(--muted); }
 .pc-wrap > .pg-menu .menu-list { top: auto; bottom: calc(100% + 6px); }
 td.pg-cell { width: 1%; text-align: right; }
-.sb-fold-head { display: flex; align-items: center; gap: 6px; width: calc(100% - 12px); border: 0; background: transparent; cursor: pointer; padding: 0; text-align: left; }
+/* The Projects sidebar's folds, set out like Slack's sections: a header in the row's own type with its caret where a row's
+   icon goes, so its name lines up with the rows above, and the projects in it one step in (a hub's folders a second step) */
+.sb-fold { margin-top: 10px; }
+.sb-fold-head { display: flex; align-items: center; gap: 9px; width: 100%; margin: 0; padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 12.5px; font-weight: 650; line-height: 1.4; text-transform: none; letter-spacing: 0; color: var(--vib-ink); }
 .sb-fold-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-fold-head em { font-style: normal; letter-spacing: 0; }
-.sb-fold-head:hover { color: var(--ink); }
-.sb-caret { width: 12px; height: 12px; transition: transform 0.15s; }
+.sb-fold-head em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--vib-muted); font-variant-numeric: tabular-nums; }
+.sb-fold-head:hover { background: var(--hover); }
+.sb-caret { flex: none; width: 15px; height: 13px; color: var(--vib-muted); transition: transform 0.15s; }
 .sb-fold-head[aria-expanded="true"] .sb-caret { transform: rotate(90deg); }
+.sb-fold > .sb-row { padding-left: 24px; }
+.sb-fold > .sb-row.sb-sub { padding-left: 40px; }
 /* On a computer that sends to a hub: the hub's projects, each over the folders here that go to it (projectsSidebar) */
-.sb-hub-head .sb-hub-ic { width: 13px; height: 13px; color: var(--hub-ink); }
+.sb-hub-head .sb-hub-ic { flex: none; width: 14px; height: 14px; margin-left: -4px; color: var(--hub-ink); }
 .sb-row.sb-hubproj { font-weight: 600; }
 .sb-row.sb-hubproj .sb-ext { display: none; width: 12px; height: 12px; }
 .sb-row.sb-hubproj:is(:hover, :focus-visible) .sb-ext { display: block; }
 .sb-row.sb-hubproj:is(:hover, :focus-visible) em { display: none; }
-.sb-row.sb-sub { padding-left: 22px; }
 .gd-back { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.45); }
 .gd { width: min(560px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: 8px; overflow: auto; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25); }
 .gd-head { display: flex; align-items: center; justify-content: space-between; }
