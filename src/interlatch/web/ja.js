@@ -1921,7 +1921,7 @@ window.INTERLATCH_JA = {
   "Every folder": "すべてのフォルダー",
   // Devices on a computer that sends to a hub (its projects there), Team › Hub settings
   "Share now": "今すぐ共有",
-  "Leave the hub at {host}? This computer stops sending to it, and records and analyzes its own sessions again. The hub keeps what it was sent. Joining again takes a new invite.": "{host} のハブから抜けますか？このコンピューターはハブへの送信をやめ、自分のセッションを再び自分で記録・分析します。ハブは送られたものを残します。再び参加するには新しい招待が必要です。",
+  "Leave the hub at {host}? This computer stops sending to it, and records and analyzes its own sessions again. The hub keeps what it was sent. Teammates' lessons from it are removed here, and its folders and shared groups are put aside: joining this hub again from the command line, with a new invite, offers to bring them back; another hub never gets them.": "{host} のハブから抜けますか？このコンピューターはハブへの送信をやめ、自分のセッションを再び自分で記録・分析します。ハブは送られたものを残します。そのハブからのチームメイトのナレッジはここから削除され、フォルダーと共有グループの設定は別に保存されます。新しい招待でコマンドラインから同じハブに再び参加すると、元に戻すか尋ねます。ほかのハブには渡りません。",
   "This computer left the hub.": "このコンピューターはハブから抜けました。",
   "Leave the hub…": "ハブから抜ける…",
   "Nothing sent yet": "まだ何も送っていません",

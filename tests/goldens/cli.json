@@ -785,7 +785,8 @@
        "signin",
        "project",
        "purge",
-       "rejoin"
+       "rejoin",
+       "set-url"
       ],
       "const": null,
       "default": "status",
@@ -1037,6 +1038,38 @@
       "nargs": 0,
       "option_strings": [
        "--yes"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": null,
+      "dest": "restore",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--restore"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreFalseAction",
+      "choices": null,
+      "const": false,
+      "default": null,
+      "dest": "restore",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--no-restore"
       ],
       "required": false,
       "type": null

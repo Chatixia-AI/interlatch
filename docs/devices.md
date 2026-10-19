@@ -252,8 +252,14 @@ Devices › Projects on the hub**, each project has these buttons:
   hub files them by their git remote or their own folder again.
 
 `interlatch hub leave`, or **Leave the hub…** in **Settings › Devices**, makes the computer record and analyze its own
-sessions again; the hub keeps what it was sent. Joining again takes a new invite. `interlatch hub disable` on the hub
-stops it accepting sessions.
+sessions again; the hub keeps what it was sent. It also removes the teammates' lessons that came from the hub, and
+puts aside what the computer had for that hub (its folders, the projects it left, and its groups shared there) in
+`~/.interlatch/hub-left/`, so a different hub joined later never gets any of it. Whether it shares knowledge only
+(`[hub] share`) stays as it is. Joining again takes a new invite; joining the same hub again asks whether to bring those back (`interlatch hub join … --restore` or
+`--no-restore` answers without asking). While a computer is in one hub, `interlatch hub join` refuses another before
+it contacts it; joining the same hub again, at any spelling of its address, only renews the computer's token. A hub
+that moved to a new address: `interlatch hub set-url <address>` on each computer keeps everything. `interlatch hub
+disable` on the hub stops it accepting sessions.
 
 ## People and roles
 

@@ -65,8 +65,12 @@ def new_token(cfg: Config) -> str:
 
 
 def token_ok(cfg: Config, authorization: str | None) -> bool:
+    from .membership import left_token
+
     expected = read_token(cfg)
     if not expected or cfg.is_spoke or not authorization or not authorization.startswith("Bearer "):
+        return False
+    if left_token(cfg):  # the token of a hub this computer sent to, still on file: never this computer's own
         return False
     return hmac.compare_digest(authorization[7:].strip().encode(), expected.encode())
 

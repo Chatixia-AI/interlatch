@@ -20,7 +20,7 @@ from ..core.config import Config
 from ..core.machine import local_machine, platform_label
 from ..core.paths import normalize_project_path
 from ..projects import routing  # git_info through routing: one patch there reaches every caller
-from .identity import machine_key, read_token, token_path
+from .identity import machine_key, read_token
 from .projects import REPOS_CACHE_S, GroupRoutes, _record_folders, group_routes, sent_folders
 from .protocol import PROTOCOL, FolderError, HubError, HubUnauthorized, HubUnreachable, _check_protocol
 
@@ -258,11 +258,17 @@ def handshake(cfg: Config, client: HubClient | None = None) -> dict:
 def redeem_invite(cfg: Config, url: str, code: str, client: HubClient | None = None) -> dict:
     """Trade an invite code for this computer's own token at the hub (`interlatch hub join --code`).
 
-    Returns the hub's answer: {"token", "person", "hub"}. The caller keeps the token (write_token).
+    Returns the hub's answer: {"token", "person", "hub"}. The caller keeps the token (write_token). A computer that
+    sends to another hub is refused before anything goes out: the join sends this computer's key, which is how a hub
+    recognises it (people.may_claim), and another hub's operator has no business with it.
     """
+    from .membership import other_hub, same_hub
+
+    if joined := other_hub(cfg, url):
+        raise HubError(f"this computer sends to the hub at {joined}; leave it first (`interlatch hub leave`)")
     me = local_machine(cfg)
     client = client or HubClient(url, "")
-    if read_token(cfg) and cfg.hub_url and HubClient(cfg.hub_url, "").url == client.url:
+    if read_token(cfg) and cfg.hub_url and same_hub(cfg.hub_url, client.url):
         # it sends to this hub already (with the shared token): a hello first puts its key on record there, so the
         # invite can claim this computer's id with it (people.may_claim)
         try:
@@ -391,10 +397,24 @@ def rejoin_project(cfg: Config, project: str) -> Config:
 
 @_one_change
 def leave_hub(cfg: Config) -> Config:
-    """`interlatch hub leave`: stop sending to the hub. This computer records and analyzes its own sessions again; the
-    hub keeps what it was sent."""
+    """`interlatch hub leave`, and Settings › Devices › Leave the hub: stop sending to the hub. This computer records
+    and analyzes its own sessions again; the hub keeps what it was sent. What this computer kept for that hub is put
+    aside and cleared (membership.leave), the token first, so a hub joined later never gets any of it."""
+    from ..core.config import load_config
+    from .membership import leave
+
+    leave(cfg)
+    return load_config(cfg.home)
+
+
+@_one_change
+def move_hub(cfg: Config, url: str) -> Config:
+    """`interlatch hub set-url`: the hub this computer sends to now answers at `url`. Only the address changes: the
+    token, the folders and everything else stay, and nothing is sent until the next push."""
     from ..core.config import load_config, set_config_value
 
-    set_config_value(cfg, "hub", "url", '""')
-    token_path(cfg).unlink(missing_ok=True)
+    if not cfg.is_spoke:
+        raise HubError("this computer has not joined a hub (`interlatch hub join`)")
+    HubClient(url, "")  # an http(s) address, or HubError
+    set_config_value(cfg, "hub", "url", json.dumps(url.rstrip("/")))
     return load_config(cfg.home)
