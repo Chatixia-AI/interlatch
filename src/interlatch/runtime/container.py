@@ -52,6 +52,9 @@ def hub_url(env: Mapping[str, str]) -> tuple[str, str]:
         raise SetupError("INTERLATCH_HUB_URL is not set: the address computers and browsers reach this hub at, "
                          "e.g. https://interlatch.example.com")
     parts = urlparse(url)
+    if parts.scheme in ("http", "https") and not parts.netloc:  # compose.yaml writes https:// and the domain after it
+        raise SetupError("INTERLATCH_HUB_URL has no host name: with compose.yaml, set INTERLATCH_DOMAIN in .env "
+                         "(a name such as interlatch.example.com, without https://)")
     if parts.scheme not in ("http", "https") or not parts.hostname or parts.path or parts.query or parts.fragment:
         raise SetupError(f"INTERLATCH_HUB_URL must be an address such as https://interlatch.example.com, not {url!r}")
     return url, parts.hostname.lower()

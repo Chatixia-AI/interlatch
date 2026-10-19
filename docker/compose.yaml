@@ -14,7 +14,8 @@
 # A .env written before Interlatch was renamed from Chronicle names its settings CHRONICLE_*: each one still counts
 # when its INTERLATCH_* name isn't set. The names below that stay "chronicle" (the project, so its volumes, and the
 # database and its user) are what a hub set up before the rename keeps its data under: changing them would start it
-# empty.
+# empty. A fallback to a CHRONICLE_* name never ends in :? (required): Compose checks a nested :? even when the
+# INTERLATCH_* name is set, so a new .env would fail. The hub stops with what to set when the domain or admin is missing.
 name: chronicle
 
 services:
@@ -26,9 +27,10 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      INTERLATCH_DOMAIN: ${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN:?set INTERLATCH_DOMAIN in .env}}
+      # localhost keeps Caddy up without a domain, so `docker compose logs hub` can say to set it
+      INTERLATCH_DOMAIN: ${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN:-localhost}}
       # a Caddyfile from before the rename reads this name, and an update downloads only compose.yaml
-      CHRONICLE_DOMAIN: ${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN:?set INTERLATCH_DOMAIN in .env}}
+      CHRONICLE_DOMAIN: ${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN:-localhost}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -45,9 +47,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      INTERLATCH_HUB_URL: https://${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN}}
+      INTERLATCH_HUB_URL: https://${INTERLATCH_DOMAIN:-${CHRONICLE_DOMAIN:-}}
       INTERLATCH_HOST: 127.0.0.1
-      INTERLATCH_ADMIN_EMAIL: ${INTERLATCH_ADMIN_EMAIL:-${CHRONICLE_ADMIN_EMAIL:?set INTERLATCH_ADMIN_EMAIL in .env}}
+      INTERLATCH_ADMIN_EMAIL: ${INTERLATCH_ADMIN_EMAIL:-${CHRONICLE_ADMIN_EMAIL:-}}
       INTERLATCH_ADMIN_NAME: ${INTERLATCH_ADMIN_NAME:-${CHRONICLE_ADMIN_NAME:-}}
       INTERLATCH_HUB_NAME: ${INTERLATCH_HUB_NAME:-${CHRONICLE_HUB_NAME:-}}
       INTERLATCH_TEAM_STORE: postgres
