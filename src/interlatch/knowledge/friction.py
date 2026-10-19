@@ -16,6 +16,7 @@ import re
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
+from math import comb
 
 from ..core.i18n import tr
 from ..core.util import loads, one_line, parse_ts, utcnow
@@ -841,3 +842,82 @@ def sessions_since(cause: dict, when: str | None) -> int:
     if not start:
         return 0
     return sum(1 for ts in (cause.get("_last_by_session") or {}).values() if (parse_ts(ts) or start) > start)
+
+
+# ---------------------------------------------------------------- did an applied fix help?
+EFFECT_BEFORE_DAYS = 28  # the baseline: sessions in the four weeks before the fix
+EFFECT_MIN_SESSIONS = 5  # sessions on each side before a verdict
+CONFOUND_DAYS = 7  # another fix for the same cause applied this close, where both reach, can't be told apart
+HELPED_RATIO = 0.5  # the share of sessions hitting the cause fell to half or less, and by more than chance (HELPED_P)
+HELPED_P = 0.1
+NOT_HELPING_RATIO = 0.8  # ... or stayed at 80% or more of what it was
+RETIRE_AFTER_DAYS = 21
+RETIRE_MIN_SESSIONS = 10
+
+
+def reaches(fix: dict, other: dict) -> bool:
+    """Two applied fixes reach some of the same sessions: the same agent (or 'all'), and the same project or user level."""
+    agents = {fix.get("agent") or "all", other.get("agent") or "all"}
+    same_agent = "all" in agents or len(agents) == 1
+    return same_agent and (not fix.get("project_path") or not other.get("project_path")
+                           or fix["project_path"] == other["project_path"])
+
+
+def effect(conn: sqlite3.Connection, cause: dict, fix: dict, others: list[dict] = (), *,
+           now: datetime | None = None) -> dict | None:
+    """Whether an applied fix (a suggestions row: applied_at, agent, project_path) helped, honestly: the share of the
+    sessions it reached that hit `cause` in the four weeks before it against the share since. A session counts on the
+    side it started on, since one that began earlier never read the fix. Only analyzed sessions count when any are, so
+    both sides carry the same evidence (friction notes arrive with the analysis).
+
+    verdict: `confounded` when another fix for the same cause (`others`) was applied within CONFOUND_DAYS and reaches the
+    same sessions, as neither can take the credit; `unclear` with fewer than EFFECT_MIN_SESSIONS sessions on a side, no
+    baseline (fewer than 2 hits before), or a change too small to call; `helped` when the share fell to HELPED_RATIO or
+    less and chance explains that poorly (p < HELPED_P, Fisher's exact test); `not_helping` when it stayed at
+    NOT_HELPING_RATIO or more with 2+ hits since. `retire` marks a line that has not helped for RETIRE_AFTER_DAYS over
+    RETIRE_MIN_SESSIONS sessions. Needs a cause from _scan."""
+    applied = parse_ts(fix.get("applied_at"))
+    if not applied:
+        return None
+    now = now or utcnow()
+    sql = ("SELECT id, started_at, analysis_status FROM sessions WHERE source = 'transcript' AND started_at >= ? "
+           "AND started_at IS NOT NULL")
+    params: list = [(applied - timedelta(days=EFFECT_BEFORE_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")]
+    if fix.get("agent") and fix["agent"] != "all":
+        sql += " AND agent = ?"
+        params.append(fix["agent"])
+    if fix.get("project_path"):
+        sql += " AND project_path = ?"
+        params.append(fix["project_path"])
+    rows = [r for r in conn.execute(sql, params) if parse_ts(r["started_at"])]
+    if any(r["analysis_status"] in ("done", "skipped", "stale") for r in rows):
+        rows = [r for r in rows if r["analysis_status"] in ("done", "skipped", "stale")]
+    hit = cause.get("_sessions") or set()
+    sides = {"before": [0, 0], "after": [0, 0]}  # [sessions that hit the cause, sessions]
+    for r in rows:
+        side = sides["after" if parse_ts(r["started_at"]) >= applied else "before"]
+        side[0] += r["id"] in hit
+        side[1] += 1
+    (hb, nb), (ha, na) = sides["before"], sides["after"]
+    days = max(0, (now - applied).days)
+    out = {"before": [hb, nb], "after": [ha, na], "days": days, "verdict": "unclear", "retire": False}
+    near = [o for o in others if o.get("id") != fix.get("id") and parse_ts(o.get("applied_at"))
+            and abs((parse_ts(o["applied_at"]) - applied).total_seconds()) <= CONFOUND_DAYS * 86400 and reaches(fix, o)]
+    if near:
+        return {**out, "verdict": "confounded", "with": near[0].get("title") or ""}
+    if nb < EFFECT_MIN_SESSIONS or na < EFFECT_MIN_SESSIONS or hb < 2:
+        return out
+    before, after = hb / nb, ha / na
+    if after <= before * HELPED_RATIO and fewer_by_chance(hb, nb, ha, na) < HELPED_P:
+        out["verdict"] = "helped"
+    elif after >= before * NOT_HELPING_RATIO and ha >= 2:
+        out["verdict"] = "not_helping"
+        out["retire"] = days >= RETIRE_AFTER_DAYS and na >= RETIRE_MIN_SESSIONS
+    return out
+
+
+def fewer_by_chance(hb: int, nb: int, ha: int, na: int) -> float:
+    """One-sided Fisher's exact test: the chance of `ha` or fewer hits among `na` sessions if a fix changed nothing
+    (the hits fell on the two sides at random)."""
+    total, hits = nb + na, hb + ha
+    return sum(comb(hits, x) * comb(total - hits, na - x) for x in range(ha + 1)) / comb(total, na)

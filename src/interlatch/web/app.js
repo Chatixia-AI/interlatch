@@ -7305,6 +7305,13 @@ const sgAct = {
     toast(was === "applied" ? t("Taken back out of {path}", { path: homePath(r.path || x.target_path) }) : t("Back in the queue"));
     return true;
   },
+  async retire(x) { // an applied line that didn't help: out of its file, and not proposed again
+    const r = await post(`/api/suggestions/${x.id}/retire`);
+    if (!r.ok) { toast(t("Could not remove it: {error}", { error: r.error || t("unknown error") }), 6000); return false; }
+    Object.assign(x, { status: "dismissed", applied_at: null, applied_text: null, dismissed_reason: "didn't help" });
+    toast(t("Taken out of {path}; it won't be proposed again", { path: homePath(r.path || x.target_path) }));
+    return true;
+  },
   async dismiss(x) {
     const r = await post(`/api/suggestions/${x.id}/dismiss`);
     if (!r.ok) { toast(t("Could not dismiss: {error}", { error: r.error || t("unknown error") }), 6000); return false; }
@@ -7379,7 +7386,8 @@ function suggestionCard(x, { onStatus } = {}) {
       const prev = x.status;
       if (verb === "apply" && !(await checkBeforeApply())) return;
       if (await sgAct[verb](x, verb === "apply" && editor ? current() : undefined)) redraw(prev);
-    }) }, { apply: t("Apply"), undo: x.status === "dismissed" ? t("Restore") : t("Undo"), dismiss: t("Dismiss"), done: t("Mark done") }[verb]);
+    }) }, { apply: t("Apply"), undo: x.status === "dismissed" ? t("Restore") : t("Undo"), retire: t("Remove the line"),
+      dismiss: t("Dismiss"), done: t("Mark done") }[verb]);
     return b;
   };
   const preview = h("button", { class: "btn small", type: "button", "aria-expanded": "false", onclick: () => {
@@ -7402,9 +7410,10 @@ function suggestionCard(x, { onStatus } = {}) {
   else body = h("pre", { class: "sg-code" }, x.status === "applied" ? x.applied_text || x.text : x.text);
   let actions;
   if (x.status === "applied" || x.status === "done") {
-    actions = [h("span", { class: "muted" }, x.status === "done" ? t("Marked done {ago}", { ago: ago(x.applied_at) }) : t("Applied {ago}", { ago: ago(x.applied_at) })), act("undo", t("Undoing…"))];
+    actions = [h("span", { class: "muted" }, x.status === "done" ? t("Marked done {ago}", { ago: ago(x.applied_at) }) : t("Applied {ago}", { ago: ago(x.applied_at) })),
+      e.effect?.retire && x.kind === "instruction" ? act("retire", t("Removing…"), "btn small primary") : null, act("undo", t("Undoing…"))];
   } else if (x.status === "dismissed") {
-    actions = [h("span", { class: "muted" }, x.dismissed_reason ? t("Dismissed: {reason}", { reason: x.dismissed_reason }) : t("Dismissed")), act("undo", t("Restoring…"))];
+    actions = [h("span", { class: "muted" }, x.dismissed_reason ? t("Dismissed: {reason}", { reason: x.dismissed_reason === "didn't help" ? t("didn't help") : x.dismissed_reason }) : t("Dismissed")), act("undo", t("Restoring…"))];
   } else if (x.kind === "environment") {
     actions = [act("done", t("Saving…"), "btn small primary"), act("dismiss", t("Dismissing…"))];
   } else {
@@ -7433,6 +7442,7 @@ function suggestionCard(x, { onStatus } = {}) {
       x.status === "stale" ? h("span", { class: "badge muted-badge", title: t("The cause has not been seen lately") }, h("span", { class: "sdot" }), t("not seen lately")) : null),
     h("div", { class: "sg-title" }, x.title),
     h("div", { class: "sg-evidence" }, sgEvidence(x)),
+    x.status === "applied" && e.effect_line ? h("div", { class: `sg-effect ${e.effect?.verdict || ""}` }, e.effect_line) : null,
     examples.length ? h("ul", { class: "sg-examples one-line" }, examples.map((ex) => h("li", { title: ex.note || null },
       h("a", { href: `#/session/${ex.session_id}` }, ex.title || ex.session_id.slice(0, 8)),
       ex.note ? h("span", { class: "muted" }, ` · ${ex.note}`) : null))) : null,

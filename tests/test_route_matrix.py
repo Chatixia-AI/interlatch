@@ -222,6 +222,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/suggestions/refresh"): POST_ADMIN,
     ("POST", "/api/suggestions/{n}/apply"): POST_ADMIN.ok(404),
     ("POST", "/api/suggestions/{n}/unapply"): POST_ADMIN.ok(404),
+    ("POST", "/api/suggestions/{n}/retire"): POST_ADMIN.ok(404),
     ("POST", "/api/suggestions/{n}/dismiss"): POST_ADMIN.ok(404),
     ("POST", "/api/suggestions/{n}/done"): POST_ADMIN.ok(404),
     ("POST", "/api/suggestions/{n}/edit"): POST_ADMIN.ok(404),

@@ -199,6 +199,7 @@ The **Home** page shows a **Suggestions** card with the top 3 waiting, when ther
 | `interlatch suggest dismiss ID [--reason R]` | Never propose it again (an applied one must be undone first) |
 | `interlatch suggest done ID` | You ran a setup step |
 | `interlatch suggest undo ID` | Take an applied line or config change back out, or put a dismissed or done one back in the queue |
+| `interlatch suggest retire ID` | Take an applied line that [didn't help](#did-it-help) back out, and never propose it again |
 | `interlatch suggest move ID --to user\|project` | [Move](#moving-a-line) a waiting line to your user-level file, or back to the files of its projects |
 | `interlatch suggest refresh` | Look at the latest sessions and knowledge now |
 
@@ -228,10 +229,35 @@ again**, and by `interlatch suggest refresh`.
 | Status | Meaning |
 | --- | --- |
 | `new` (To review) | Waiting for you. A refresh updates its evidence, but keeps text you edited |
-| `applied` | Written. For a friction fix, the evidence counts the sessions that hit the cause since ("seen in 2 sessions since applied", or "not seen since applied") |
+| `applied` | Written. For a friction fix, the evidence counts the sessions that hit the cause since ("seen in 2 sessions since applied", or "not seen since applied"), and says whether it [helped](#did-it-help) |
 | `done` | A setup step you marked as run |
 | `stale` | Its cause stopped happening, or the file already has it. It comes back as new if the cause returns |
 | `dismissed` | Never proposed again, whatever later sessions show. **Restore** (or `interlatch suggest undo ID`) puts it back |
+
+### Did it help?
+
+An applied friction fix says whether the cause got rarer. Interlatch compares the share of sessions that hit the cause
+in the 4 weeks before the fix with the share since, among the sessions the fix reaches: its agent, and its project
+for a project file. A session counts on the side it started on, because one that began earlier never read the line.
+Once any of those sessions is analyzed, only analyzed ones count, since friction notes arrive with the analysis.
+
+| Verdict | When |
+| --- | --- |
+| **Helped** | The share fell to half or less, by more than chance would explain (one-sided Fisher's exact test, p < 0.1) |
+| **Not helping** | The share stayed at 80% or more of what it was, with at least 2 sessions hitting it since |
+| **Can't tell** | Another fix for the same cause was applied within a week and reaches the same sessions (for example the Playwright config change and its CLAUDE.md line), so neither gets the credit |
+| **Too early to tell** | Fewer than 5 sessions on either side, fewer than 2 hits before, or a change in between |
+
+The counts behind the verdict are shown next to it ("4 of 13 sessions hit this in the 4 weeks before, 4 of 12
+since"). The comparison can't see everything else that changed, such as a new agent version or a different kind of
+work, so read it as a hint, not a measurement.
+
+Every line in an instruction file is read at the start of every session, and a file holds at most 8 of Interlatch's
+lines. When a line has not helped for 3 weeks and at least 10 sessions, its card offers **Remove the line**
+(`interlatch suggest retire ID`): the line leaves the file, and the suggestion is dismissed so it isn't proposed again.
+
+The SessionStart digest leaves tentative (`wip`) lessons out for the same reason. The interlatch MCP tools still
+find them.
 
 ## Undoing
 
