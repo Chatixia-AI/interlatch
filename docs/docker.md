@@ -27,6 +27,11 @@ file paths stay on the computers. The hub analyzes nothing, so it needs no model
   that points at `172.207.25.249`. For a name only your company network reaches, see
   [Your own certificate](#your-own-certificate).
 
+    Every hub needs a name of its own. A browser sends the cookies of one name to every port of it, so two hubs on
+    one name, even on different ports, could sign in to each other as their people. For a second hub on the same
+    server, put a word in front: `team-b.172-207-25-249.sslip.io` points at the same address
+    ([One name per hub](devices.md#one-name-per-hub)).
+
 To install Docker on the server:
 
 ```bash

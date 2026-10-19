@@ -34,6 +34,7 @@ from interlatch.sharing.receiver import IngestTrigger
 from interlatch.interfaces.web import api
 from interlatch.interfaces.web import handler as handler_mod
 from interlatch.interfaces.web import routes as route_table
+from interlatch.interfaces.web.handler import session_cookie_name
 
 from conftest import CWD, SID
 from test_hub import _serve
@@ -492,13 +493,15 @@ def matrix(synced, monkeypatch):
         tokens[kind] = json.loads(body)["token"]
     people.set_role(conn, vic["id"], "readonly")
 
+    cookie = session_cookie_name(conn, https=False, create=True)  # the hub's own session cookie name
+
     def headers(kind: str) -> dict:
         if kind == "here":
             return {}
         if kind == "anon":
             return dict(REMOTE)
         if kind in browser:
-            return {**REMOTE, "Cookie": f"interlatch_session={browser[kind]}"}
+            return {**REMOTE, "Cookie": f"{cookie}={browser[kind]}"}
         return {**REMOTE, "Authorization": f"Bearer {shared if kind == 'shared' else tokens[kind]}"}
 
     machines = {"shared": SHARED_PC, "member_pc": BOB_PC, "readonly_pc": VIC_PC}

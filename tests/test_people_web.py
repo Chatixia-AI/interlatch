@@ -15,6 +15,7 @@ from interlatch.sharing.client import dashboard_signin
 from interlatch.sharing.identity import new_token, write_token
 from interlatch.sharing.receiver import IngestTrigger
 from interlatch.core.config import load_config, set_config_value
+from interlatch.interfaces.web.handler import session_cookie_name
 
 from test_hub import _serve
 
@@ -71,6 +72,8 @@ def _call(url, path, body=None, headers=None):
 
 
 def _as(session, **extra):
+    """A browser signed in to the test's hub. Under the cookie name every hub used before it had its own, which the
+    hub still takes (and replaces): the hub's own name depends on the hub (test_hub_cookie.py)."""
     return {**REMOTE, "Cookie": f"interlatch_session={session}", **extra}
 
 
@@ -172,7 +175,8 @@ def test_signing_in_with_a_link(team):
     code = people.invite(conn, team["vic"]["id"])
     status, headers, _ = _signin(url, code.lower(), headers=REMOTE)
     cookie = headers["Set-Cookie"]
-    assert status == 302 and headers["Location"] == "/#/" and "Secure" not in cookie and cookie.startswith("interlatch_session=")
+    name = session_cookie_name(conn, https=False)
+    assert status == 302 and headers["Location"] == "/#/" and "Secure" not in cookie and cookie.startswith(f"{name}=")
     assert all(part in cookie for part in ("HttpOnly", "SameSite=Lax", "Path=/", "Max-Age=2592000"))
     session = cookie.split(";")[0].split("=", 1)[1]
     assert _call(url, "/api/me", headers=_as(session))[1]["viewer"]["name"] == "Vic"
@@ -215,7 +219,8 @@ def test_a_link_alone_signs_nobody_in(team):
     assert people.peek_invite(conn, code)  # still unused: a refused POST doesn't look at the code
 
     status, headers, _ = _post_form(url, {"code": code}, {**REMOTE, "Sec-Fetch-Site": "same-origin"})
-    assert status == 302 and headers["Set-Cookie"].startswith("interlatch_session=") and not people.peek_invite(conn, code)
+    assert status == 302 and headers["Set-Cookie"].startswith(f"{session_cookie_name(conn, https=False)}=")
+    assert not people.peek_invite(conn, code)
     status, _, page = _post_form(url, {"code": "AAAA-BBBB-CCCC"}, {**REMOTE, "Origin": f"http://{urlparse(url).netloc}"})
     assert status == 400 and b"known on this hub" in page  # the dashboard's own code form: a wrong code
 

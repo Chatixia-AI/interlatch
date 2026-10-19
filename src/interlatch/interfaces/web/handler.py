@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -20,8 +21,49 @@ from .assets import PAGE_CSP, WEB_FILES, web_type
 from . import api, routes
 
 LOOPBACK = ("127.0.0.1", "localhost", "[::1]")
-SESSION_COOKIE = "interlatch_session"  # a person's dashboard session on a hub (people.py)
-LEGACY_SESSION_COOKIE = "chronicle_session"  # the same, signed in before the rename: still honoured until it expires
+# A person's dashboard session on a hub (people.py) is kept in a cookie named for that hub: interlatch_session_<id>,
+# and __Host-interlatch_session_<id> over https (session_cookie_name). Browsers keep cookies by host name, not port, so
+# two hubs on one name with one cookie name took each other's sign-in.
+SESSION_COOKIE = "interlatch_session"
+COOKIE_ID_KEY = "hub_cookie_id"  # kv: the hub's own random id in its cookie's name, made at its first sign-in
+COOKIE_ID_RE = re.compile(r"[0-9a-f]{8}")
+# Names every hub used before it had its own: still taken, so nobody is signed out by an upgrade, and replaced by the
+# hub's own name on the first answer that finds one holding a session of this hub (_viewer). Drop them once a release
+# with this has been out longer than a session lasts (people.BROWSER_DAYS after its last use).
+LEGACY_COOKIES = (SESSION_COOKIE, "chronicle_session")  # chronicle_session: from before the rename to Interlatch
+
+
+def session_cookie_name(conn, *, https: bool, create: bool = False) -> str | None:
+    """The name of this hub's session cookie: its own random id (kv hub_cookie_id), so that two hubs reached under one
+    host name don't overwrite each other's sign-in. Over https it starts with __Host-, which a browser takes only from a
+    secure page, with Path=/ and no Domain, so another site or a plain-http server on the same name can't set it.
+    None while the hub has no id yet (it never signed anyone in), unless `create` makes one: only signing in and
+    replacing an old cookie do, so a dashboard without people never writes it."""
+    from ...storage.kv import kv_get, kv_set, kv_transaction
+
+    hub_id = kv_get(conn, COOKIE_ID_KEY)
+    if not (hub_id and COOKIE_ID_RE.fullmatch(hub_id)):
+        if not create:
+            return None
+        with kv_transaction(conn):  # two first sign-ins at once agree on one id
+            hub_id = kv_get(conn, COOKIE_ID_KEY)
+            if not (hub_id and COOKIE_ID_RE.fullmatch(hub_id)):
+                hub_id = secrets.token_hex(4)
+                kv_set(conn, COOKIE_ID_KEY, hub_id)
+    return f"{'__Host-' if https else ''}{SESSION_COOKIE}_{hub_id}"
+
+
+def sent_cookies(values: list[str]) -> dict[str, list[str]]:
+    """The cookies a request's Cookie headers carry, by name, each value in the order sent. Read leniently, pair by
+    pair: a browser also sends the cookies of other servers on the same host name, and one odd value among them must
+    not hide this hub's (http.cookies gives up on the whole header)."""
+    out: dict[str, list[str]] = {}
+    for line in values:
+        for part in line.split(";"):
+            name, eq, value = part.strip().partition("=")
+            if eq and name and value.strip():
+                out.setdefault(name, []).append(value.strip())
+    return out
 
 # headers a proxy adds: a request with any of them came through one, so it is not from someone at this computer
 PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
@@ -46,6 +88,8 @@ def make_handler(app: App, port: int):
         server_version = f"interlatch/{__version__}"
         viewer: dict | None = None  # who is viewing (_viewer), None meaning an admin
         limited = False  # the viewer sees only some projects (access.py): set per request in _get
+        signed_in = ""  # the session cookie _viewer signed the viewer in with
+        cookies_out: list[str] | tuple = ()  # Set-Cookie headers for this answer: a new list per request (do_GET, do_POST)
 
         def log_message(self, fmt, *args):  # quiet
             log.debug("%s - %s", self.address_string(), fmt % args)
@@ -128,22 +172,52 @@ def make_handler(app: App, port: int):
             return (self.client_address[0] in app.cfg.server_trusted_proxies
                     and (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https")
 
+        def _cookie_name(self, create: bool = False) -> str | None:
+            return session_cookie_name(app.conn, https=self._proxied_https(), create=create)
+
         def _session(self) -> str:
-            return next(iter(self._sessions()), "")
+            """The session this browser is signed in with (_viewer found it), else the first one it sent."""
+            return self.signed_in or next((v for _, v in self._session_cookies()), "")
 
         def _sessions(self) -> tuple[str, ...]:
-            """The session cookies this browser sent: the current one first, then one from before the rename."""
-            from http.cookies import CookieError, SimpleCookie
+            return tuple(v for _, v in self._session_cookies())
 
-            try:
-                jar = SimpleCookie(self.headers.get("Cookie") or "")
-            except CookieError:
-                return ()
-            return tuple(m.value for m in (jar.get(SESSION_COOKIE), jar.get(LEGACY_SESSION_COOKIE)) if m and m.value)
+        def _session_cookies(self) -> list[tuple[str, str]]:
+            """(name, value) of the session cookies this browser sent: this hub's own name first, then the names from
+            before it had one. Over https only the __Host- name counts, which no plain-http server can set."""
+            current = self._cookie_name()
+            sent = sent_cookies(self.headers.get_all("Cookie") or [])
+            return [(n, v) for n in ((current,) if current else ()) + LEGACY_COOKIES for v in sent.get(n, ())]
 
         def _session_cookie(self, value: str, max_age: int) -> str:
+            secure = "; Secure" if self._proxied_https() else ""  # __Host- (over https) requires it
+            return f"{self._cookie_name(create=True)}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}{secure}"
+
+        def _clear_cookie(self, name: str) -> str:
             secure = "; Secure" if self._proxied_https() else ""
-            return f"{SESSION_COOKIE}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}{secure}"
+            return f"{name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0{secure}"
+
+        def _ours(self) -> list[tuple[str, str]]:
+            """The session cookies this browser sent that hold a live session of this hub. A cookie under an old name
+            may be another hub's on the same host name: that one is left alone, never cleared from here."""
+            from ...sharing import people
+
+            return [(n, v) for n, v in self._session_cookies() if people.browser_person(app.conn, v)]
+
+        def _replace_cookie(self, value: str):
+            """This browser's session `value` came in a cookie under an old name: the answer sets it under this hub's
+            own name and clears the old names that held it. The session itself goes on (no new secret), so requests
+            the page sends meanwhile, still with the old cookie, keep working."""
+            from ...sharing import people
+
+            self.cookies_out.append(self._session_cookie(value, people.BROWSER_DAYS * 86400))
+            self.cookies_out += [self._clear_cookie(n) for n, v in self._session_cookies() if v == value and n in LEGACY_COOKIES]
+
+        def end_headers(self):
+            for cookie in self.cookies_out:  # set while answering (_viewer, sign-in, sign-out), whatever the answer
+                self.send_header("Set-Cookie", cookie)
+            self.cookies_out = []
+            super().end_headers()
 
         def _viewer(self) -> tuple[dict | None, tuple[dict, int] | None]:
             """(person, None) for who is viewing, person None being an admin: someone at the hub computer itself, or,
@@ -170,9 +244,13 @@ def make_handler(app: App, port: int):
                 if not person:
                     return None, ({"error": tr("you're not on this hub; ask an admin to add you")}, 403)
                 return person, None
-            person = people.browser_person(app.conn, self._session())
-            if person:
-                return person, None
+            for name, value in self._session_cookies():
+                person = people.browser_person(app.conn, value)
+                if person:
+                    self.signed_in = value
+                    if name in LEGACY_COOKIES:  # signed in before the hub had its own cookie name: move it there
+                        self._replace_cookie(value)
+                    return person, None
             return None, ({"error": tr("sign in to this hub"), "signin": True}, 401)
 
         def _can_admin(self) -> bool:
@@ -279,13 +357,15 @@ def make_handler(app: App, port: int):
 
             if not self._same_origin():
                 return self._signin_refused(people.PeopleError("open the sign-in link again"), status=403)
+            old_names = [n for n, _ in self._ours() if n in LEGACY_COOKIES]  # before they end, below
             opened = self._signin_code(code, lambda c: people.open_browser(
                 app.conn, c, label=self.headers.get("User-Agent"), replaces=self._sessions()))  # this browser's old session ends
             if opened is None:
                 return
+            self.cookies_out = [self._session_cookie(opened[1], people.BROWSER_DAYS * 86400),
+                                *(self._clear_cookie(n) for n in dict.fromkeys(old_names))]
             self.send_response(302)
             self.send_header("Location", people.landing(page))
-            self.send_header("Set-Cookie", self._session_cookie(opened[1], people.BROWSER_DAYS * 86400))
             self.send_header("Cache-Control", "no-store")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Length", "0")
@@ -381,14 +461,12 @@ def make_handler(app: App, port: int):
                 return self._json({"error": str(exc)}, 400)
             return self._json({"error": "not found"}, 404)
 
-        def _json(self, data, status=200, cookie: str | None = None, headers: dict | None = None):
+        def _json(self, data, status=200, headers: dict | None = None):
             body = json.dumps(data, ensure_ascii=False, default=str).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
-            if cookie:
-                self.send_header("Set-Cookie", cookie)
             for name, value in (headers or {}).items():
                 self.send_header(name, value)
             self.end_headers()
@@ -444,6 +522,7 @@ def make_handler(app: App, port: int):
             token = i18n.lang.set(i18n.pick(self._asked_lang()))  # the dashboard's language, per browser
             try:
                 app.refresh_config()
+                self.signed_in, self.cookies_out = "", []
                 return self._get()
             finally:
                 i18n.lang.reset(token)
@@ -453,6 +532,7 @@ def make_handler(app: App, port: int):
             token = i18n.lang.set(i18n.pick(self._asked_lang()))
             try:
                 app.refresh_config()
+                self.signed_in, self.cookies_out = "", []
                 return self._post()
             finally:
                 i18n.lang.reset(token)
@@ -583,9 +663,14 @@ def make_handler(app: App, port: int):
             if urlparse(self.path).path == "/api/signout":
                 from ...sharing import people
 
-                if self._session():
-                    people.sign_out(app.conn, self._session())
-                return self._json({"ok": True}, cookie=self._session_cookie("", 0))
+                # every session cookie of this hub's that the browser sent ends and is cleared: its own name's, and
+                # an old name's not replaced yet; an old name holding another hub's session is left to that hub
+                old_names = [n for n, v in self._ours() if n in LEGACY_COOKIES]
+                for _, value in self._session_cookies():
+                    people.sign_out(app.conn, value)  # no-op for a value that isn't a browser session here
+                current = self._cookie_name()
+                self.cookies_out = [self._clear_cookie(n) for n in dict.fromkeys(([current] if current else []) + old_names)]
+                return self._json({"ok": True})
             self.viewer, refused = self._viewer()
             if refused:
                 return self._json(*refused)
