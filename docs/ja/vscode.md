@@ -33,8 +33,8 @@ Marketplace を使わないエディター（Cursor、Windsurf、Antigravity、V
 
 ```bash
 cd vscode-extension
-npx @vscode/vsce package          # interlatch-0.3.0.vsix を作成
-code --install-extension interlatch-0.3.0.vsix
+npx @vscode/vsce package          # interlatch-0.3.1.vsix を作成
+code --install-extension interlatch-0.3.1.vsix
 ```
 
 一覧が読み込む `/api/file` と `/api/files` エンドポイントは、Interlatch と 0.6.1 より新しい Chronicle にあります。
@@ -49,7 +49,7 @@ code --install-extension interlatch-0.3.0.vsix
 
 | 設定 | 既定値 | 内容 |
 | --- | --- | --- |
-| `interlatch.url` | 空：`chronicle.url` を設定していればその値、なければ `http://127.0.0.1:11524`、それもなければ `:8765` | ダッシュボードのアドレス。Interlatch の[設定](configuration.md)で `[server] port` を変えた場合は合わせて変更します。 |
+| `interlatch.url` | 空：`chronicle.url` を設定していればその値、なければ `http://127.0.0.1:11524`、それもなければ `:8765` | ダッシュボードのアドレス。Interlatch の[設定](configuration.md)で `[server] port` を変えた場合は合わせて変更します。ユーザー設定の値だけが使われます。ワークスペースの `.vscode/settings.json` では設定できないので、リポジトリが拡張機能を別のサーバーに向けることはできません。 |
 | `interlatch.includeReads` | `true` | 読んだだけのセッションとファイルも表示します。オフにすると、セッションが変更したものだけになります。 |
 | `interlatch.showIgnoredFiles` | `false` | git が無視するファイル（スクリーンショット、ビルド出力、キャッシュ）も **Interlatch: Files in Workspace** に表示します。 |
 

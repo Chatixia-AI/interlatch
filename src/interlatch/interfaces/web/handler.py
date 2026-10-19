@@ -35,6 +35,7 @@ PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/cleared", "/api/
 log = logging.getLogger("interlatch.server")
 SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's dashboard again from your own Interlatch "
                "(Settings › Devices).")
+SIGNIN_CHECK = "Go on only if you opened this link from your own Interlatch or an admin of this hub sent it to you."
 TOO_MANY_CODES = "too many wrong codes from this address; try again in {seconds} s"  # people.CodeAttempts
 
 
@@ -192,12 +193,47 @@ def make_handler(app: App, port: int):
                 return app.cfg.hub_address
             return f"{'https' if self._proxied_https() else 'http'}://{self._host() or '127.0.0.1'}"
 
-        def _signin(self, code: str, page: str | None = None):
-            """An invite link, or a sign-in link a person's own Interlatch asked for: opens a browser session, on the page
-            the link's next names (people.landing) or Home. After a few unknown codes from one address, its next tries
-            wait their turn (people.CodeAttempts)."""
+        def _same_origin(self) -> bool:
+            """A page of this dashboard sent the request, not another site's (a login CSRF): the browser's
+            Sec-Fetch-Site says so, or its Origin names this Host. A page can set neither."""
+            if (self.headers.get("Sec-Fetch-Site") or "").strip().lower() == "same-origin":
+                return True
+            origin = (self.headers.get("Origin") or "").strip().lower()
+            return origin not in ("", "null") and urlparse(origin).netloc == self._host()
+
+        def _signin_page(self, status: int, title: str, body: str, retry: int = 0):
+            """The small page /signin answers with: asking before a sign-in, or why one didn't happen."""
             import html
 
+            title = html.escape(title)
+            page = (f'<!doctype html><html lang="{i18n.lang.get()}"><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                    f'<meta name="color-scheme" content="light dark"><title>{title} · Interlatch</title>'
+                    '<body style="font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 12vh auto; '
+                    f'padding: 0 16px"><h1 style="font-size: 1.3rem">{title}</h1>{body}</body></html>').encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.send_header("Cache-Control", "no-store")
+            if retry:
+                self.send_header("Retry-After", str(retry))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")  # the code is in this page's address
+            self.send_header("Content-Security-Policy",
+                             "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+            self.end_headers()
+            self.wfile.write(page)
+
+        def _signin_refused(self, exc, wait: int = 0, status: int = 400):
+            import html
+
+            self._signin_page(429 if wait else status, tr("Could not sign in"),
+                              f"<p>{html.escape(exc.shown())}</p><p>{html.escape(tr(SIGNIN_HELP))}</p>"
+                              f'<p><a href="/">{html.escape(tr("Open the dashboard"))}</a></p>', wait)
+
+        def _signin_code(self, code: str, take):
+            """take(code) for a sign-in, after the wrong-code wait (people.CodeAttempts): its answer, or None once the
+            refusal page was sent."""
             from ...sharing import people
 
             accept = (self.headers.get("Accept-Language") or "").strip().lower()
@@ -207,36 +243,50 @@ def make_handler(app: App, port: int):
             try:
                 if wait:
                     raise people.PeopleError(TOO_MANY_CODES, seconds=wait)  # the code isn't looked at
-                _person, session = people.open_browser(app.conn, code, label=self.headers.get("User-Agent"),
-                                                       replaces=self._sessions())  # this browser's old session ends
+                return take(code)
             except people.PeopleError as exc:
                 if isinstance(exc, people.UnknownCode):
                     app.code_attempts.wrong(who)
-                title = html.escape(tr("Could not sign in"))
-                body = (f'<!doctype html><html lang="{i18n.lang.get()}"><meta charset="utf-8">'
-                        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-                        f'<meta name="color-scheme" content="light dark"><title>{title} · Interlatch</title>'
-                        '<body style="font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 12vh auto; '
-                        f'padding: 0 16px"><h1 style="font-size: 1.3rem">{title}</h1><p>{html.escape(exc.shown())}</p>'
-                        f"<p>{html.escape(tr(SIGNIN_HELP))}</p>"
-                        f'<p><a href="/">{html.escape(tr("Open the dashboard"))}</a></p></body></html>').encode()
-                self.send_response(429 if wait else 400)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-store")
-                if wait:
-                    self.send_header("Retry-After", str(wait))
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header("Referrer-Policy", "no-referrer")
-                self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-                self.end_headers()
-                self.wfile.write(body)
+                self._signin_refused(exc, wait)
+                return None
+
+        def _signin_ask(self, code: str, page: str | None = None):
+            """GET /signin?code=: an invite link, or a sign-in link a person's own Interlatch asked for. Says who the
+            code signs in as and asks first: a link alone never signs a browser in, or another site could sign yours in
+            as someone else (a login CSRF). The code isn't used up here."""
+            import html
+
+            from ...sharing import people
+
+            person = self._signin_code(code, lambda c: people.code_person(app.conn, c))
+            if person is None:
+                return
+            who = person["name"] + (f" ({person['email']})" if person.get("email") else "")
+            hidden = "".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">'
+                             for k, v in (("code", code), ("next", page)) if v)
+            self._signin_page(200, tr("Sign in to this hub"),
+                              f"<p>{html.escape(tr('Sign in as {who}?', who=who))}</p>"
+                              f"<p>{html.escape(tr(SIGNIN_CHECK))}</p>"
+                              f'<form method="post" action="/signin">{hidden}'
+                              f'<button type="submit" style="font: inherit; padding: 6px 16px">'
+                              f"{html.escape(tr('Sign in'))}</button></form>")
+
+        def _signin(self, code: str, page: str | None = None):
+            """POST /signin, from the page above or the dashboard's own sign-in form: opens a browser session, on the
+            page the link's next names (people.landing) or Home. Only a page of this dashboard may ask."""
+            from ...sharing import people
+
+            if not self._same_origin():
+                return self._signin_refused(people.PeopleError("open the sign-in link again"), status=403)
+            opened = self._signin_code(code, lambda c: people.open_browser(
+                app.conn, c, label=self.headers.get("User-Agent"), replaces=self._sessions()))  # this browser's old session ends
+            if opened is None:
                 return
             self.send_response(302)
             self.send_header("Location", people.landing(page))
-            self.send_header("Set-Cookie", self._session_cookie(session, people.BROWSER_DAYS * 86400))
+            self.send_header("Set-Cookie", self._session_cookie(opened[1], people.BROWSER_DAYS * 86400))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Referrer-Policy", "no-referrer")  # the code is in this page's address
+            self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Length", "0")
             self.end_headers()
 
@@ -418,7 +468,7 @@ def make_handler(app: App, port: int):
             p = url.path
             try:
                 if p == "/signin":
-                    return self._signin(q.get("code", ""), q.get("next"))
+                    return self._signin_ask(q.get("code", ""), q.get("next"))
                 if p.startswith("/api/"):  # the page itself stays public, so it can show how to sign in
                     self.viewer, refused = self._viewer()
                     if refused:
@@ -482,6 +532,16 @@ def make_handler(app: App, port: int):
             except ValueError:
                 return None
 
+        def _form(self, limit: int = 4096) -> dict | None:
+            """A small urlencoded form body (the /signin form), else None."""
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                if not 0 <= length <= limit:
+                    return None
+                return {k: v[-1] for k, v in parse_qs(self.rfile.read(length).decode() if length else "").items()}
+            except (ValueError, UnicodeDecodeError):
+                return None
+
         def _party_own(self, ctx, p: str):
             """A Party quest marked done, or the goal: the viewer's own log, so members and read-only people may too.
             The route's access still decides, and someone limited to projects is answered from those projects only,
@@ -510,6 +570,13 @@ def make_handler(app: App, port: int):
                 return self._json({"error": tr("forbidden")}, 403)
             if urlparse(self.path).path.startswith("/api/hub/"):
                 return self._hub_api(urlparse(self.path).path)
+            if urlparse(self.path).path == "/signin":  # a form, so no X-Interlatch header: _signin checks the origin
+                if not self._user_ok() and not self._people_mode():
+                    return self._json({"error": tr("forbidden")}, 403)
+                form = self._form()
+                if form is None:
+                    return self._json({"error": tr("bad form")}, 400)
+                return self._signin(form.get("code", ""), form.get("next"))
             if "1" not in (self.headers.get("X-Interlatch"), self.headers.get("X-Chronicle")) or not (self._user_ok() or self._people_mode()):
                 return self._json({"error": tr("forbidden")}, 403)
             if urlparse(self.path).path == "/api/signout":

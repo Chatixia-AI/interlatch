@@ -1,10 +1,12 @@
 """People on a hub, from the dashboard's side: who is viewing (at the hub, a company sign-in, a session cookie), what
 each role may do, signing in with an invite or sign-in link, the People API, and the hub API's person tokens."""
 
+import html
 import json
+import re
 import urllib.error
 import urllib.request
-from urllib.parse import quote
+from urllib.parse import quote, urlencode, urlparse
 
 import pytest
 
@@ -34,6 +36,28 @@ def _raw(url, path, body=None, headers=None):
     req = urllib.request.Request(url + path, data=None if body is None else json.dumps(body).encode(),
                                  method="GET" if body is None else "POST",
                                  headers={"Content-Type": "application/json", "X-Interlatch": "1", **(headers or {})})
+    try:
+        with OPENER.open(req, timeout=10) as r:
+            return r.status, r.headers, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers, e.read()
+
+
+def _signin(url, code, page=None, headers=None, origin=True):
+    """Open a sign-in link and press Sign in, as a browser does: the GET page asks, its form POSTs to /signin from this
+    dashboard (Origin). The GET's answer when it didn't ask."""
+    query = f"code={quote(code, safe='')}" + (f"&next={quote(page, safe='')}" if page is not None else "")
+    status, got, body = _raw(url, f"/signin?{query}", headers=headers)
+    if status != 200:
+        return status, got, body
+    assert "Set-Cookie" not in got and b'<form method="post" action="/signin">' in body  # asking signs nobody in
+    fields = {k: html.unescape(v) for k, v in re.findall(r'name="(\w+)" value="([^"]*)"', body.decode())}
+    return _post_form(url, fields, {**(headers or {}), **({"Origin": f"http://{urlparse(url).netloc}"} if origin else {})})
+
+
+def _post_form(url, fields, headers):
+    req = urllib.request.Request(url + "/signin", data=urlencode(fields).encode(), method="POST",
+                                 headers={"Content-Type": "application/x-www-form-urlencoded", **headers})
     try:
         with OPENER.open(req, timeout=10) as r:
             return r.status, r.headers, r.read()
@@ -146,7 +170,7 @@ def test_team_store_settings_for_an_admin_person(team):
 def test_signing_in_with_a_link(team):
     url, conn, app = team["url"], team["conn"], team["app"]
     code = people.invite(conn, team["vic"]["id"])
-    status, headers, _ = _raw(url, f"/signin?code={code.lower()}", headers=REMOTE)
+    status, headers, _ = _signin(url, code.lower(), headers=REMOTE)
     cookie = headers["Set-Cookie"]
     assert status == 302 and headers["Location"] == "/#/" and "Secure" not in cookie and cookie.startswith("interlatch_session=")
     assert all(part in cookie for part in ("HttpOnly", "SameSite=Lax", "Path=/", "Max-Age=2592000"))
@@ -161,20 +185,47 @@ def test_signing_in_with_a_link(team):
     assert status == 400 and b"<script>" not in page
 
     signin = people.signin_code(conn, team["bob"])  # https through a trusted proxy: the cookie is Secure
-    status, headers, _ = _raw(url, f"/signin?code={signin}", headers={**REMOTE, "X-Forwarded-Proto": "https"})
+    status, headers, _ = _signin(url, signin, headers={**REMOTE, "X-Forwarded-Proto": "https"})
     assert status == 302 and "Secure" in headers["Set-Cookie"]
     app.cfg.server_trusted_proxies = ["10.0.0.1"]  # from anyone else, X-Forwarded-Proto is not believed
     signin = people.signin_code(conn, team["bob"])
-    status, headers, _ = _raw(url, f"/signin?code={signin}", headers={**REMOTE, "X-Forwarded-Proto": "https"})
+    status, headers, _ = _signin(url, signin, headers={**REMOTE, "X-Forwarded-Proto": "https"})
     assert status == 302 and "Secure" not in headers["Set-Cookie"]
+
+
+def test_a_link_alone_signs_nobody_in(team):
+    """A login CSRF: another site sends your browser to a sign-in link, or posts a code to /signin, to sign you in as
+    someone else. The link only asks, naming who it signs in as, and uses nothing up; the POST that signs in must come
+    from a page of this dashboard (Sec-Fetch-Site, else Origin)."""
+    url, conn = team["url"], team["conn"]
+    code = people.invite(conn, team["vic"]["id"])
+    status, headers, page = _raw(url, f"/signin?code={code}&next={quote('/project?path=%2Fx', safe='')}", headers=REMOTE)
+    assert status == 200 and "Set-Cookie" not in headers and b"Sign in as Vic (vic@example.com)?" in page
+    assert f'name="code" value="{code}"'.encode() in page and b'name="next" value="/project?path=%2Fx"' in page
+    csp = headers["Content-Security-Policy"]
+    assert "form-action 'self'" in csp and "frame-ancestors 'none'" in csp and "script-src" not in csp
+    assert people.peek_invite(conn, code)  # asking used nothing up
+    page = _raw(url, f"/signin?code={code}", headers={**REMOTE, "Accept-Language": "ja"})[2]
+    assert "Vic (vic@example.com) としてサインインしますか？".encode() in page
+
+    for other in ({}, {"Origin": "https://evil.example"}, {"Origin": "null"}, {"Origin": "http://127.0.0.1.evil.example"},
+                  {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, {"Sec-Fetch-Site": "same-site"}):
+        status, headers, page = _post_form(url, {"code": code}, {**REMOTE, **other})
+        assert status == 403 and "Set-Cookie" not in headers and b"open the sign-in link again" in page, other
+    assert people.peek_invite(conn, code)  # still unused: a refused POST doesn't look at the code
+
+    status, headers, _ = _post_form(url, {"code": code}, {**REMOTE, "Sec-Fetch-Site": "same-origin"})
+    assert status == 302 and headers["Set-Cookie"].startswith("interlatch_session=") and not people.peek_invite(conn, code)
+    status, _, page = _post_form(url, {"code": "AAAA-BBBB-CCCC"}, {**REMOTE, "Origin": f"http://{urlparse(url).netloc}"})
+    assert status == 400 and b"known on this hub" in page  # the dashboard's own code form: a wrong code
 
 
 def test_signing_in_again_replaces_the_browsers_session(team):
     url, conn, ada, s = team["url"], team["conn"], team["ada"], team["sessions"]
     old = s["Ada"]
     legacy = people.open_browser(conn, people.signin_code(conn, ada), "test")[1]  # a cookie from before the rename
-    status, headers, _ = _raw(url, f"/signin?code={people.signin_code(conn, ada)}",
-                              headers={**REMOTE, "Cookie": f"interlatch_session={old}; chronicle_session={legacy}"})
+    status, headers, _ = _signin(url, people.signin_code(conn, ada),
+                                 headers={**REMOTE, "Cookie": f"interlatch_session={old}; chronicle_session={legacy}"})
     new = headers["Set-Cookie"].split(";")[0].split("=", 1)[1]
     assert status == 302 and new not in (old, legacy)
     assert _call(url, "/api/me", headers=_as(old))[0] == 401 and _call(url, "/api/me", headers=_as(legacy))[0] == 401
@@ -195,10 +246,10 @@ def test_signing_in_again_replaces_the_browsers_session(team):
 def test_a_signin_link_opens_on_the_page_it_names(team):
     url, conn, bob = team["url"], team["conn"], team["bob"]
     page = "/project?path=%2Fdata%2Fprojects%2FCosmo-Quote-Agent"
-    status, headers, _ = _raw(url, f"/signin?code={people.signin_code(conn, bob)}&next={quote(page, safe='')}", headers=REMOTE)
+    status, headers, _ = _signin(url, people.signin_code(conn, bob), page, headers=REMOTE)
     assert status == 302 and headers["Location"] == f"/#{page}" and headers["Set-Cookie"]
     for bad in ("https://evil.example/", "/x\r\nSet-Cookie: a=b", "javascript:alert(1)", "/a b", "/#/x", "/<p>", "/" + "a" * 600, ""):
-        status, headers, _ = _raw(url, f"/signin?code={people.signin_code(conn, bob)}&next={quote(bad, safe='')}", headers=REMOTE)
+        status, headers, _ = _signin(url, people.signin_code(conn, bob), bad, headers=REMOTE)
         assert status == 302 and headers["Location"] == "/#/", bad  # Home: only a dashboard route passes
 
 
@@ -283,7 +334,7 @@ def test_person_tokens_on_the_hub_api(team):
     assert api("/api/hub/done", {"machine": MACHINE}, "nope")[0] == 401
 
     status, r = api("/api/hub/signin", {"machine": MACHINE}, bob_token)
-    assert status == 200 and _raw(url, f"/signin?code={r['code']}", headers=REMOTE)[0] == 302
+    assert status == 200 and _signin(url, r["code"], headers=REMOTE)[0] == 302
     status, r = api("/api/hub/signin", {"machine": MACHINE}, token)
     assert status == 401  # the shared token can't act as Bob's computer
     status, r = api("/api/hub/signin", {"machine": OTHER}, token)
@@ -311,7 +362,7 @@ def test_wrong_codes_make_an_address_wait(team):
     status, headers, page = _raw(url, f"/signin?code={good}", headers=there)
     assert status == 429 and headers["Retry-After"] == "1" and b"too many wrong codes" in page
     assert people.peek_invite(conn, good)  # not looked at, so not used up
-    assert _raw(url, f"/signin?code={good}", headers={"X-Forwarded-For": "198.51.100.9"})[0] == 302  # nobody else waits
+    assert _signin(url, good, headers={"X-Forwarded-For": "198.51.100.9"})[0] == 302  # nobody else waits
 
     # joining with a code counts the same way, for the same address
     wrong = {"code": "AAAA-BBBB-CCCC", "machine": OTHER}
@@ -362,7 +413,7 @@ def test_tailscale_logins_and_people(team):
     code, r = _call(url, "/api/overview", headers=REMOTE)
     assert code == 401 and r["signin"] is True
     signin = people.signin_code(team["conn"], team["vic"])
-    assert _raw(url, f"/signin?code={signin}", headers=REMOTE)[0] == 302
+    assert _signin(url, signin, headers=REMOTE)[0] == 302
     assert _call(url, "/api/suggestions/seen", {}, _as(s["Ada"])) == (200, {"ok": True})
 
 

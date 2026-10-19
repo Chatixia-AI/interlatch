@@ -2,7 +2,7 @@
   "name": "interlatch",
   "displayName": "Interlatch",
   "description": "Shared memory for your coding agents, in the Explorer: the agent sessions that read or changed the open file, and every file they worked on, from your local Interlatch.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "Chatixia-AI",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -116,7 +116,8 @@
         "interlatch.url": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Address of the Interlatch dashboard (`interlatch ui`). Empty: the Chronicle extension's `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `http://127.0.0.1:8765` (older installs). Set it if you changed `[server] port` in Interlatch's config."
+          "scope": "machine",
+          "markdownDescription": "Address of the Interlatch dashboard (`interlatch ui`). Empty: the Chronicle extension's `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `http://127.0.0.1:8765` (older installs). Set it if you changed `[server] port` in Interlatch's config. User settings only: a workspace can't set it."
         },
         "interlatch.includeReads": {
           "type": "boolean",

@@ -10,11 +10,15 @@ const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "Copilot", bob:
 const OLD_SECTION = "chronicle";
 const OLD_ID = "chatixia.chronicle-sessions";
 
+// Settings a workspace may not set: a repo's .vscode/settings.json could point the extension at its own server and
+// receive the paths of the files you open. Only your own (user) value counts.
+const MACHINE_ONLY = new Set(["url"]);
+
 // A value you set for interlatch.<key>, else for chronicle.<key>; undefined when neither is set.
 const configured = (key) => {
   for (const section of ["interlatch", OLD_SECTION]) {
     const i = vscode.workspace.getConfiguration(section).inspect(key);
-    const v = i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue;
+    const v = MACHINE_ONLY.has(key) ? i?.globalValue : i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue;
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return undefined;

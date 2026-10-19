@@ -331,11 +331,10 @@ def peek_invite(conn: sqlite3.Connection, code: str) -> dict | None:
     return p if p and not p["removed_at"] else None
 
 
-def _take_code(conn: sqlite3.Connection, code: str, kinds: tuple[str, ...]) -> dict:
-    # an invite as typed (any case, with or without dashes), or a sign-in code exactly as issued
+def _live_code(conn: sqlite3.Connection, code: str, kinds: tuple[str, ...]) -> tuple[dict, str]:
+    # an invite as typed (any case, with or without dashes), or a sign-in code exactly as issued: (person, its hash)
     r = conn.execute("SELECT * FROM people_codes WHERE code_hash IN (?, ?)",
                      (_hash(normalize_code(code)), _hash(code or ""))).fetchone()
-    h = r["code_hash"] if r else None
     if not r or r["kind"] not in kinds:
         raise UnknownCode("that code isn't known on this hub")
     if r["used_at"]:
@@ -345,6 +344,17 @@ def _take_code(conn: sqlite3.Connection, code: str, kinds: tuple[str, ...]) -> d
     p = get(conn, r["person_id"])
     if not p or p["removed_at"]:
         raise PeopleError("that person is no longer on this hub")
+    return p, r["code_hash"]
+
+
+def code_person(conn: sqlite3.Connection, code: str) -> dict:
+    """Who an invite or sign-in code would sign a browser in as, without using it up (the /signin page asks before it
+    does); raises as open_browser would."""
+    return _live_code(conn, code, ("invite", "signin"))[0]
+
+
+def _take_code(conn: sqlite3.Connection, code: str, kinds: tuple[str, ...]) -> dict:
+    p, h = _live_code(conn, code, kinds)
     cur = conn.execute("UPDATE people_codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (utcnow_iso(), h))
     if cur.rowcount != 1:  # two redemptions at once: only one wins
         raise PeopleError("that code was already used; ask an admin for a new one")

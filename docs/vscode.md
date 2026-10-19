@@ -33,8 +33,8 @@ repository, installed with their own command (`cursor --install-extension …`, 
 
 ```bash
 cd vscode-extension
-npx @vscode/vsce package          # writes interlatch-0.3.0.vsix
-code --install-extension interlatch-0.3.0.vsix
+npx @vscode/vsce package          # writes interlatch-0.3.1.vsix
+code --install-extension interlatch-0.3.1.vsix
 ```
 
 It needs Interlatch, or a Chronicle newer than 0.6.1, which adds the `/api/file` and `/api/files` endpoints the lists read. With an older one,
@@ -49,7 +49,7 @@ set takes its `chronicle.*` value.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `interlatch.url` | empty: your `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `:8765` | Where the dashboard runs. Change it if you set `[server] port` in Interlatch's [configuration](configuration.md). |
+| `interlatch.url` | empty: your `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `:8765` | Where the dashboard runs. Change it if you set `[server] port` in Interlatch's [configuration](configuration.md). Only your user settings count: a workspace's `.vscode/settings.json` can't set it, so a repository can't point the extension at another server. |
 | `interlatch.includeReads` | `true` | Also list sessions, and files, that were only read. Turn it off to see only what sessions changed. |
 | `interlatch.showIgnoredFiles` | `false` | Also show files git ignores (screenshots, build output, caches) in **Interlatch: Files in Workspace**. |
 

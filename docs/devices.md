@@ -338,8 +338,12 @@ or the id the refused join printed. That code joins that computer only.
 
 - **From your own Interlatch.** On a computer that joined, **Settings › Devices › Open the hub's dashboard** asks the
   hub for a sign-in link, valid for 5 minutes, and opens it in your browser. There is no password.
-- **With the invite link.** Opening `…/signin?code=…` signs that browser in. You can also paste the code on the
-  hub's sign-in screen. Use this for a phone, or for someone with no computer joined to the hub.
+- **With the invite link.** Opening `…/signin?code=…` shows who the code signs in as; **Sign in** signs that browser
+  in. You can also paste the code on the hub's sign-in screen. Use this for a phone, or for someone with no computer
+  joined to the hub.
+
+A link never signs a browser in by itself: another site could otherwise open one for you and sign you in as someone
+else. Check the name on that page before you press **Sign in**.
 - **With company sign-in**, when the hub sits behind it ([below](#company-sign-in)).
 
 A browser stays signed in until 30 days after it was last used. **Sign out** in the header ends it.
