@@ -1550,9 +1550,7 @@ table.data a.proj { overflow-wrap: normal; word-break: normal; white-space: nowr
 .statusbar #status-hub-problem { background: var(--critical-wash); color: var(--critical-ink); font-weight: 600; padding: 2px 8px; margin: 0; border-radius: 999px; }
 .statusbar #status-hub-problem:hover { background: color-mix(in srgb, var(--critical) 18%, transparent); }
 .statusbar #status-hub-problem .dot { background: var(--critical); }
-/* a computer whose pushes don't get through: Home's card and the Hub card's block */
-.hp-card { margin-bottom: 16px; box-shadow: inset 3px 0 0 var(--critical); background: linear-gradient(var(--critical-wash), var(--critical-wash)), var(--surface); }
-.hp-card .card-title .icon { color: var(--critical-ink); }
+/* a computer whose pushes don't get through: the Hub card's block */
 .hp-inline { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius); background: var(--critical-wash); box-shadow: inset 3px 0 0 var(--critical); }
 .hp-inline > b { color: var(--critical-ink); }
 .hp-body p { margin: 6px 0; overflow-wrap: anywhere; }

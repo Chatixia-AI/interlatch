@@ -1489,7 +1489,6 @@ async function activityView(params, own = false) {
         segControl([["", t("All agents")], ...Object.keys(AGENTS).filter((a) => a === agent || data.agents.some((x) => x.agent === a && x.sessions))
           .map((a) => [a, agentName(a)])], agent, (v) => update({ agent: v })),
         h("select", { "aria-label": t("Project"), onchange: (e) => update({ project: e.target.value }) }, await projectOptions(project)))),
-    hubProblemCard(data.status?.hub_problem),
     tiles,
     sgBox,
     data.agents.length ? h("div", { class: "section-gap" }, agentsCard(data.agents, { agent, project, period: days === "all" ? t("All time") : t("Last {n} days", { n: days }), pick: (a) => update({ agent: a }) })) : null,
@@ -6260,7 +6259,7 @@ async function devicesPost(path, body) { // null when it failed, after saying wh
 }
 const notHere = () => t("Change this on the computer itself, not from another device.");
 
-// A computer whose pushes stopped getting through (status.hub_problem / devices.push_problem): why, since when, and the
+// A computer whose pushes stopped getting through (devices.push_problem), in the Hub card: why, since when, and the
 // fix. A token the hub turned away takes a new invite, joined here; the rest resolve by themselves or on the hub.
 function hubProblemBody(pb, here) {
   const host = hubHost(pb.hub);
@@ -6302,13 +6301,6 @@ function hubProblemBody(pb, here) {
 function hubProblemTitle(pb) {
   return pb.reason === "token" ? t("The hub no longer accepts this computer")
     : pb.reason === "unreachable" ? t("Can't reach the hub") : t("The hub refuses this computer's sends");
-}
-// Home: the same, as a card above everything else
-function hubProblemCard(pb) {
-  if (!pb || dedicated()) return null;
-  return h("section", { class: "card hp-card", role: "alert" },
-    cardHead(hubProblemTitle(pb), { iconName: "blocked", tools: h("a", { class: "btn small", href: "#/devices" }, t("Hub settings")) }),
-    hubProblemBody(pb, !!ME?.viewer?.here));
 }
 
 function spokeHubCard(dv) {

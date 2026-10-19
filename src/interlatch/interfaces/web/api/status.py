@@ -175,7 +175,7 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
         "update": available(),
         "ui_build": UI_BUILD,
         "hub_url": ctx.cfg.hub_url or None,  # set on a computer that sends its sessions to a hub
-        "hub_problem": _hub_problem(ctx),  # its pushes don't get through: every page warns
+        "hub_problem": _hub_problem(ctx),  # its pushes don't get through: the status bar warns
     }
 
 
