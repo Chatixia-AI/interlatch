@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.8 (2026-10-19)
+
+- **Projects sidebar reads like a tree:** groups and the hub now have headers in the sidebar's own type, each with its
+  caret, and the projects in a group sit one step in under it (a hub project's folders a second step), the way Slack
+  lays out its sections.
+
 ## 0.27.7 (2026-10-19)
 
 - **Sign-in links ask first:** opening a hub's sign-in or invite link shows who it signs you in as, and **Sign in**
