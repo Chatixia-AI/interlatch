@@ -229,6 +229,8 @@ else:
         "friction": ["read a missing file", {"kind": "tool_error", "note": "Read failed"}],
         "sentiment": "positive",
     }
+if os.environ.get("FAKE_BASIS") and data.get("knowledge"):  # the first item's basis (analysis.session, interlatch_guidance)
+    data["knowledge"][0]["basis"] = os.environ["FAKE_BASIS"]
 text = json.dumps(data)
 if mode == "fenced":
     text = "Here you go:\n```json\n" + text + "\n```"

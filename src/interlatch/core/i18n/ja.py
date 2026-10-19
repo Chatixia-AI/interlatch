@@ -115,6 +115,7 @@ JA: dict[str, str] = {
     "written by the agent's own memory": "エージェント自身のメモリーが記録",
     "one session, low confidence": "1 セッションのみ、確信度は低い",
     "one session": "1 セッションのみ",
+    "only followed what Interlatch told the session": "Interlatch が伝えた内容に従っただけ",
 
     # ---- the analysis queue (worker)
     "ready now": "準備完了",

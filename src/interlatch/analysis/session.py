@@ -11,7 +11,7 @@ from ..knowledge import ladder
 from ..sharing import news
 from ..knowledge.cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from ..core.config import Config
-from .digest import build_digest
+from .digest import build_digest, session_guidance
 from ..core.sessions import best_title
 from ..knowledge.learning import TOPICS, normalize_interests, store_interests
 from .runners.base import BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
@@ -59,7 +59,7 @@ RULED_OUT_SCHEMA = {
 KNOWLEDGE_ITEM_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["kind", "title", "body", "tags", "scope", "confidence", "evidence", "scene", "question", "answer",
+    "required": ["kind", "title", "body", "tags", "scope", "confidence", "evidence", "basis", "scene", "question", "answer",
                  "ruled_out", "clues", "principle", "checklist", "topics", "visual"],
     "properties": {
         "kind": {
@@ -73,6 +73,9 @@ KNOWLEDGE_ITEM_SCHEMA = {
         "scope": {"type": "string", "enum": ["project", "global"]},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "evidence": {"type": "string", "description": "Where the session established this, e.g. 'prompt 4: tests passed after the fix'"},
+        "basis": {"type": "string", "enum": ["observed", "guidance"],
+                  "description": "guidance: the item only restates Interlatch guidance the session followed; observed: "
+                  "the session found, hit or tested it itself"},
         "scene": {"type": "string", "description": "fix, gotcha, decision: what was being done and what was seen, before "
                   "the answer was known (1-3 sentences, the error verbatim); a decision: the problem it settled. Never "
                   "gives the answer away. Empty for other kinds"},
@@ -177,6 +180,13 @@ commands, config keys, versions and error messages.
 Leave out generic programming advice, restatements of the task, and trivia that is quick to rediscover. \
 A routine session may have few or no knowledge items; that is a correct answer.
 
+Some sessions began with guidance from Interlatch: lessons from earlier sessions that the agent was given before it \
+started, shown in <interlatch_guidance>. A session that only followed that guidance found nothing new, so don't write \
+the lesson up again. Write an item that matches the guidance only when this session added evidence of its own: it hit \
+the problem anyway, found the guidance wrong or out of date, or sharpened it. Set its basis to "observed" and say in \
+evidence what the session saw. An item that only restates guidance the session followed has basis "guidance". Every \
+other item has basis "observed".
+
 The developer also reads fixes, gotchas and decisions as case files, which ask before they tell: the scene, then the \
 question, and only then the answer. For those three kinds, fill in:
 - scene: what was being done and what was seen first, before the cause was known (the symptom, the error message \
@@ -224,17 +234,23 @@ def system_prompt(cfg: Config) -> str:
                       "topic whichever language they were analyzed in.")
 
 
-def _session_prompt(header: str, digest: str) -> str:
+def _guidance(guidance: str) -> str:
+    return f"<interlatch_guidance>\n{guidance}\n</interlatch_guidance>\n\n" if guidance else ""
+
+
+def _session_prompt(header: str, digest: str, guidance: str = "") -> str:
     return (
         f"<session_metadata>\n{header}\n</session_metadata>\n\n"
+        f"{_guidance(guidance)}"
         f"<transcript>\n{digest}\n</transcript>\n\n"
         "Analyze this session."
     )
 
 
-def _chunk_prompt(header: str, chunk: str, i: int, n: int) -> str:
+def _chunk_prompt(header: str, chunk: str, i: int, n: int, guidance: str = "") -> str:
     return (
         f"<session_metadata>\n{header}\n</session_metadata>\n\n"
+        f"{_guidance(guidance)}"
         f"This is part {i} of {n} of a long session transcript. Extract notes for this part only; "
         "all parts will be merged afterwards.\n\n"
         f"<transcript_part index=\"{i}\" of=\"{n}\">\n{chunk}\n</transcript_part>"
@@ -299,6 +315,7 @@ def normalize_knowledge(items) -> list[dict]:
             "scope": item.get("scope") if item.get("scope") in ("project", "global") else "project",
             "confidence": item.get("confidence") if item.get("confidence") in ("high", "medium", "low") else "medium",
             "evidence": str(item.get("evidence") or "").strip(),
+            "basis": "guidance" if item.get("basis") == "guidance" else "observed",
             **{k: str(item.get(k) or "").strip() if case else "" for k in ("scene", "question", "answer")},
             "ruled_out": _leads(item.get("ruled_out")) if case else [],
             **(lesson_of(item) if kind in LESSON_KINDS else {}),
@@ -379,6 +396,7 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
     conn.execute("UPDATE sessions SET analysis_status = 'running' WHERE id = ?", (session_id,))
     conn.commit()
     header, digest = build_digest(conn, session_id, runner.chunk_chars)
+    guidance = session_guidance(conn, session_id)
     if len(digest.text) < 200 and s["n_prompts"] <= 1:
         conn.execute("UPDATE sessions SET analysis_status='skipped', analysis_reason='too little content' WHERE id=?", (session_id,))
         conn.commit()
@@ -387,13 +405,13 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
     system = system_prompt(cfg)
     try:
         if len(digest.chunks) == 1:
-            res = runner.run(_session_prompt(header, digest.chunks[0]), ANALYSIS_SCHEMA, system=system, model=model)
+            res = runner.run(_session_prompt(header, digest.chunks[0], guidance), ANALYSIS_SCHEMA, system=system, model=model)
             total_cost += res.cost_usd
             data = normalize_analysis(res.data)
         else:
             notes, items = [], {}
             for i, chunk in enumerate(digest.chunks, 1):
-                part = runner.run(_chunk_prompt(header, chunk, i, len(digest.chunks)), CHUNK_SCHEMA, system=system, model=model)
+                part = runner.run(_chunk_prompt(header, chunk, i, len(digest.chunks), guidance), CHUNK_SCHEMA, system=system, model=model)
                 total_cost += part.cost_usd
                 _log_run(conn, "chunk", session_id, part, status="done", input_chars=len(chunk), started=started)
                 shown = []  # the merge judges each item by what it says; the full item is kept here, by id
@@ -424,6 +442,9 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
         conn.commit()
         raise
     res.cost_usd = total_cost
+    if not guidance:  # a session told nothing cannot have only followed what it was told
+        for item in data["knowledge"]:
+            item["basis"] = "observed"
     store_analysis(conn, cfg, session_id, data, res.model, s["n_prompts"])
     _log_run(conn, "session", session_id, res, status="done", input_chars=digest.chars,
              chunks=len(digest.chunks), started=started, result=data)
@@ -478,8 +499,8 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
         # and a diagram it lacked while its text is unchanged
         conn.execute(
             "INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, tags_json, scope, "
-            "confidence, evidence, source, source_ref, fingerprint, created_at, updated_at, stage, case_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "confidence, evidence, basis, source, source_ref, fingerprint, created_at, updated_at, stage, case_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(fingerprint) DO UPDATE SET case_json = CASE WHEN knowledge.case_json IS NULL "
             "THEN excluded.case_json WHEN knowledge.body = excluded.body AND json_valid(knowledge.case_json) "
             "AND json_extract(knowledge.case_json, '$.visual') IS NULL "
@@ -490,7 +511,8 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
                 session_id, s["project_path"], s["project_name"], item["kind"], redact(item["title"]).strip(),
                 redact(item.get("body") or "").strip(), dumps([t.lower() for t in item.get("tags") or []]),
                 item.get("scope") if item.get("scope") in ("project", "global") else "project",
-                item.get("confidence"), redact(item.get("evidence") or ""), "analysis", f"prompt-v{PROMPT_VERSION}",
+                item.get("confidence"), redact(item.get("evidence") or ""),
+                "guidance" if item.get("basis") == "guidance" else "observed", "analysis", f"prompt-v{PROMPT_VERSION}",
                 fingerprint(session_id, item["kind"], item["title"]), now, now, ladder.initial_stage(item),
                 dumps(case) if case else None,
             ),

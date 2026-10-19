@@ -28,8 +28,14 @@ TEXT_LIMITS = {
     "notice": 600,
     "compact": 300,
     "attachment": 300,
+    "guidance": 8_000,
 }
 SEARCHABLE_KINDS = {"prompt", "text", "tool_use", "command", "bash_input"}
+# What Interlatch's SessionStart hook (runtime/hooks.py) put in front of a session opens with one of these, also under
+# the name before the rename. The parser keeps that context as a `guidance` event, so the analysis can tell a lesson
+# the session found from one it was told (analysis.digest.session_guidance).
+GUIDANCE_OPENING = re.compile(r"^(?:(?:Interlatch|Chronicle) (?:knowledge base for |notes from past coding-agent sessions)"
+                              r"|From teammates' sessions in this project|Recent sessions here: )")
 
 IDLE_GAP_CAP_S = 15 * 60
 

@@ -123,6 +123,13 @@ with it ("confirmed in 3 sessions over 19 days (2026-09-01 → 2026-09-20)"). It
 separate, and the cross-project playbook pools evidence without retiring anything. Re-analyzing a session keeps
 what its items had earned.
 
+A lesson can't confirm itself. The analysis is shown what Interlatch told the session before it began: the bullets the
+SessionStart hook added and the lines Interlatch had written to its instruction files. A session that only followed
+that guidance repeated the lesson rather than finding it again, so its item is marked as guidance (tentative, "only
+followed what Interlatch told the session") and its session never counts as a confirmation. A session that hit the
+problem anyway, or found the guidance wrong, still counts. The transcript shows the hook's context as **Interlatch
+guidance**.
+
 Stages are used wherever knowledge is read: searches and the SessionStart digest list the most trusted items first,
 the MCP tools label each item (`[gotcha · established ×3]`), knowledge-base bullets carry the stage of their best
 source, and syntheses see each item's stage. Leaving the ladder is a status, not a stage: a superseded item keeps

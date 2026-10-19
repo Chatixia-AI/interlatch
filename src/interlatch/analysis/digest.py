@@ -67,6 +67,33 @@ def session_header(s: dict, files: list[dict]) -> str:
     return "\n".join(lines)
 
 
+GUIDANCE_CHARS = 6000
+
+
+def session_guidance(conn: sqlite3.Connection, session_id: str) -> str:
+    """What Interlatch told this session before it began, one lesson per line: the bullets its SessionStart hook added
+    (`guidance` events) and the lines Interlatch had written to the session's instruction files by then (applied
+    suggestions for its agent, at user level or in its project). Empty when it was told nothing."""
+    s = conn.execute("SELECT project_path, agent, started_at FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    if s is None:
+        return ""
+    lines = [line[2:].strip() for (text,) in conn.execute(
+        "SELECT text FROM events WHERE session_id = ? AND agent_id = '' AND kind = 'guidance' ORDER BY seq", (session_id,))
+        for line in (text or "").splitlines() if line.startswith("- ")]
+    if s["started_at"]:
+        lines += [r[0] for r in conn.execute(
+            "SELECT COALESCE(applied_text, text) FROM suggestions WHERE status = 'applied' AND kind = 'instruction' "
+            "AND applied_at <= ? AND agent IN (?, 'all') AND (project_path IS NULL OR project_path = ?) ORDER BY id",
+            (s["started_at"], s["agent"] or "claude", s["project_path"] or ""))]
+    out, size = [], 0
+    for line in dict.fromkeys(one_line(x, 400) for x in lines if x.strip()):
+        size += len(line) + 3
+        if size > GUIDANCE_CHARS:
+            break
+        out.append(f"- {line}")
+    return redact("\n".join(out))
+
+
 def _render(events: list[dict], calls: dict, level: int, who: str = "CLAUDE") -> list[str]:
     cap_prompt, cap_text, cap_err, cap_ok, cap_agent, cap_note = CAPS[level]
     out: list[str] = []

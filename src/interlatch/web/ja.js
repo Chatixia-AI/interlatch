@@ -425,6 +425,7 @@ window.INTERLATCH_JA = {
   "command output": "コマンドの出力",
   "bash output": "シェルの出力",
   "attachment": "添付",
+  "Interlatch guidance": "Interlatch のガイダンス",
   "Applies across projects": "プロジェクトをまたいで適用",
   "Imported from the agent's own memory notes": "エージェント自身のメモリーノートから取り込み",
   "{agent} memory": "{agent} のメモリー",
