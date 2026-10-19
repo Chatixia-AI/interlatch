@@ -34,6 +34,7 @@ def cmd_hub(args) -> int:
     import platform
 
     from ....core.machine import local_machine
+    from ....core.util import local_str
     from ....ingestion.persistence import register_local
     from ....runtime.install import background_status, hooks_installed
     from ....sharing.client import dashboard_signin, leave_hub, redeem_invite
@@ -41,7 +42,7 @@ def cmd_hub(args) -> int:
     from ....sharing.projects import machines
     from ....sharing.protocol import HubError, join_command
     from ....sharing.pull import last_team
-    from ....sharing.push import last_push
+    from ....sharing.push import last_push, problem_text, send_problem
 
     cfg = load_cfg()
     console = new_console()
@@ -228,7 +229,15 @@ def cmd_hub(args) -> int:
                       + (" · knowledge only (transcripts stay here)" if cfg.shares_knowledge else "")
                       + ((" · from every folder" if cfg.hub_all_folders else " · from the hub's projects only")
                          if cfg.shares_knowledge else ""), highlight=False)
-        console.print(f"  last push: {last['at'] + ' · ' + last['summary'] if last else 'never'}", highlight=False)
+        console.print(f"  last push: {local_str(last['at']) + ' · ' + last['summary'] if last and last.get('at') else 'never'}",
+                      highlight=False)
+        if problem := send_problem(last):
+            headline, fix = problem_text(problem)
+            console.print(f"  [red]![/] {headline}: nothing sent since {local_str(problem['since'])} "
+                          f"({problem['attempts']} tries; last: {problem['error']})\n    {fix}", highlight=False)
+        elif last and (failure := last.get("failure")):  # not worth a warning yet: a hub restarting, a laptop offline
+            console.print(f"  the last try failed ({local_str(failure['at'])}): {failure['error']}; it tries again "
+                          "with the next sync", highlight=False)
         team = last_team(cfg)
         if team:
             console.print(f"  team lessons here: {team.get('lessons', 0)} from the hub's team store (as of {team.get('at')})",

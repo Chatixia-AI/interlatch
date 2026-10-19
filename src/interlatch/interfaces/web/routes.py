@@ -406,6 +406,7 @@ POST: list[Route] = [
     # what leaves this computer, and for which projects: only from here
     Route(r"/api/devices/projects/(choices|add|remove|leave|rejoin)", HERE, _hub_project),
     Route("/api/devices/leave-hub", HERE, lambda h, ctx, m, b: h._json(api.devices.action_leave_hub(ctx))),
+    Route("/api/devices/rejoin-hub", HERE, lambda h, ctx, m, b: h._json(*api.devices.action_rejoin_hub(ctx, b))),
     Route("/api/team/settings", ADMIN,
           lambda h, ctx, m, b: h._json(*api.hub_admin.action_hub_settings(ctx, _body(b), h.viewer))),
     # what leaves this computer (its sessions go to the team store): only from here, or a dedicated hub's admin

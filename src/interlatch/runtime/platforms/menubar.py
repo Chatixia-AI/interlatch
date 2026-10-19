@@ -125,6 +125,8 @@ def summarize(st: dict, *, now: datetime | None = None, analyzing: int = 0, sync
     dashboard (the app's own loop, or the launchd agent); `push`: a spoke's last push (sharing.push.last_push()),
     `hub_name` what the hub calls itself, `sends_files` whether the hub analyzes this computer's sessions
     (Config.sends_files) or only gets the knowledge learned here."""
+    from ...sharing.push import problem_text, send_problem
+
     now = now or utcnow()
     jobs = {name: j for name, j in (st.get("jobs") or {}).items() if j.get("state") == "running"}
     failed = (st.get("jobs") or {}).get("sync") or {}
@@ -147,6 +149,9 @@ def summarize(st: dict, *, now: datetime | None = None, analyzing: int = 0, sync
         return snap(ATTENTION, "Sync failed", _short(sync_error, 90))
     if failed.get("state") == "error":
         return snap(ATTENTION, "Sync failed", _short(failed.get("result") or "see the logs", 90))
+    if problem := send_problem(push, now):  # nothing gets through: it says why, until a push does
+        headline, fix = problem_text(problem)
+        return snap(ATTENTION, headline, _short(f"Nothing sent since {when(problem['since'], now).removeprefix('at ')}. {fix}", 160))
     if push and push.get("errors"):
         return snap(ATTENTION, "Sending to the hub failed", _short(push["errors"][0], 90))
     if jobs or syncing or analyzing:

@@ -156,7 +156,7 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
     if limited:  # the hub's own queue, jobs and updates are not theirs to see
         return {"pending": {"ready": 0, "queued": 0}, "analysis": {"auto": False, "max_per_run": 0, "label": ""}, "paused_until": None,
                 "last_sync": None, "jobs": {}, "version": __version__, "update": None, "ui_build": UI_BUILD,
-                "hub_url": None, "limited": True}
+                "hub_url": None, "hub_problem": None, "limited": True}
 
     recall(ctx.conn)  # a check made by another dashboard process, or before a restart
     _maybe_check_daily(ctx)
@@ -175,7 +175,14 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
         "update": available(),
         "ui_build": UI_BUILD,
         "hub_url": ctx.cfg.hub_url or None,  # set on a computer that sends its sessions to a hub
+        "hub_problem": _hub_problem(ctx),  # its pushes don't get through: every page warns
     }
+
+
+def _hub_problem(ctx: Context) -> dict | None:
+    from ....sharing.push import last_push, send_problem
+
+    return send_problem(last_push(ctx.cfg)) if ctx.cfg.is_spoke else None
 
 
 def status(ctx: Context) -> dict:
