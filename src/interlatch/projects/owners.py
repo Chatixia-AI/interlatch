@@ -214,7 +214,7 @@ class HubFilter:
         if self.cfg.is_excluded(folder):
             return True
         if self.reg is None:
-            return False
+            return self.cfg.owner != PERSONAL
         if remote is None and folder and lookup:
             if folder not in self._remotes:
                 from .routing import git_info
@@ -222,4 +222,4 @@ class HubFilter:
                 info = git_info(folder)
                 self._remotes[folder] = info[1] if info else None
             remote = self._remotes[folder]
-        return route(self.reg, folder, remote, known=self.known).owner != PERSONAL
+        return route(self.reg, folder, remote, known=self.known).owner != self.cfg.owner

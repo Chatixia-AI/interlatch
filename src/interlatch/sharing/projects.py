@@ -257,8 +257,8 @@ class GroupRoutes:
 def group_routes(cfg: Config, conn=None) -> GroupRoutes:
     """This computer's GroupRoutes, from its groups and what they shared before. Empty on a computer that doesn't
     send to a hub. Folders only: a path another computer recorded (host:/…) isn't one the hub files by."""
-    if not cfg.is_spoke or (conn is None and not cfg.db_path.exists()):
-        return GroupRoutes()
+    if not cfg.is_spoke or cfg.owner != "personal" or (conn is None and not cfg.db_path.exists()):
+        return GroupRoutes()  # a named profile shares no groups: they are Personal's, for Personal's hub
     from ..projects.groups import assign, groups
     from ..storage.sqlite import connect
 

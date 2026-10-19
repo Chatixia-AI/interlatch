@@ -186,7 +186,7 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
     conn = conn or connect(cfg.db_path, readonly=True)
     found: dict[str, str | None] = {}
     left = set(cfg.hub_left)
-    mine = personal_ids(cfg, conn)  # named profiles: only Personal's own sessions go to Personal's hub
+    mine = owned_ids(cfg, conn)  # named profiles: only this profile's own sessions go to its hub
     routes = routes if routes is not None else GroupRoutes()
     try:
         # an allowlist: never a prompt-made title, the raw analysis, the person's mood or friction notes
@@ -240,16 +240,17 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
     return out, unchanged, excluded
 
 
-def personal_ids(cfg: Config, conn) -> set[str] | None:
-    """The sessions Personal owns, when named profiles exist (core.profiles); None when there are none. A session
-    with no owner yet isn't in it: it waits for the next sync to be given one."""
+def owned_ids(cfg: Config, conn) -> set[str] | None:
+    """The sessions this profile owns (cfg.owner: Personal, or a named profile sharing from Personal's archive), when
+    named profiles exist (core.profiles); None when there are none. A session with no owner yet isn't in it: it waits
+    for the next sync to be given one."""
     if cfg.profiles is None:
-        return None
+        return None if cfg.owner == "personal" else set()
     from ..projects.owners import has_table
 
     if not has_table(conn):
         return set()
-    return {r[0] for r in conn.execute("SELECT session_id FROM session_owner WHERE owner = 'personal'")}
+    return {r[0] for r in conn.execute("SELECT session_id FROM session_owner WHERE owner = ?", (cfg.owner,))}
 
 
 def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
@@ -412,7 +413,7 @@ def export_analyses(cfg: Config) -> tuple[bytes, int]:
     if cfg.db_path.exists():
         conn = connect(cfg.db_path, readonly=True)
         try:
-            mine = personal_ids(cfg, conn)
+            mine = owned_ids(cfg, conn)
             cols = ", ".join(("id", "project_path AS _project", "machine_path AS _ran") + ANALYSIS_COLS)
             for r in conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done'").fetchall():
                 rec = dict(r)

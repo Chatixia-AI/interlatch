@@ -223,12 +223,22 @@ def test_one_profile_per_hub(teamenv):  # noqa: F811
         redeem_invite(acme, teamenv["url"], "ABCD-EFGH-JKLM")
 
 
-def test_a_profiles_own_folder_records_nothing(tmp_path):
+def test_a_profiles_folder_is_a_hub_link_of_personal(tmp_path):
+    """A profile's folder holds its hub link, token, computer identity and sharing state; what it shares comes from
+    Personal's archive, with Personal's settings. An older Interlatch run there records and sends nothing."""
+    import tomllib
+
+    from interlatch.core.machine import local_machine_id
+
     cfg = load_config(tmp_path / "personal")
     p, _ = ops.create(cfg, "Acme", owns=[str(tmp_path)])
     acme = load_config(p.home)
     assert p.home == cfg.home / "profiles" / p.id and acme.server_port == p.port == 11525
-    assert acme.claude_dirs == [] and acme.exclude_projects == ["*"] and acme.hub_share == "knowledge"
+    assert acme.db_path == cfg.db_path and acme.archive_dir == cfg.archive_dir and acme.owner == p.id
+    assert acme.claude_dirs == cfg.claude_dirs and acme.hub_share == "knowledge" and not acme.mirror_to
+    assert local_machine_id(acme) != local_machine_id(cfg)  # its hub can't tell it is the same computer
+    raw = tomllib.loads((p.home / "config.toml").read_text())
+    assert raw["sources"]["claude_dirs"] == [] and raw["sources"]["exclude_projects"] == ["*"]
     assert ops.is_profile_home(p.home) and not ops.is_profile_home(cfg.home)
     with pytest.raises(ops.ProfileError, match="named profile's folder"):
         ops.create(acme, "Nested")
@@ -265,8 +275,10 @@ def test_the_global_profile_option_runs_a_command_in_its_folder(tmp_path, monkey
     p = reg.find("acme")
     assert main(["--profile", "Acme", "config", "path"]) == 0
     assert str(p.home) in capsys.readouterr().out
-    assert main(["--profile", "Nope", "status"]) == 1  # from inside Acme too: Personal's registry is found
+    assert main(["--profile", "Nope", "push"]) == 1  # from inside Acme too: Personal's registry is found
     assert "profiles: Acme" in capsys.readouterr().err
+    assert main(["--profile", "Acme", "sync"]) == 2  # recording is Personal's
+    assert "runs for Personal" in capsys.readouterr().err
     monkeypatch.setenv("INTERLATCH_HOME", str(tmp_path / "personal"))
     assert main(["profile", "where", str(tmp_path / "x")]) == 0
     assert "Acme" in capsys.readouterr().out

@@ -55,12 +55,34 @@ def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyse
             report.shared = push_knowledge(cfg).summary()
         except HubError as exc:
             report.shared = f"not sent ({exc})"
+    from .profiles import joined
+
+    for pcfg in joined(cfg):  # each named profile with a hub of its own: only its sessions, from this archive
+        from ..sharing.push import push_knowledge
+        from ..sharing.protocol import HubError
+
+        try:
+            sent = push_knowledge(pcfg).summary()
+        except HubError as exc:
+            sent = f"not sent ({exc})"
+        label = _profile_label(cfg, pcfg.owner)
+        report.shared = "; ".join(x for x in (report.shared, f"{label}: {sent}") if x)
     if cfg.mirror_to and not session_ids:  # a background or `interlatch work` run: bring the mirror up to date
         from ..storage.mirror import sync as mirror_sync
 
         report.mirrored = mirror_sync(cfg).summary()  # never raises; a missed write is caught up by the next run
     log.info("worker: %s", report.summary())
     return report
+
+
+def _profile_label(cfg: Config, owner: str) -> str:
+    from ..core.profiles import RegistryError, load_registry
+
+    try:
+        reg = load_registry(cfg.home)
+    except RegistryError:
+        return owner
+    return reg.label(owner) if reg else owner
 
 
 def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analyses, analyze, synthesize, export,

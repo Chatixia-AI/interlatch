@@ -16,6 +16,21 @@ from .protocol import TEAM_SOURCE
 TEAM_FILE = "team-lessons.json"  # on a computer that shares knowledge: the team lessons it holds, as of the last pull
 
 
+def team_prefix(cfg: Config) -> str:
+    """The start of the fingerprints of the team lessons this profile's hub sent: `team:<id>` for Personal's hub (as
+    before profiles), `team:<profile>:<id>` for a named profile's, so two hubs' lessons share one archive without
+    one pull replacing the other's (core.profiles)."""
+    return f"{TEAM_SOURCE}:" if cfg.owner == "personal" else f"{TEAM_SOURCE}:{cfg.owner}:"
+
+
+def is_from(cfg: Config, fingerprint: str | None) -> bool:
+    """Whether a team lesson's fingerprint is one this profile's hub sent."""
+    fp = fingerprint or ""
+    if cfg.owner != "personal":
+        return fp.startswith(team_prefix(cfg))
+    return fp.startswith(f"{TEAM_SOURCE}:") and fp.count(":") == 1
+
+
 def pull_team_lessons(cfg: Config, client: HubClient, repos: dict) -> int:
     """Ask the hub for teammates' lessons in this computer's projects and keep them here, read-only (source 'team').
     Returns how many this computer holds. Nothing changes when the hub's answer is the one it already has."""
@@ -28,7 +43,8 @@ def pull_team_lessons(cfg: Config, client: HubClient, repos: dict) -> int:
     if state.get("version") and cfg.db_path.exists():  # "unchanged" only counts if the lessons are still here
         conn = connect(cfg.db_path, readonly=True)
         try:
-            held = conn.execute("SELECT COUNT(*) FROM knowledge WHERE source = ?", (TEAM_SOURCE,)).fetchone()[0]
+            held = sum(1 for (fp,) in conn.execute("SELECT fingerprint FROM knowledge WHERE source = ?", (TEAM_SOURCE,))
+                       if is_from(cfg, fp))
         finally:
             conn.close()
         if held != state.get("lessons"):
@@ -130,7 +146,7 @@ def apply_team_lessons(cfg: Config, data: dict, repos: dict) -> int:
             if not where[spot]:
                 continue
             path, name = where[spot]
-            fp = f"{TEAM_SOURCE}:{k['id']}"
+            fp = f"{team_prefix(cfg)}{k['id']}"
             held.add(fp)
             sessions = [str(s) for s in k.get("session_ids") or [] if isinstance(s, str)][:ladder.MAX_CONFIRMATIONS]
             ref = dumps({"lesson": k["id"], "hub": data.get("hub"), "from": [str(c) for c in k.get("computers") or []][:10],
@@ -152,7 +168,7 @@ def apply_team_lessons(cfg: Config, data: dict, repos: dict) -> int:
                                    [*values.values(), fp, None])
                 changed.append(cur.lastrowid)
         gone = [r[0] for r in conn.execute("SELECT id, fingerprint FROM knowledge WHERE source = ?", (TEAM_SOURCE,))
-                if r[1] not in held]
+                if r[1] not in held and is_from(cfg, r[1])]  # another profile's hub's lessons are that pull's
         if gone:
             conn.execute(f"DELETE FROM knowledge WHERE id IN ({','.join('?' * len(gone))})", gone)
         ladder.refresh(conn, changed)

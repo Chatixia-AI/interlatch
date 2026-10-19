@@ -12,8 +12,8 @@ most one hub.
   pattern. Its sessions stay off Personal's hub, and later go to Acme's hub only.
 
 !!! note "Being built in stages"
-    So far, Interlatch decides who owns each session, keeps a named profile's sessions off Personal's hub, and shows
-    agents only what their folder's profile owns. Named profiles don't send to their own hub yet
+    Interlatch decides who owns each session, sends each profile's sessions to its own hub only, and shows agents only
+    what their folder's profile owns. Profiles are set up from the command line for now
     ([What comes next](#what-comes-next)).
 
 ## Make a profile
@@ -74,7 +74,7 @@ inside it.
 | Give a profile another folder, with its sessions so far | `interlatch profile own <folder> <profile>` |
 | Take a folder away from its profile | `interlatch profile disown <folder>` |
 | Remove a profile | `interlatch profile remove <profile> [--delete-data]` |
-| Run any command for a profile | `interlatch --profile <profile> <command>` |
+| Run a hub command for a profile | `interlatch --profile <profile> hub …` / `push` / `config …` |
 
 `disown` and `remove` never send a folder back to Personal on their own. Its sessions wait for you, so a client's
 folder isn't shared with your Personal hub by mistake. `remove` keeps the profile's folder unless you pass
@@ -96,6 +96,30 @@ Lines Interlatch proposes for your user-level instruction files (`~/.claude/CLAU
 agents read in every folder, come only from Personal's lessons. A lesson a profile's sessions learned is proposed for
 that project's own files instead ([Suggestions](suggestions.md)).
 
+## Connect a profile to its hub
+
+A profile joins its hub the way a computer does, with an invite from that hub's admin
+([Joining your team's hub](join-a-hub.md)), and `--profile` in front:
+
+```bash
+interlatch --profile Acme hub join https://hub.acme.example --code XXXX-XXXX-XXXX
+interlatch --profile Acme hub add-folder ~/work/acme/app --project App
+```
+
+From then on, the background job sends each hub what is new: Personal's hub first, then each profile's.
+`interlatch push` does the same now, and `interlatch --profile Acme push` sends Acme's only.
+
+- **Only its own sessions.** A profile's hub gets the sessions that profile owns, read from Personal's archive: there
+  is no second copy, and nothing is analyzed twice. As on any computer, only folders added to a project on its hub go,
+  unless it joined with `--all-folders`.
+- **Its own identity.** Each profile has its own token and computer ID, so two hubs can't match this computer by its
+  ID. Each hub still shows the computer's name: change the name a profile's hub sees in
+  `~/.interlatch/profiles/<id>/machine.json`.
+- **Its own teammates.** Teammates' lessons a profile's hub sends are kept for that profile, and agents see them only
+  in its folders. Leaving one hub (`interlatch --profile Acme hub leave`) removes only that hub's.
+- **Personal does the rest.** Recording, analysis and the dashboard are Personal's: with `--profile`, only `hub`,
+  `push` and `config` run.
+
 ## Sharing with profiles
 
 - **Knowledge only.** Every profile shares summaries and project lessons, never transcripts. A transcript upload
@@ -115,8 +139,8 @@ An archive without profiles is never changed.
 
 ## What comes next
 
-1. **Each profile shares with its own hub.** A named profile copies its sessions from Personal and shares them with
-   its hub (`interlatch --profile Acme hub join …`). Moving a folder takes its sessions back from the hub that had
-   them.
-2. **Windows and the dashboard.** A labelled window per profile, the menu bar, and Profiles and Waiting cards in the
-   dashboard.
+1. **Groups instead of profiles.** The groups you already make in the dashboard (a name and its folders) will connect
+   to a hub, in place of `interlatch profile`.
+2. **Moving a folder takes its sessions back** from the hub that had them, session by session.
+3. **The dashboard:** each group shows its hub, Settings › Devices lists every hub, and waiting folders appear under
+   Needs you.

@@ -21,11 +21,13 @@ def cmd_profile(args) -> int:
     console = new_console()
     action = args.action
 
-    def label(owner: str) -> str:
-        reg = load_registry(cfg.home)
-        return reg.label(owner) if reg else ("Personal" if owner == PERSONAL else owner)
-
     def report(moved, *, done: bool = True) -> None:
+        def label(owner: str) -> str:  # as the change leaves them: a profile a dry run would make has its name too
+            if owner in moved.labels:
+                return moved.labels[owner]
+            reg = load_registry(cfg.home)
+            return reg.label(owner) if reg else ("Personal" if owner == PERSONAL else owner)
+
         console.print(_moved_words(label, moved), highlight=False)
         if moved.on_hub:
             console.print(f"[yellow]The hub at {moved.hub} has {moved.on_hub} of them[/]"
