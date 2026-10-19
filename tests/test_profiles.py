@@ -3,6 +3,7 @@ gets only Personal's. The design: docs/profiles.md."""
 
 import gzip
 import json
+import os
 import random
 
 import pytest
@@ -117,7 +118,8 @@ def test_the_registry_round_trips_and_is_private(tmp_path):
     assert again.profiles["p7k2m9qa"].label == 'Acme "Corp"' and again.profiles["p7k2m9qa"].owns == ["/w/acme"]
     assert again.profiles["p7k2m9qa"].remotes == ["github.com/acme-corp/*"]
     assert again.choices == {'/w/odd "dir"': WAITING}
-    assert (tmp_path / "profiles.toml").stat().st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert (tmp_path / "profiles.toml").stat().st_mode & 0o077 == 0
 
 
 def test_an_unreadable_registry_shares_nothing(tmp_path):
