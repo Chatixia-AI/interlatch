@@ -59,10 +59,14 @@ def list_suggestions(conn: sqlite3.Connection, status: str | None = None, projec
 
 def display(s: dict) -> dict:
     """A suggestion as the dashboard shows it, in the viewer's language (i18n). The row keeps its English title and
-    evidence line (a knowledge title, and every line's text, stay as they were written), so they are rebuilt here."""
+    evidence line (a knowledge title, and every line's text, stay as they were written), so they are rebuilt here.
+    An applied fix also gets effect_line: whether it helped, in words."""
+    e = dict(s.get("evidence") or {})
+    if s.get("status") == "applied" and isinstance(e.get("effect"), dict):
+        e["effect_line"] = effect_line(e["effect"])
+        s = {**s, "evidence": e}
     if lang.get() == "en":
         return s
-    e = dict(s.get("evidence") or {})
     if s["origin"] == "friction":
         s = {**s, "title": tr(s["title"])}
         if e.get("cause"):
@@ -86,6 +90,21 @@ def _friction_line(e: dict) -> str:
     if e.get("project_sessions") is not None:
         parts.append(tr("{n} in this project", n=e["project_sessions"]))
     return " · ".join(parts)
+
+
+def effect_line(effect: dict) -> str:
+    """friction.effect in words, in the viewer's language: the verdict, then the counts it rests on."""
+    (hb, nb), (ha, na) = effect.get("before") or (0, 0), effect.get("after") or (0, 0)
+    counts = tr("{hb} of {nb} sessions hit this in the 4 weeks before, {ha} of {na} since", hb=hb, nb=nb, ha=ha, na=na)
+    verdict = effect.get("verdict")
+    if verdict == "confounded":
+        return tr("Can't tell if it helped: applied together with “{other}”", other=tr(effect.get("with") or ""))
+    if verdict == "helped":
+        return tr("Helped: {counts}", counts=counts)
+    if verdict == "not_helping":
+        out = tr("Not helping: {counts}", counts=counts)
+        return out + (" · " + tr("remove it to free its place") if effect.get("retire") else "")
+    return tr("Too early to tell: {counts}", counts=counts)
 
 
 def _knowledge_line(e: dict) -> str:
@@ -290,6 +309,7 @@ def refresh(conn: sqlite3.Connection, cfg: Config) -> dict[str, int]:
             cause = causes.get(old["cause_id"] or "")
             if cause:
                 p["evidence"]["sessions_since_applied"] = friction.sessions_since(cause, old["applied_at"])
+                p["evidence"]["effect"] = _effect(conn, cause, old, existing.values())
                 evidence = dumps(p["evidence"])
         # an applied line stays where it was written: undo must find it there, whatever the routing says now
         agent, target = (old["agent"], old["target_path"]) if status in ("applied", "done") else (p["agent"], p["target_path"])
@@ -322,10 +342,18 @@ def refresh(conn: sqlite3.Connection, cfg: Config) -> dict[str, int]:
             if cause:
                 ev = loads(old["evidence_json"], {}) or {}
                 ev["sessions_since_applied"] = friction.sessions_since(cause, old["applied_at"])
+                ev["effect"] = _effect(conn, cause, old, existing.values())
                 ev["still_happening"] = cause["still_happening"]
                 conn.execute("UPDATE suggestions SET evidence_json = ? WHERE id = ?", (dumps(ev), old["id"]))
     conn.commit()
     return report
+
+
+def _effect(conn: sqlite3.Connection, cause: dict, old: dict, rows) -> dict | None:
+    """friction.effect for an applied suggestion, against the other fixes applied (or done) for the same cause."""
+    others = [r for r in rows if r["origin"] == "friction" and r["cause_id"] == old["cause_id"]
+              and r["status"] in ("applied", "done") and r["id"] != old["id"]]
+    return friction.effect(conn, cause, old, others)
 
 
 def move(conn: sqlite3.Connection, cfg: Config, sid: int, to: str) -> dict:
@@ -608,6 +636,23 @@ def unapply(conn: sqlite3.Connection, cfg: Config, sid: int) -> dict:
                  "WHERE id = ?", (utcnow_iso(), sid))
     conn.commit()
     return {"ok": True, "path": str(path) if path else None, "diff": diff}
+
+
+RETIRED_REASON = "didn't help"
+
+
+def retire(conn: sqlite3.Connection, cfg: Config, sid: int) -> dict:
+    """Take an applied instruction line that didn't help back out of its file, and keep it from being proposed again:
+    each line in a file is read at the start of every session, so one that changes nothing only costs."""
+    s = get(conn, sid)
+    if s is None:
+        return {"ok": False, "error": tr("no such suggestion")}
+    if s["status"] != "applied" or s["kind"] != "instruction":
+        return {"ok": False, "error": tr("only an applied instruction line can be retired")}
+    out = unapply(conn, cfg, sid)
+    if out["ok"]:
+        dismiss(conn, sid, RETIRED_REASON)
+    return {**out, "retired": out["ok"]}
 
 
 def edit_text(conn: sqlite3.Connection, sid: int, text: str) -> dict:

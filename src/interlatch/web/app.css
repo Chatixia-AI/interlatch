@@ -1890,6 +1890,9 @@ details.agent-pick [aria-checked="true"] .ap-check { visibility: visible; }
 .sg-head .tag { margin: 0; }
 .sg-title { font-weight: 600; font-size: 14.5px; line-height: 1.38; letter-spacing: -0.005em; }
 .sg-evidence { color: var(--ink-2); font-size: 12.5px; }
+.sg-effect { color: var(--ink-2); font-size: 12.5px; font-weight: 600; }
+.sg-effect.helped { color: var(--good-ink); }
+.sg-effect.not_helping { color: var(--warning-ink); }
 .sg-examples { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12.5px; }
 .sg-examples li { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sg-warn { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -403,3 +403,26 @@ def test_mcp_page_info(env):
     assert json.loads(snip["vscode"])["servers"]["interlatch"]["type"] == "stdio"
     assert tomllib.loads(snip["codex"])["mcp_servers"]["interlatch"]["args"] == info["args"]
     assert snip["claude"].startswith("claude mcp add --scope user interlatch -- ") and snip["claude"].endswith(" mcp")
+
+
+def test_session_start_context_leaves_tentative_lessons_out(synced, monkeypatch):
+    """The digest is read at the start of every session: tentative lessons wait in search_knowledge, and a section
+    with nothing else says nothing."""
+    from interlatch.knowledge import synthesize
+    from interlatch.runtime.hooks import build_session_context
+
+    conn = synced["conn"]
+    for title, stage in (("Token TTL is in ms", "provisional"), ("Maybe the cache is stale", "wip")):
+        conn.execute("INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, scope, source, "
+                     "fingerprint, stage, status) VALUES (?, ?, 'demo-app', 'gotcha', ?, 'b', 'project', 'analysis', ?, ?, "
+                     "'active')", (SID, CWD, title, f"fp-{title}", stage))
+    conn.commit()
+    ctx = build_session_context(synced["cfg"], CWD)
+    assert "Token TTL is in ms" in ctx and "Maybe the cache is stale" not in ctx
+
+    monkeypatch.setattr(synthesize, "kb_for_path", lambda _conn, _cwd: {"project_name": "demo-app", "updated_at": "2026-10-01T00:00:00Z"})
+    monkeypatch.setattr(synthesize, "kb_sections", lambda _kb: [
+        {"title": "Gotchas", "items": [{"text": "Raw body for Stripe", "stage": "established"}, {"text": "A hunch", "stage": "wip"}]},
+        {"title": "Hunches", "items": [{"text": "Another hunch", "stage": "wip"}]}])
+    ctx = build_session_context(synced["cfg"], CWD)
+    assert "Raw body for Stripe" in ctx and "hunch" not in ctx and "Hunches:" not in ctx

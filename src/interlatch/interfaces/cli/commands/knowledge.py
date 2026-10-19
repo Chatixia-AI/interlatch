@@ -360,6 +360,9 @@ def cmd_suggest(args) -> int:
             line = (s["evidence"] or {}).get("line")
             if line:
                 console.print(f"    [dim]{escape_markup(line)}[/]", highlight=False, soft_wrap=True)
+            effect = (suggest.display(s)["evidence"] or {}).get("effect_line")
+            if effect:
+                console.print(f"    {escape_markup(effect)}", highlight=False, soft_wrap=True)
             for bit in _warning_bits(s["warnings"] or {}):
                 console.print(f"    [yellow]! {escape_markup(bit)}[/]", highlight=False, soft_wrap=True)
         if not rows:
@@ -401,6 +404,15 @@ def cmd_suggest(args) -> int:
                 print(f"#{sid} moved to " + ", ".join(_home_short(t) for t in got["targets"]) + " (see interlatch suggest)")
             else:
                 print(f"#{sid} moved, but nothing is waiting there: it was dismissed or applied there before")
+            continue
+        if action == "retire":
+            got = suggest.retire(conn, cfg, sid)
+            if got["ok"]:
+                print(f"#{sid} taken back out" + (f" of {_home_short(got['path'])}" if got.get("path") else "")
+                      + "; it will not be proposed again")
+            else:
+                print(f"#{sid}: {got['error']}", file=sys.stderr)
+                failed += 1
             continue
         if action == "undo":
             got = suggest.unapply(conn, cfg, sid)
@@ -570,9 +582,10 @@ def add_review(sub) -> None:
 def add_suggest(sub) -> None:
     s = sub.add_parser("suggest", aliases=["suggestions"],
                        help="proposed fixes (instruction lines, config changes, setup steps); nothing is written until you apply one")
-    s.add_argument("action", nargs="?", choices=["list", "show", "apply", "dismiss", "done", "undo", "move", "refresh"],
+    s.add_argument("action", nargs="?", choices=["list", "show", "apply", "dismiss", "done", "undo", "retire", "move", "refresh"],
                    help="list (default), show ID (the diff), apply ID..., dismiss ID, done ID (a setup step you ran), "
-                        "undo ID (take an applied one back out), move ID --to user|project, refresh")
+                        "undo ID (take an applied one back out), retire ID (take out an applied line that didn't help, for good), "
+                        "move ID --to user|project, refresh")
     s.add_argument("ids", nargs="*", type=int, metavar="ID")
     s.add_argument("-p", "--project", help="only this project's suggestions (path or name)")
     s.add_argument("--all", action="store_true", help="also applied, dismissed, stale and done ones")

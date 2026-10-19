@@ -466,6 +466,6 @@ POST: list[Route] = [
           lambda h, ctx, m, b: h._json({"ok": api.knowledge.action_knowledge(ctx, int(m.group(1)), b)})),
     Route("/api/suggestions/seen", ANYONE, _suggestions_seen),
     Route("/api/suggestions/refresh", ANYONE, _suggestions_refresh),
-    Route(r"/api/suggestions/(\d+)/(apply|unapply|dismiss|done|edit|move)", ANYONE, lambda h, ctx, m, b: h._json(
+    Route(r"/api/suggestions/(\d+)/(apply|unapply|retire|dismiss|done|edit|move)", ANYONE, lambda h, ctx, m, b: h._json(
         *api.knowledge.action_suggestion(ctx, int(m.group(1)), m.group(2), _body(b)))),
 ]

@@ -281,7 +281,7 @@ def suggestion_preview(ctx: Context, sid: int, q: dict) -> tuple[dict, int]:
 
 
 def action_suggestion(ctx: Context, sid: int, verb: str, body: dict) -> tuple[dict, int]:
-    """apply / unapply / dismiss / done / edit / move. A refusal is a 400 carrying the reason; an unknown id a 404."""
+    """apply / unapply / retire / dismiss / done / edit / move. A refusal is a 400 carrying the reason; an unknown id a 404."""
     from ....knowledge import suggest
 
     if suggest.get(ctx.conn, sid) is None:
@@ -292,6 +292,8 @@ def action_suggestion(ctx: Context, sid: int, verb: str, body: dict) -> tuple[di
         got = suggest.apply(ctx.conn, ctx.cfg, sid, text)
     elif verb == "unapply":
         got = suggest.unapply(ctx.conn, ctx.cfg, sid)
+    elif verb == "retire":  # an applied line that didn't help: out of its file, and not proposed again
+        got = suggest.retire(ctx.conn, ctx.cfg, sid)
     elif verb == "dismiss":
         got = suggest.dismiss(ctx.conn, sid, str(body.get("reason") or "") or None)
     elif verb == "done":

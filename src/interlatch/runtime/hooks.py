@@ -115,7 +115,9 @@ def build_session_context(cfg, cwd: str) -> str | None:
             lines.append(f"Interlatch knowledge base for {kb['project_name']} (from past coding-agent sessions, "
                          f"updated {local_str(kb['updated_at'], '%Y-%m-%d')}):")
             for section in kb_sections(kb):
-                items = section.get("items") or []
+                # tentative bullets stay out: this text is read at the start of every session, and
+                # search_knowledge still finds them
+                items = [i for i in section.get("items") or [] if i.get("stage") != "wip"]
                 if not items:
                     continue
                 lines.append(f"{section.get('title')}:")
@@ -127,6 +129,7 @@ def build_session_context(cfg, cwd: str) -> str | None:
             rows = conn.execute(
                 "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json FROM knowledge k WHERE k.status = 'active' "
                 "AND k.project_path = ? AND k.source != 'team' AND k.kind IN ('gotcha', 'fix', 'fact', 'decision', 'preference') "
+                "AND COALESCE(k.stage, '') != 'wip' "
                 f"ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, k.id DESC LIMIT 12",
                 (cwd,),
             ).fetchall()
@@ -136,7 +139,7 @@ def build_session_context(cfg, cwd: str) -> str | None:
                           for r in rows]
         team = conn.execute(  # teammates' lessons the team hub sent (sharing.pull.apply_team_lessons)
             "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json, k.source_ref FROM knowledge k "
-            f"WHERE k.status = 'active' AND k.source = 'team' AND k.project_path = ? "
+            f"WHERE k.status = 'active' AND k.source = 'team' AND k.project_path = ? AND COALESCE(k.stage, '') != 'wip' "
             f"ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, k.updated_at DESC LIMIT 6", (cwd,),
         ).fetchall()
         if team:
