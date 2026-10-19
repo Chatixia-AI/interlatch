@@ -339,15 +339,18 @@ class Config:
     systems_read_manifests: bool = True
     providers: dict[str, dict] = field(default_factory=dict)  # [providers.<name>]: see analysis/runners/settings.py
     loaded: tuple[int, int] | None = field(default=None, repr=False, compare=False)  # config.toml when read: current()
+    # a named profile's folder (core.profiles): Personal's archive and settings, its own hub and identity
+    archive_home: Path | None = None  # Personal's folder, whose archive it reads; None: this folder's own
+    owner: str = "personal"  # whose sessions this folder shares with its hub: "personal", or the profile's id
 
     # ---- derived paths -------------------------------------------------
     @property
     def db_path(self) -> Path:
-        return self.home / "chronicle.db"
+        return (self.archive_home or self.home) / "chronicle.db"
 
     @property
     def archive_dir(self) -> Path:
-        return self.home / "archive"
+        return (self.archive_home or self.home) / "archive"
 
     @property
     def logs_dir(self) -> Path:
@@ -404,7 +407,7 @@ class Config:
         nothing may then be shared as if there were none."""
         from .profiles import load_registry
 
-        reg = load_registry(self.home)
+        reg = load_registry(self.archive_home or self.home)
         return reg if reg and (reg.profiles or reg.choices) else None
 
     @property
@@ -414,16 +417,16 @@ class Config:
 
     def off_hub(self, project_path: str | None, remote: str | None = None) -> bool:
         """Whether sessions in `project_path` (a repository with git remote `remote`) stay off this profile's hub:
-        an excluded project, or one a named profile owns (or that waits for you to choose). Only the folder and remote
+        an excluded project, or one another profile owns (or that waits for you to choose). Only the folder and remote
         decide here; push also checks each session's recorded owner (projects.owners)."""
         if self.is_excluded(project_path):
             return True
         reg = self.profiles
         if reg is None:
-            return False
-        from .profiles import PERSONAL, route
+            return self.owner != "personal"  # a profile's folder without a registry shares nothing
+        from .profiles import route
 
-        return route(reg, project_path, remote).owner != PERSONAL
+        return route(reg, project_path, remote).owner != self.owner
 
     def claude_bin(self) -> str | None:
         if self.analysis.claude_bin:
@@ -496,8 +499,38 @@ def _map_path(path: str) -> str:
     return normalize_project_path(path) if path_kind(path) in ("drive", "unc") else path.rstrip("/")
 
 
+def personal_home_of(home: Path) -> Path | None:
+    """Personal's folder when `home` is a named profile's: <Personal>/profiles/<id>, next to Personal's profiles.toml
+    (core.profiles). None for any other folder."""
+    home = Path(home).expanduser()
+    if home.parent.name != "profiles" or not (home.parent.parent / "profiles.toml").exists():
+        return None
+    return home.parent.parent
+
+
+def _as_profile(own: Config, personal: Path) -> Config:
+    """A named profile's config: Personal's archive and settings (its agents, exclusions, language, analysis), with the
+    profile's own folder (token, computer identity, sharing state), its hub link and its dashboard's port. It is a
+    computer that sends to its hub, never a hub, and writes no mirror of its own."""
+    import dataclasses
+
+    base = load_config(personal, create=False)
+    return dataclasses.replace(
+        base, home=own.home, archive_home=base.home, owner=own.home.name, loaded=own.loaded,
+        server_port=own.server_port, hub_url=own.hub_url, hub_folders=own.hub_folders, hub_share="knowledge",
+        hub_all_folders=own.hub_all_folders, hub_left=own.hub_left, hub_path_map={}, hub_accept="knowledge",
+        hub_store="", hub_shared_token=False, hub_address="", hub_name="", hub_dedicated=False, mirror_to="",
+        game_enabled=False)
+
+
 def load_config(home: Path | None = None, *, create: bool = True) -> Config:
     home = (home or interlatch_home()).expanduser()
+    cfg = _load_config(home, create=create)
+    personal = personal_home_of(home)
+    return _as_profile(cfg, personal) if personal is not None else cfg
+
+
+def _load_config(home: Path, *, create: bool = True) -> Config:
     path = home / "config.toml"
     if create and not path.exists():
         home.mkdir(parents=True, exist_ok=True)

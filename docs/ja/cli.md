@@ -48,7 +48,7 @@
 | `interlatch hub leave --project <name>` / `hub rejoin --project <name>` | ナレッジを共有するコンピューターで：ハブのプロジェクトの一つへの共有とチームメイトのナレッジの受け取りをやめる（すでに共有したものは残る）、または再開する（[やめるとき](devices.md#やめるとき)） |
 | `interlatch profile create <name> [--owns <folder>]… [--remotes <pattern>]…` / `profile list` / `profile where <folder>` | それぞれにハブを持つ名前付きプロファイル：フォルダーとリポジトリを持つプロファイルを作る（これまでのセッションも移る）、一覧する、フォルダーの持ち主とその理由を表示する（[プロファイル](profiles.md)） |
 | `interlatch profile own <folder> <profile>` / `disown <folder>` / `waiting` / `choose <folder> <profile\|personal>` / `remove <profile> [--delete-data]` | フォルダーをこれまでのセッションごとプロファイルに移す、外す（セッションは選択待ちに）、選択待ちのフォルダーを一覧して決める、プロファイルを削除する。`--dry-run` は移るものの表示だけ、`--leave-on-hub` は Personal のハブがすでに持つセッションも移す |
-| `interlatch --profile <name> <command>` | 任意のコマンドを名前付きプロファイル（専用のフォルダー、設定、ハブ）で実行する |
+| `interlatch --profile <name> hub … \| push \| config …` | 名前付きプロファイルのハブのコマンドを実行する：自分のハブに参加する、セッションを送る、設定を変える（[プロファイルをハブにつなぐ](profiles.md#プロファイルをハブにつなぐ)）。記録と分析は Personal が行います。`interlatch push` は Personal のハブ、次に各プロファイルのハブへ送ります |
 | `interlatch push` | ハブに参加したコンピューターで：新しいセッションを今すぐ送る（フックとバックグラウンド同期も送ります） |
 | `interlatch container` | ハブの Docker イメージが実行するコマンド：`INTERLATCH_*` 変数からハブを設定し、ダッシュボードを提供して 15 分ごとに同期（[Docker でハブを動かす](docker.md)） |
 | `interlatch config [edit]` | `~/.interlatch/config.toml` を表示または編集 |

@@ -141,8 +141,9 @@ def drop_left_token(cfg: Config) -> None:
 
 
 def _groups(cfg: Config) -> tuple[list[dict], list[dict]]:
-    """(the groups shared as a hub project, every folder a group shared) in this computer's database."""
-    if not cfg.db_path.exists():
+    """(the groups shared as a hub project, every folder a group shared) in this computer's database. None for a named
+    profile: groups are shared with Personal's hub only."""
+    if not cfg.db_path.exists() or cfg.owner != "personal":
         return [], []
     from ..storage.sqlite import connect
 
@@ -200,11 +201,17 @@ def _clear(cfg: Config) -> None:
     if cfg.db_path.exists():
         from ..storage.sqlite import connect
 
+        from .pull import is_from
+
         conn = connect(cfg.db_path)
         try:
-            conn.execute("UPDATE project_groups SET hub_project = NULL WHERE hub_project IS NOT NULL")
-            conn.execute("DELETE FROM group_shares")
-            conn.execute("DELETE FROM knowledge WHERE source = ?", (TEAM_SOURCE,))
+            if cfg.owner == "personal":  # groups are shared with Personal's hub only (a profile reads its archive)
+                conn.execute("UPDATE project_groups SET hub_project = NULL WHERE hub_project IS NOT NULL")
+                conn.execute("DELETE FROM group_shares")
+            mine = [r[0] for r in conn.execute("SELECT id, fingerprint FROM knowledge WHERE source = ?", (TEAM_SOURCE,))
+                    if is_from(cfg, r[1])]  # this hub's teammates' lessons, not another profile's hub's
+            if mine:
+                conn.execute(f"DELETE FROM knowledge WHERE id IN ({','.join('?' * len(mine))})", mine)
             conn.commit()
         finally:
             conn.close()
@@ -264,7 +271,7 @@ def restore(cfg: Config, kept: dict, *, share: str | None = None, all_folders: b
     if share:
         set_config_value(cfg, "hub", "share", json.dumps(share))
     set_config_value(cfg, "hub", "all_folders", "true" if all_folders or kept.get("all_folders") is True else "false")
-    if cfg.db_path.exists() and (kept.get("groups") or kept.get("group_shares")):
+    if cfg.db_path.exists() and cfg.owner == "personal" and (kept.get("groups") or kept.get("group_shares")):
         from ..storage.sqlite import connect
 
         conn = connect(cfg.db_path)

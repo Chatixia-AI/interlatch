@@ -13,13 +13,23 @@ from ..common import load_cfg, new_console, open_archive, push_now, wait_for_por
 def cmd_push(args) -> int:
     from ....core.util import setup_logging
 
+    from ....application.profiles import joined
+    from ....core.profiles import load_registry
+
     cfg = load_cfg()
     setup_logging(cfg.logs_dir)
-    if not cfg.is_spoke:
+    targets = ([cfg] if cfg.is_spoke else []) + joined(cfg)  # Personal's hub, then each named profile's
+    if not targets:
         print("This computer has not joined a hub. On the hub run `interlatch hub enable`, then run the command it "
               "prints here.", file=sys.stderr)
         return 1
-    return push_now(cfg, quiet=args.quiet)
+    code = 0
+    reg = load_registry(cfg.archive_home or cfg.home) if len(targets) > 1 else None
+    for t in targets:
+        if reg is not None and not args.quiet:
+            print(f"{reg.label(t.owner)} → {t.hub_url}")
+        code = push_now(t, quiet=args.quiet) or code
+    return code
 
 
 def _hub_url_guess(cfg) -> str | None:

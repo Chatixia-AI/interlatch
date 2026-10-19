@@ -7,8 +7,8 @@ first, as sharing/access.py does for hub viewers), so every query the MCP server
 scoped without being rewritten:
 
 - sessions and their rows (events, tool calls, files, subagents, API calls, artifacts): the owner's sessions;
-- knowledge: lessons from those sessions, notes about the owner's projects (and, for Personal, its hub's teammates'
-  lessons and notes about no project);
+- knowledge: lessons from those sessions, notes about the owner's projects, teammates' lessons the owner's own hub
+  sent (and, for Personal, notes about no project);
 - project_kb, glossary: the owner's projects' knowledge bases and terms; nothing made across every project (the
   global playbook, the cross-project glossary pass, themes, weekly reviews), which mixes every profile's sessions;
 - every other table reads as empty (DENY), and a table nobody classified yet does too.
@@ -80,11 +80,14 @@ def scope(conn: sqlite3.Connection, owner: str) -> None:
     conn.execute(f"CREATE TEMP VIEW sessions AS SELECT * FROM main.sessions WHERE id IN ({owned})")
     for t in BY_SESSION:
         conn.execute(f"CREATE TEMP VIEW {t} AS SELECT * FROM main.{t} WHERE session_id IN ({owned})")
-    personal_extra = ("OR (session_id IS NULL AND project_path IS NULL) "  # your own notes about no project
-                      f"OR (source = 'team' AND session_id IS NULL AND project_path IN ({paths}))") \
-        if owner == PERSONAL else ""
+    # teammates' lessons from this owner's hub only (sharing.pull.team_prefix: "team:<id>" Personal's hub's,
+    # "team:<profile>:<id>" a named profile's), filed under this owner's projects
+    team = "fingerprint GLOB 'team:[0-9]*'" if owner == PERSONAL else f"fingerprint LIKE {_q(f'team:{owner}:%')}"
+    personal_extra = "OR (session_id IS NULL AND project_path IS NULL AND source != 'team') " \
+        if owner == PERSONAL else ""  # your own notes about no project
     conn.execute("CREATE TEMP VIEW knowledge AS SELECT * FROM main.knowledge WHERE "
                  f"(session_id IN ({owned})) OR (session_id IS NULL AND source != 'team' AND project_path IN ({paths})) "
+                 f"OR (source = 'team' AND session_id IS NULL AND {team} AND project_path IN ({paths})) "
                  f"{personal_extra}")
     conn.execute(f"CREATE TEMP VIEW project_kb AS SELECT * FROM main.project_kb WHERE project_path IN ({paths})")
     conn.execute(f"CREATE TEMP VIEW glossary_usage AS SELECT * FROM main.glossary_usage WHERE project_path IN ({paths})")

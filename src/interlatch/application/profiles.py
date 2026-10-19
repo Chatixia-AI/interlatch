@@ -30,6 +30,7 @@ class Moved:
     """What a change did, or (preview) would do."""
     sessions: dict[str, int] = field(default_factory=dict)  # {old owner: sessions} that move
     owner: str = ""  # where they go
+    labels: dict[str, str] = field(default_factory=dict)  # {owner: name}, as the change leaves them (a new profile's too)
     on_hub: int = 0  # of them, how many Personal's hub has
     hub: str = ""
     checked: bool = True  # False: Personal's hub couldn't be asked
@@ -126,7 +127,8 @@ def _apply(cfg: Config, before: Registry, after: Registry, folders: list[str], *
         moves, old = _moving(conn, cfg, before, after, folders)
         leaving = {sid for sid, new in moves.items() if new != PERSONAL}  # what leaves Personal's hub's reach
         on_hub, checked = _hub_has(cfg, leaving) if leaving else (0, True)
-        result = Moved(sessions=old, owner=owner, on_hub=on_hub, hub=cfg.hub_url if cfg.is_spoke else "", checked=checked)
+        result = Moved(sessions=old, owner=owner, on_hub=on_hub, hub=cfg.hub_url if cfg.is_spoke else "", checked=checked,
+                       labels={o: after.label(o) for o in {*old, owner}})
         if dry_run:
             return result
         if leaving and not leave_on_hub:
@@ -364,3 +366,21 @@ def profile_home(key: str, personal_home: Path | None = None) -> Path:
     if key.strip().casefold() == PERSONAL:
         return home
     return find_profile(home, key).home
+
+
+def joined(cfg: Config) -> list[Config]:
+    """The named profiles that send to a hub of their own, each as its own config (core.config._as_profile): what the
+    background job and `interlatch push` send for after Personal. None from a profile's own folder."""
+    if cfg.owner != PERSONAL:
+        return []
+    try:
+        reg = load_registry(cfg.home)
+    except RegistryError:
+        return []
+    out = []
+    for p in (reg.profiles.values() if reg else []):
+        if (p.home / "config.toml").exists():
+            pcfg = load_config(p.home, create=False)
+            if pcfg.is_spoke:
+                out.append(pcfg)
+    return out
