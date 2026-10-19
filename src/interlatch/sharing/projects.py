@@ -332,10 +332,12 @@ def _record_folders(cfg: Config, hello: dict, repos: dict | None = None) -> None
             by_remote.setdefault(remotes[remote], []).append({"remote": remote, "folder": top})
     projects = [{"path": p["path"], "name": p.get("name") or Path(p["path"]).name, "sessions": p.get("sessions") or 0}
                 for p in hello.get("projects") or [] if isinstance(p, dict) and isinstance(p.get("path"), str)]
+    scope = [p for p in hello["scope"] if isinstance(p, str)] if isinstance(hello.get("scope"), list) else None
     try:
         (cfg.home / FOLDERS_FILE).write_text(json.dumps({"at": utcnow_iso(), "folders": hello["folders"],
                                                           "moved": int(hello.get("moved") or 0), "hub": hello.get("hub"),
-                                                          "projects": projects, "remotes": by_remote}))
+                                                          "projects": projects, "remotes": by_remote,
+                                                          "scope": scope}))
     except OSError:
         pass
 

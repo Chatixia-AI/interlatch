@@ -21,7 +21,7 @@ from ..core.machine import local_machine, platform_label
 from ..core.paths import normalize_project_path
 from ..projects import routing  # git_info through routing: one patch there reaches every caller
 from .identity import machine_key, read_token
-from .projects import REPOS_CACHE_S, GroupRoutes, _record_folders, group_routes, sent_folders
+from .projects import REPOS_CACHE_S, GroupRoutes, _record_folders, destination, group_routes, last_folders, sent_folders
 from .protocol import PROTOCOL, FolderError, HubError, HubUnauthorized, HubUnreachable, _check_protocol
 
 SHARING_LOCK = "hub-sharing.lock"  # on a spoke: one push, hello or folder change at a time (sharing())
@@ -72,28 +72,101 @@ def root_files(root: Root):
 
 
 class _Exclusions:
-    """cfg.exclude_projects, applied on the spoke so excluded projects never leave it."""
+    """cfg.exclude_projects, applied on the spoke so excluded projects never leave it: their transcripts stay here,
+    the files that mix projects (Claude Code's history.jsonl, Codex's thread index and imports) go without their
+    lines, and Codex's own memory notes, which don't say which project they came from, stay here altogether."""
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.cache: dict[str, bool] = {}
+        self.threads: dict[str, set[str]] = {}  # per Codex root: the threads that ran in an excluded project
 
     def excluded(self, root: Root, rel: str, path: Path) -> bool:
         if not self.cfg.exclude_projects:
             return False
-        from ..sources.claude.files import decode_project_dir, peek_cwd
         from ..sources.codex.parser import read_meta
 
         parts = rel.split("/")
         if root.kind == "claude" and parts[0] == "projects" and len(parts) > 2:
-            key = f"{root.name}/{parts[1]}"
-            if key not in self.cache:
-                proj = root.path / "projects" / parts[1]
-                self.cache[key] = self.cfg.is_excluded(peek_cwd(proj) or decode_project_dir(parts[1]))
-            return self.cache[key]
+            return self._claude_project(root, parts[1])
         if root.kind == "codex" and parts[0] == "sessions" and path.suffix == ".jsonl":
             return self.cfg.is_excluded(read_meta(path).get("cwd"))
-        return False
+        return root.kind == "codex" and parts[0] == "memories"
+
+    def _claude_project(self, root: Root, name: str) -> bool:
+        return self._project_dir(root.path / "projects" / name)
+
+    def _project_dir(self, proj: Path) -> bool:
+        """Whether a Claude Code project folder (~/.claude/projects/<encoded cwd>) is an excluded project's."""
+        from ..sources.claude.files import decode_project_dir, peek_cwd
+
+        key = str(proj)
+        if key not in self.cache:
+            cwd = peek_cwd(proj) if proj.is_dir() else None
+            self.cache[key] = self.cfg.is_excluded(cwd or decode_project_dir(proj.name))
+        return self.cache[key]
+
+    def _excluded_threads(self, root: Root) -> set[str]:
+        from ..sources.codex.parser import read_meta, rollout_files, rollout_id
+
+        if root.name not in self.threads:
+            self.threads[root.name] = {rollout_id(f) or f.stem for f in rollout_files(root.path)
+                                       if self.cfg.is_excluded(read_meta(f).get("cwd"))}
+        return self.threads[root.name]
+
+    def filtered(self, root: Root, rel: str, path: Path) -> bytes | None:
+        """The file as it may leave this computer, without what belongs to an excluded project, read once: what is
+        sent is what was checked, never lines added since. None when nothing is excluded, or it is no such file."""
+        if not self.cfg.exclude_projects:
+            return None
+        if root.kind == "claude" and rel == "history.jsonl":  # each prompt names its project
+            return _keep_lines(path, lambda d: not self.cfg.is_excluded(d.get("project")))
+        if root.kind == "codex" and rel == "session_index.jsonl":  # thread titles, by thread id
+            gone = self._excluded_threads(root)
+            return _keep_lines(path, lambda d: d.get("id") not in gone)
+        if root.kind == "codex" and rel == "external_agent_session_imports.json":
+            return self._imports(root, path)
+        return None
+
+    def _imports(self, root: Root, path: Path) -> bytes | None:
+        """Codex Desktop's record of the Claude Code sessions it imported, without those of an excluded project."""
+        gone = self._excluded_threads(root)
+
+        def keep(r) -> bool:
+            if not isinstance(r, dict):
+                return False
+            if r.get("imported_thread_id") in gone:
+                return False
+            src = Path(str(r.get("source_path") or ""))
+            return not (len(src.parts) > 2 and src.parts[-3] == "projects" and self._project_dir(src.parent))
+
+        try:
+            raw = path.read_bytes()
+            data = json.loads(raw)
+        except (OSError, ValueError):
+            return b""  # unreadable or half-written: nothing of it, rather than all of it
+        if not isinstance(data, dict) or not isinstance(data.get("records"), list):
+            return b""
+        kept = [r for r in data["records"] if keep(r)]
+        return raw if len(kept) == len(data["records"]) else json.dumps({**data, "records": kept}).encode()
+
+
+def _keep_lines(path: Path, keep) -> bytes:
+    """The JSON lines of `path` that `keep(record)` keeps. A line that isn't a JSON object (one still being written)
+    can't say whose it is, so it stays here."""
+    out = []
+    try:
+        with open(path, "rb") as fh:
+            for line in fh:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    d = None
+                if isinstance(d, dict) and keep(d):
+                    out.append(line if line.endswith(b"\n") else line + b"\n")
+    except OSError:
+        return b""
+    return b"".join(out)
 
 
 def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
@@ -115,11 +188,13 @@ def spoke_repos(cfg: Config, roots: list[Root]) -> dict[str, list[str]]:
             if not proj.is_dir():
                 continue
             cwd = peek_cwd(proj) or decode_project_dir(proj.name)
+            if cfg.is_excluded(cwd):  # an excluded project: not even its folder or remote leaves this computer
+                continue
             hit = cache.get(cwd)
             if not hit or now - hit.get("at", 0) > REPOS_CACHE_S:
                 info = routing.git_info(cwd)
                 hit = cache[cwd] = {"at": now, "info": list(info) if info else None}
-            if hit.get("info"):
+            if hit.get("info") and not cfg.is_excluded(hit["info"][0]):
                 out[cwd] = hit["info"]
     try:
         cache_path.write_text(json.dumps(cache))
@@ -190,12 +265,78 @@ class HubClient:
         return payload
 
 
-def hello_info(cfg: Config, roots: list[Root], routes: GroupRoutes | None = None) -> dict:
+def known_remotes(cfg: Config) -> dict[str, str]:
+    """{git remote: hub project} for this computer's repositories the hub filed by their remote at the last hello
+    (hub-folders.json)."""
+    seen = last_folders(cfg) or {}
+    remotes = seen.get("remotes") if isinstance(seen.get("remotes"), dict) else {}
+    return {r["remote"]: project for project, rs in remotes.items() if isinstance(rs, list)
+            for r in rs if isinstance(r, dict) and isinstance(r.get("remote"), str)}
+
+
+def hub_repos(cfg: Config, repos: dict[str, list[str]], routes: GroupRoutes, remotes: dict,
+              scope: list[str] | None = None) -> dict[str, list[str]]:
+    """The repositories of `repos` (spoke_repos, excluded projects already left out) the hub hears of in the hello.
+
+    A computer that shares knowledge of the hub's projects only ([hub] all_folders = false) names only the ones
+    whose sessions can go there, as _shared_records decides: a repository whose remote the hub files somewhere
+    (`remotes`), else one in a folder of a group shared with the hub, else one in a folder added to a hub project.
+    Not one in a project this computer left, nor outside `scope` (the projects its person is limited to). A computer
+    that sends transcripts, or shares knowledge of every folder, names them all."""
+    if not cfg.shares_knowledge or cfg.hub_all_folders:
+        return dict(repos)
+    left = set(cfg.hub_left)
+    out = {}
+    for cwd, info in repos.items():
+        remote = info[1] if isinstance(info, list) and len(info) == 2 else None
+        via = None if remote and remotes.get(remote) else routes.decide(cwd, cfg.hub_folders) if routes else None
+        if via is not None:
+            goes = via[0] if via[1] else None
+        else:
+            goes = destination(cfg, cwd, remote, remotes)
+        goes = normalize_project_path(goes) if goes else None
+        if goes and goes not in left and (scope is None or goes in scope):
+            out[cwd] = info
+    return out
+
+
+def hello_info(cfg: Config, roots: list[Root], routes: GroupRoutes | None = None, *, repos: dict | None = None,
+               remotes: dict | None = None, scope: list[str] | None = None) -> dict:
+    """What the hello tells the hub. Nothing of an excluded project; the repositories as hub_repos says, by the
+    remotes the hub knew at the last hello unless `remotes` says otherwise."""
     me = local_machine(cfg)
     routes = group_routes(cfg) if routes is None else routes
+    repos = spoke_repos(cfg, roots) if repos is None else repos
+    if remotes is None:
+        remotes, seen = known_remotes(cfg), last_folders(cfg) or {}
+        scope = seen.get("scope") if isinstance(seen.get("scope"), list) else None
+    folders = {f: p for f, p in sent_folders(cfg, routes).items() if not cfg.is_excluded(f)}
     return {"protocol": PROTOCOL, "machine": me["id"], "name": me["name"], "key": machine_key(cfg),
-            "platform": platform_label(), "version": __version__, "roots": [r.name for r in roots], "repos": spoke_repos(cfg, roots),
-            "folders": sent_folders(cfg, routes), "left": cfg.hub_left, "share": cfg.hub_share}
+            "platform": platform_label(), "version": __version__, "roots": [r.name for r in roots],
+            "repos": hub_repos(cfg, repos, routes, remotes, scope), "folders": folders, "left": cfg.hub_left,
+            "share": cfg.hub_share}
+
+
+def say_hello(cfg: Config, client: HubClient, roots: list[Root], routes: GroupRoutes) -> tuple[dict, dict]:
+    """Send the hello: (the hub's answer, what it was told). The hello names the repositories by the remotes the hub
+    knew last time; when its answer files a repository of this computer by a remote that is new to it, a second hello
+    names that one too, before anything is sent, so the hub files its sessions by their folder in it at once."""
+    every = spoke_repos(cfg, roots)
+    info = hello_info(cfg, roots, routes, repos=every)
+    hello = client.request("POST", "/api/hub/hello", body=info)
+    _check_protocol(hello)
+    if cfg.shares_knowledge and not cfg.hub_all_folders and isinstance(hello.get("remotes"), dict):
+        scope = hello.get("scope") if isinstance(hello.get("scope"), list) else None
+        now = hub_repos(cfg, every, routes, hello["remotes"], scope)
+        if set(now) - set(info["repos"]):
+            info = {**info, "repos": now}
+            again = client.request("POST", "/api/hub/hello", body=info)
+            _check_protocol(again)
+            # the first answer stands (what the hub has, what it refiled); the second reports on these folders
+            hello = {**hello, "folders": again.get("folders", hello.get("folders"))}
+    routes.remember(cfg)
+    _record_folders(cfg, hello, every)  # this computer's own note: a left project's repositories too, for Devices
+    return hello, info
 
 
 _sharing = threading.local()
@@ -243,15 +384,10 @@ def handshake(cfg: Config, client: HubClient | None = None) -> dict:
     if not cfg.hub_url or not token:
         raise HubError("this computer has not joined a hub (`interlatch hub join`)")
     client = client or HubClient(cfg.hub_url, token)
-    routes = group_routes(cfg)
-    info = hello_info(cfg, spoke_roots(cfg), routes)
     try:
-        hello = client.request("POST", "/api/hub/hello", body=info)
+        hello, _ = say_hello(cfg, client, spoke_roots(cfg), group_routes(cfg))
     finally:
         client.close()
-    _check_protocol(hello)
-    routes.remember(cfg)
-    _record_folders(cfg, hello, info["repos"])
     return hello
 
 

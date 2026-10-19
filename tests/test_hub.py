@@ -33,6 +33,7 @@ from conftest import CWD, PROJECT_DIR, SID, fake_log, write_fake_claude_tree
 
 SPOKE_SID = "99999999-8888-7777-6666-555555555555"
 SPOKE_CWD = "/home/test/code/demo-app"
+SPOKE_OLD_SID = "old-spoke-session-1"  # in its history.jsonl only
 
 
 def _serve(cfg):
@@ -59,7 +60,11 @@ def _make_spoke(tmp: Path, url: str, token: str, *, cwd: str = SPOKE_CWD, extra:
             path.write_text(path.read_text().replace(SID, SPOKE_SID).replace(CWD, cwd))
         if SID in path.name:
             path.rename(path.with_name(path.name.replace(SID, SPOKE_SID)))
-    (claude / "history.jsonl").unlink()
+    # its own prompt history: one of a session elsewhere whose transcript is gone, and its session's own
+    (claude / "history.jsonl").write_text("\n".join(json.dumps(x) for x in [
+        {"display": "set up the spoke", "timestamp": 1774931730912, "project": "/home/test", "sessionId": SPOKE_OLD_SID},
+        {"display": "hello", "timestamp": 1774931773838, "project": cwd, "sessionId": SPOKE_SID},
+    ]) + "\n")
     home.mkdir()
     (home / "config.toml").write_text(textwrap.dedent(f"""\
         [sources]
@@ -183,11 +188,49 @@ def test_forgotten_session_is_not_taken_back(hubenv):
 
 
 def test_excluded_projects_never_leave_the_spoke(hubenv):
-    spoke = hubenv["spoke"]
+    """An excluded project's transcripts stay on the spoke, and so do its prompts in history.jsonl: the hub gets that
+    file without their lines."""
+    cfg, spoke = hubenv["cfg"], hubenv["spoke"]
     spoke.exclude_projects = ["/home/test/code/*"]
     report = push(spoke)
-    assert report.skipped >= 3 and report.sent == 0
-    assert not list(hubenv["cfg"].machines_dir.rglob("*.jsonl"))
+    assert report.skipped >= 3 and report.sent == 1  # history.jsonl, without the excluded project's lines
+    assert [p.name for p in cfg.machines_dir.rglob("*.jsonl")] == ["history.jsonl"]
+    sent = next(cfg.machines_dir.rglob("history.jsonl")).read_text()
+    assert SPOKE_CWD not in sent and SPOKE_SID not in sent and SPOKE_OLD_SID in sent
+
+    again = push(spoke)  # the hub's copy is the filtered one: its size, not the file's here, says it is unchanged
+    assert again.sent == 0 and again.unchanged == 1
+    spoke.exclude_projects = []
+    assert push(spoke).sent >= 4  # nothing excluded any more: the whole history goes, and the transcripts
+    assert SPOKE_CWD in next(cfg.machines_dir.rglob("history.jsonl")).read_text()
+
+
+def test_an_excluded_projects_prompts_make_no_session_on_the_hub(hubenv):
+    """The hub builds sessions from history.jsonl prompts whose transcripts are gone, checking only its own
+    exclusions: a prompt of a project excluded on the spoke must never reach it."""
+    from interlatch.ingestion.service import sync
+
+    cfg, conn, spoke = hubenv["cfg"], hubenv["conn"], hubenv["spoke"]
+    private = "/home/test/private/secret-app"
+    proj = hubenv["spoke_claude"] / "projects" / private.replace("/", "-")
+    proj.mkdir()
+    (proj / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl").write_text(json.dumps(
+        {"type": "user", "sessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "cwd": private,
+         "timestamp": "2026-09-20T10:00:00.000Z", "message": {"role": "user", "content": "TRANSCRIPT-CANARY"}}) + "\n")
+    with open(hubenv["spoke_claude"] / "history.jsonl", "a") as fh:  # its session whose transcript is gone
+        fh.write(json.dumps({"display": "EXCLUDED-PROMPT-CANARY", "timestamp": 1774931790000, "project": private,
+                             "sessionId": "old-excluded-session"}) + "\n")
+    spoke.exclude_projects = ["/home/test/private/*"]
+    assert not push(spoke).errors
+    sync(cfg, conn)
+    stubs = {r[0]: r[1] for r in conn.execute("SELECT id, project_path FROM sessions WHERE source = 'history' "
+                                                "AND machine_id = ?", (local_machine(spoke)["id"],))}
+    assert stubs == {SPOKE_OLD_SID: "/home/test"}  # the prompt of a project that isn't excluded still makes one
+    assert conn.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 1
+    for canary in ("EXCLUDED-PROMPT-CANARY", "TRANSCRIPT-CANARY"):
+        assert not conn.execute("SELECT COUNT(*) FROM events WHERE text LIKE ?", (f"%{canary}%",)).fetchone()[0]
+        assert not any(canary in p.read_text(errors="replace") for p in cfg.machines_dir.rglob("*") if p.is_file())
+    assert not conn.execute("SELECT COUNT(*) FROM sessions WHERE project_path LIKE '%secret-app%'").fetchone()[0]
 
 
 def test_projects_matched_across_computers(hubenv, monkeypatch):

@@ -76,8 +76,10 @@ then on:
 The same repository often lives in different folders on different computers. The hub files each session under the
 matching project of its own:
 
-1. **By git remote.** The other computer reports each project folder's git remote (Codex sessions record theirs
-   too); a session goes to the hub's folder with the same remote.
+1. **By git remote.** The other computer reports its project folders' git remotes (Codex sessions record theirs
+   too); a session goes to the hub's folder with the same remote. A computer that shares knowledge of the hub's
+   projects only reports just the repositories whose sessions can go there ([What the hub learns about this
+   computer](#what-the-hub-learns-about-this-computer)).
 2. **By a folder added on that computer**, for a folder whose sessions belong to one of the hub's projects: a notes
    folder, a scratch folder, or a repository the hub doesn't know. On that computer, run:
 
@@ -131,7 +133,10 @@ the Projects page and sidebar list the group's projects under that project as we
 
 - From each `claude_dirs` folder: `projects/` (transcripts, subagent threads, memory notes) and `history.jsonl`.
   From each `codex_dirs` folder: `sessions/`, `memories/` and Codex's session index.
-- Projects in `sources.exclude_projects` are never sent.
+- Projects in `sources.exclude_projects` are never sent. Files that mix projects go without the excluded ones' lines:
+  `history.jsonl` without their prompts, and Codex's session index and imported-session list without their threads.
+  Codex's memory notes don't say which project they came from, so they stay on the computer while any project is
+  excluded. The analyses a computer hands over when it joins leave out excluded projects too.
 - GitHub Copilot, IBM Bob, Google Antigravity, OpenCode, Codex Cloud and chat exports are not sent: connect or import those on the hub.
 - Files travel over HTTPS (inside your tailnet, or through the HTTPS proxy in front of the hub), compressed, and are
   checked against a SHA-256 on arrival. Only files the hub lacks, or has an older copy of, are sent. Each computer
@@ -168,6 +173,19 @@ sessions from every folder, join with `--all-folders`, run `interlatch config se
 
 Prompts, shell commands, file paths, transcripts and lessons about you (global ones and preferences) never leave
 the computer. Sessions from GitHub Copilot, IBM Bob, Google Antigravity and OpenCode are shared too; imported chats are not.
+
+#### What the hub learns about this computer
+
+Each push opens with a hello: the computer's name, platform and Interlatch version, the folders it added to the
+hub's projects, the projects it left, and its repositories (each project folder's git top level and remote), which
+the hub needs to file sessions by git remote. Projects in `sources.exclude_projects` are never in it. With
+`all_folders = false`, it names only the repositories whose sessions can go to the hub: those in a folder added to
+one of its projects or in a group shared with it, and those whose git remote the hub files under one of its
+projects, as of the last push. Not those in a project the computer left, nor, for someone limited to projects,
+outside their projects. When the hub's answer files a repository by a remote that is new to it, the computer says a
+second hello naming that repository before it shares anything, so no session waits for the next push. The request
+for teammates' lessons names the same repositories' remotes and the projects the computer shares. With
+`all_folders = true`, or a computer that sends transcripts, the hello names every repository except excluded ones.
 
 On the hub these sessions are filed like any other from that computer (by git remote, an added folder or
 `path_map`) and their lessons join the project's knowledge base. A session page shows **transcript on
