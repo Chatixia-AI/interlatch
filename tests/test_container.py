@@ -66,6 +66,8 @@ def test_later_starts_keep_what_an_admin_changed(env):
 
 @pytest.mark.parametrize("change, problem", [
     ({"INTERLATCH_HUB_URL": ""}, "INTERLATCH_HUB_URL is not set"),
+    ({"INTERLATCH_HUB_URL": "https://"}, "set INTERLATCH_DOMAIN in .env"),  # compose.yaml without a domain
+    ({"INTERLATCH_HUB_URL": "https://http://203.0.113.7"}, "must be an address"),  # a domain written with http://
     ({"INTERLATCH_HUB_URL": "chronicle.example.com"}, "must be an address"),
     ({"INTERLATCH_HUB_URL": "https://chronicle.example.com/hub"}, "must be an address"),
     ({"INTERLATCH_PORT": "web"}, "INTERLATCH_PORT"),

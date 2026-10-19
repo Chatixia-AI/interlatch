@@ -166,3 +166,13 @@ jobs:
           grep -q 'INTERLATCH_HUB_URL: https://old.example.com' "$RUNNER_TEMP/compose.yaml"
           grep -q 'CHRONICLE_DOMAIN: old.example.com' "$RUNNER_TEMP/compose.yaml"  # what that hub's Caddyfile reads
           grep -q 'name: chronicle_hub-data' "$RUNNER_TEMP/compose.yaml"
+      - name: compose.yaml reads a new .env, and one missing its domain and admin still renders for the hub to explain
+        run: |
+          printf 'INTERLATCH_DOMAIN=new.example.com\nINTERLATCH_ADMIN_EMAIL=ada@example.com\nPOSTGRES_PASSWORD=x\n' > "$RUNNER_TEMP/new.env"
+          docker compose -f docker/compose.yaml --env-file "$RUNNER_TEMP/new.env" config > "$RUNNER_TEMP/compose.yaml"
+          grep -q 'INTERLATCH_HUB_URL: https://new.example.com' "$RUNNER_TEMP/compose.yaml"
+          grep -q 'CHRONICLE_DOMAIN: new.example.com' "$RUNNER_TEMP/compose.yaml"
+          grep -q 'INTERLATCH_ADMIN_EMAIL: ada@example.com' "$RUNNER_TEMP/compose.yaml"
+          printf 'POSTGRES_PASSWORD=x\n' > "$RUNNER_TEMP/empty.env"
+          docker compose -f docker/compose.yaml --env-file "$RUNNER_TEMP/empty.env" config > "$RUNNER_TEMP/compose.yaml"
+          grep -q 'INTERLATCH_HUB_URL: https://$' "$RUNNER_TEMP/compose.yaml"  # the hub stops: set INTERLATCH_DOMAIN
