@@ -3,6 +3,36 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.0 (2026-10-19)
+
+- **Sharing knowledge only sends only what is about the project:** a computer with `share = "knowledge"` used to send
+  the hub the analysis model's full reply with each session, which held lessons about you (your preferences, global
+  lessons) that were meant to stay on your computer, and titles with secrets the summary had redacted. It now sends
+  only each session's details, title, summary, goal, outcome, highlights, open threads, tags and project lessons, with
+  secrets redacted again on the way out; never the full reply, the session's mood or friction notes. A hub drops those
+  from computers that haven't updated yet, and an updated hub clears what it already received, in its team store too.
+  Titles and friction notes are now stored redacted on your own computer as well
+  ([What is shared](docs/join-a-hub.md#what-is-shared)).
+- **Leaving a hub leaves nothing behind for the next one:** `interlatch hub leave` (and **Leave the hub…** in
+  **Settings › Devices**) now also clears the folders, left projects and shared groups the computer had for that hub,
+  and its teammates' lessons, so a different hub joined later no longer gets the first one's folders and groups. They
+  are put aside, and joining the same hub again asks whether to bring them back (`--restore` / `--no-restore`).
+  `interlatch hub join` refuses a second hub while the computer is in one, before it sends anything there; joining the
+  same hub again still just renews the token. A hub that moved: `interlatch hub set-url <address>`
+  ([Joining your team's hub](docs/join-a-hub.md)).
+- **Each hub has its own sign-in cookie:** two hubs reached under one host name (on different ports, say) no longer
+  sign each other's people out: a hub's cookie is named for that hub, with `__Host-` in front over HTTPS. A browser
+  still sends one host name's cookies to all its ports, so give every hub a host name of its own, sslip.io names
+  included. A browser already signed in stays signed in and moves to the new name on its next visit
+  ([One name per hub](docs/devices.md#one-name-per-hub)).
+- **Less about your computer reaches a hub:** projects in `[sources] exclude_projects` no longer reach a hub in any
+  form: not their folders and git remotes, their prompts in `history.jsonl`, Codex's titles for them, or their
+  earlier analyses. A computer that shares knowledge of the hub's projects only now tells the hub just about the
+  repositories it can share from, and asks for teammates' lessons with just those. Invite codes and sign-in links are
+  now redacted like other credentials ([What the hub learns about this computer](docs/devices.md#what-the-hub-learns-about-this-computer)).
+- **Hand-edited hub folders:** `interlatch hub leave` and `interlatch hub add-folder` no longer stop with an error
+  when `config.toml` lists the hub's folders in a `[hub.folders]` section of its own.
+
 ## 0.27.8 (2026-10-19)
 
 - **Projects sidebar reads like a tree:** groups and the hub now have headers in the sidebar's own type, each with its
