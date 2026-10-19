@@ -3,6 +3,28 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.1 (2026-10-19)
+
+- **Profiles, first stage:** `interlatch profile create Acme --owns ~/work/acme` makes a named profile that owns a
+  folder (or repositories by git remote, `--remotes`). Its sessions stay off your Personal hub, a folder two profiles
+  could claim waits for you (`profile waiting`, `profile choose`), and `interlatch --profile Acme <command>` runs any
+  command for it. Sharing with each profile's own hub comes next ([Profiles](docs/profiles.md)).
+- **Profiles: agents see only their profile.** With named profiles, the MCP server and the notes at session start
+  show an agent only what its folder's profile owns, and nothing in a folder that waits for you to choose. Lines
+  proposed for your user-level CLAUDE.md and AGENTS.md come only from Personal's lessons
+  ([What agents see](docs/profiles.md#what-agents-see)).
+- **Profiles: one computer, several hubs.** A named profile joins a hub of its own
+  (`interlatch --profile Acme hub join …`) and sends it only the sessions it owns, read from your one archive, with its
+  own token and computer ID. Teammates' lessons from each hub reach only that profile's folders, and `interlatch push`
+  and the background job send for every hub ([Connect a profile to its hub](docs/profiles.md#connect-a-profile-to-its-hub)).
+- **OpenCode analyzes sessions:** pick OpenCode as the analyzer (`interlatch install`, `--backend opencode`, or
+  **Status › Analysis**) and it runs `opencode run` headless with no tools, through the providers you set up in
+  OpenCode, with the model you choose as `provider/model`. Install asks for the model and offers a test call. The CLI
+  inside the OpenCode desktop app is found too ([Analysis](docs/analysis.md)).
+- **Record only:** `interlatch install --no-analysis` (or **Record only** in install's list, or **Off** in
+  **Status › Analysis**) records sessions and never analyzes them: no model is called and nothing is sent anywhere for
+  analysis. Pick an analyzer later to analyze what was recorded ([Analysis](docs/analysis.md)).
+
 ## 0.28.0 (2026-10-19)
 
 - **Sharing knowledge only sends only what is about the project:** a computer with `share = "knowledge"` used to send
