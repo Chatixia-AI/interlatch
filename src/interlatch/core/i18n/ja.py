@@ -158,6 +158,10 @@ JA: dict[str, str] = {
     "analysis is paused until {when} (usage limit); it resumes by itself": "使用量の上限のため、分析は {when} まで一時停止しています。自動で再開します",
     "automatic analysis is off (analysis.auto); analyze it from its page or with `interlatch analyze`":
         "自動分析がオフです（analysis.auto）。セッションのページか `interlatch analyze` で分析してください",
+    "analysis is off (record only): pick an analyzer in Status › Analysis to analyze sessions":
+        "分析はオフです（記録のみ）。分析するには ステータス › 分析 で分析エンジンを選んでください",
+    "Analysis is off (record only): sessions are recorded but not analyzed":
+        "分析はオフです（記録のみ）：セッションは記録されますが分析されません",
     "not saved: {keys}": "保存されませんでした：{keys}",
     "{reason}, so nothing can be analyzed": "{reason}ため、何も分析できません",
     "{label} (`{cli}`) was not found": "{label}（`{cli}`）が見つかりません",

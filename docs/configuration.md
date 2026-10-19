@@ -25,9 +25,10 @@ the file. Changes apply on the next sync or worker run. `INTERLATCH_HOME` reloca
 | Key | Default | |
 | --- | --- | --- |
 | `auto` | `true` | analyze sessions automatically once they go idle |
-| `backend` | `claude` | what analyzes sessions: `claude` (Claude Code) or `codex` (Codex) through your own login, `bob` (IBM Bob Shell, with a Bob API key: `interlatch config set-key bob`), or a model provider's API: `anthropic`, `bedrock`, `openai`, `azure`, `openrouter`, `ollama`, `openai-compatible` (see [`[providers.<name>]`](#providers)). Also in **Status › Analysis** |
+| `backend` | `claude` | what analyzes sessions: `claude` (Claude Code), `codex` (Codex) or `opencode` (OpenCode) through your own login, `bob` (IBM Bob Shell, with a Bob API key: `interlatch config set-key bob`), or a model provider's API: `anthropic`, `bedrock`, `openai`, `azure`, `openrouter`, `ollama`, `openai-compatible` (see [`[providers.<name>]`](#providers)). Or `none`: record sessions only, never analyze them (`interlatch install --no-analysis`). Also in **Status › Analysis** |
 | `model` / `effort` | `sonnet` / `medium` | Claude: any `claude --model` alias or full model id. `effort` also sets Codex's reasoning effort (`max` becomes `xhigh`). Both are in Claude Code's tab in **Status › Analysis** |
 | `codex_model` | `""` | Codex model, e.g. `gpt-5.5`; empty uses Codex's default |
+| `opencode_model` | `""` | OpenCode model as `provider/model`, e.g. `ollama/qwen3.8`; empty uses OpenCode's default |
 | `screen_model` | `haiku` | model that screens imported chats (`interlatch screen`); it reads only each chat's opening, 60 chats a call |
 | `language` | `en` | the language Interlatch writes in: summaries, knowledge, knowledge bases, the playbook, glossary definitions, weekly reviews, screening reasons and the lines it proposes for `CLAUDE.md` / `AGENTS.md`. `en` or `ja`; applies to what is analyzed from then on. Also in **Status › Analysis**. The dashboard's own language is chosen in the dashboard, per browser |
 | `max_budget_usd` | `3.0` | spend cap per `claude -p` call, API-equivalent USD (Codex reports tokens only) |
@@ -37,7 +38,7 @@ the file. Changes apply on the next sync or worker run. `INTERLATCH_HOME` reloca
 | `backfill` | `true` | also analyze sessions recorded before install (newest first) |
 | `chunk_chars` | `150000` | characters of condensed transcript per call; longer sessions are map-reduced |
 | `timeout_seconds` | `900` | wall-clock limit per call |
-| `claude_bin` / `codex_bin` / `bob_bin` | `""` | path to `claude` / `codex` / Bob Shell's `bob` (found automatically when empty) |
+| `claude_bin` / `codex_bin` / `bob_bin` / `opencode_bin` | `""` | path to `claude` / `codex` / Bob Shell's `bob` / `opencode` (found automatically when empty; for OpenCode, also the CLI inside its desktop app) |
 
 ## `[providers.*]`
 

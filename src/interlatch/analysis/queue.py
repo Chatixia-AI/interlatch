@@ -10,7 +10,7 @@ from ..core.i18n import tr
 from ..core.util import local_str, one_line, parse_ts, to_iso, utcnow
 from ..storage.kv import kv_get
 from .runners.base import Runner
-from .runners.factory import make_runner
+from .runners.factory import OFF, make_runner
 
 PAUSE_KEY = "analysis_paused_until"
 
@@ -91,6 +91,8 @@ def queue_block(conn, cfg: Config, runner: Runner | None = None) -> str | None:
     paused = kv_get(conn, PAUSE_KEY)
     if paused and paused > to_iso(utcnow()):
         return tr("analysis is paused until {when} (usage limit); it resumes by itself", when=local_str(paused, "%m-%d %H:%M"))
+    if cfg.analysis.backend == OFF:
+        return tr("analysis is off (record only): pick an analyzer in Status › Analysis to analyze sessions")
     if not cfg.analysis.auto:
         return tr("automatic analysis is off (analysis.auto); analyze it from its page or with `interlatch analyze`")
     runner = runner or make_runner(cfg)

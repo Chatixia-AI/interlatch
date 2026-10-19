@@ -451,6 +451,8 @@ def _menu_bar_line(on: bool) -> str:
 
 
 ANALYZER_ASKED_KEY = "analyzer_asked"  # kv: install showed the list of analysis backends, so later runs keep the choice
+RECORD_ONLY = ("Record only: sessions are recorded but not analyzed, and nothing is sent to a model. To analyze them "
+               "later, pick an analyzer in Status › Analysis or run `interlatch install --backend NAME`.")
 
 
 def _input(question: str) -> str:
@@ -492,15 +494,18 @@ def _backend_state(runner) -> str:
     """Whether `runner` can analyze now, in a few words, for the list install shows."""
     import re
 
-    from ....analysis.runners.factory import AGENTS
+    from ....analysis.runners.factory import AGENTS, OFF
     from ....analysis.runners.settings import env_only_key
 
+    if runner.name == OFF:
+        return "never analyze: only record sessions"
     if runner.available():
         env = env_only_key(runner.cfg, runner.name)
         if env:
             return f"ready in this terminal only · ${env}"
         if runner.name in AGENTS:
-            return "ready · your Bob API key" if runner.name == "bob" else "ready · your own login and plan"
+            return {"bob": "ready · your Bob API key", "opencode": "ready · your OpenCode providers"}.get(
+                runner.name, "ready · your own login and plan")
         return f"ready · {runner.model_label()}" + (" on this computer" if runner.local() else "")
     if runner.name in AGENTS and not runner.bin:
         return "not installed"
@@ -587,10 +592,39 @@ def _finish_setup(cfg, console, runner, *, ask):
     return runner
 
 
+def _opencode_model(cfg, console, runner, *, ask):
+    """Ask which of your OpenCode models analyzes (provider/model; Enter keeps the one set, or OpenCode's default) and
+    offer one small call: OpenCode's free tier, a common default, refuses headless runs. Returns the runner, or None
+    when the call failed."""
+    from ....analysis.runners.base import LLMError
+    from ....core.config import load_config
+
+    current = cfg.analysis.opencode_model or "OpenCode's default"
+    for _ in range(3):
+        answer = _input(f"  OpenCode model, as provider/model (`opencode models` lists them; Enter = {current}): ")
+        if not answer:
+            break
+        if "/" in answer.strip("/") and not any(c.isspace() for c in answer):
+            set_config_value(cfg, "analysis", "opencode_model", json.dumps(answer))
+            cfg.analysis.opencode_model = answer
+            runner = _runner_for(load_config(cfg.home), "opencode")
+            break
+        console.print("  Type it as provider/model, e.g. anthropic/claude-sonnet-5-5 or ollama/qwen3.8.")
+    if ask(f"  Check that it works now? (one small call to OpenCode, {runner.model_label()})", True):
+        try:
+            res = runner.check()
+        except LLMError as exc:
+            console.print(f"  [red]It did not work:[/] {str(exc)[:400]}", highlight=False)
+            return None
+        console.print(f"  [green]It works[/] ({res.model or runner.model_label()}, {res.duration_ms / 1000:.1f} s).",
+                      highlight=False)
+    return runner
+
+
 def _pick_analyzer(cfg, console, *, ask):
     """List every analysis backend with whether it is ready, ask which to use, and finish setting it up when it
     needs a key, a model or an endpoint. Returns its runner, or None to leave analysis until one is set up."""
-    from ....analysis.runners.factory import BACKENDS
+    from ....analysis.runners.factory import BACKENDS, OFF
     from ....core.config import load_config
 
     names = list(BACKENDS)
@@ -606,7 +640,8 @@ def _pick_analyzer(cfg, console, *, ask):
             mark = "  [bold]← Enter[/]" if r is default else ""
             console.print(f"  {i:>2}  {r.label:<18} [{color}]{state}[/]{mark}", highlight=False)
         console.print("  [dim]Coding agents use your own login and plan; the APIs bill your key; Ollama keeps "
-                      "transcripts on this computer. Change it any time in Status › Analysis.[/]", highlight=False)
+                      "transcripts on this computer; Record only sends nothing. Change it any time in Status › "
+                      "Analysis.[/]", highlight=False)
         prompt = f"Which one? [1-{len(runners)}, Enter = {runners.index(default) + 1}]: " if default else \
             f"Which one? [1-{len(runners)}, Enter = set one up later]: "
         picked = None
@@ -626,8 +661,18 @@ def _pick_analyzer(cfg, console, *, ask):
             picked = default
         if picked is None:
             return None
+        if picked.name == OFF:
+            set_config_value(cfg, "analysis", "backend", json.dumps(OFF))
+            cfg.analysis.backend = OFF
+            console.print(RECORD_ONLY + "\n", highlight=False)
+            return None
         if not picked.available():
             picked = _finish_setup(cfg, console, picked, ask=ask)
+            if picked is None:
+                console.print("  [dim]Not set up; back to the list.[/]\n")
+                continue
+        if picked.name == "opencode":
+            picked = _opencode_model(cfg, console, picked, ask=ask)
             if picked is None:
                 console.print("  [dim]Not set up; back to the list.[/]\n")
                 continue
@@ -641,11 +686,23 @@ def _choose_analyzer(cfg, console, *, ask, dry_run: bool, conn=None, interactive
                      choice: str | None = None):
     """Settle what analyzes sessions; return its runner, or None when it cannot run yet. `choice` (--backend) sets it;
     otherwise the first interactive install (and any after it while the chosen one cannot run) lists them all."""
-    from ....analysis.runners.factory import BACKENDS, make_runner
+    from ....analysis.runners.factory import BACKENDS, OFF, make_runner
     from ....core.config import load_config
     from ....core.util import utcnow_iso
     from ....storage.kv import kv_get, kv_set
 
+    if choice == OFF or (not choice and cfg.analysis.backend == OFF):
+        if dry_run:
+            console.print("Would record sessions without analyzing them (record only).\n", highlight=False)
+            return None
+        if choice:
+            set_config_value(cfg, "analysis", "backend", json.dumps(OFF))
+            cfg.analysis.backend = OFF
+            if conn is not None:
+                kv_set(conn, ANALYZER_ASKED_KEY, utcnow_iso())
+                conn.commit()
+        console.print(RECORD_ONLY + "\n", highlight=False)
+        return None
     if choice:
         runner = _runner_for(cfg, choice)
         if dry_run:
@@ -656,6 +713,8 @@ def _choose_analyzer(cfg, console, *, ask, dry_run: bool, conn=None, interactive
         cfg.analysis.backend = choice
         if not runner.available() and interactive:
             runner = _finish_setup(cfg, console, runner, ask=ask) or _runner_for(load_config(cfg.home), choice)
+        if choice == "opencode" and runner.available() and interactive:
+            runner = _opencode_model(cfg, console, runner, ask=ask) or _runner_for(load_config(cfg.home), choice)
         if conn is not None:
             kv_set(conn, ANALYZER_ASKED_KEY, utcnow_iso())
             conn.commit()
@@ -820,11 +879,13 @@ def _config_set(cfg, key: str | None, value: str | None) -> int:
         return 2
     print(f"[{section}] {name} = {literal}")
     if key == "analysis.backend":
-        from ....analysis.runners.factory import make_runner
+        from ....analysis.runners.factory import OFF, make_runner
         from ....analysis.runners.settings import env_only_key
 
         runner = make_runner(load_config(cfg.home))
-        if not runner.available():
+        if runner.name == OFF:
+            print("note: sessions are recorded but never analyzed; pick an analyzer to analyze them")
+        elif not runner.available():
             print(f"note: {runner.unavailable_reason()}; analysis waits until it is set up")
         elif env := env_only_key(runner.cfg, runner.name):
             print(f"note: the {runner.label} key is only in ${env}, which background analysis and the dashboard don't "
@@ -867,7 +928,7 @@ def _analyze_choice(value: str) -> str:
 
 
 def add_install(sub) -> None:
-    from ....analysis.runners.factory import BACKENDS
+    from ....analysis.runners.factory import BACKENDS, OFF
 
     s = sub.add_parser("install", aliases=["setup"],
                        help="set up: pick which coding agents to record, import past sessions, start the dashboard")
@@ -883,8 +944,12 @@ def add_install(sub) -> None:
     s.add_argument("--interval", type=int, default=15, help="background sync interval in minutes (default 15)")
     s.add_argument("--exe", help="command used by hooks/launchd (default: the installed `interlatch`)")
     s.add_argument("--backend", choices=list(BACKENDS), metavar="NAME",
-                   help="what analyzes sessions: claude, codex, bob, or a model provider's API (anthropic, bedrock, "
-                        "openai, azure, openrouter, ollama, openai-compatible); asked on the first install when omitted")
+                   help="what analyzes sessions: claude, codex, bob, opencode, or a model provider's API (anthropic, "
+                        "bedrock, openai, azure, openrouter, ollama, openai-compatible), or none to only record them; "
+                        "asked on the first install when omitted")
+    s.add_argument("--no-analysis", dest="backend", action="store_const", const=OFF,
+                   help="record sessions only, never analyze them (nothing is sent to a model); the same as "
+                        "--backend none")
     s.add_argument("--analyze", type=_analyze_choice, metavar="all|N|later",
                    help="analyze past sessions now with progress (all, or the newest N), or later; asked when omitted "
                         "(later without a terminal). The Glossary and the Map are built from the analyzed sessions")

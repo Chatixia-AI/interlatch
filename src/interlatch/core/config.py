@@ -6,6 +6,7 @@ import fnmatch
 import json
 import os
 import shutil
+import sys
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -44,9 +45,11 @@ exclude_projects = []
 [analysis]
 # Analyze sessions automatically once they go idle.
 auto = true
-# What does the analysis. A coding agent: "claude" (Claude Code, `claude -p`) or "codex" (OpenAI Codex, `codex exec`)
-# through your own login, or "bob" (IBM Bob Shell, `bob run`, with a Bob API key). Or a model provider's API, set up under [providers.<name>] below: "anthropic",
+# What does the analysis. A coding agent: "claude" (Claude Code, `claude -p`), "codex" (OpenAI Codex, `codex exec`) or
+# "opencode" (OpenCode, `opencode run`, with your OpenCode providers) through your own login, or "bob" (IBM Bob Shell,
+# `bob run`, with a Bob API key). Or a model provider's API, set up under [providers.<name>] below: "anthropic",
 # "bedrock", "openai", "azure", "openrouter", "ollama" (models on this computer), or "openai-compatible".
+# Or "none": record sessions only, never analyze them (nothing is sent to a model).
 backend = "claude"
 # Claude model (backend "claude").
 model = "sonnet"
@@ -74,6 +77,10 @@ codex_model = ""
 codex_bin = ""
 # Path to IBM Bob Shell's bob executable (auto-detected when empty). Its API key: `interlatch config set-key bob`.
 bob_bin = ""
+# OpenCode model (backend "opencode"), as provider/model from your OpenCode providers; empty uses OpenCode's default.
+opencode_model = ""
+# Path to the opencode executable (auto-detected when empty, also the one inside the OpenCode desktop app).
+opencode_bin = ""
 # Model that screens imported chats (`interlatch screen`): it reads only each chat's opening.
 screen_model = "haiku"
 # Language Interlatch writes in: summaries, knowledge, knowledge bases, the playbook, glossary definitions, weekly reviews,
@@ -277,6 +284,8 @@ class AnalysisConfig:
     codex_model: str = ""
     codex_bin: str = ""
     bob_bin: str = ""
+    opencode_model: str = ""
+    opencode_bin: str = ""
     screen_model: str = "haiku"  # `interlatch screen`: sorts imported chats, reading only their openings
     language: str = "en"  # what Interlatch writes in (LANGUAGES); codes the parser reads stay English
 
@@ -453,6 +462,17 @@ class Config:
             return found
         return _installed_bin("bob", ("/opt/homebrew/bin/bob", "/usr/local/bin/bob", "~/.local/bin/bob", "~/.npm-global/bin/bob"))
 
+    def opencode_bin(self) -> str | None:
+        """OpenCode's CLI: `opencode` (its installer, npm, Homebrew), else the one the desktop app bundles."""
+        if self.analysis.opencode_bin:
+            return str(Path(self.analysis.opencode_bin).expanduser())
+        found = shutil.which("opencode")
+        if found:
+            return found
+        return _installed_bin("opencode", ("~/.opencode/bin/opencode", "/opt/homebrew/bin/opencode",
+                                           "/usr/local/bin/opencode", "~/.local/bin/opencode",
+                                           "~/.npm-global/bin/opencode")) or _desktop_opencode()
+
     def is_internal_path(self, path: str | None) -> bool:
         """`path` is in Interlatch's own working folder, where agents run its analyses: not a project of yours. Runs from
         before the rename name the working folder in ~/.claude-chronicle."""
@@ -473,6 +493,19 @@ def _installed_bin(name: str, candidates: tuple[str, ...]) -> str | None:
     else:
         paths = list(candidates)
     return next((str(p) for p in map(lambda c: Path(c).expanduser(), paths) if p.exists()), None)
+
+
+def _desktop_opencode() -> str | None:
+    """The CLI inside the OpenCode desktop app on a Mac (cli/<version>-<arch>/opencode-cli), the newest version."""
+    root = Path("~/Library/Application Support/ai.opencode.desktop/cli").expanduser()
+    if sys.platform != "darwin" or not root.is_dir():
+        return None
+
+    def version(p: Path) -> tuple:
+        return tuple(int(x) if x.isdigit() else 0 for x in p.parent.name.split("-")[0].split("."))
+
+    found = sorted((p for p in root.glob("*/opencode-cli") if os.access(p, os.X_OK)), key=version)
+    return str(found[-1]) if found else None
 
 
 def _game_enabled(home: Path, game: dict) -> bool:

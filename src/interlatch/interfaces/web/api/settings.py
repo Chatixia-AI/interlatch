@@ -78,7 +78,8 @@ def action_backend(ctx: Context, backend: str) -> dict:
 
 
 def action_agent(ctx: Context, body: dict) -> dict:
-    """Change a coding agent's model and effort (AGENT_SETTINGS). An empty Codex model means Codex's default."""
+    """Change a coding agent's model and effort (AGENT_SETTINGS). An empty Codex or OpenCode model means that agent's
+    default."""
     from ....core.config import load_config, set_config_value
 
     name = str(body.get("agent") or "")
@@ -92,6 +93,8 @@ def action_agent(ctx: Context, body: dict) -> dict:
         ok = k in allowed and len(v) <= 120 and not any(c.isspace() for c in v)
         if k == "effort":
             ok = ok and v in EFFORTS
+        elif name == "opencode":
+            ok = ok and (not v or "/" in v.strip("/"))  # provider/model, or empty for OpenCode's default
         elif not (name == "codex" and k == "model"):
             ok = ok and bool(v)  # Claude needs a model for each job
         if not ok:
@@ -221,5 +224,6 @@ AGENT_SETTINGS = {
     "claude": {"model": ("analysis", "model"), "synthesis_model": ("synthesis", "model"),
                "screen_model": ("analysis", "screen_model"), "effort": ("analysis", "effort")},
     "codex": {"model": ("analysis", "codex_model"), "effort": ("analysis", "effort")},
+    "opencode": {"model": ("analysis", "opencode_model")},
 }
 EFFORTS = ("low", "medium", "high", "xhigh", "max")

@@ -6035,8 +6035,9 @@ function changesList(c) { // what a checkout reinstall brings in: commits since 
       h("ul", { class: "upd-files" }, shown.map((f) => h("li", null, h("span", { class: "codeline" }, f))),
         files.length > shown.length ? h("li", { class: "muted" }, t("and {n} more", { n: files.length - shown.length })) : null)) : null);
 }
-// What analyzes sessions: a coding agent installed here (Claude Code and Codex through the user's own login, IBM Bob
-// with a Bob API key), or a model provider's API (providers.py). An older server sends no "kind": every choice is an agent.
+// What analyzes sessions: a coding agent installed here (Claude Code, Codex and OpenCode through the user's own login,
+// IBM Bob with a Bob API key), a model provider's API (providers.py), or nothing ("off": record only). An older server
+// sends no "kind": every choice is an agent.
 let paneTab = null; // the tab open while it isn't what analyzes now: an agent's name, or "api"
 let apiPane = null; // the provider whose settings are open on the API tab
 const providerModels = {}; // provider -> model ids its endpoint offers, fetched once per page load
@@ -6045,7 +6046,8 @@ const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 function analyzerPicker(a) {
   const choices = a?.choices || [];
   const current = choices.find((c) => c.name === a.backend);
-  const agents = choices.filter((c) => c.kind !== "api"), apis = choices.filter((c) => c.kind === "api");
+  const agents = choices.filter((c) => c.kind !== "api" && c.kind !== "off"), apis = choices.filter((c) => c.kind === "api");
+  const off = choices.find((c) => c.kind === "off");
   const home = current?.kind === "api" ? "api" : current?.name; // the tab of what analyzes now
   const tab = paneTab || home;
   const open = (name) => { paneTab = name === home ? null : name; render(); };
@@ -6054,7 +6056,8 @@ function analyzerPicker(a) {
     if (r.error) { toast(r.error); return; }
     paneTab = null;
     apiPane = null;
-    toast(t("Sessions are now analyzed with {agent}.", { agent: choices.find((c) => c.name === name)?.label }));
+    toast(name === off?.name ? t("Analysis is off: sessions are only recorded.")
+      : t("Sessions are now analyzed with {agent}.", { agent: choices.find((c) => c.name === name)?.label }));
     render();
   };
   // a green dot on the tab that analyzes now; a tab whose agent isn't installed here says so
@@ -6066,16 +6069,32 @@ function analyzerPicker(a) {
       onclick: () => open(c.name) }, c.label, tag(c.name === a.backend, !c.path))),
     apis.length ? h("button", { type: "button", role: "radio", class: tab === "api" ? "on" : "", "aria-checked": String(tab === "api"),
       disabled: !canAdmin() && tab !== "api", onclick: () => { if (tab !== "api") { apiPane = apiPane || "anthropic"; open("api"); } } },
-      t("API provider"), tag(home === "api", false)) : null];
+      t("API provider"), tag(home === "api", false)) : null,
+    off ? h("button", { type: "button", role: "radio", class: tab === off.name ? "on" : "", "aria-checked": String(tab === off.name),
+      disabled: !canAdmin() && tab !== off.name, onclick: () => open(off.name) }, t("Off"), tag(home === off.name, false)) : null];
   const agent = agents.find((c) => c.name === tab);
   return h("div", { class: "analyzer" },
     h("div", { class: "seg", role: "radiogroup", "aria-label": t("Analyzed by") }, tabs),
-    tab === "api" ? providerPane(apis, current, use) : agent ? agentPane(agent, current, use) : null);
+    tab === "api" ? providerPane(apis, current, use) : off && tab === off.name ? offPane(off, current, use)
+      : agent ? agentPane(agent, current, use) : null);
 }
 const engineBadge = (inUse, ready) => inUse ? stateBadge("accent", t("In use")) : ready ? stateBadge("good", t("Ready"))
   : stateBadge("warning", t("Not set up"));
+// Record only: nothing analyzes sessions, so no model is ever called (analysis.backend "none")
+function offPane(c, current, use) {
+  const inUse = current?.name === c.name;
+  const useBtn = h("button", { class: "btn primary", type: "button", disabled: !canAdmin() || inUse, onclick: async () => {
+    useBtn.disabled = true;
+    await use(c.name);
+    useBtn.disabled = false;
+  } }, inUse ? t("In use") : t("Turn analysis off"));
+  return h("div", { class: "provider-pane" },
+    h("div", { class: "pv-head" }, h("span", { class: "pv-agent" }, t("Record only")), inUse ? stateBadge("accent", t("In use")) : null),
+    h("div", { class: "pv-where muted" }, t("Sessions are recorded but never analyzed, and nothing is sent to a model. Knowledge, the Glossary and the Map stay as they are until you pick an analyzer again.")),
+    h("div", { class: "pv-actions" }, h("span", { class: "grow" }), useBtn));
+}
 // A coding agent's settings: Claude Code's models (sessions, knowledge bases, screening) and effort, Codex's model and
-// effort, IBM Bob's API key (Bob picks its own model)
+// effort, OpenCode's model, IBM Bob's API key (Bob picks its own model)
 function agentPane(c, current, use) {
   const s = c.settings || {}, admin = canAdmin(), inUse = current?.name === c.name, key = c.key;
   const field = (k, label, attrs = {}) => h("label", null, label, h("input", { class: "input", name: k, value: s[k] ?? "", autocomplete: "off",
@@ -6091,6 +6110,8 @@ function agentPane(c, current, use) {
       effort());
   } else if (c.name === "codex") {
     fields.push(field("model", t("Model"), { placeholder: t("Codex's default") }), effort());
+  } else if (c.name === "opencode") {
+    fields.push(field("model", t("Model (provider/model)"), { placeholder: t("OpenCode's default") }));
   }
   const keyInput = key ? h("input", { class: "input", name: "key", type: "password", autocomplete: "new-password", disabled: !admin,
     placeholder: key.source === "stored" ? t("stored; type to replace it") : key.source ? t("from {variable}", { variable: key.source }) : t("required") }) : null;
@@ -6141,6 +6162,7 @@ function agentPane(c, current, use) {
   } }, inUse ? t("In use") : t("Use for analysis"));
   const note = !c.path ? t("{agent} was not found: sessions wait in the queue until it is installed and signed in.", { agent: c.label })
     : c.name === "bob" ? t("Runs Bob Shell headless (bob run) with no tools and Bob's own model; only a redacted digest of each session is sent.")
+    : c.name === "opencode" ? t("Runs OpenCode headless (opencode run) with no tools, through your OpenCode providers; only a redacted digest of each session is sent.")
     : t("Analyzed by {agent} through your own login; only a redacted digest of each session is sent.", { agent: c.label });
   return h("div", { class: "provider-pane" },
     h("div", { class: "pv-head" }, h("span", { class: "pv-agent" }, c.label), engineBadge(inUse, c.available)),
@@ -6148,7 +6170,8 @@ function agentPane(c, current, use) {
     form,
     result,
     h("div", { class: "pv-actions" }, testBtn, saveBtn, h("span", { class: "grow" }), useBtn),
-    c.name === "bob" ? h("div", { class: "pv-foot muted" }, t("Bob keeps each analysis in its own task list; Interlatch doesn't record them as sessions.")) : null);
+    c.name === "bob" ? h("div", { class: "pv-foot muted" }, t("Bob keeps each analysis in its own task list; Interlatch doesn't record them as sessions."))
+      : c.name === "opencode" ? h("div", { class: "pv-foot muted" }, t("Each analysis is deleted from OpenCode's sessions once it's done; Interlatch doesn't record them as sessions.")) : null);
 }
 function providerPane(apis, current, use) {
   const name = apiPane || (current?.kind === "api" ? current.name : apis[0].name);

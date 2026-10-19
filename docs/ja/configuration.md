@@ -25,9 +25,10 @@
 | キー | 既定値 | |
 | --- | --- | --- |
 | `auto` | `true` | アイドルになったセッションを自動で分析する |
-| `backend` | `claude` | セッションを分析するもの：あなた自身のログインで `claude`（Claude Code）または `codex`（Codex）、Bob の API キーで `bob`（IBM Bob Shell。`interlatch config set-key bob`）、またはモデルプロバイダーの API：`anthropic`、`bedrock`、`openai`、`azure`、`openrouter`、`ollama`、`openai-compatible`（[`[providers.<name>]`](#providers) を参照）。**Status › Analysis** でも変更できます |
+| `backend` | `claude` | セッションを分析するもの：あなた自身のログインで `claude`（Claude Code）、`codex`（Codex）、`opencode`（OpenCode）、Bob の API キーで `bob`（IBM Bob Shell。`interlatch config set-key bob`）、またはモデルプロバイダーの API：`anthropic`、`bedrock`、`openai`、`azure`、`openrouter`、`ollama`、`openai-compatible`（[`[providers.<name>]`](#providers) を参照）。または `none`：セッションを記録するだけで分析しません（`interlatch install --no-analysis`）。**Status › Analysis** でも変更できます |
 | `model` / `effort` | `sonnet` / `medium` | Claude：`claude --model` の任意のエイリアスか完全なモデル ID。`effort` は Codex の推論の強さにも使われます（`max` は `xhigh` になります）。どちらも **Status › Analysis** の Claude Code タブで変更できます |
 | `codex_model` | `""` | Codex のモデル。例：`gpt-5.5`。空の場合は Codex の既定のモデルを使います |
+| `opencode_model` | `""` | OpenCode のモデル（`provider/model`）。例：`ollama/qwen3.8`。空の場合は OpenCode の既定のモデルを使います |
 | `screen_model` | `haiku` | 取り込んだチャットを選別するモデル（`interlatch screen`）。各チャットの冒頭だけを、1 回の呼び出しで 60 件ずつ読みます |
 | `language` | `en` | Interlatch が書く言語：要約、ナレッジ、ナレッジベース、プレイブック、用語集の定義、週次の振り返り、選別の理由、`CLAUDE.md` / `AGENTS.md` に提案する行。`en` または `ja`。変更したあとに分析するものから反映されます。**Status › Analysis** でも変更できます。ダッシュボード自体の言語は、ダッシュボードでブラウザーごとに選びます |
 | `max_budget_usd` | `3.0` | `claude -p` の呼び出し 1 回あたりの費用上限（API 換算の USD。Codex はトークン数だけを報告します） |
@@ -37,7 +38,7 @@
 | `backfill` | `true` | インストール前に記録されたセッションも分析する（新しい順） |
 | `chunk_chars` | `150000` | 1 回の呼び出しに渡す、まとめたトランスクリプトの文字数。これより長いセッションは map-reduce で処理します |
 | `timeout_seconds` | `900` | 呼び出し 1 回あたりの実時間の上限 |
-| `claude_bin` / `codex_bin` / `bob_bin` | `""` | `claude` / `codex` / Bob Shell の `bob` のパス（空の場合は自動で検出） |
+| `claude_bin` / `codex_bin` / `bob_bin` / `opencode_bin` | `""` | `claude` / `codex` / Bob Shell の `bob` / `opencode` のパス（空の場合は自動で検出。OpenCode はデスクトップアプリに同梱の CLI も探します） |
 
 ## `[providers.*]`
 

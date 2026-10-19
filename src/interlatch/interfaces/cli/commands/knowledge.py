@@ -35,11 +35,15 @@ def cmd_analyze(args) -> int:
     if not ids:
         print("nothing to analyze (use SESSION ids, --pending or --all)")
         return 0
-    from ....analysis.runners.factory import make_runner
+    from ....analysis.runners.factory import OFF, make_runner
 
     if args.backend:
         cfg.analysis.backend = args.backend
     runner = make_runner(cfg)
+    if runner.name == OFF:
+        print("analysis is off (record only): nothing was analyzed. `--backend NAME` analyzes these once with another "
+              "analyzer; `interlatch install --backend NAME` turns analysis back on", file=sys.stderr)
+        return 1
     if args.dry_run:
         from ....analysis.digest import build_digest
 
@@ -516,7 +520,7 @@ def cmd_context(args) -> int:
 
 
 def add_analyze(sub) -> None:
-    from ....analysis.runners.factory import BACKENDS
+    from ....analysis.runners.factory import BACKENDS, OFF
 
     s = sub.add_parser("analyze", help="analyze specific sessions now (ids or prefixes)")
     s.add_argument("sessions", nargs="*")
@@ -526,7 +530,8 @@ def add_analyze(sub) -> None:
     s.add_argument("--model")
     s.add_argument("--force", action="store_true")
     s.add_argument("--no-synthesize", action="store_true")
-    s.add_argument("--backend", choices=list(BACKENDS), help="analyze with this agent or provider for this run only")
+    s.add_argument("--backend", choices=[b for b in BACKENDS if b != OFF],
+                   help="analyze with this agent or provider for this run only")
     s.add_argument("--dry-run", action="store_true", help="show digest sizes instead of calling the model")
     s.add_argument("--concurrency", type=int, help="parallel analysis processes for this run")
     s.set_defaults(fn=cmd_analyze)
