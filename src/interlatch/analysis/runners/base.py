@@ -1,5 +1,5 @@
-"""Run a headless coding agent with structured output: Claude Code (`claude -p`), Codex (`codex exec`) or IBM Bob;
-or, through api.py, a model provider's API.
+"""Run a headless coding agent with structured output: Claude Code (`claude -p`), Codex (`codex exec`), IBM Bob or
+OpenCode (`opencode run`); or, through api.py, a model provider's API. Or nothing: backend "none" only records.
 
 Agent runs use the developer's own install and login of the chosen agent (`analysis.backend`).
 Each call is isolated: no session is persisted (so analyses never show up as sessions), user hooks,
@@ -63,6 +63,10 @@ LIMIT_MARKERS = (
     "refresh token",
     "log in again",
 )
+# An agent whose tools are all off can still write a tool call into its reply (Bob, OpenCode): saying so up front makes
+# that rare.
+NO_TOOLS = ("You have no tools here: don't call or write one (no list_files, read_file or the like). Everything you "
+            "need is in the message; answer it directly.")
 
 
 class Runner:

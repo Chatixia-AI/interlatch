@@ -203,13 +203,14 @@ def test_install_explains_analysis_and_builds_the_glossary_now_when_asked(machin
 
 @pytest.fixture()
 def no_providers(monkeypatch):
-    """No API key, AWS or Azure sign-in, Ollama host or IBM Bob from the computer that runs the tests."""
+    """No API key, AWS or Azure sign-in, Ollama host, IBM Bob or OpenCode from the computer that runs the tests."""
     from interlatch.analysis.runners.settings import KEY_ENVS
 
     for name in [*KEY_ENVS.values(), "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "OLLAMA_HOST"]:
         if name:
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr("interlatch.core.config.Config.bob_bin", lambda self: None)
+    monkeypatch.setattr("interlatch.core.config.Config.opencode_bin", lambda self: None)
     monkeypatch.setattr("interlatch.analysis.runners.api._tool", lambda name: None)
 
 
@@ -217,9 +218,10 @@ def test_first_install_lists_every_backend_and_enter_keeps_the_ready_one(machine
     asked = _answer(monkeypatch, {"Claude Code": "y", "Codex": "n", "Cursor": "n", "Analyze": "n", "Open": "n"})
     assert _install("--no-sync") == 0
     out = " ".join(capsys.readouterr().out.split())
-    assert asked[0] == "Which one? [1-10, Enter = 1]: "
+    assert asked[0] == "Which one? [1-12, Enter = 1]: "
     assert "1 Claude Code ready · your own login and plan ← Enter" in out and "2 Codex not installed" in out
-    assert "4 Anthropic API add an API key" in out and "9 Ollama choose a model" in out
+    assert "4 OpenCode not installed" in out and "5 Anthropic API add an API key" in out
+    assert "10 Ollama choose a model" in out and "12 Record only never analyze: only record sessions" in out
     assert "Sessions are analyzed with Claude Code." in out
     assert load_config(machine["home"]).analysis.backend == "claude"
     asked = _answer(monkeypatch, {})
@@ -236,7 +238,7 @@ def test_picking_a_provider_asks_for_its_key_and_checks_it(machine, no_providers
     monkeypatch.setattr("getpass.getpass", lambda q: "sk-ant-test")
     monkeypatch.setattr(ApiRunner, "check", lambda self: checked.append(self.name) or LLMResult(
         {"ok": True}, 0.0, 800, "claude-sonnet-5-5", 10, 5))
-    asked = _answer(monkeypatch, {"Which one": "4", "Check": "y", "Claude Code": "y", "Codex": "n", "Cursor": "n",
+    asked = _answer(monkeypatch, {"Which one": "5", "Check": "y", "Claude Code": "y", "Codex": "n", "Cursor": "n",
                                   "Analyze": "n", "Open": "n"})
     assert _install() == 0
     out = " ".join(capsys.readouterr().out.split())
@@ -262,7 +264,7 @@ def test_picking_ollama_offers_its_models(machine, no_providers, monkeypatch, ca
 
 
 def test_a_setup_left_blank_goes_back_to_the_list(machine, no_providers, monkeypatch, capsys):
-    picks = iter(["6", ""])  # OpenAI API, then (its model left blank) Enter for the ready one
+    picks = iter(["7", ""])  # OpenAI API, then (its model left blank) Enter for the ready one
 
     def fake_input(q):
         if q.startswith("Which one"):

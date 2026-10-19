@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ...core.config import Config
 from ...core.process import internal_env
-from .base import LIMIT_MARKERS, LLMError, LLMResult, Runner, UsageLimitError
+from .base import LIMIT_MARKERS, NO_TOOLS, LLMError, LLMResult, Runner, UsageLimitError
 from .process import run_sleep_aware
 
 # Bob Shell's tool groups (those its built-in modes use); every one is off for analysis.
@@ -19,9 +19,7 @@ BOB_TOOL_GROUPS = ("artifact", "browser", "edit", "execute", "mcp", "mode", "pla
                    "subtask", "todo")
 BOB_MODE = "interlatch-analyst"
 # Bob reads tool calls out of the reply's text, so a model can write one with every tool group off; saying so up front
-# makes that rare, and a call that does it anyway is retried once (TOOL_TRIES).
-NO_TOOLS = ("You have no tools here: don't call or write one (no list_files, read_file or the like). Everything you "
-            "need is in the message; answer it directly.")
+# (NO_TOOLS) makes that rare, and a call that does it anyway is retried once (TOOL_TRIES).
 TOOL_TRIES = 2
 
 

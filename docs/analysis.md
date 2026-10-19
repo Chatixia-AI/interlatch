@@ -60,6 +60,12 @@ instance, have no cache split (so no cost estimate), Bob tasks have no per-call 
      background analysis and the dashboard don't see your shell's variables, so `interlatch install` offers to save it.
      Bob picks its own model. It keeps each analysis in its own task list;
      Interlatch doesn't import those as sessions.
+   - **OpenCode** (`backend = "opencode"`): `opencode run --standalone --format json` with an agent of Interlatch's
+     own that holds its instructions and denies every permission, so the model is offered no tool; a reply that
+     follows any tool call is thrown away. It runs through the providers you set up in OpenCode (`opencode auth
+     login`, or local models such as Ollama). OpenCode's free tier refuses headless runs. Interlatch finds `opencode`
+     on your PATH, or the CLI inside the OpenCode desktop app on a Mac. OpenCode saves each run as a session:
+     Interlatch reads its tokens and cost, then deletes it, and never imports runs from its work folder.
 
    - **A model provider's API** (`backend = "anthropic"`, `"bedrock"`, `"openai"`, `"azure"`, `"openrouter"`,
      `"ollama"` or `"openai-compatible"`): one plain HTTP request per call, with no tools in it, so the model can
@@ -68,10 +74,17 @@ instance, have no cache split (so no cost estimate), Bob tasks have no per-call 
    Each agent's tab in **Status › Analysis** sets its model: for Claude Code, one for sessions (`analysis.model`), one
    for knowledge bases (`synthesis.model`) and one for screening imported chats (`analysis.screen_model`), each an
    alias (`sonnet`, `opus`, `haiku`, `fable`) or a full model id such as `claude-opus-5-5`; for Codex,
-   `analysis.codex_model` (empty: Codex's default). Both share `analysis.effort`.
+   `analysis.codex_model` (empty: Codex's default). Both share `analysis.effort`. For OpenCode,
+   `analysis.opencode_model` as `provider/model`, e.g. `anthropic/claude-sonnet-5-5` or `ollama/qwen3.8` (empty:
+   OpenCode's default model); `opencode models` lists them.
 
    `INTERLATCH_INTERNAL=1` makes Interlatch's own hooks inert for these runs. Switch in **Status › Analysis**, with
    `interlatch config set analysis.backend codex`, or for one run with `interlatch analyze --backend codex`.
+
+   **Record only.** `backend = "none"` (`interlatch install --no-analysis`, or **Off** in **Status › Analysis**)
+   records sessions and never analyzes them: no model is called and nothing leaves your computer for analysis, not
+   for sessions, knowledge bases, weekly re-analyses, screening or glossaries. Sessions wait in the queue; pick an
+   analyzer later to analyze them, or analyze a few once with `interlatch analyze --backend NAME`.
 4. The JSON reply is validated leniently (with one repair pass) and stored. When a project gains
    `min_new_items` new items, its knowledge base is re-synthesized (or once a week, on the day you pick, with fewer, where you turned on
    [weekly re-analysis](dashboard.md#project-groups) for it); items that are outdated, contradicted or
@@ -210,7 +223,8 @@ interlatch config set analysis.backend openai
 Cost: with a provider, the cost is what the API reports (OpenRouter) or an estimate from the token counts at
 Anthropic's, OpenAI's or Google's list prices (Anthropic, Bedrock, OpenAI, and Gemini models on an OpenAI-compatible
 server); Azure, Ollama and other models show tokens only. Otherwise,
-analysis runs through your own Claude Code or Codex login, or your Bob API key (Bob reports what each analysis cost).
+analysis runs through your own Claude Code, Codex or OpenCode login, or your Bob API key (Bob reports what each
+analysis cost; OpenCode reports its price for the model, nothing for a subscription or a local model).
 With Claude, the reported cost is the API
 list-price equivalent: sessions averaged about $0.38 each with Sonnet (digests average ~150k characters), and
 `max_budget_usd` caps each call. Codex reports tokens but no price, so Codex analyses show no cost. On a Claude or

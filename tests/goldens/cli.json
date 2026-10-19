@@ -159,6 +159,7 @@
        "claude",
        "codex",
        "bob",
+       "opencode",
        "anthropic",
        "bedrock",
        "openai",
@@ -1410,13 +1411,15 @@
        "claude",
        "codex",
        "bob",
+       "opencode",
        "anthropic",
        "bedrock",
        "openai",
        "azure",
        "openrouter",
        "ollama",
-       "openai-compatible"
+       "openai-compatible",
+       "none"
       ],
       "const": null,
       "default": null,
@@ -1427,6 +1430,22 @@
       "nargs": null,
       "option_strings": [
        "--backend"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreConstAction",
+      "choices": null,
+      "const": "none",
+      "default": null,
+      "dest": "backend",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--no-analysis"
       ],
       "required": false,
       "type": null
