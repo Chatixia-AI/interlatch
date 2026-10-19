@@ -3,6 +3,41 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.27.7 (2026-10-19)
+
+- **Sign-in links ask first:** opening a hub's sign-in or invite link shows who it signs you in as, and **Sign in**
+  does it, so another site can no longer sign your browser in as someone else. The VS Code extension takes
+  `interlatch.url` from your user settings only, so a repository's `.vscode/settings.json` can't point it at another
+  server ([Opening the hub's dashboard](docs/devices.md), [VS Code](docs/vscode.md)).
+- **Docker hub with a new .env:** `docker compose up` no longer stops with "required variable CHRONICLE_DOMAIN is
+  missing a value" on recent Docker Compose when `.env` uses the `INTERLATCH_*` names. A missing domain or admin email
+  is now explained in `docker compose logs hub` ([Docker](docs/docker.md)).
+- **A lesson can't confirm itself:** a session that only followed what Interlatch told it (the SessionStart digest, or a
+  line Interlatch wrote to CLAUDE.md or AGENTS.md) no longer counts as a confirmation, so lessons climb the trust ladder
+  only when a session finds them again. The transcript shows that context as **Interlatch guidance**
+  ([How knowledge earns trust](docs/analysis.md#how-knowledge-earns-trust)).
+- **Did a fix help?** An applied friction fix now says whether its cause got rarer: the share of sessions that hit it
+  in the 4 weeks before against the share since, as **Helped**, **Not helping**, **Can't tell** (applied together
+  with another fix for the same cause) or **Too early to tell**. A line that hasn't helped for 3 weeks can be taken
+  out for good with **Remove the line** (`interlatch suggest retire ID`), and the SessionStart digest leaves
+  tentative lessons out ([Did it help?](docs/suggestions.md#did-it-help)).
+- **You hear when the hub stops taking your sends:** when the hub turns this computer's token away, or can't be reached
+  for two hours, the status bar says **Not sending to the hub**, and the Hub card under **Settings › Devices** says why;
+  so do the menu-bar icon and `interlatch hub status`. Before, only the log said so, and the dashboard kept showing "Connected".
+  To fix a rejected token, paste a new invite code into **Join again** in that card. With `[updates] notify` on, a desktop
+  notification also tells you, once each time sends start failing
+  ([Troubleshooting](docs/troubleshooting.md#a-hub)).
+- **Weekly re-analysis:** a switch on a project's or a group's page has the background sync refresh it once a week:
+  the knowledge base and glossary of each project with new knowledge items, and a group's Mindmap and Connections links
+  when they changed. A week with nothing new costs no model call. **Settings › Re-analysis** picks the day and lists
+  every project and group re-analyzed weekly ([Project groups](docs/dashboard.md#project-groups)).
+- **Game mode is optional, and off by default:** Innerlatch (the Party, study battles, the leaderboard and the arena)
+  is now part of game mode. `interlatch install` asks once (no unless you say yes), and **Settings › Appearance ›
+  Game mode** switches it; it replaces the **The door** setting. Off, there is no door, Innerlatch's pages and API
+  refuse, and nothing is sent to the leaderboard; what you played is kept. If you had already signed in for the Party
+  or the leaderboard, it stays on. On a hub, its admins turn it on for everyone signed in to it
+  ([Getting there](docs/party.md#getting-there)).
+
 ## 0.27.6 (2026-10-18)
 
 - **A group's mindmap and connections:** a group's **Map** tab adds **Mindmap** (the glossary map for just the group's
