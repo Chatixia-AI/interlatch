@@ -83,7 +83,7 @@ def _state(cfg):
                                           if (cfg.home / f).exists())}
 
 
-CLEARED = {"url": "", "token": None, "folders": {}, "left": [], "share": "everything", "all_folders": False,
+CLEARED = {"url": "", "token": None, "folders": {}, "left": [], "share": "knowledge", "all_folders": False,
            "groups": [], "group_shares": [], "team": 0, "files": []}
 
 
@@ -354,3 +354,21 @@ def test_set_url_moves_the_same_hub_and_keeps_everything(tmp_path, monkeypatch, 
     assert main(["hub", "set-url", "ftp://x", "--yes"]) == 2
     leave_hub(load_config(spoke.home))
     assert main(["hub", "set-url", "https://x.example.com", "--yes"]) == 1  # not in a hub
+
+
+def test_a_computer_that_shares_knowledge_keeps_doing_so_with_the_next_hub(tmp_path, monkeypatch):
+    """[hub] share is this computer's own choice (it keeps recording and analyzing its sessions), not the hub's: leaving
+    A and joining B without --share must not turn it into one that sends transcripts and records nothing itself."""
+    spoke = _spoke(tmp_path, monkeypatch)
+    assert spoke.hub_share == "knowledge"
+    assert main(["hub", "leave"]) == 0
+    assert load_config(spoke.home).hub_share == "knowledge"
+    assert main(["hub", "join", "https://hub-b.example.com", "--token", "token-of-b", "--no-push"]) == 0
+    after = load_config(spoke.home)
+    assert after.hub_url == "https://hub-b.example.com" and after.shares_knowledge and not after.hub_all_folders
+
+    old = _spoke(tmp_path, monkeypatch, name="two")  # a leave from before this left it all behind: share still stays
+    set_config_value(old, "hub", "url", '""')
+    (old.home / "hub-token").unlink()
+    assert main(["hub", "join", "https://hub-b.example.com", "--token", "token-of-b", "--no-push"]) == 0
+    assert load_config(old.home).shares_knowledge

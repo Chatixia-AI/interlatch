@@ -141,8 +141,7 @@ def _kept(cfg: Config) -> dict:
 
 
 def _anything(kept: dict) -> bool:
-    return bool(kept["folders"] or kept["left"] or kept["groups"] or kept["group_shares"] or kept["all_folders"]
-                or kept["share"] != "everything")
+    return bool(kept["folders"] or kept["left"] or kept["groups"] or kept["group_shares"] or kept["all_folders"])
 
 
 def _write_private(path: Path, data: dict) -> None:
@@ -161,16 +160,18 @@ def _write_private(path: Path, data: dict) -> None:
 
 
 def _clear(cfg: Config) -> None:
-    """Clear what this computer keeps for a hub: [hub] folders, left, all_folders and share, its groups' links to hub
-    projects and the folders they shared, its teammates' lessons, and its notes of the last push, pull and hello.
-    Not [hub] url, which the caller clears last."""
+    """Clear what this computer keeps for a hub: [hub] folders, left and all_folders (which widens what it shares:
+    off is safer), its groups' links to hub projects and the folders they shared, its teammates' lessons, and its
+    notes of the last push, pull and hello. Not [hub] share: whether this computer records and analyzes its own
+    sessions is its own choice, not the hub's, and a hub joined later must not turn that off. Not [hub] url, which the
+    caller clears last."""
     from ..core.config import set_config_value
     from .projects import FOLDERS_FILE
     from .protocol import TEAM_SOURCE
     from .pull import TEAM_FILE
     from .push import LAST_PUSH
 
-    for key, value in (("folders", "{}"), ("left", "[]"), ("all_folders", "false"), ("share", '"everything"')):
+    for key, value in (("folders", "{}"), ("left", "[]"), ("all_folders", "false")):
         set_config_value(cfg, "hub", key, value)
     if cfg.db_path.exists():
         from ..storage.sqlite import connect
