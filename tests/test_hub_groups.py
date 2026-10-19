@@ -147,3 +147,55 @@ def test_a_registry_from_0_28_1_keeps_its_folders(synced, monkeypatch, capsys):
     monkeypatch.setenv("INTERLATCH_HOME", str(cfg.home))
     assert main(["--profile", "Acme", "config", "path"]) == 0 and str(p.home) in capsys.readouterr().out
     assert main(["profile", "list"]) == 2 and "interlatch hubs" in capsys.readouterr().err
+
+
+def _ctx(cfg, conn):
+    from interlatch.interfaces.web.context import Context
+
+    return Context(lambda: cfg, lambda c: None, lambda: conn, None, None)
+
+
+def test_the_dashboard_lists_hubs_and_connects_groups(synced):
+    """Settings › Devices › Hubs and a group's page: list, add, connect (and back to Personal), choose a waiting
+    folder; what a connected group's folder holds waiting shows once, under that folder."""
+    from interlatch.interfaces.web.api.hubs import action_hubs, hubs
+    from interlatch.interfaces.web.api.projects import project_groups
+
+    cfg, conn = synced["cfg"], synced["conn"]
+    ctx = _ctx(cfg, conn)
+    out, code = action_hubs(ctx, "add", {"name": "Acme"})
+    assert code == 200 and out["hub"] == "Acme"
+    work, side = group(cfg, "Acme work", [WORK]), group(cfg, "Side", [CWD])
+    out, code = action_hubs(ctx, "connect", {"group": work, "hub": "Acme"})
+    assert code == 200
+    listed = hubs(ctx)
+    assert [(x["label"], x["groups"]) for x in listed["hubs"]] == [("Personal", []), ("Acme", ["Acme work"])]
+    assert [g for g in listed["groups"] if g["hub"]] == [{"id": work, "name": "Acme work", "hub": "Acme"}]
+    assert listed["waiting"] == [{"folder": CWD, "sessions": 1, "projects": 1, "held": True, "why": None}]
+    assert {g["name"]: g["goes_to"] for g in project_groups(ctx)["groups"]} == {"Acme work": "Acme", "Side": None}
+
+    out, code = action_hubs(ctx, "choose", {"folder": CWD, "hub": "Acme"})
+    assert code == 200 and out["moved"] == 1 and _owner(cfg) == load_registry(cfg.home).find("Acme").id
+    assert hubs(ctx)["waiting"] == []
+    out, code = action_hubs(ctx, "connect", {"group": side, "hub": "personal"})  # not connected: nothing to do
+    assert code == 200 and out["moved"] == 0
+    out, code = action_hubs(ctx, "connect", {"group": work, "hub": "personal"})  # disconnect
+    assert code == 200 and not load_registry(cfg.home).find("Acme").groups
+    out, code = action_hubs(ctx, "connect", {"group": work, "hub": "Nope"})
+    assert code == 409 and "No hub named" in out["error"]
+    out, code = action_hubs(ctx, "remove", {"hub": "Acme"})
+    assert code == 200 and load_registry(cfg.home).find("Acme") is None
+
+
+def test_the_dashboard_adds_a_hub_but_never_joins_one_this_computer_already_sends_to(teamenv):  # noqa: F811
+    """Added, not joined, and why: Personal sends to that hub already, refused before anything goes out."""
+    from interlatch.interfaces.web.api.hubs import action_hubs
+
+    spoke = teamenv["spoke"]
+    conn = connect(spoke.db_path)
+    try:
+        out, code = action_hubs(_ctx(spoke, conn), "add", {"name": "Second", "address": teamenv["url"], "code": "X"})
+    finally:
+        conn.close()
+    assert code == 200 and out["hub"] == "Second" and "already sends to the hub" in out["join_error"]
+    assert load_registry(spoke.home).find("Second") is not None

@@ -6,6 +6,7 @@ from . import (  # noqa: F401
     common,
     devices,
     hub_admin,
+    hubs,
     knowledge,
     leaderboard,
     party,

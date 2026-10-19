@@ -137,6 +137,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/update"): SIGNED_IN,
     ("GET", "/api/imports"): SIGNED_IN,
     ("GET", "/api/devices"): SIGNED_IN,  # non-admins get it trimmed: test_devices_is_trimmed_for_non_admins
+    ("GET", "/api/hubs"): HERE,
     ("GET", "/api/team-store"): ADMIN,  # admin-only since #156; the matrix found it open
     ("GET", "/api/suggestions"): SIGNED_IN,
     ("GET", "/api/suggestions/unseen"): SIGNED_IN,
@@ -235,6 +236,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/suggestions/{n}/move"): POST_ADMIN.ok(404),
     # POST: only the computer itself (what leaves it, its own sign-ins, software it installs, its files)
     ("POST", "/api/project-groups/share"): POST_HERE.ok(400),
+    **{("POST", f"/api/hubs/{verb}"): POST_HERE.ok(409) for verb in ("add", "join", "remove", "connect", "choose")},
     ("POST", "/api/devices/share"): POST_HERE,
     ("POST", "/api/devices/hub-signin"): POST_HERE,
     ("POST", "/api/devices/leave-hub"): POST_HERE,

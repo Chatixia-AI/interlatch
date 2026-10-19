@@ -3654,13 +3654,15 @@ route(/^\/group$/, async (params) => {
     const found = groupsCache.find((x) => x.id === g.id);
     if (found) groupDialog(found);
   } }, t("Edit")) : null;
+  const hubPick = g.local && canGroup() ? await groupHubPicker(g) : null;
   return h("div", null,
     h("div", { class: "page-head" }, titled("folder", h("div", { class: "muted", style: { fontSize: "12.5px" } }, h("a", { href: "#/projects" }, t("Projects")), " / "),
-      h("h1", null, g.name, g.hub_project ? [" ", h("span", { class: "badge accent" }, icon("linked"), t("On the hub as {name}", { name: hubProjectName(g.hub_project) }))] : null),
+      h("h1", null, g.name, g.hub_project ? [" ", h("span", { class: "badge accent" }, icon("linked"), t("On the hub as {name}", { name: hubProjectName(g.hub_project) }))] : null,
+        g.goes_to ? [" ", h("span", { class: "badge accent" }, icon("organization"), t("Goes to {hub}", { hub: g.goes_to }))] : null),
       h("div", { class: "sub mono", style: { fontSize: "12px" } }, g.folders.map((f) => shortPath(f)).join(" · ") || tn(g.members.length, "{n} project", "{n} projects"),
         ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
       usage),
-      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/sessions?group=${g.id}` }, icon("sessions"), t("Sessions")), reanalyzeSwitch("group", g.id, g.reanalyze), edit)),
+      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/sessions?group=${g.id}` }, icon("sessions"), t("Sessions")), reanalyzeSwitch("group", g.id, g.reanalyze), hubPick, edit)),
     h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
     Object.values(panes).filter(Boolean));
 });
@@ -7076,8 +7078,113 @@ route(/^\/devices$/, async () => {
   return h("div", { class: "narrow-page" },
     h("div", { class: "page-head" }, titled("laptop", h("h1", null, t("Devices")), h("div", { class: "sub" }, t("One Interlatch for your computers and your phone.")))),
     h("div", { class: "grid" }, ...(dv.role === "spoke"
-      ? [spokeHubCard(dv), spokeProjectsCard(dv), spokeSharingCard(dv), phone] : [thisCard, phone, computers])));
+      ? [spokeHubCard(dv), spokeProjectsCard(dv), spokeSharingCard(dv), phone] : [thisCard, phone, computers]),
+      dv.here && dv.role !== "hub" ? hubsCard() : null));
 });
+
+// Settings › Devices › Hubs (docs/profiles.md): Personal's hub and this computer's others, the groups each one gets,
+// adding and joining one, and the folders that wait for you to choose. Only from the computer itself.
+function hubsCard() {
+  const body = h("div", null, h("p", { class: "muted" }, t("Loading…")));
+  const card = h("section", { class: "card" }, cardHead(t("Hubs"), { iconName: "organization" }), body);
+  const fact = (text) => h("div", { class: "muted" }, text);
+  const draw = async () => {
+    let hb;
+    try { hb = await api("/api/hubs"); } catch (e) { body.replaceChildren(fact(e.message)); return; }
+    const others = hb.hubs.filter((x) => x.id !== "personal");
+    const rows = hb.hubs.map((x) => {
+      const groups = hb.groups.filter((g) => (x.id === "personal" ? !g.hub : g.hub === x.label));
+      const remove = x.id === "personal" ? null : h("button", { class: "btn small danger", type: "button", onclick: async () => {
+        if (!confirm(t("Remove the hub {name} from this computer? Its groups stop going to it, and what they held waits for you to choose. Leave it first if you joined it: {command}", { name: x.label, command: `interlatch --hub "${x.label}" hub leave` }))) return;
+        if (await devicesPost("/api/hubs/remove", { hub: x.label })) { toast(t("Removed the hub {name}.", { name: x.label })); draw(); }
+      } }, t("Remove"));
+      const join = x.id !== "personal" && !x.hub ? joinForm(x.label) : null;
+      return h("li", { class: "hub-row" },
+        h("div", null, h("b", null, x.id === "personal" ? t("Personal") : x.label), " ",
+          h("span", { class: "muted" }, x.hub ? t("sends to {host}", { host: hubHost(x.hub) }) : t("not joined")),
+          x.sessions != null ? h("span", { class: "muted" }, " · ", tn(x.sessions, "{n} session", "{n} sessions")) : null),
+        h("div", { class: "muted" }, x.id === "personal" ? t("Everything no other hub's groups hold")
+          : groups.length ? t("Groups: {names}", { names: groups.map((g) => g.name).join(", ") })
+          : t("No group connected yet: open a group's page and choose this hub.")),
+        join, remove);
+    });
+    const name = h("input", { class: "input", placeholder: t("Name, e.g. Acme"), "aria-label": t("Hub name"), maxlength: 60 });
+    const address = h("input", { class: "input", placeholder: t("Address, e.g. https://hub.acme.example"), "aria-label": t("Hub address") });
+    const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
+    const add = h("button", { class: "btn small primary", type: "button", onclick: async () => {
+      add.disabled = true;
+      const r = await devicesPost("/api/hubs/add", { name: name.value, address: address.value, code: code.value });
+      add.disabled = false;
+      if (!r) return;
+      toast(r.join_error ? t("Added {name}, but couldn't join it: {why}", { name: r.hub, why: r.join_error })
+        : r.joined ? t("Added and joined {name}.", { name: r.hub }) : t("Added {name}.", { name: r.hub }), 7000);
+      draw();
+    } }, t("Add the hub"));
+    const waiting = hb.waiting.length ? h("div", { class: "hub-waiting" }, h("h3", null, t("Waiting for you")),
+      h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
+      h("ul", { class: "hub-list" }, hb.waiting.map((w) => {
+        const sel = h("select", { "aria-label": t("Which hub") }, h("option", { value: "personal" }, t("Personal")),
+          others.map((x) => h("option", { value: x.label }, x.label)));
+        const go = h("button", { class: "btn small", type: "button", onclick: async () => {
+          go.disabled = true;
+          if (await hubsPost("/api/hubs/choose", { folder: w.folder, hub: sel.value })) draw(); else go.disabled = false;
+        } }, t("Choose"));
+        const count = w.projects > 1 ? t("{sessions} in {projects} projects", { sessions: tn(w.sessions, "{n} session", "{n} sessions"), projects: fmtNum(w.projects) })
+          : tn(w.sessions, "{n} session", "{n} sessions");
+        const why = w.held ? t("Inside a connected group's folders, but in no connected group: choose for all of them here, or connect its group to a hub.") : w.why;
+        return h("li", { class: "hub-row" }, h("div", { class: "mono" }, shortPath(w.folder || "")),
+          h("div", { class: "muted" }, count), why ? h("div", { class: "muted" }, why) : null, h("div", { class: "hub-pick" }, sel, go));
+      }))) : null;
+    body.replaceChildren(...[ // replaceChildren draws a null as "null": only what there is
+      h("p", { class: "muted" }, t("Sessions in a group connected to another hub go to that hub only, and agents working there see only what belongs to it. Personal still records and analyzes everything.")),
+      h("ul", { class: "hub-list" }, rows),
+      h("div", { class: "hub-add" }, name, address, code, add),
+      waiting].filter(Boolean));
+  };
+  const joinForm = (label) => {
+    const address = h("input", { class: "input", placeholder: t("Address"), "aria-label": t("Hub address") });
+    const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
+    const go = h("button", { class: "btn small", type: "button", onclick: async () => {
+      go.disabled = true;
+      const r = await devicesPost("/api/hubs/join", { hub: label, address: address.value, code: code.value });
+      go.disabled = false;
+      if (r) { toast(t("Joined {name}.", { name: r.hub || label })); draw(); }
+    } }, t("Join"));
+    return h("div", { class: "hub-pick" }, address, code, go);
+  };
+  draw();
+  return card;
+}
+
+// a change of hubs the hubs can't make (Personal's hub has some of the sessions): ask, and move them anyway on a yes
+async function hubsPost(path, body) {
+  let r;
+  try { r = await post(path, body); } catch (e) { if (!e.handled) toast(e.message, 7000); return null; }
+  if (r.error && r.on_hub) {
+    if (!confirm(t("{why}\n\nMove them anyway? The copies on Personal's hub stay there.", { why: r.error }))) return null;
+    return hubsPost(path, { ...body, leave_on_hub: true });
+  }
+  if (r.error) { toast(r.error, 8000); return null; }
+  return r;
+}
+
+// a group's page: which hub its sessions go to (docs/profiles.md), changed here on the computer itself
+async function groupHubPicker(g) {
+  let hb;
+  try { hb = await api("/api/hubs"); } catch { return null; }
+  const others = hb.hubs.filter((x) => x.id !== "personal");
+  if (!others.length) return null; // one hub: nothing to choose
+  const sel = h("select", { "aria-label": t("Goes to"), onchange: async () => {
+    sel.disabled = true;
+    const r = await hubsPost("/api/hubs/connect", { group: g.id, hub: sel.value });
+    sel.disabled = false;
+    if (!r) { sel.value = g.goes_to || "personal"; return; }
+    toast(sel.value === "personal" ? t("{group} no longer goes to another hub. What it held waits for you in Settings › Devices.", { group: g.name })
+      : t("{group} goes to {hub} only.", { group: g.name, hub: sel.value }), 7000);
+    render();
+  } }, h("option", { value: "personal" }, t("Personal")), others.map((x) => h("option", { value: x.label, selected: g.goes_to === x.label }, x.label)));
+  return h("label", { class: "hub-pick" }, h("span", { class: "muted" }, t("Goes to")), sel);
+}
 
 // Settings › Devices on a hub: its people, computers, shared projects and team store have a section of their own
 function teamPointer() {

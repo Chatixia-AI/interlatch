@@ -280,6 +280,8 @@ GET: list[Route] = [
     Route("/api/update", ANYONE, lambda h, ctx, m, q: h._json(api.settings.update_info(ctx, remote=False))),
     Route("/api/imports", ANYONE, lambda h, ctx, m, q: h._json(api.sources.imports(ctx))),
     Route("/api/devices", ANYONE, _devices),
+    # this computer's hubs, its folders that wait: only from here (docs/profiles.md)
+    Route("/api/hubs", HERE, lambda h, ctx, m, q: h._json(api.hubs.hubs(ctx))),
     # its database, host and counts: admins'
     Route("/api/team-store", ADMIN_PERSON, lambda h, ctx, m, q: h._json(api.hub_admin.team_store_status(ctx))),
     # its address and user: at the computer itself, or an admin of a hub
@@ -427,6 +429,9 @@ POST: list[Route] = [
     # what leaves this computer (its sessions go to the team store): only from here, or a dedicated hub's admin
     Route(r"/api/projects/shared/(add|remove)", HERE_OR_HUB_ADMIN, lambda h, ctx, m, b: h._json(
         *api.devices.action_shared_project(ctx, m.group(1), _body(b), by=h.viewer, here=h._from_here()))),
+    # which hub each group goes to, and joining one: what leaves this computer, only from here
+    Route(r"/api/hubs/(add|join|remove|connect|choose)", HERE,
+          lambda h, ctx, m, b: h._json(*api.hubs.action_hubs(ctx, m.group(1), _body(b)))),
     Route("/api/project-groups/share", HERE,  # what leaves this computer: only from here
           lambda h, ctx, m, b: h._json(*api.projects.action_project_groups(ctx, "share", _body(b)))),
     Route(r"/api/project-groups/(save|delete|move)", ANYONE,

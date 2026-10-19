@@ -38,6 +38,9 @@ keeps its copies of any it already has. So if it has some, nothing changes, and 
 back first (`interlatch hub remove-folder <folder>` for a folder added there, or ask the hub's admin to purge them),
 or pass `--leave-on-hub` to move them anyway. `--dry-run` shows what would move without changing anything.
 
+**On the dashboard:** **Settings › Devices › Hubs** adds a hub (its name, address and invite code), and a group's page
+has **Goes to**, where you pick the hub its sessions go to.
+
 As on any computer, a hub gets only the folders added to one of its projects
 (`interlatch --hub Acme hub add-folder ~/work/acme/app --project App`), unless you joined with `--all-folders`.
 
@@ -69,6 +72,9 @@ interlatch group waiting
 interlatch group choose ~/work/acme/notes Acme       # or: personal
 interlatch group where ~/work/acme/app               # who gets a folder, and why
 ```
+
+**Settings › Devices › Hubs** lists them too, with a **Choose** for each. Projects a folder holds waiting (a group
+connected to no hub inside a connected one) are listed once, under that folder.
 
 ## What agents see
 
@@ -129,6 +135,5 @@ An archive without one is never changed.
 
 ## What comes next
 
-1. **The dashboard:** each group shows its hub and connects from its page, Settings › Devices lists every hub, and
-   waiting folders appear under Needs you.
-2. **Moving a folder takes its sessions back** from the hub that had them, session by session.
+**Moving a folder takes its sessions back** from the hub that had them, session by session, instead of asking you to
+take them back first.
