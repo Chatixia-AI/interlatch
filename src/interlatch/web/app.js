@@ -2198,7 +2198,7 @@ function transcriptCard(sx, focusSeq, agent, onPrompt = null, terms = []) {
   const earlier = h("button", { class: "btn", type: "button", hidden: true, onclick: () => loadEarlier() }, t("Load earlier"));
   const info = h("span", { class: "hint" });
   const kindMap = { prompt: ["prompt", "attachment"], text: ["text"], tool: ["tool_use", "tool_result"], thinking: ["thinking"],
-    system: ["compact", "interrupt", "api_error", "notice", "notification", "compact_summary", "meta", "command_output", "bash_output"], command: ["command", "bash_input"] };
+    system: ["compact", "interrupt", "api_error", "notice", "notification", "compact_summary", "meta", "command_output", "bash_output", "guidance"], command: ["command", "bash_input"] };
   let toolBlock = null, toolRows = {};
   async function load(append) {
     if (!append) { state.offset = 0; list.replaceChildren(); bySeq.clear(); toolBlock = null; toolRows = {}; if (state.kinds.has("prompt")) onPrompt?.(null); }
@@ -2338,6 +2338,7 @@ function transcriptCard(sx, focusSeq, agent, onPrompt = null, terms = []) {
 const EVENT_KIND = {
   compact: t("compact"), interrupt: t("interrupt"), api_error: t("api error"), notice: t("notice"), notification: t("notification"),
   compact_summary: t("compact summary"), meta: t("meta"), command_output: t("command output"), bash_output: t("bash output"), attachment: t("attachment"),
+  guidance: t("Interlatch guidance"),
 };
 function prettyJson(text) {
   try { return JSON.stringify(JSON.parse(text), null, 2); } catch (e) { return text; }

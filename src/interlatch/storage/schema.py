@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS knowledge (
     stage TEXT NOT NULL DEFAULT 'provisional',      -- wip | provisional | established | canonical (see ladder.py)
     stage_reason TEXT,                             -- the evidence that earned the stage
     confirmed_json TEXT,                           -- session ids that state the same lesson
+    basis TEXT,                                    -- observed | guidance (its session only followed what Interlatch told it; never a confirmation)
     superseded_by INTEGER,                         -- the item that replaced this one, when there is one
     superseded_reason TEXT,                        -- duplicate | outdated | contradicted
     superseded_at TEXT,

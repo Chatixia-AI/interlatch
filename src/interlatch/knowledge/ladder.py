@@ -8,6 +8,10 @@ same lesson (a duplicate), and the two items' sessions are pooled. Two distinct 
 three spread over at least two weeks, or a pin, make it `canonical`. The stage is recomputed from that evidence, never
 guessed, and `stage_reason` says what earned it.
 
+A session that only followed what Interlatch told it (its SessionStart context, or a line Interlatch wrote to an
+instruction file) repeats a lesson rather than finding it again. The analysis marks such an item basis 'guidance', and
+its session never counts as a confirmation: otherwise a lesson would climb by being read back.
+
 Leaving the ladder is a status change (`superseded`, `dismissed`), not a stage: a superseded item keeps the stage it
 had, names its successor in `superseded_by` when there is one, and says why in `superseded_reason`. An established or
 canonical item that is overturned (not merely merged as a duplicate) is listed in that week's review.
@@ -27,6 +31,7 @@ STAGE_RANK = {s: i for i, s in enumerate(STAGES)}
 SUPERSEDE_REASONS = ("duplicate", "outdated", "contradicted")
 TRUSTED = ("established", "canonical")
 MEMORY_STAGE_REASON = "written by the agent's own memory"
+GUIDANCE_STAGE_REASON = "only followed what Interlatch told the session"
 
 ESTABLISHED_SESSIONS = 2
 CANONICAL_SESSIONS = 3
@@ -39,10 +44,14 @@ STAGE_ORDER_SQL = ("CASE k.stage WHEN 'canonical' THEN 0 WHEN 'established' THEN
 
 
 def confirmations(row) -> list[str]:
-    """Distinct session ids that state this item's lesson (its own session first)."""
+    """Distinct session ids that state this item's lesson (its own session first). An item whose session only
+    followed what Interlatch told it (basis 'guidance') leaves that session out: it repeated the lesson, it didn't
+    find it again, so counting it would let a lesson confirm itself."""
     ids = [str(x) for x in (loads(_get(row, "confirmed_json"), []) or []) if x]
     own = _get(row, "session_id")
-    if own and own not in ids:
+    if _get(row, "basis") == "guidance":
+        ids = [x for x in ids if x != own]
+    elif own and own not in ids:
         ids.insert(0, own)
     seen: set[str] = set()
     return [x for x in ids if not (x in seen or seen.add(x))]
@@ -73,6 +82,8 @@ def compute_stage(conn: sqlite3.Connection, row) -> tuple[str, str]:
         return "established", MEMORY_STAGE_REASON
     if source == "manual":
         return "established", "added by you"
+    if n == 0 and _get(row, "basis") == "guidance":
+        return "wip", GUIDANCE_STAGE_REASON
     if _get(row, "confidence") == "low":
         return "wip", "one session, low confidence"
     return "provisional", "one session"
@@ -95,7 +106,7 @@ def reason_text(reason: str | None) -> str | None:
 def initial_stage(item: dict, *, source: str = "analysis") -> str:
     if source in ("memory", "manual"):
         return "established"
-    return "wip" if item.get("confidence") == "low" else "provisional"
+    return "wip" if item.get("confidence") == "low" or item.get("basis") == "guidance" else "provisional"
 
 
 def refresh(conn: sqlite3.Connection, ids) -> None:

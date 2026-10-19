@@ -18,7 +18,8 @@ from pathlib import Path
 from ...core import artifact_records
 from ...core.pricing import normalize_model, usage_cost
 from ...core.util import iter_jsonl, one_line, parse_ts, safe_text, to_iso, truncate
-from ...core.sessions import ApiCall, Event, FileStat, IDLE_GAP_CAP_S, ParsedSession, Subagent, TEXT_LIMITS, ToolCall
+from ...core.sessions import (ApiCall, Event, FileStat, GUIDANCE_OPENING, IDLE_GAP_CAP_S, ParsedSession, Subagent,
+                              TEXT_LIMITS, ToolCall)
 from ..prompts import TAG_RE, clean_prompt, parse_command
 from .files import session_dir_for, subagent_files
 
@@ -512,6 +513,11 @@ class _Thread:
             h = ps.hooks.setdefault(name, {"count": 0, "ms": 0})
             h["count"] += 1
             h["ms"] += a.get("durationMs") or 0
+            if at == "hook_additional_context" and name == "SessionStart":
+                content = a.get("content")
+                for part in [content] if isinstance(content, str) else content if isinstance(content, list) else []:
+                    if isinstance(part, str) and GUIDANCE_OPENING.match(part):
+                        self._event(ts, "system", "guidance", part)
         elif at == "invoked_skills":
             for s in a.get("skills") or []:
                 if isinstance(s, dict) and s.get("name") and s["name"] not in ps.skills:
