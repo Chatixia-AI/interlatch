@@ -16,6 +16,7 @@ gives it the new markers (or `interlatch migrate` does, relabel()).
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -584,6 +585,25 @@ def about_you(members: list[dict]) -> bool:
     return any(m["kind"] == "preference" and m["scope"] == "global" for m in members)
 
 
+def _not_personal(conn: sqlite3.Connection, cfg: Config | None) -> tuple[set[str] | None, set[str]]:
+    """With named profiles: (the sessions that aren't Personal's, the projects they are filed under); (None, ...)
+    without. An unreadable profiles.toml counts every session as not Personal's."""
+    if cfg is None:
+        return None, set()
+    from ..core.profiles import RegistryError
+    from ..projects.owners import foreign_ids
+
+    try:
+        if cfg.profiles is None:
+            return None, set()
+        ids = foreign_ids(conn)
+    except RegistryError:
+        ids = {r[0] for r in conn.execute("SELECT id FROM sessions")}
+    paths = {r[0] for r in conn.execute("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL "
+                                        "AND id IN (SELECT value FROM json_each(?))", (json.dumps(sorted(ids)),))}
+    return ids, paths
+
+
 def candidates(conn: sqlite3.Connection, cfg: Config | None = None, decided: Callable[[dict], bool] | None = None,
                waiting: list[dict] | None = None) -> list[dict]:
     """Suggestion dicts for knowledge worth an instruction line, best first, at most 8 per target file. A candidate
@@ -604,6 +624,7 @@ def candidates(conn: sqlite3.Connection, cfg: Config | None = None, decided: Cal
     agents_by_project = _project_agents(conn)
     choices = scope_choices(conn)
     groups = _clusters(items)
+    foreign, foreign_paths = _not_personal(conn, cfg)
 
     out: list[dict] = []
     for group in groups:
@@ -629,6 +650,16 @@ def candidates(conn: sqlite3.Connection, cfg: Config | None = None, decided: Cal
         # must keep the identity a dismissal or an approval was recorded under
         # one line in the user-level file for a lesson relearned across projects or a preference about you; you can move it
         user_level = choice == "user" if choice else (len(projects) >= THEME_PROJECTS or about_you(members))
+        if user_level and foreign is not None:
+            # named profiles: agents in every folder read the user-level file, so its lines come from Personal's own
+            # lessons only; a profile's lesson stays a line in its project's files
+            own = [m for m in members if m["session_id"] not in foreign
+                   and not (m["session_id"] is None and m["project_path"] in foreign_paths)]
+            if own:
+                best = max(own, key=lambda m: (m["_score"], m["id"]))
+                text = line_text(best["title"], best["body"])
+            else:
+                user_level = False
         if user_level:
             agents = sorted({m["agent"] or "claude" for m in members} & {"claude", "codex"}) or ["claude"]
             anchor = min(m["id"] for m in members)

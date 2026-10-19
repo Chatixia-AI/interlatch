@@ -332,3 +332,29 @@ def test_script_names_are_not_hosts():
     assert ins.sensitive("Run ./build.sh then deploy.sh") == []
     assert ins.sensitive("curl https://get.example.sh") == ["host: get.example.sh"]
     assert ins.sensitive("ssh build.internal.corp") == ["host: build.internal.corp"]
+
+
+def test_with_profiles_the_user_level_file_gets_only_personals_lessons(archive):
+    """Agents in every folder read the user-level file: a lesson a named profile's sessions learned stays a line in
+    its project's files, and a cluster that mixes owners speaks there in Personal's words only."""
+    from interlatch.application import profiles as ops
+
+    a, conn, cfg = archive["a"], archive["conn"], archive["cfg"]
+    paths = []
+    for i, (title, body) in enumerate([("Never kill launchd KeepAlive services with plain kill", "ACME_CANARY kickstart"),
+                                       ("Never kill launchd KeepAlive services with plain kill", "ACME_CANARY again"),
+                                       ("Never kill launchd KeepAlive services with plain kill", "Use launchctl kickstart -k.")]):
+        p = a.project(f"repo{i}")
+        paths.append(p)
+        a.session(f"x{i}", p)
+        _knowledge(conn, f"x{i}", p, title, body)
+    conn.commit()
+    ops.create(cfg, "Acme", owns=paths[:2])
+    out = ins.candidates(conn, cfg)
+    user = [c for c in out if c["project_path"] is None]
+    assert user and all("ACME_CANARY" not in c["text"] for c in user)
+
+    ops.own(cfg, paths[2], "Acme")  # all three Acme's: no user-level line at all, a line in each project instead
+    out = ins.candidates(conn, cfg)
+    assert [c for c in out if c["project_path"] is None] == []
+    assert {c["project_path"] for c in out} == set(paths)
