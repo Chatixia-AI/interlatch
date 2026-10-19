@@ -24,6 +24,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
             conn.execute(st)
     if current < 8:
         _derive_maturity_stages(conn)
+    if 0 < current < 20:
+        scrub_analyses(conn)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
@@ -64,3 +66,45 @@ def _derive_maturity_stages(conn: sqlite3.Connection) -> None:
     from ..knowledge.ladder import refresh_all
 
     refresh_all(conn)
+
+
+# What a hub keeps of a session another computer shared as knowledge (source 'remote'): never that computer's raw
+# analysis, the person's mood or friction notes. Hubs before schema 20 kept what computers sent of them.
+_REMOTE_CLEARED = ("analysis_json", "sentiment", "friction_json", "analysis_reason")
+_SESSION_TEXT = ("llm_title", "title", "summary", "goal", "outcome_note")
+_SESSION_JSON = ("work_types_json", "tags_json", "highlights_json", "open_threads_json", "friction_json")
+
+
+def scrub_analyses(conn: sqlite3.Connection) -> dict:
+    """Schema 20: sessions shared with this computer as a hub (source 'remote') lose the raw analysis, mood and
+    friction notes their computers used to send, and every session's title, analysis text and friction notes, and the
+    shared sessions' lessons, are redacted again (titles and friction notes used to be stored as the model wrote them).
+    Rows already clean are left alone, so a copy in Postgres (mirror.py) writes again only the rows that changed.
+    Returns how many rows changed, by table."""
+    from ..core.redact import redact, redact_json
+
+    cleared = conn.execute(f"UPDATE sessions SET {', '.join(f'{c} = NULL' for c in _REMOTE_CLEARED)} "
+                           f"WHERE source = 'remote' AND ({' OR '.join(f'{c} IS NOT NULL' for c in _REMOTE_CLEARED)})"
+                           ).rowcount
+    sessions = set()
+    cols = _SESSION_TEXT + tuple(c for c in _SESSION_JSON if c not in _SESSION_TEXT)
+    for r in conn.execute(f"SELECT id, {', '.join(cols)} FROM sessions WHERE llm_title IS NOT NULL "
+                          "OR friction_json IS NOT NULL OR source = 'remote'").fetchall():
+        new = {c: redact(r[c]) if isinstance(r[c], str) else r[c] for c in _SESSION_TEXT}
+        new.update({c: redact_json(r[c]) for c in _SESSION_JSON})
+        changed = {c: v for c, v in new.items() if v != r[c]}
+        if changed:
+            conn.execute(f"UPDATE sessions SET {', '.join(f'{c} = ?' for c in changed)} WHERE id = ?",
+                         [*changed.values(), r["id"]])
+            sessions.add(r["id"])
+    lessons = 0
+    for r in conn.execute("SELECT id, title, body, evidence, tags_json, case_json FROM knowledge WHERE session_id IN "
+                          "(SELECT id FROM sessions WHERE source = 'remote')").fetchall():
+        new = {c: redact(r[c]) if isinstance(r[c], str) else r[c] for c in ("title", "body", "evidence")}
+        new.update({c: redact_json(r[c]) for c in ("tags_json", "case_json")})
+        changed = {c: v for c, v in new.items() if v != r[c]}
+        if changed:
+            conn.execute(f"UPDATE knowledge SET {', '.join(f'{c} = ?' for c in changed)} WHERE id = ?",
+                         [*changed.values(), r["id"]])
+            lessons += 1
+    return {"sessions_cleared": cleared, "sessions_redacted": len(sessions), "lessons_redacted": lessons}

@@ -33,7 +33,8 @@ devices either: `interlatch tailnet on` makes the dashboard reachable inside you
 Tailscale login only. A computer that joined a hub sends it one of two things. With `share = "everything"` (the
 default) it sends its **raw session files, unredacted** like the archive: secrets that appeared in a session (a key
 pasted in a prompt, a `.env` an agent read) reach the hub and its admins as they are. With `share = "knowledge"` it
-sends only summaries and project lessons, made from the redacted digest. Pick `knowledge` for a hub you don't run
+sends only titles, summaries and project lessons, made from the redacted digest and redacted again as they go;
+never a session's mood or friction notes, or lessons about you. Pick `knowledge` for a hub you don't run
 yourself. Inside a tailnet, or behind a proxy with HTTPS, the files travel encrypted; over plain `http://` they don't.
 
 **With a copy in Postgres** ([A copy in Postgres](postgres.md)), which is off unless you set it up, Interlatch writes

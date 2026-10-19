@@ -22,8 +22,8 @@ from ..projects import routing  # git_info through routing: one patch there reac
 from .client import PUSH_WAIT_S, HubClient, _Exclusions, hello_info, root_files, sharing, spoke_roots
 from .identity import read_token
 from .projects import GroupRoutes, _record_folders, destination, group_routes
-from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_COLS, HubError, HubUnauthorized,
-                       HubUnreachable, _check_protocol)
+from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_ANALYSIS_COLS, SHARED_COLS,
+                       HubError, HubUnauthorized, HubUnreachable, _check_protocol, shared_analysis, shared_lesson)
 from .pull import pull_team_lessons
 
 
@@ -184,7 +184,8 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
     left = set(cfg.hub_left)
     routes = routes if routes is not None else GroupRoutes()
     try:
-        cols = ", ".join(("id", "project_path", "machine_path") + SHARED_COLS + ANALYSIS_COLS)  # never a prompt-made title
+        # an allowlist: never a prompt-made title, the raw analysis, the person's mood or friction notes
+        cols = ", ".join(("id", "project_path", "machine_path") + SHARED_COLS + SHARED_ANALYSIS_COLS)
         marks = ", ".join("?" for _ in SHARED_AGENTS)
         rows = conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done' "
                             f"AND source NOT IN ('history', 'remote') AND agent IN ({marks}){where}",
@@ -221,9 +222,10 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
             if have.get(rec["id"]) == rec["analyzed_at"]:
                 unchanged += 1
                 continue
+            rec.update(shared_analysis(rec))  # its text redacted again, whatever wrote it
             rec["language"] = cfg.analysis.language  # what its summary and lessons are written in
             # lessons about the project only: ones about the person (global, preferences) stay on this computer
-            rec["knowledge"] = [dict(k) for k in conn.execute(
+            rec["knowledge"] = [shared_lesson(dict(k)) for k in conn.execute(
                 f"SELECT {', '.join(KNOWLEDGE_COLS)} FROM knowledge WHERE session_id = ? AND source = 'analysis' "
                 "AND scope = 'project' AND kind != 'preference' AND status != 'dismissed'", (rec["id"],)).fetchall()]
             out.append(rec)

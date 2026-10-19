@@ -14,10 +14,11 @@ your teammates' lessons back. It takes about five minutes. Whoever runs the hub 
 
 ## What is shared
 
-- **Sent to the hub:** for the projects the admin gave you, each analyzed session's summary and project lessons,
-  with its details (times, counts, models).
+- **Sent to the hub:** for the projects the admin gave you, each analyzed session's title, summary and project
+  lessons, with its details (times, counts, models). Secrets in them (keys, tokens, passwords) are redacted first.
 - **Never sent:** your prompts, transcripts, files and commands; lessons about you, such as your preferences;
-  sessions in any other project; chats you imported from ChatGPT or claude.ai.
+  how a session went for you (its mood and what slowed it down); sessions in any other project; chats you imported
+  from ChatGPT or claude.ai.
 - **Your own computer still analyzes your sessions,** with your own Claude Code, Codex or model provider, as it did
   before. The hub analyzes nothing.
 

@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from ..core.paths import is_abs_path, normalize_project_path
+from ..core.redact import redact, redact_json
 from ..projects.routing import MAX_FOLDERS
 
 PROTOCOL = 1
@@ -32,6 +33,17 @@ SHARED_COLS = ("agent", "started_at", "ended_at", "duration_s", "active_s", "git
                "n_tool_calls", "n_tool_errors", "n_interrupts", "n_compactions", "n_api_errors", "n_subagents", "n_files",
                "lines_added", "lines_removed", "input_tokens", "output_tokens", "cache_read_tokens",
                "cache_write_tokens", "sub_tokens", "est_cost_usd", "sub_cost_usd", "peak_context", "ended_flag")
+# ... and of its analysis: what it did for the project, built from this list and nothing else (shared_analysis). Never
+# the model's raw reply (analysis_json: every lesson, those about the person included), the person's mood
+# (sentiment) or friction notes; a hub clears them in what an older computer still sends (receive_sessions).
+SHARED_ANALYSIS_COLS = ("analysis_status", "analyzed_at", "analysis_model", "analyzed_prompts", "llm_title", "summary",
+                        "goal", "outcome", "outcome_note", "work_types_json", "tags_json", "highlights_json",
+                        "open_threads_json")
+PERSONAL_ANALYSIS_COLS = tuple(c for c in ANALYSIS_COLS if c not in SHARED_ANALYSIS_COLS)
+_SHARED_TEXT = ("llm_title", "summary", "goal", "outcome_note")
+_SHARED_JSON = ("work_types_json", "tags_json", "highlights_json", "open_threads_json")
+_LESSON_TEXT = ("title", "body", "evidence")
+_LESSON_JSON = ("tags_json", "case_json")
 SHARED_AGENTS = ("claude", "codex", "copilot", "bob", "antigravity", "opencode")  # coding agents; imported chats stay personal
 SHARE_BATCH = 200
 SHARE_KV = "hub-share:"  # + machine id: what that computer sends, as it last said
@@ -68,6 +80,29 @@ class FolderError(HubError):
 
 class HubUnauthorized(HubError):
     pass
+
+
+def shared_analysis(rec: dict) -> dict:
+    """The SHARED_ANALYSIS_COLS of a session record, its free text redacted again (to the last string of its JSON
+    lists): what a computer sends and what a hub keeps of a session shared as knowledge."""
+    out = {c: rec.get(c) for c in SHARED_ANALYSIS_COLS}
+    for c in _SHARED_TEXT:
+        if isinstance(out[c], str):
+            out[c] = redact(out[c])
+    for c in _SHARED_JSON:
+        out[c] = redact_json(out[c])
+    return out
+
+
+def shared_lesson(k: dict) -> dict:
+    """A project lesson as it is shared: its KNOWLEDGE_COLS, title, body, evidence and case file redacted again."""
+    out = {c: k.get(c) for c in KNOWLEDGE_COLS}
+    for c in _LESSON_TEXT:
+        if isinstance(out[c], str):
+            out[c] = redact(out[c])
+    for c in _LESSON_JSON:
+        out[c] = redact_json(out[c])
+    return out
 
 
 def clean_left(raw) -> list[str]:

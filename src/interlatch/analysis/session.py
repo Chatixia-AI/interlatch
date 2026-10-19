@@ -17,7 +17,7 @@ from ..knowledge.learning import TOPICS, normalize_interests, store_interests
 from .runners.base import BudgetExceededError, LLMError, LLMResult, Runner, SleepInterruptedError, UsageLimitError
 from .runners.factory import make_runner
 from .language import written_in
-from ..core.redact import redact
+from ..core.redact import redact, redact_deep
 from ..core.util import dumps, fingerprint, to_iso, utcnow, utcnow_iso
 
 log = logging.getLogger("interlatch.analyze")
@@ -461,7 +461,7 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
     data = {key: value for key, value in data.items() if key != "learning_interests"}
     s = conn.execute("SELECT project_path, project_name, ai_title, first_prompt, machine_id, source FROM sessions "
                      "WHERE id = ?", (session_id,)).fetchone()
-    title = (data.get("title") or "").strip() or None
+    title = redact((data.get("title") or "").strip()) or None  # shown and shared like the summary: redacted too
     # prompts that arrived while Claude was analyzing leave the session stale, so they get analyzed too
     conn.execute(
         "UPDATE sessions SET analysis_status = CASE WHEN n_prompts > ? THEN 'stale' ELSE 'done' END, "
@@ -476,7 +476,7 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
             dumps(data.get("work_types") or []), dumps([t.lower() for t in data.get("tags") or []]),
             dumps([redact(h) for h in data.get("highlights") or []]),
             dumps([redact(o) for o in data.get("open_threads") or []]),
-            dumps(data.get("friction") or []), dumps(data),
+            dumps(redact_deep(data.get("friction") or [])), dumps(data),
             best_title({"llm_title": title, "ai_title": s["ai_title"], "first_prompt": s["first_prompt"]}), session_id,
         ),
     )

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
+
+from .util import dumps
 
 _PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), "[REDACTED PRIVATE KEY]"),
@@ -48,3 +51,31 @@ def redact(text: str | None) -> str:
     for pattern, repl in _PATTERNS:
         text = pattern.sub(repl, text)
     return text
+
+
+def redact_deep(value):
+    """`value` with every string in it redacted, however deep in lists and dicts (keys stay as they are)."""
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, list):
+        return [redact_deep(v) for v in value]
+    if isinstance(value, dict):
+        return {k: redact_deep(v) for k, v in value.items()}
+    return value
+
+
+def redact_json(text):
+    """A JSON column (a list or object as text) with every string in it redacted; text that isn't JSON is redacted as
+    text, and a list or dict is redacted and written as JSON. None stays None."""
+    if text is None:
+        return None
+    if isinstance(text, (list, dict)):
+        return dumps(redact_deep(text))
+    if not isinstance(text, str):
+        return text
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return redact(text)
+    clean = redact_deep(data)
+    return text if clean == data else dumps(clean)
