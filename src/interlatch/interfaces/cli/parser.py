@@ -10,6 +10,7 @@ from .commands.archive import add_export, add_forget, add_projects, add_search, 
 from .commands.knowledge import (add_analyze, add_context, add_friction, add_glossary, add_knowledge, add_review,
                                  add_suggest, add_synthesize, add_systems)
 from .commands.operations import add_container, add_leaderboard, add_mirror, add_status, add_tailnet
+from .commands.profiles import add_profile
 from .commands.recording import (add_connect, add_disconnect, add_hook, add_import, add_ingest_session, add_screen,
                                  add_sources, add_sync, add_work)
 from .commands.setup import add_app, add_config, add_install, add_mcp, add_migrate, add_ui, add_uninstall
@@ -29,7 +30,7 @@ COMMANDS = (add_install, add_uninstall, add_status, add_sync, add_work, add_anal
             add_show, add_search, add_knowledge, add_projects, add_stats, add_ui, add_app, add_export, add_glossary,
             add_systems, add_review, add_suggest, add_friction, add_forget, add_sources, add_connect, add_disconnect,
             add_import, add_screen, add_context, add_config, add_migrate, add_mcp, add_leaderboard, add_mirror,
-            add_tailnet, add_hub, add_push, add_container, add_hook, add_ingest_session)
+            add_tailnet, add_hub, add_push, add_profile, add_container, add_hook, add_ingest_session)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "Google Antigravity, OpenCode); extract reusable knowledge.",
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--profile", metavar="NAME", help="run the command for a named profile (`interlatch profile list`); "
+                                                     "without it, Personal")
     sub = p.add_subparsers(dest="command", metavar="<command>")
     for add in COMMANDS:
         add(sub)

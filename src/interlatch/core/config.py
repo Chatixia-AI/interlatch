@@ -397,6 +397,34 @@ class Config:
             return False
         return any(fnmatch.fnmatch(project_path, pat) for pat in self.exclude_projects)
 
+    @property
+    def profiles(self):
+        """The named profiles (core.profiles.Registry) when this is Personal's folder and any were made (or folders
+        are still held after the last one went), else None. Raises RegistryError when profiles.toml can't be read:
+        nothing may then be shared as if there were none."""
+        from .profiles import load_registry
+
+        reg = load_registry(self.home)
+        return reg if reg and (reg.profiles or reg.choices) else None
+
+    @property
+    def hub_filters(self) -> bool:
+        """Whether anything here must be kept off the hub: excluded projects, or folders named profiles own."""
+        return bool(self.exclude_projects) or self.profiles is not None
+
+    def off_hub(self, project_path: str | None, remote: str | None = None) -> bool:
+        """Whether sessions in `project_path` (a repository with git remote `remote`) stay off this profile's hub:
+        an excluded project, or one a named profile owns (or that waits for you to choose). Only the folder and remote
+        decide here; push also checks each session's recorded owner (projects.owners)."""
+        if self.is_excluded(project_path):
+            return True
+        reg = self.profiles
+        if reg is None:
+            return False
+        from .profiles import PERSONAL, route
+
+        return route(reg, project_path, remote).owner != PERSONAL
+
     def claude_bin(self) -> str | None:
         if self.analysis.claude_bin:
             return str(Path(self.analysis.claude_bin).expanduser())

@@ -81,6 +81,9 @@ def push(cfg: Config, *, progress=None, client: HubClient | None = None) -> Push
         with _noting_failure(cfg):
             if cfg.shares_knowledge:
                 return _push_knowledge(cfg, progress=progress, client=client)
+            if cfg.profiles is not None:  # transcripts would carry every profile's sessions: never with profiles
+                raise HubError("named profiles share knowledge only, and this computer is set to send transcripts: run "
+                               "`interlatch config set hub.share knowledge`")
             return _push_files(cfg, progress=progress, client=client)
 
 
@@ -183,6 +186,7 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
     conn = conn or connect(cfg.db_path, readonly=True)
     found: dict[str, str | None] = {}
     left = set(cfg.hub_left)
+    mine = personal_ids(cfg, conn)  # named profiles: only Personal's own sessions go to Personal's hub
     routes = routes if routes is not None else GroupRoutes()
     try:
         # an allowlist: never a prompt-made title, the raw analysis, the person's mood or friction notes
@@ -194,8 +198,8 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
         for r in rows:
             rec = dict(r)
             ran = rec.pop("machine_path") or rec["project_path"]  # where it ran: a set-up project may hold it
-            if cfg.is_excluded(rec["project_path"]):
-                excluded += 1
+            if cfg.is_excluded(rec["project_path"]) or (mine is not None and (rec["id"] not in mine or cfg.off_hub(ran))):
+                excluded += 1  # an excluded project's, or a named profile's (or waiting) once there are profiles
                 continue
             limited = scope is not None or projects_only
             routed = bool(routes) and routes.decide(rec["project_path"], cfg.hub_folders) is not None
@@ -234,6 +238,18 @@ def _shared_records(cfg: Config, have: dict, *, scope: list[str] | None = None, 
         if own:
             conn.close()
     return out, unchanged, excluded
+
+
+def personal_ids(cfg: Config, conn) -> set[str] | None:
+    """The sessions Personal owns, when named profiles exist (core.profiles); None when there are none. A session
+    with no owner yet isn't in it: it waits for the next sync to be given one."""
+    if cfg.profiles is None:
+        return None
+    from ..projects.owners import has_table
+
+    if not has_table(conn):
+        return set()
+    return {r[0] for r in conn.execute("SELECT session_id FROM session_owner WHERE owner = 'personal'")}
 
 
 def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
@@ -324,8 +340,13 @@ def failure_reason(exc: HubError) -> str:
 
 @contextmanager
 def _noting_failure(cfg: Config):
+    from ..core.profiles import RegistryError
+
     try:
-        yield
+        try:
+            yield
+        except RegistryError as exc:  # profiles.toml unreadable: nothing is sent, and it is a problem to tell
+            raise HubError(f"nothing sent: {exc}") from None
     except HubError as exc:
         if cfg.hub_url and read_token(cfg):  # not joined at all is no failure to warn about
             note_failure(cfg, exc)
@@ -391,12 +412,13 @@ def export_analyses(cfg: Config) -> tuple[bytes, int]:
     if cfg.db_path.exists():
         conn = connect(cfg.db_path, readonly=True)
         try:
+            mine = personal_ids(cfg, conn)
             cols = ", ".join(("id", "project_path AS _project", "machine_path AS _ran") + ANALYSIS_COLS)
             for r in conn.execute(f"SELECT {cols} FROM sessions WHERE analysis_status = 'done'").fetchall():
                 rec = dict(r)
                 ran = (rec.pop("_project"), rec.pop("_ran"))
-                if any(cfg.is_excluded(p) for p in ran):
-                    continue  # an excluded project's analysis stays here, as its transcript does
+                if any(cfg.off_hub(p) for p in ran) or (mine is not None and rec["id"] not in mine):
+                    continue  # an excluded project's analysis stays here, as its transcript does; a profile's too
                 rec["knowledge"] = [dict(k) for k in conn.execute(
                     f"SELECT {', '.join(KNOWLEDGE_COLS)} FROM knowledge WHERE session_id = ? AND source = 'analysis'",
                     (rec["id"],)).fetchall()]

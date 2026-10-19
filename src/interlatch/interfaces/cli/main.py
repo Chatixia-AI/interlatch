@@ -61,6 +61,22 @@ def _rerun_in_utf8_mode(argv: list[str]) -> int:
             continue
 
 
+def _use_profile(name: str) -> int:
+    """--profile: everything this command reads and writes is that profile's folder (INTERLATCH_HOME), as are the
+    commands it starts. Returns an exit code when there is no such profile."""
+    from ...application.profiles import ProfileError, profile_home
+    from ...core.profiles import RegistryError
+
+    try:
+        home = profile_home(name)
+    except (ProfileError, RegistryError) as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    os.environ["INTERLATCH_HOME"] = str(home)
+    os.environ.pop("CHRONICLE_HOME", None)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if argv is None and sys.platform == "win32" and not sys.flags.utf8_mode:
         return _rerun_in_utf8_mode(sys.argv[1:])
@@ -76,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     plain_old_console()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.profile and (code := _use_profile(args.profile)):
+        return code
     if not args.command:
         from ...core.config import interlatch_home
 
