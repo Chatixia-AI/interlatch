@@ -78,7 +78,7 @@ def test_projects_page_filter_and_breadcrumb(projects):
     app = App(projects["cfg"])
     r, code = api.projects.action_project_groups(app.context(), "save", {"name": "Aktio", "folders": [AKTIO, VM]})
     gid = r["id"]
-    assert code == 200 and api.projects.project_groups(app.context())["groups"] == [{"id": gid, "name": "Aktio", "folders": [AKTIO, VM], "hub_project": None}]
+    assert code == 200 and api.projects.project_groups(app.context())["groups"] == [{"id": gid, "name": "Aktio", "folders": [AKTIO, VM], "hub_project": None, "goes_to": None}]
     rows = {p["project_path"]: p for p in api.projects.projects(app.context())}
     assert (rows[AKTIO]["group"], rows[AKTIO]["group_by"]) == (gid, "folder") and rows["claude.ai"]["group"] is None
     assert api.projects.action_project_groups(app.context(), "move", {"paths": ["claude.ai"], "group": gid}) == ({"ok": True}, 200)

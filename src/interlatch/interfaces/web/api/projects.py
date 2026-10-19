@@ -85,8 +85,23 @@ def project_groups(ctx: Context) -> dict:
     projects under), with the team's sessions in each and the hub's address."""
     from ....projects.groups import groups
 
-    return {"groups": groups(ctx.conn), "home": str(Path.home()),
+    gs = groups(ctx.conn)
+    for g in gs:
+        g["goes_to"] = _goes_to(ctx, g["id"])
+    return {"groups": gs, "home": str(Path.home()),
             "hub": _hub_choices(ctx) if ctx.cfg.is_spoke else None}
+
+
+def _goes_to(ctx: Context, group_id: int) -> str | None:
+    """The other hub a group is connected to (docs/profiles.md), by its name here; None: Personal's."""
+    from ....core.profiles import RegistryError
+    from ....projects.hubgroups import hub_of_group
+
+    try:
+        hub = hub_of_group(ctx.cfg.profiles, group_id)
+    except RegistryError:
+        return None
+    return hub.label if hub else None
 
 
 def _billed(ctx: Context) -> bool:
@@ -330,6 +345,7 @@ def group(ctx: Context, group_id: int, here: bool = False, limited: bool = False
         (*paths, to_iso(utcnow() - timedelta(days=372))))]
     return {
         "id": g["id"], "name": g["name"], "folders": g["folders"], "hub_project": g["hub_project"],
+        "goes_to": _goes_to(ctx, g["id"]),
         "reanalyze": _reanalyze(ctx, "group", g["id"]),
         "weekly": {"weeks": weeks, "series": [{"project_path": p, "values": weekly[p]} for p in paths]},
         "daily": daily,

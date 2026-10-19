@@ -168,7 +168,7 @@ def waiting(conn: sqlite3.Connection) -> list[dict]:
     if not has_table(conn):
         return []
     return [dict(r) for r in conn.execute(
-        "SELECT folder, remote, MAX(detail) why, COUNT(*) sessions, MAX(decided_at) at FROM session_owner "
+        "SELECT folder, remote, MAX(detail) why, MAX(rule) rule, COUNT(*) sessions, MAX(decided_at) at FROM session_owner "
         "WHERE owner = ? GROUP BY folder, remote ORDER BY sessions DESC, folder", (WAITING,))]
 
 

@@ -2383,6 +2383,15 @@ td.pg-cell { width: 1%; text-align: right; }
 .gd-item .tag { flex: none; margin: 0; }
 .gd-err { color: var(--critical-ink); font-size: 12.5px; min-height: 1em; }
 .gd-err:empty { display: none; }
+/* Settings › Devices › Hubs, and a group page's hub picker (several hubs: docs/profiles.md) */
+.hub-list { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.hub-row { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+.hub-row > .btn { justify-self: start; }
+.hub-add, .hub-pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hub-add .input, .hub-pick .input { flex: 1 1 160px; min-width: 0; }
+label.hub-pick { gap: 6px; }
+.hub-waiting { margin-top: 18px; }
+.hub-waiting h3 { margin: 0 0 4px; }
 .gd-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .gd-actions { display: flex; gap: 8px; margin-left: auto; }
 .gd > select { width: 100%; }

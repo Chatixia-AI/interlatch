@@ -504,3 +504,32 @@ def change_groups(cfg: Config, change, *, leave_on_hub: bool = False) -> tuple[o
         return result, moved
     finally:
         conn.close()
+
+
+def join(cfg: Config, key: str, url: str, code: str, *, all_folders: bool = False) -> dict:
+    """Join hub `key` (one added with add_hub) at `url` with the invite code its admin sent, as
+    `interlatch --hub <key> hub join <url> --code <code>` does for a hub not yet joined: knowledge only. Returns the
+    hub's answer ({person, hub}); raises ProfileError when it can't."""
+    import json
+
+    from ..sharing.client import redeem_invite
+    from ..sharing.membership import keep_token
+    from ..sharing.protocol import HubError
+
+    personal_cfg(cfg)
+    p = find_profile(cfg.home, key)
+    hub = load_config(p.home)
+    url = (url or "").strip().rstrip("/")
+    if hub.is_spoke:
+        raise ProfileError(f"{p.label} already sends to {hub.hub_url}.")
+    if not url or not code.strip():
+        raise ProfileError("Give the hub's address and the invite code its admin sent.")
+    try:
+        got = redeem_invite(hub, url, code.strip())
+    except HubError as exc:
+        raise ProfileError(f"Can't join: {exc}") from None
+    set_config_value(hub, "hub", "url", json.dumps(url))  # the address first: a token alone makes a hub
+    keep_token(hub, url, got["token"])
+    set_config_value(hub, "hub", "share", json.dumps("knowledge"))
+    set_config_value(hub, "hub", "all_folders", "true" if all_folders else "false")
+    return {"person": got.get("person") or {}, "hub": got.get("hub") or url}
