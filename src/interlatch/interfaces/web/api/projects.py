@@ -185,6 +185,7 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
         "shared": path in declared_projects(c),
         "hub": hub_project_of(ctx.cfg, [path], c).get(path),
         "group": group_of(c, path),
+        "reanalyze": _reanalyze(ctx, "project", path),
         "label": labels.get(path, stats["project_name"]),
         "stats": dict(stats),
         "kb": dict(kb) if kb else None,
@@ -317,6 +318,7 @@ def group(ctx: Context, group_id: int, here: bool = False, limited: bool = False
         (*paths, to_iso(utcnow() - timedelta(days=372))))]
     return {
         "id": g["id"], "name": g["name"], "folders": g["folders"], "hub_project": g["hub_project"],
+        "reanalyze": _reanalyze(ctx, "group", g["id"]),
         "weekly": {"weeks": weeks, "series": [{"project_path": p, "values": weekly[p]} for p in paths]},
         "daily": daily,
         "diagram_sources": diagram_sources,
@@ -420,6 +422,64 @@ def action_group_graph(ctx: Context, group_id: int) -> bool | None:
         return f"kept {len(rec['links'])} of {len(rec['checked'])} links"
 
     return ctx.jobs.start(f"group-graph:{group_id}", job)
+
+
+def _reanalyze(ctx: Context, kind: str, target) -> dict | None:
+    """A project's or group's weekly re-analysis (knowledge.weekly). None where this computer's sessions go to a hub,
+    which analyzes them."""
+    from ....knowledge import weekly
+
+    return None if ctx.cfg.sends_files else weekly.status(ctx.conn, ctx.cfg, kind, target)
+
+
+def action_reanalyze(ctx: Context, kind: str, target, on: bool) -> dict | None:
+    """Turn a project's or group's weekly re-analysis on or off. None: no such project or group, or this computer's
+    sessions go to a hub."""
+    from ....knowledge import weekly
+    from ....projects.groups import groups
+
+    if ctx.cfg.sends_files:
+        return None
+    if kind == "group":
+        try:
+            target = int(target)
+        except (TypeError, ValueError):
+            return None
+        if not any(g["id"] == target for g in groups(ctx.conn)):
+            return None
+    elif kind != "project" or not isinstance(target, str) or target == GLOBAL or not ctx.conn.execute(
+            "SELECT 1 FROM sessions WHERE project_path = ? LIMIT 1", (target,)).fetchone():
+        return None
+    return weekly.turn(ctx.conn, ctx.cfg, kind, target, on)
+
+
+def reanalysis(ctx: Context) -> dict:
+    """Settings › Re-analysis: the day weekly re-analyses run, each one that is on, and the projects and groups it can
+    still be turned on for (most recent first). on_hub: this computer's sessions go to a hub, which analyzes them."""
+    from ....knowledge import weekly
+    from ....projects.groups import groups
+
+    out = {"on_hub": ctx.cfg.sends_files, "day": weekly.day_of(ctx.cfg), "days": list(weekly.DAYS), "items": [],
+           "choices": {"projects": [], "groups": []}}
+    if ctx.cfg.sends_files:
+        return out
+    c = ctx.conn
+    labels = project_labels(c)
+    projects = {r["project_path"]: labels.get(r["project_path"], r["project_name"]) for r in c.execute(
+        "SELECT project_path, MAX(project_name) project_name, MAX(started_at) last FROM sessions "
+        "WHERE project_path IS NOT NULL AND project_path != '' GROUP BY project_path ORDER BY last DESC")}
+    named = {str(g["id"]): g["name"] for g in groups(c)}
+    for kind, target, st in weekly.listing(c, ctx.cfg):
+        name = (projects if kind == "project" else named).get(target)
+        if kind == "group" and name is None:
+            continue  # a removed group's: the next run drops it
+        out["items"].append({"kind": kind, "target": int(target) if kind == "group" else target,
+                             "name": name or target.rstrip("/").rsplit("/", 1)[-1], **st})
+    on = {(i["kind"], str(i["target"])) for i in out["items"]}
+    out["choices"]["projects"] = [{"path": p, "name": n} for p, n in projects.items()
+                                  if ("project", p) not in on and not ctx.cfg.is_excluded(p)]
+    out["choices"]["groups"] = [{"id": int(i), "name": n} for i, n in named.items() if ("group", i) not in on]
+    return out
 
 
 def file_sessions(ctx: Context, path: str, limit: int = 50) -> dict:

@@ -78,11 +78,18 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
         else:
             ids = session_ids or pending_sessions(conn, cfg, max_analyses or cfg.analysis.max_per_run)
             analyze_many(cfg, ids, runner, report, model=model, progress=progress)
-    if synthesize and (cfg.synthesis.auto or force) and runner.available() and not report.paused_until:
-        _synthesize(cfg, conn, runner, report, force=force, progress=progress)
+    auto = cfg.synthesis.auto or force
+    # the projects and groups whose weekly re-analysis is due: someone turned each on, so they run without [synthesis] auto
+    due = (_weekly_due(cfg, conn) if synthesize and not session_ids and runner.available() and not report.paused_until
+           and not (paused and paused > to_iso(utcnow())) else [])
+    if synthesize and (auto or due) and runner.available() and not report.paused_until:
+        _synthesize(cfg, conn, runner, report, force=force, auto=auto, also=_weekly_projects(cfg, conn, due),
+                    progress=progress)
         _glossaries(cfg, conn, runner, report, progress=progress)
         _themes(cfg, report, progress=progress)
-        _weekly_review(cfg, conn, runner, report, progress=progress)
+        _weekly_refresh(cfg, conn, runner, report, due, progress=progress)
+        if auto:
+            _weekly_review(cfg, conn, runner, report, progress=progress)
     if export and cfg.export_markdown:
         try:
             report.exported = export(conn, cfg)
@@ -102,12 +109,14 @@ def _suggestions(cfg: Config, conn, report: WorkReport) -> None:
         report.suggestions = got["new"]
 
 
-def _synthesize(cfg: Config, conn, runner: Runner, report: WorkReport, *, force=False, progress=None):
+def _synthesize(cfg: Config, conn, runner: Runner, report: WorkReport, *, force=False, auto=True, also=(), progress=None):
+    """auto: the knowledge bases [synthesis] refreshes by itself; also: the ones a weekly re-analysis refreshes."""
     from ..knowledge.synthesize import GLOBAL, global_needs_synthesis, projects_needing_synthesis, synthesize_project
 
-    targets = projects_needing_synthesis(conn, cfg, force=force)
-    if global_needs_synthesis(conn, cfg) or (force and targets):
+    targets = projects_needing_synthesis(conn, cfg, force=force) if auto else []
+    if auto and (global_needs_synthesis(conn, cfg) or (force and targets)):
         targets.append(GLOBAL)
+    targets += [p for p in also if p not in targets]
     for path in targets:
         try:
             if progress:
@@ -151,6 +160,61 @@ def _weekly_review(cfg: Config, conn, runner: Runner, report: WorkReport, *, pro
         conn.rollback()
         log.exception("weekly review %s failed", key)
         report.failed.append((key, f"{type(exc).__name__}: {exc}"))
+
+
+def _weekly_due(cfg: Config, conn) -> list[tuple[str, str]]:
+    from ..knowledge.weekly import due
+
+    return due(conn, cfg)
+
+
+def _weekly_projects(cfg: Config, conn, due) -> list[str]:
+    """The projects the due weekly re-analyses cover that have something new to synthesize."""
+    from ..knowledge import weekly
+
+    out: list[str] = []
+    for kind, target in due:
+        out += [p for p in weekly.members(conn, kind, target) if p not in out and weekly.project_changed(conn, cfg, p)]
+    return out
+
+
+def _weekly_refresh(cfg: Config, conn, runner: Runner, report: WorkReport, due, *, progress=None):
+    """Finish each due weekly re-analysis: _synthesize re-synthesized its changed projects (and _glossaries rebuilt
+    their glossaries); a group's links are checked again when they changed. Then it counts as this week's refresh,
+    unless a usage limit cut the run short: what's left runs once the pause ends."""
+    from ..knowledge import group_graph, weekly
+
+    for kind, target in due:
+        if report.paused_until:
+            return
+        paths = weekly.members(conn, kind, target)
+        errors = [m for t, m in report.failed if t in paths or t.removeprefix("glossary:") in paths]
+        detail = {"projects": sum(1 for p in paths if p in report.synthesized), "graph": False,
+                  "error": errors[0] if errors else None}
+        if kind == "group" and paths and weekly.graph_changed(conn, int(target), paths):
+            try:
+                if progress:
+                    progress(f"checking the links of group {target}…")
+                group_graph.analyze(cfg, conn, int(target), paths, runner=runner, concurrency=cfg.analysis.concurrency,
+                                    progress=progress)
+                detail["graph"] = True
+            except UsageLimitError as exc:
+                until = to_iso(utcnow() + timedelta(hours=1))
+                kv_set(conn, PAUSE_KEY, until)
+                conn.commit()
+                report.paused_until = until
+                report.failed.append((f"group:{target}", str(exc)))
+                return
+            except (LLMError, ValueError) as exc:
+                detail["error"] = str(exc)
+                report.failed.append((f"group:{target}", str(exc)))
+            except Exception as exc:
+                conn.rollback()
+                log.exception("weekly links check of group %s failed", target)
+                detail["error"] = f"{type(exc).__name__}: {exc}"
+                report.failed.append((f"group:{target}", detail["error"]))
+        result = "failed" if detail["error"] else "refreshed" if detail["projects"] or detail["graph"] else "unchanged"
+        weekly.record(conn, kind, target, result, detail)
 
 
 def _themes(cfg: Config, report: WorkReport, *, progress=None):

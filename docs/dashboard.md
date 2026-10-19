@@ -9,7 +9,7 @@ navy blueprint paper in the dark theme, a whiteprint in the light one, IBM Plex 
 **Home**, **Sessions**, **Knowledge**, **Projects**, **Suggestions** and **Settings** (point at an icon, or tab to it, for its name and what
 it holds), and the sidebar beside it lists that section:
 recent sessions grouped by the day they were last active, with agent filters, knowledge kinds with counts plus Glossary, Map, Global playbook
-and Weekly reviews, projects, suggestions by status plus What goes wrong, or Status, Sources, MCP, Devices, Storage and Appearance.
+and Weekly reviews, projects, suggestions by status plus What goes wrong, or Status, Sources, MCP, Devices, Storage, Re-analysis and Appearance.
 The door at the bottom of the rail opens **Innerlatch**, drawn in violet, where the [Party](party.md), the Leaderboard
 and the Arena live ([Getting there](party.md#getting-there)). **⌘K** (also ⌘P or `/`) opens a palette that jumps
 to any session, knowledge item, project, glossary term or page and runs commands (sync, rebuild the glossary, group
@@ -19,7 +19,8 @@ last sync and, once one is found, an available update ([Updating](install.md#upd
 and **The door** hides the door to Innerlatch in this browser (Innerlatch still opens from its address). The fonts ship with Interlatch, so the dashboard never
 calls out to a font service. **Settings › Devices** shows whether this computer is a hub or sends to
 one (then also the hub's projects it is in, to join, leave or rejoin), and how to open the dashboard on your phone. **Settings › Storage**
-sets up a copy of your archive in Postgres ([A copy in Postgres](postgres.md)). On a phone the rail becomes a tab bar at the bottom, the page takes
+sets up a copy of your archive in Postgres ([A copy in Postgres](postgres.md)). **Settings › Re-analysis** picks the
+day [weekly re-analyses](#project-groups) run and lists the projects and groups that have one. On a phone the rail becomes a tab bar at the bottom, the page takes
 the whole width, and the dashboard can be added to the Home Screen like an app
 ([Phone and other computers](devices.md)).
 
@@ -178,6 +179,16 @@ sessions, knowledge base and hub sharing.
   glossary terms more than one project uses first. The Knowledge, Sessions, Artifacts and Usage tabs cover every
   project in the group; Usage adds each project's active time week by week and the group's activity calendar. As on a
   project's page, git and roadmap files are read only when you open the page on this computer.
+- **Weekly re-analysis:** the switch in the head of a project's or a group's page has the background sync refresh it
+  once a week. For a project, that re-synthesizes its knowledge base and glossary when it has new knowledge items,
+  even fewer than `synthesis.min_new_items` and with `synthesis.auto` off. For a group, it does that for each of its
+  projects, then checks the **Mindmap** and **Connections** links again when they changed (or draws them the first
+  time). A week with nothing new costs no model call, and still counts as that week's run. It runs at the first sync of
+  the day picked in **Settings › Re-analysis** (Monday unless you change it; `synthesis.weekly_day`), in this
+  computer's time zone; a computer off or asleep all that day catches up at its next sync. That page also lists every
+  project and group re-analyzed weekly, turns each off, and turns one on without opening its page. The line under a
+  page's switch says when it last ran, what that did, and when it runs next. A computer that sends its sessions to a
+  hub shows neither, since the hub analyzes them.
 
 Groups are kept in this computer's archive and never go to a hub. On a hub with people, admins see and change the
 hub's groups; someone limited to some projects sees none. On a computer that sends to a hub, a whole group can be

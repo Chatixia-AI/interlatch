@@ -165,6 +165,11 @@ def _group_graph_analyze(h, ctx, m, b):  # the Analyze button: the analyzer chec
     return h._json({"started": started}) if started is not None else h._json({"error": tr("not found")}, 404)
 
 
+def _reanalyze(h, ctx, m, b):  # a project's or group's weekly re-analysis, on or off
+    found = api.projects.action_reanalyze(ctx, b.get("kind"), b.get("target"), bool(b.get("on")))
+    return h._json(found) if found is not None else h._json({"error": tr("not found")}, 404)
+
+
 def _diagram(h, ctx, m, q):  # a download: the project's architecture sketch as an .excalidraw file
     f = api.knowledge.diagram_file(ctx, q.get("path", ""))
     return h._download(*f) if f else h._json({"error": tr("no architecture sketch for this project")}, 404)
@@ -236,6 +241,7 @@ GET: list[Route] = [
     Route("/api/group/map", ANYONE, _group_map),
     Route("/api/group/map.excalidraw", ANYONE, _group_map_file),
     Route("/api/group/graph", ANYONE, _group_graph),
+    Route("/api/reanalysis", ADMIN_PERSON, lambda h, ctx, m, q: h._json(api.projects.reanalysis(ctx))),
     Route("/api/diagram", ANYONE, _diagram),
     # parse_qs has decoded the path already: a second unquote would mangle a literal %
     Route("/api/file", ANYONE, lambda h, ctx, m, q: h._json(
@@ -455,6 +461,9 @@ POST: list[Route] = [
           lambda h, ctx, m, b: h._json({"started": api.status.action_analyze(ctx, m.group(1))})),
     Route(r"/api/connectors/([\w-]+)/(connect|disconnect)", ANYONE, _connector),
     Route("/api/group/graph/analyze", ANYONE, _group_graph_analyze),
+    Route("/api/reanalyze", ANYONE, _reanalyze),
+    Route("/api/reanalysis/day", ANYONE,
+          lambda h, ctx, m, b: h._json(api.settings.action_weekly_day(ctx, str(b.get("day") or "")))),
     Route("/api/map/themes", ANYONE,
           lambda h, ctx, m, b: h._json({"started": api.knowledge.action_themes(ctx, bool(b.get("force")))})),
     Route("/api/glossary/rebuild", ANYONE,

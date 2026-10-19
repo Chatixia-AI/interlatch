@@ -62,6 +62,7 @@ Settings for `analysis.backend = "<name>"`; [Model providers](analysis.md#model-
 | Key | Default | |
 | --- | --- | --- |
 | `synthesis.auto` / `model` / `min_new_items` | `true` / `sonnet` / `3` | rebuild a project's knowledge base once it gains this many new items |
+| `synthesis.weekly_day` | `"mon"` | the day (`mon` … `sun`, this computer's time zone) [weekly re-analyses](dashboard.md#project-groups) run; **Settings › Re-analysis** sets it |
 | `export.markdown` | `true` | mirror everything into the Markdown vault |
 | `export.notes_dir` | `""` | where the vault lives (empty: `~/.interlatch/notes`) |
 | `server.host` / `port` | `127.0.0.1` / `11524` | the dashboard; the app uses a free port when this one is taken. Installs made before 11524 became the default keep `port = 8765` in their `config.toml`; to move, run `interlatch config set server.port 11524`, then restart the dashboard (`launchctl kickstart -k gui/$(id -u)/com.interlatch.ui`). Computers that send to it as a hub then need its new address: `interlatch config set hub.url http://<hub>:11524` on each |

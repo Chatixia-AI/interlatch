@@ -1496,6 +1496,21 @@ mark.qhit.on { background: var(--warning); color: #1a1a1a; box-shadow: 0 0 0 2px
 .switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s; }
 .switch[aria-checked="true"] { background: var(--good); }
 .switch[aria-checked="true"]::after { transform: translateX(16px); }
+/* a project's or group's weekly re-analysis, in its page head */
+.rean { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.rean-text { display: flex; flex-direction: column; line-height: 1.25; font-size: 12.5px; }
+.rean-note { font-size: 11.5px; }
+.rean-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* "Project" and "Group" tags: blue and violet, mixed toward the ink so they read in light and dark */
+.badge.kind-tag { font-size: 11px; padding: 0 7px; }
+.badge.kind-project { --kind: var(--series-1); }
+.badge.kind-group { --kind: var(--series-7); }
+.badge.kind-tag, .badge.kind-tag .icon { color: color-mix(in srgb, var(--kind) 72%, var(--ink)); }
+.badge.kind-tag { background: color-mix(in srgb, var(--kind) 12%, transparent); border-color: color-mix(in srgb, var(--kind) 40%, transparent); }
+.sp-option > .badge.kind-tag { align-self: center; justify-self: start; }
+.badge.kind-tag .icon .hub-line { stroke: currentColor; } /* the group icon is the hub-project one, in the tag colour */
+.rean-add { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; }
+.rean-add .pk-field { flex: 1 1 220px; }
 .search-form { position: relative; max-width: 620px; margin-bottom: 18px; }
 .search-form .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
 .search-form input { width: 100%; padding: 9px 12px 9px 34px; font-size: 14px; }

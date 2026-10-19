@@ -280,6 +280,7 @@ class SynthesisConfig:
     auto: bool = True
     model: str = "sonnet"
     min_new_items: int = 3
+    weekly_day: str = "mon"  # when weekly re-analyses run (knowledge/weekly.py): mon … sun, this computer's time zone
 
 
 @dataclass
