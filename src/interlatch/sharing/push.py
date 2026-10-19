@@ -9,19 +9,21 @@ import json
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 
 from ..core.config import Config
 from ..core.machine import local_machine
 from ..core.paths import normalize_project_path
-from ..core.util import utcnow_iso
+from ..core.util import parse_ts, utcnow, utcnow_iso
 from ..projects import routing  # git_info through routing: one patch there reaches every caller
 from .client import PUSH_WAIT_S, HubClient, _Exclusions, hello_info, root_files, sharing, spoke_roots
 from .identity import read_token
 from .projects import GroupRoutes, _record_folders, destination, group_routes
-from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_COLS, HubError, HubUnreachable,
-                       _check_protocol)
+from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_COLS, HubError, HubUnauthorized,
+                       HubUnreachable, _check_protocol)
 from .pull import pull_team_lessons
 
 
@@ -73,9 +75,10 @@ def push(cfg: Config, *, progress=None, client: HubClient | None = None) -> Push
     """Send the hub every session file it lacks (or has an older copy of); with [hub] share = "knowledge", what
     this computer learned instead (push_knowledge). By the config as it is now (sharing)."""
     with sharing(cfg, PUSH_WAIT_S) as cfg:
-        if cfg.shares_knowledge:
-            return _push_knowledge(cfg, progress=progress, client=client)
-        return _push_files(cfg, progress=progress, client=client)
+        with _noting_failure(cfg):
+            if cfg.shares_knowledge:
+                return _push_knowledge(cfg, progress=progress, client=client)
+            return _push_files(cfg, progress=progress, client=client)
 
 
 def push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
@@ -84,7 +87,8 @@ def push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = Non
     with sharing(cfg, PUSH_WAIT_S) as cfg:
         if not cfg.shares_knowledge:  # changed since the caller read it
             raise HubError("this computer no longer shares knowledge only with the hub")
-        return _push_knowledge(cfg, progress=progress, client=client)
+        with _noting_failure(cfg):
+            return _push_knowledge(cfg, progress=progress, client=client)
 
 
 def _push_files(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
@@ -283,20 +287,100 @@ def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = No
 
 
 def _record_push(cfg: Config, report: PushReport) -> None:
-    """The spoke's own note of its last push, for `interlatch hub status` and its dashboard."""
-    try:
-        (cfg.home / "last-push.json").write_text(json.dumps({
-            "at": utcnow_iso(), "summary": report.summary(), "errors": report.errors[:5], "kind": report.kind,
-            "sent": report.sent, "unchanged": report.unchanged, "kept": report.skipped, "team": report.team}))
+    """The spoke's own note of its last push, for `interlatch hub status` and its dashboard. A push that got through
+    clears the failure an earlier one noted."""
+    _write_last(cfg, {
+        "at": utcnow_iso(), "summary": report.summary(), "errors": report.errors[:5], "kind": report.kind,
+        "sent": report.sent, "unchanged": report.unchanged, "kept": report.skipped, "team": report.team})
+
+
+def _write_last(cfg: Config, data: dict) -> None:
+    path = cfg.home / LAST_PUSH
+    tmp = path.with_name(f".{LAST_PUSH}.{os.getpid()}")
+    try:  # whole or not at all: the dashboard and the menu bar read it while a push writes it
+        tmp.write_text(json.dumps(data))
+        os.replace(tmp, path)
     except OSError:
-        pass
+        tmp.unlink(missing_ok=True)
 
 
 def last_push(cfg: Config) -> dict | None:
     try:
-        return json.loads((cfg.home / "last-push.json").read_text())
+        return json.loads((cfg.home / LAST_PUSH).read_text())
     except (OSError, ValueError):
         return None
+
+
+# A push that never got through (the hub turned this computer's token away, or could not be reached) used to leave
+# no trace but the log: last-push.json kept the last good push, so every place that shows it said all was well.
+# It is noted beside that push now, as `failure`, until a push gets through again.
+LAST_PUSH = "last-push.json"
+UNREACHABLE_GRACE = timedelta(hours=2)  # a laptop offline for an hour or a hub restarting is no news
+
+
+def failure_reason(exc: HubError) -> str:
+    """'token' (the hub turned this computer's token away: only joining again helps), 'unreachable' or 'error'."""
+    return "token" if isinstance(exc, HubUnauthorized) else "unreachable" if isinstance(exc, HubUnreachable) else "error"
+
+
+@contextmanager
+def _noting_failure(cfg: Config):
+    try:
+        yield
+    except HubError as exc:
+        if cfg.hub_url and read_token(cfg):  # not joined at all is no failure to warn about
+            note_failure(cfg, exc)
+        raise
+
+
+def note_failure(cfg: Config, exc: HubError) -> dict:
+    """Note a push that didn't get through in last-push.json, and once it is a problem worth telling (send_problem),
+    tell it in a desktop notification, once per run of failures. Returns the failure noted."""
+    last = last_push(cfg) or {}
+    before = last.get("failure") or {}
+    reason, now = failure_reason(exc), utcnow_iso()
+    failure = {"at": now, "since": before.get("since") or now, "reason": reason, "error": str(exc),
+               "attempts": int(before.get("attempts") or 0) + 1, "hub": cfg.hub_url,
+               "notified": bool(before.get("notified"))}
+    last["failure"] = failure
+    if not failure["notified"] and send_problem(last) and cfg.update_notify:
+        failure["notified"] = _notify(cfg, failure)
+    _write_last(cfg, last)
+    return failure
+
+
+def send_problem(last: dict | None, now=None) -> dict | None:
+    """What to warn this computer's user about its pushes, or None: a token the hub turned away at once, any other
+    failure once it has gone on for UNREACHABLE_GRACE. `last`: last_push(). The dict: reason, error, since (the
+    first failed push), at (the latest), attempts, last_ok (the last push that got through, if any)."""
+    failure = (last or {}).get("failure")
+    if not failure:
+        return None
+    since = parse_ts(failure.get("since"))
+    if failure.get("reason") != "token" and (since is None or (now or utcnow()) - since < UNREACHABLE_GRACE):
+        return None
+    return {k: failure.get(k) for k in ("reason", "error", "since", "at", "attempts", "hub")} | {"last_ok": last.get("at")}
+
+
+def problem_text(problem: dict) -> tuple[str, str]:
+    """(headline, what to do) for the CLI, the menu bar and the notification; the dashboard words its own."""
+    if problem["reason"] == "token":
+        return ("The hub no longer accepts this computer",
+                "Ask the hub's admin for a new invite for this computer (Team › People › New invite), then join again: "
+                f"interlatch hub join {problem.get('hub') or '<hub address>'} --code <code>")
+    if problem["reason"] == "unreachable":
+        return "Can't reach the hub", "Check the network and that the hub is running; sending resumes by itself."
+    return "The hub refuses this computer's sends", problem.get("error") or ""
+
+
+def _notify(cfg: Config, failure: dict) -> bool:
+    from ..core.util import local_str
+    from ..runtime.notify import post
+
+    headline, fix = problem_text(failure)
+    lead = ("Nothing reaches the hub until this computer joins again." if failure["reason"] == "token"
+            else f"Nothing has reached the hub since {local_str(failure['since'])}.")
+    return post(f"Interlatch: {headline}", f"{lead} {fix}")
 
 
 def export_analyses(cfg: Config) -> tuple[bytes, int]:

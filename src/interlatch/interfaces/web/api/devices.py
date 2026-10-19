@@ -18,7 +18,7 @@ def devices(ctx: Context) -> dict:
     from ....sharing.identity import read_token
     from ....sharing.projects import last_folders, machines
     from ....sharing.pull import last_team
-    from ....sharing.push import last_push
+    from ....sharing.push import last_push, send_problem
 
     role = "spoke" if ctx.cfg.is_spoke else "hub" if read_token(ctx.cfg) else "single"
     recorded = (last_folders(ctx.cfg) or {}) if role == "spoke" else {}
@@ -30,7 +30,8 @@ def devices(ctx: Context) -> dict:
         "this": local_machine(ctx.cfg),
         "role": role,
         "hub_url": ctx.cfg.hub_url or None,
-        "last_push": last_push(ctx.cfg) if role == "spoke" else None,
+        "last_push": (pushed := last_push(ctx.cfg) if role == "spoke" else None),
+        "push_problem": send_problem(pushed),
         "share": ctx.cfg.hub_share if role == "spoke" else None,
         "all_folders": ctx.cfg.hub_all_folders if role == "spoke" else None,
         "accept": ctx.cfg.hub_accept if role == "hub" else None,
@@ -141,6 +142,32 @@ def action_leave_hub(ctx: Context) -> dict:
     url = ctx.cfg.hub_url
     ctx.cfg = leave_hub(ctx.cfg)
     return {"ok": True, "hub": url}
+
+
+def action_rejoin_hub(ctx: Context, body: dict) -> tuple[dict, int]:
+    """The hub warning's Join again: a new invite code for this computer takes the place of the token the hub turned
+    away (`interlatch hub join <its address> --code`), for the same hub and the same sharing; then a push."""
+    from ....core.config import load_config, set_config_value
+    from ....sharing.client import redeem_invite
+    from ....sharing.identity import write_token
+    from ....sharing.protocol import HubError
+
+    if not ctx.cfg.is_spoke:
+        return {"error": tr("this computer has not joined a hub")}, 400
+    code = str(body.get("code") or "").strip()
+    if not code or len(code) > 200:
+        return {"error": tr("paste the invite code the hub's admin gave you")}, 400
+    try:
+        got = redeem_invite(ctx.cfg, ctx.cfg.hub_url, code)
+    except HubError as exc:
+        return {"error": str(exc)}, 400
+    write_token(ctx.cfg, got["token"])
+    if got.get("share") == "knowledge" and not ctx.cfg.shares_knowledge:  # what `hub join` does: this hub takes no more
+        set_config_value(ctx.cfg, "hub", "share", json.dumps("knowledge"))
+    ctx.cfg = load_config(ctx.cfg.home)
+    action_push(ctx)
+    who = got.get("person") or {}
+    return {"ok": True, "person": {"name": who.get("name"), "role": who.get("role")}, "hub": got.get("hub")}, 200
 
 
 def shared_projects(ctx: Context) -> dict:

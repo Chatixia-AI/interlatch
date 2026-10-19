@@ -1547,6 +1547,15 @@ table.data a.proj { overflow-wrap: normal; word-break: normal; white-space: nowr
 .statusbar #status-update { background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 2px 8px; margin: 0; border-radius: 999px; }
 .statusbar #status-update:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .statusbar #status-update .dot { background: var(--accent); animation: pulse 2s infinite; }
+.statusbar #status-hub-problem { background: var(--critical-wash); color: var(--critical-ink); font-weight: 600; padding: 2px 8px; margin: 0; border-radius: 999px; }
+.statusbar #status-hub-problem:hover { background: color-mix(in srgb, var(--critical) 18%, transparent); }
+.statusbar #status-hub-problem .dot { background: var(--critical); }
+/* a computer whose pushes don't get through: the Hub card's block */
+.hp-inline { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius); background: var(--critical-wash); box-shadow: inset 3px 0 0 var(--critical); }
+.hp-inline > b { color: var(--critical-ink); }
+.hp-body p { margin: 6px 0; overflow-wrap: anywhere; }
+.hp-join, .hp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.hp-join .hp-code { flex: 1 1 220px; min-width: 0; max-width: 360px; font-family: var(--mono); }
 .card.update-ready { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .card.flash { animation: upd-flash 1.6s ease-out; }
 @keyframes upd-flash { 0%, 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent); } }

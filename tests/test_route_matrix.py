@@ -232,6 +232,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/devices/share"): POST_HERE,
     ("POST", "/api/devices/hub-signin"): POST_HERE,
     ("POST", "/api/devices/leave-hub"): POST_HERE,
+    ("POST", "/api/devices/rejoin-hub"): POST_HERE.ok(400),
     ("POST", "/api/devices/projects/choices"): POST_HERE,
     ("POST", "/api/devices/projects/add"): POST_HERE,
     ("POST", "/api/devices/projects/remove"): POST_HERE,

@@ -30,12 +30,17 @@ def cmd_status(args) -> int:
     spent = conn.execute("SELECT COALESCE(SUM(cost_usd),0) FROM analyses").fetchone()[0]
     console.print(f"[bold]Interlatch[/] · home {cfg.home}")
     from ....sharing.identity import read_token
-    from ....sharing.push import last_push
+    from ....sharing.push import last_push, problem_text, send_problem
 
     if cfg.is_spoke:
         last = last_push(cfg)
         console.print(f"  sends {'what it learns' if cfg.shares_knowledge else 'its sessions'} to the hub at {cfg.hub_url}"
-                      f" (last push: {local_str(last['at']) + ' · ' + last['summary'] if last else 'never'})", highlight=False)
+                      f" (last push: {local_str(last['at']) + ' · ' + last['summary'] if last and last.get('at') else 'never'})",
+                      highlight=False)
+        if problem := send_problem(last):
+            headline, fix = problem_text(problem)
+            console.print(f"    [red]![/] {headline}: nothing sent since {local_str(problem['since'])} "
+                          f"({problem['attempts']} tries). {fix}", highlight=False)
     elif read_token(cfg):
         others = conn.execute("SELECT COUNT(*) FROM machines WHERE role = 'spoke'").fetchone()[0]
         console.print(f"  hub for {others} other computer{'s' * (others != 1)} (`interlatch hub status`)")

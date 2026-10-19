@@ -6259,6 +6259,50 @@ async function devicesPost(path, body) { // null when it failed, after saying wh
 }
 const notHere = () => t("Change this on the computer itself, not from another device.");
 
+// A computer whose pushes stopped getting through (devices.push_problem), in the Hub card: why, since when, and the
+// fix. A token the hub turned away takes a new invite, joined here; the rest resolve by themselves or on the hub.
+function hubProblemBody(pb, here) {
+  const host = hubHost(pb.hub);
+  const since = t("Nothing has reached {host} since {time} ({n} tries).", { host, time: fmtDT(pb.since), n: fmtNum(pb.attempts || 1) });
+  const lastOk = pb.last_ok ? t("Last sent {ago}.", { ago: ago(pb.last_ok) }) : t("Nothing was ever sent from here.");
+  if (pb.reason !== "token") {
+    const tryNow = h("button", { class: "btn small", type: "button", disabled: !here, title: here ? "" : notHere(), onclick: async () => {
+      tryNow.disabled = true;
+      const r = await devicesPost("/api/devices/push");
+      if (!r) { tryNow.disabled = false; return; }
+      toast(r.started ? t("Sending to the hub…") : t("Already sending"));
+      if (r.started) watchJob("push");
+    } }, t("Try now"));
+    return h("div", { class: "hp-body" },
+      h("p", null, since, " ", pb.reason === "unreachable"
+        ? t("Check the network and that the hub is running; sending resumes by itself.")
+        : t("The hub answered: {error}", { error: pb.error || "" })),
+      h("p", { class: "muted" }, lastOk), h("div", { class: "hp-actions" }, tryNow));
+  }
+  const code = h("input", { type: "text", class: "hp-code", autocomplete: "off", spellcheck: "false", disabled: !here,
+    placeholder: t("Invite code"), "aria-label": t("Invite code") });
+  const join = h("button", { class: "btn small primary", type: "submit", disabled: !here, title: here ? "" : notHere() }, t("Join again"));
+  const form = h("form", { class: "hp-join", onsubmit: async (e) => {
+    e.preventDefault();
+    if (!code.value.trim()) { code.focus(); return; }
+    join.disabled = true;
+    const r = await devicesPost("/api/devices/rejoin-hub", { code: code.value.trim() });
+    if (!r) { join.disabled = false; return; }
+    toast(t("Joined {host} again as {name}. Sending now…", { host, name: r.person?.name || "" }), 6000);
+    watchJob("push");
+    render();
+  } }, code, join);
+  return h("div", { class: "hp-body" },
+    h("p", null, since, " ", t("The hub turned this computer's token away, so nothing reaches it until this computer joins again.")),
+    h("p", null, tx("Ask the hub's admin for a new invite for this computer ({path}), then paste the code here.",
+      { path: h("b", null, [t("Team"), t("People"), t("New invite")].join(" › ")) })),
+    form, h("p", { class: "muted" }, lastOk, " ", t("Or in a terminal: {command}", { command: `interlatch hub join ${pb.hub || "<hub>"} --code <code>` })));
+}
+function hubProblemTitle(pb) {
+  return pb.reason === "token" ? t("The hub no longer accepts this computer")
+    : pb.reason === "unreachable" ? t("Can't reach the hub") : t("The hub refuses this computer's sends");
+}
+
 function spokeHubCard(dv) {
   const lp = dv.last_push, knowledge = dv.share === "knowledge", host = hubHost(dv.hub_url);
   const failed = !!lp?.errors?.length;
@@ -6275,18 +6319,21 @@ function spokeHubCard(dv) {
     if (await devicesPost("/api/devices/leave-hub")) { toast(t("This computer left the hub.")); render(); } else leave.disabled = false;
   } }, t("Leave the hub…"));
   const fact = (value, label) => h("div", { class: "fact" }, h("b", null, value), h("span", null, label));
-  const state = !lp ? h("span", { class: "badge" }, h("i", { class: "sdot" }), t("Nothing sent yet"))
+  const pb = dv.push_problem;
+  const state = pb ? h("span", { class: "badge critical" }, h("i", { class: "sdot" }), t("Not sending"))
+    : !lp?.at ? h("span", { class: "badge" }, h("i", { class: "sdot" }), t("Nothing sent yet"))
     : failed ? h("span", { class: "badge warning" }, h("i", { class: "sdot" }), t("Last send had problems"))
       : h("span", { class: "badge good" }, h("i", { class: "sdot" }), t("Connected"));
   return h("section", { class: "card hl-card" },
     cardHead(t("Hub"), { iconName: "organization", tools: state }),
     h("div", { class: "hl-name" }, h("b", null, dv.hub_name || host), dv.hub_name ? h("span", { class: "codeline" }, host) : null),
+    pb ? h("div", { class: "hp-inline", role: "alert" }, h("b", null, hubProblemTitle(pb)), hubProblemBody(pb, dv.here)) : null,
     lp && lp.sent != null ? h("div", { class: "hero-facts" },
       fact(ago(lp.at), knowledge ? t("last shared") : t("last sent")),
       fact(fmtNum(lp.sent + lp.unchanged), knowledge ? t("sessions shared") : t("files sent")),
       knowledge && lp.kept ? fact(fmtNum(lp.kept), t("kept here")) : null,
       knowledge ? fact(fmtNum(dv.team?.lessons || 0), t("teammates' lessons")) : null)
-      : lp ? h("div", { class: "muted hl-note" }, t("Last sent {ago}: {summary}", { ago: ago(lp.at), summary: lp.summary })) : null,
+      : lp?.at ? h("div", { class: "muted hl-note" }, t("Last sent {ago}: {summary}", { ago: ago(lp.at), summary: lp.summary })) : null,
     ...(lp?.errors || []).map((e) => h("div", { class: "warn-line" }, e)),
     knowledge ? h("p", { class: "muted hl-note" }, dv.team
       ? [t("Teammates' lessons are read-only here: your MCP tools answer with them, and the start-of-session notes list them as teammates'."), " ",
@@ -8445,6 +8492,7 @@ async function pollStatus() {
       : st.hub_url ? t("Sends its sessions to {host}", { host: st.hub_url.replace(/^https?:\/\//, "") })
       : st.last_sync ? t("Synced {ago}", { ago: ago(st.last_sync) }) : t("Not synced yet");
     $("#status-version").textContent = st.version ? `Interlatch ${st.version}` : "";
+    showHubProblem(st.hub_problem);
     showUpdate(st.update, st.version);
     pollUnseen();
     pollNews();
@@ -8558,6 +8606,15 @@ function drawActivity(st) {
       h("span", null, h("button", { class: "btn small", type: "button", onclick: () => { toggleActivity(false); go("#/status"); } }, t("Status")), " ",
         h("button", { class: "btn small primary admin-only", type: "button", disabled: running.some(([n]) => n === "sync"), onclick: syncNow }, t("Sync now")))),
   ].filter(Boolean));
+}
+// pushes to the hub not getting through: a chip in the status bar on every page, to Settings › Devices
+function showHubProblem(pb) {
+  const chip = $("#status-hub-problem");
+  if (!chip) return;
+  chip.hidden = !pb || dedicated();
+  if (chip.hidden) return;
+  chip.replaceChildren(h("span", { class: "dot" }), t("Not sending to the hub"));
+  chip.title = `${hubProblemTitle(pb)} · ${t("since {time}", { time: fmtDT(pb.since) })}`;
 }
 // an update on offer: a chip in the status bar, a dot on Settings, and once per update a notification card
 function showUpdate(u, version) {
@@ -8734,6 +8791,7 @@ $("#status-pill").title = t("Background work: click for progress");
 document.addEventListener("mousedown", (e) => { if (!$("#activity").hidden && !e.target.closest("#activity, #status-pill")) toggleActivity(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#activity").hidden) toggleActivity(false); });
 $("#status-update").addEventListener("click", () => go("#/status?focus=updates"));
+$("#status-hub-problem").addEventListener("click", () => go("#/devices"));
 $("#status-queue").addEventListener("click", openQueueDialog);
 $("#status-queue").setAttribute("aria-haspopup", "dialog");
 $("#status-queue").setAttribute("aria-expanded", "false");
