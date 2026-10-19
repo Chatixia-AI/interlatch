@@ -135,13 +135,13 @@ def cmd_hub(args) -> int:
         from ....sharing.membership import hub_of_another_profile
 
         if elsewhere := hub_of_another_profile(cfg, url):  # named profiles: one profile per hub
-            console.print(f"{elsewhere} already sends to the hub at {url}. A hub gets one profile's sessions: join it "
-                          f"from {elsewhere} only (`interlatch profile list`).", highlight=False)
+            console.print(f"This computer already sends to the hub at {url} as {elsewhere} (`interlatch hubs`). Each "
+                          "hub is joined once: connect your groups to that one instead.", highlight=False)
             return 1
         if cfg.profiles is not None or is_profile_home(cfg.home):
             if args.share == "everything":
-                console.print("With named profiles, every profile shares knowledge only (summaries and project "
-                              "lessons, never transcripts): join with --share knowledge.", highlight=False)
+                console.print("With several hubs, each shares knowledge only (summaries and project lessons, never "
+                              "transcripts): join with --share knowledge.", highlight=False)
                 return 1
             args.share = "knowledge"
         refresh = cfg.is_spoke  # the same hub: a new token for it, and everything else stays

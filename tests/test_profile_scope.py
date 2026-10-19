@@ -14,6 +14,7 @@ from interlatch.projects import scope as scope_mod
 from interlatch.storage.sqlite import connect
 
 from conftest import CWD, SID
+from hubs_fixture import hub_with
 
 MINE = "/Users/test/Projects/mine"
 MINE_SID = "mine-0000-1111-2222-333333333333"
@@ -66,7 +67,7 @@ def _plant(conn):
 def profiled(synced):
     cfg = synced["cfg"]
     _plant(synced["conn"])
-    p, _ = ops.create(cfg, "Acme", owns=[CWD])
+    p, _ = hub_with(cfg, "Acme", [CWD])
     synced.update(acme=p)
     return synced
 
@@ -114,7 +115,7 @@ def test_an_agent_in_a_profiles_folder_sees_only_that_profile(profiled, monkeypa
 def test_an_agent_in_a_waiting_folder_sees_nothing(profiled, monkeypatch):
     from interlatch.interfaces.mcp import WAITING_TEXT, _handle
 
-    ops.disown(profiled["cfg"], CWD)
+    ops.disconnect(profiled["cfg"], "Acme work")
     tools = _tools(profiled["cfg"], monkeypatch, CWD)
     assert tools.owner == WAITING
     text = _everything(tools)
@@ -133,7 +134,7 @@ def test_session_start_context_is_scoped(profiled):
     assert "PERSONAL_CANARY" in mine and "ACME_CANARY" not in mine
     acme = build_session_context(cfg, CWD) or ""
     assert "ACME_CANARY" in acme and "PERSONAL_CANARY" not in acme
-    ops.disown(cfg, CWD)
+    ops.disconnect(cfg, "Acme work")
     assert build_session_context(cfg, CWD) is None
 
 

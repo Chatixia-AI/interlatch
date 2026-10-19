@@ -1,23 +1,27 @@
-"""Named profiles: several Interlatches on one computer, each with its own hub (docs/profiles.md).
+"""Several hubs on one computer (docs/profiles.md): which hub each session belongs to.
 
-Personal, the default profile (~/.interlatch), records and analyzes every session from every agent, always. A named
-profile (Acme, Globex) owns some folders, and optionally the repositories whose git remote matches a pattern; it keeps
-a copy of only their sessions and shares them with its own hub. The registry, `profiles.toml` in Personal's folder,
-lists them; route() decides who owns a session, and each session reaches at most one hub.
+Personal (~/.interlatch) records and analyzes every session from every agent, always, and may send to a hub of its
+own. Each other hub is a "profile" here: a folder of its own (<Personal>/profiles/<id>: its [hub] link, token,
+computer identity, sharing state) that reads Personal's archive (core.config._as_profile). You connect your groups of
+projects (projects.groups) to it, and the folders they hold become what it owns (projects.hubgroups.derive). The
+registry, `profiles.toml` in Personal's folder, lists them; route() decides who owns a session, and each session
+reaches at most one hub.
 
+    held = ["/Users/me/work/acme/notes"]      # held waiting by the groups: a project picked out of a connected group
     [choices]                                 # your answers: they beat every other rule but a narrower owned folder
     "/Users/me/work/acme/oss" = "personal"
-    "/Users/me/clients/old" = "waiting"       # held until you choose (a removed profile's, a disowned folder)
+    "/Users/me/clients/old" = "waiting"       # held until you choose (a disconnected group's, a removed hub's)
 
     [profiles.p7k2m9qa]
     label = "Acme"
     home = "/Users/me/.interlatch/profiles/p7k2m9qa"
-    owns = ["/Users/me/work/acme"]
+    owns = ["/Users/me/work/acme"]            # its groups' folders and picked projects
     remotes = ["github.com/acme-corp/*"]
     port = 11525
+    groups = [3]
 
-Owners are "personal", a profile's id, or "waiting": a session whose owner is unclear (two profiles' rules match it)
-is recorded by Personal but shared with no hub and shown to no agent until you choose.
+Owners are "personal", a profile's id, or "waiting": a session whose owner is unclear (two hubs' rules match it, or a
+group let it go) is recorded by Personal but shared with no hub and shown to no agent until you choose.
 """
 
 from __future__ import annotations
@@ -47,6 +51,8 @@ class Profile:
     owns: list[str] = field(default_factory=list)
     remotes: list[str] = field(default_factory=list)
     port: int = FIRST_PORT
+    groups: list[int] = field(default_factory=list)  # the groups connected to this hub (projects.groups); owns follows
+    manual: list[str] = field(default_factory=list)  # folders given by hand (`interlatch profile create --owns`, 0.28.1)
 
 
 @dataclass
@@ -54,6 +60,7 @@ class Registry:
     path: Path  # Personal's profiles.toml
     profiles: dict[str, Profile] = field(default_factory=dict)
     choices: dict[str, str] = field(default_factory=dict)  # {folder: owner}, owner WAITING holds it
+    held: list[str] = field(default_factory=list)  # folders the groups hold waiting (projects.hubgroups.derive)
 
     @property
     def personal_home(self) -> Path:
@@ -78,6 +85,7 @@ class Registry:
     def folder_rules(self) -> list[tuple[str, str, bool]]:
         """(folder, owner, chosen) for every owned folder and every choice."""
         out = [(f, o, True) for f, o in self.choices.items()]
+        out += [(f, WAITING, True) for f in self.held if f not in self.choices]  # your own choice there wins
         for p in self.profiles.values():
             out += [(f, p.id, False) for f in p.owns]
         return out
@@ -135,7 +143,7 @@ def route(reg: Registry | None, folder: str | None, remote: str | None = None, *
        {remote: owners}); two profiles claiming it wait for you.
     4. default: Personal, chats with no folder included.
     """
-    if not reg or not (reg.profiles or reg.choices):  # held folders outlive the last profile
+    if not reg or not (reg.profiles or reg.choices or reg.held):  # held folders outlive the last profile
         return Route(PERSONAL, "default")
     if recorded and recorded != WAITING and (recorded == PERSONAL or recorded in reg.profiles):
         return Route(recorded, "recorded")
@@ -206,7 +214,7 @@ def _parse(path: Path) -> Registry:
     except (OSError, tomllib.TOMLDecodeError) as exc:
         # a registry that can't be read must never share as if there were no profiles: every folder waits
         raise RegistryError(f"{path} can't be read ({exc}). Fix it or remove it.") from exc
-    reg = Registry(path=path)
+    reg = Registry(path=path, held=_folders(data.get("held")))
     for f, owner in (data.get("choices") or {}).items():
         folder = _folders([f])
         if folder:
@@ -218,7 +226,10 @@ def _parse(path: Path) -> Registry:
                                     home=Path(str(raw.get("home") or path.parent / "profiles" / pid)).expanduser(),
                                     owns=_folders(raw.get("owns")),
                                     remotes=[str(r).strip().lower() for r in raw.get("remotes") or [] if str(r).strip()],
-                                    port=int(raw.get("port") or FIRST_PORT))
+                                    port=int(raw.get("port") or FIRST_PORT),
+                                    groups=[int(g) for g in raw.get("groups") or [] if isinstance(g, int)],
+                                    # 0.28.1 wrote no groups: the folders it owned were given by hand, and stay
+                                    manual=_folders(raw.get("manual") if "groups" in raw else raw.get("owns")))
     return reg
 
 
@@ -237,12 +248,14 @@ class RegistryError(RuntimeError):
 
 def save_registry(reg: Registry) -> None:
     """Write the registry whole, readable by this user only. Callers hold registry_lock()."""
-    lines = ["# Interlatch profiles: which folders and repositories each named profile owns.",
-             "# Change them with `interlatch profile ...`; docs/profiles.md explains each line.", "",
+    lines = ["# Interlatch's hubs besides Personal's, and which folders each one's groups hold (docs/profiles.md).",
+             "# Written by `interlatch group ...` and `interlatch hubs ...`; owns and held follow the groups.", "",
+             f"held = {_list(reg.held)}", "",
              "[choices]", *(f"{json.dumps(f)} = {json.dumps(o)}" for f, o in sorted(reg.choices.items()))]
     for p in reg.profiles.values():
         lines += ["", f"[profiles.{p.id}]", f"label = {json.dumps(p.label)}", f"home = {json.dumps(str(p.home))}",
-                  f"owns = {_list(p.owns)}", f"remotes = {_list(p.remotes)}", f"port = {int(p.port)}"]
+                  f"owns = {_list(p.owns)}", f"remotes = {_list(p.remotes)}", f"port = {int(p.port)}",
+                  f"groups = [{', '.join(str(int(g)) for g in p.groups)}]", f"manual = {_list(p.manual)}"]
     reg.path.parent.mkdir(parents=True, exist_ok=True)
     tmp = reg.path.with_suffix(".tmp")
     tmp.write_text("\n".join(lines) + "\n")

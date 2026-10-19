@@ -61,20 +61,20 @@ def _rerun_in_utf8_mode(argv: list[str]) -> int:
             continue
 
 
-# what a named profile does itself: its hub link, its sharing, its settings. Recording, analysis and the dashboard
-# are Personal's (a profile reads Personal's archive): run without --profile
-PROFILE_COMMANDS = frozenset({"hub", "push", "config"})
+# what another hub's folder does itself: its hub link, its sharing, its settings. Recording, analysis and the
+# dashboard are Personal's (that folder reads Personal's archive): run without --hub
+HUB_COMMANDS = frozenset({"hub", "push", "config"})
 
 
-def _use_profile(name: str, command: str | None) -> int:
-    """--profile: everything this command reads and writes is that profile's folder (INTERLATCH_HOME), as are the
-    commands it starts. Returns an exit code when there is no such profile, or the command is Personal's."""
+def _use_hub(name: str, command: str | None) -> int:
+    """--hub: everything this command reads and writes is that hub's folder (INTERLATCH_HOME), as are the commands it
+    starts. Returns an exit code when there is no such hub, or the command is Personal's."""
     from ...application.profiles import ProfileError, profile_home
     from ...core.profiles import PERSONAL, RegistryError
 
-    if name.strip().casefold() != PERSONAL and command not in PROFILE_COMMANDS:
-        print(f"`interlatch {command}` runs for Personal, which records and analyzes every profile's sessions: run it "
-              f"without --profile. With --profile: {', '.join(sorted(PROFILE_COMMANDS))}.", file=sys.stderr)
+    if name.strip().casefold() != PERSONAL and command not in HUB_COMMANDS:
+        print(f"`interlatch {command}` runs for Personal, which records and analyzes every hub's sessions: run it "
+              f"without --hub. With --hub: {', '.join(sorted(HUB_COMMANDS))}.", file=sys.stderr)
         return 2
 
     try:
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     plain_old_console()
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.profile and (code := _use_profile(args.profile, args.command)):
+    if args.hub_name and (code := _use_hub(args.hub_name, args.command)):
         return code
     if not args.command:
         from ...core.config import interlatch_home

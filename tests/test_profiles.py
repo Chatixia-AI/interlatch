@@ -19,6 +19,7 @@ from interlatch.sharing.push import push
 from interlatch.storage.sqlite import connect
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke
+from hubs_fixture import group, hub_with
 from test_team import teamenv  # noqa: F401  (the fixture)
 
 
@@ -162,7 +163,7 @@ def _owner(cfg, sid=SPOKE_SID):
 def test_a_profiles_folder_never_reaches_personals_hub(teamenv, monkeypatch):  # noqa: F811
     spoke, hub = teamenv["spoke"], teamenv["conn"]
     _analyzed_on_spoke(spoke, title="Acme work", at="2026-10-02T00:00:00Z", lessons=[("p-gotcha", "project", "gotcha")])
-    p, moved = ops.create(spoke, "Acme", owns=[SPOKE_CWD])
+    p, moved = hub_with(spoke, "Acme", [SPOKE_CWD])
     assert moved.sessions == {PERSONAL: 1} and moved.on_hub == 0 and _owner(spoke) == p.id
     sent = _bodies(monkeypatch)
     report = push(spoke)
@@ -170,8 +171,8 @@ def test_a_profiles_folder_never_reaches_personals_hub(teamenv, monkeypatch):  #
     assert hub.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 0
     assert sent and not any(SPOKE_CWD.encode() in b or b"demo-app" in b or b"Acme work" in b for b in sent)
 
-    # taken from Acme it waits: still no hub; chosen for Personal it goes
-    was, _ = ops.disown(spoke, SPOKE_CWD)
+    # its group disconnected, it waits: still no hub; chosen for Personal it goes
+    was, _ = ops.disconnect(spoke, "Acme work")
     assert was == "Acme" and _owner(spoke) == WAITING
     assert push(spoke).sent == 0
     ops.choose(spoke, SPOKE_CWD, "personal")
@@ -184,18 +185,20 @@ def test_moving_a_session_the_hub_has_asks_first(teamenv):  # noqa: F811
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Shared already", at="2026-10-02T00:00:00Z", lessons=[])
     assert push(spoke).sent == 1
+    ops.add_hub(spoke, "Acme")
+    gid = group(spoke, "Acme work", [SPOKE_CWD])
     with pytest.raises(ops.ProfileError, match="has 1 of the 1 sessions"):
-        ops.create(spoke, "Acme", owns=[SPOKE_CWD])
-    assert load_registry(spoke.home) is None and _owner(spoke) is None  # nothing changed
-    preview = ops.create(spoke, "Acme", owns=[SPOKE_CWD], dry_run=True)[1]
-    assert preview.on_hub == 1 and load_registry(spoke.home) is None
-    p, moved = ops.create(spoke, "Acme", owns=[SPOKE_CWD], leave_on_hub=True)
-    assert moved.on_hub == 1 and _owner(spoke) == p.id
+        ops.connect(spoke, gid, "Acme")
+    assert load_registry(spoke.home).find("Acme").owns == [] and _owner(spoke) == PERSONAL  # nothing changed
+    preview = ops.connect(spoke, gid, "Acme", dry_run=True)
+    assert preview.on_hub == 1 and load_registry(spoke.home).find("Acme").owns == []
+    moved = ops.connect(spoke, gid, "Acme", leave_on_hub=True)
+    assert moved.on_hub == 1 and _owner(spoke) == load_registry(spoke.home).find("Acme").id
 
 
 def test_new_sessions_are_given_their_owner_as_they_are_recorded(teamenv):  # noqa: F811
     spoke = teamenv["spoke"]
-    p, moved = ops.create(spoke, "Acme", owns=[SPOKE_CWD])
+    p, moved = hub_with(spoke, "Acme", [SPOKE_CWD])
     assert moved.sessions == {}  # nothing recorded yet
     _analyzed_on_spoke(spoke, title="New", at="2026-10-02T00:00:00Z", lessons=[])  # syncs it in
     assert _owner(spoke) == p.id
@@ -204,22 +207,22 @@ def test_new_sessions_are_given_their_owner_as_they_are_recorded(teamenv):  # no
 
 def test_with_profiles_transcripts_never_go(teamenv):  # noqa: F811
     spoke = teamenv["spoke"]
-    ops.create(spoke, "Acme", owns=["/nowhere/acme"])
+    hub_with(spoke, "Acme", ["/nowhere/acme"])
     set_config_value(spoke, "hub", "share", '"everything"')
     spoke = load_config(spoke.home)
     with pytest.raises(HubError, match="knowledge only"):
         push(spoke)
     with pytest.raises(ops.ProfileError, match="share knowledge"):
-        ops.create(spoke, "Globex", owns=["/nowhere/globex"])
+        ops.add_hub(spoke, "Globex")
 
 
 def test_one_profile_per_hub(teamenv):  # noqa: F811
     from interlatch.sharing.client import redeem_invite
 
     spoke = teamenv["spoke"]
-    p, _ = ops.create(spoke, "Acme", owns=["/nowhere/acme"])
+    p, _ = hub_with(spoke, "Acme", ["/nowhere/acme"])
     acme = load_config(p.home)
-    with pytest.raises(HubError, match="Personal already sends to the hub"):
+    with pytest.raises(HubError, match="already sends to the hub at .* as Personal"):
         redeem_invite(acme, teamenv["url"], "ABCD-EFGH-JKLM")
 
 
@@ -231,7 +234,7 @@ def test_a_profiles_folder_is_a_hub_link_of_personal(tmp_path):
     from interlatch.core.machine import local_machine_id
 
     cfg = load_config(tmp_path / "personal")
-    p, _ = ops.create(cfg, "Acme", owns=[str(tmp_path)])
+    p, _ = hub_with(cfg, "Acme", [str(tmp_path)])
     acme = load_config(p.home)
     assert p.home == cfg.home / "profiles" / p.id and acme.server_port == p.port == 11525
     assert acme.db_path == cfg.db_path and acme.archive_dir == cfg.archive_dir and acme.owner == p.id
@@ -240,19 +243,19 @@ def test_a_profiles_folder_is_a_hub_link_of_personal(tmp_path):
     raw = tomllib.loads((p.home / "config.toml").read_text())
     assert raw["sources"]["claude_dirs"] == [] and raw["sources"]["exclude_projects"] == ["*"]
     assert ops.is_profile_home(p.home) and not ops.is_profile_home(cfg.home)
-    with pytest.raises(ops.ProfileError, match="named profile's folder"):
-        ops.create(acme, "Nested")
-    with pytest.raises(ops.ProfileError, match="already belongs to Acme"):
-        ops.create(cfg, "Globex", owns=[str(tmp_path)])
-    with pytest.raises(ops.ProfileError, match="already a profile named"):
-        ops.create(cfg, "acme")
+    with pytest.raises(ops.ProfileError, match="another hub's folder"):
+        ops.add_hub(acme, "Nested")
+    with pytest.raises(ops.ProfileError, match="would belong to both Acme and Globex"):
+        hub_with(cfg, "Globex", [str(tmp_path)])
+    with pytest.raises(ops.ProfileError, match="already a hub named"):
+        ops.add_hub(cfg, "acme")
 
 
 def test_removing_a_profile_holds_its_folders(teamenv):  # noqa: F811
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Acme work", at="2026-10-02T00:00:00Z", lessons=[])
-    ops.create(spoke, "Acme", owns=[SPOKE_CWD])
-    p, _ = ops.remove(spoke, "Acme")
+    hub_with(spoke, "Acme", [SPOKE_CWD])
+    p, _ = ops.remove_hub(spoke, "Acme")
     assert _owner(spoke) == WAITING and load_registry(spoke.home).choices == {SPOKE_CWD: WAITING}
     assert p.home.is_dir()  # its data stays unless asked
     from interlatch.ingestion.service import sync
@@ -266,22 +269,30 @@ def test_removing_a_profile_holds_its_folders(teamenv):  # noqa: F811
     conn.close()
 
 
-def test_the_global_profile_option_runs_a_command_in_its_folder(tmp_path, monkeypatch, capsys):
+def test_the_commands_add_a_hub_connect_a_group_and_run_for_it(tmp_path, monkeypatch, capsys):
     from interlatch.interfaces.cli.main import main
 
     monkeypatch.setenv("INTERLATCH_HOME", str(tmp_path / "personal"))
-    assert main(["profile", "create", "Acme", "--owns", str(tmp_path)]) == 0
-    reg = load_registry(tmp_path / "personal")
-    p = reg.find("acme")
-    assert main(["--profile", "Acme", "config", "path"]) == 0
+    assert main(["hubs", "add", "Acme"]) == 0
+    assert main(["group", "create", "Client work", "--folder", str(tmp_path)]) == 0
+    assert main(["group", "connect", "Client work", "Acme"]) == 0
+    capsys.readouterr()
+    assert main(["group", "where", str(tmp_path / "x")]) == 0
+    assert "Acme" in capsys.readouterr().out
+    assert main(["hubs"]) == 0 and "group Client work" in capsys.readouterr().out
+    assert main(["group", "list"]) == 0 and "Client work → Acme" in capsys.readouterr().out
+    p = load_registry(tmp_path / "personal").find("acme")
+    assert main(["--hub", "Acme", "config", "path"]) == 0
     assert str(p.home) in capsys.readouterr().out
-    assert main(["--profile", "Nope", "push"]) == 1  # from inside Acme too: Personal's registry is found
-    assert "profiles: Acme" in capsys.readouterr().err
-    assert main(["--profile", "Acme", "sync"]) == 2  # recording is Personal's
+    assert main(["--hub", "Nope", "push"]) == 1  # from inside Acme too: Personal's registry is found
+    assert "hubs: Acme" in capsys.readouterr().err
+    assert main(["--hub", "Acme", "sync"]) == 2  # recording is Personal's
     assert "runs for Personal" in capsys.readouterr().err
     monkeypatch.setenv("INTERLATCH_HOME", str(tmp_path / "personal"))
-    assert main(["profile", "where", str(tmp_path / "x")]) == 0
-    assert "Acme" in capsys.readouterr().out
+    assert main(["group", "remove", "Client work"]) == 1  # connected: disconnect it first
+    assert main(["group", "disconnect", "Client work"]) == 0
+    assert main(["group", "where", str(tmp_path / "x")]) == 0
+    assert "Waiting" in capsys.readouterr().out
 
 
 def test_the_hello_names_no_folder_or_repository_a_profile_owns(tmp_path):
@@ -308,7 +319,7 @@ def test_the_hello_names_no_folder_or_repository_a_profile_owns(tmp_path):
         return json.dumps(client.hello_info(spoke, roots, repos=client.spoke_repos(spoke, roots), remotes={}))
 
     assert "acme-app" in hello()
-    ops.create(spoke, "Acme", remotes=["github.com/acme-corp/*"])  # by its remote alone
+    ops.add_hub(spoke, "Acme", remotes=["github.com/acme-corp/*"])  # by its remote alone
     sent = hello()
     assert "acme-app" not in sent and "acme-corp" not in sent and "/hub/acme" not in sent
     assert "own-app" in sent and "/hub/own" in sent
@@ -317,7 +328,7 @@ def test_the_hello_names_no_folder_or_repository_a_profile_owns(tmp_path):
 def test_a_broken_registry_stops_sharing_but_not_recording(teamenv):  # noqa: F811
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Before", at="2026-10-02T00:00:00Z", lessons=[])
-    ops.create(spoke, "Acme", owns=["/nowhere/acme"])
+    hub_with(spoke, "Acme", ["/nowhere/acme"])
     (spoke.home / "profiles.toml").write_text("[profiles.broken\n")
     with pytest.raises(HubError, match="nothing sent: .*profiles.toml can't be read"):
         push(spoke)

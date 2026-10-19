@@ -118,14 +118,24 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
         except (TypeError, ValueError):
             raise groups.GroupError("That group no longer exists.") from None
 
+    from ....application.profiles import ProfileError, change_groups
+
+    def changed(change):  # each hub's folders follow its groups; put back as they were when they can't (profiles.md)
+        return change_groups(ctx.cfg, change, leave_on_hub=body.get("leave_on_hub") is True)[0]
+
     try:
         if verb == "save":
             members = body.get("members")
-            new = groups.save(ctx.conn, gid(body.get("id")), str(body.get("name") or ""), body.get("folders") or [],
-                              [str(p) for p in members] if isinstance(members, list) else None)
+            new = changed(lambda c: groups.save(c, gid(body.get("id")), str(body.get("name") or ""),
+                                                body.get("folders") or [],
+                                                [str(p) for p in members] if isinstance(members, list) else None))
             return {"ok": True, "id": new}, 200
         if verb == "delete":
-            groups.delete(ctx.conn, gid(body.get("id")))
+            from ....projects.hubgroups import hub_of_group
+
+            if hub_of_group(ctx.cfg.profiles, gid(body.get("id"))):
+                return {"error": tr("This group is connected to a hub: disconnect it first.")}, 400
+            changed(lambda c: groups.delete(c, gid(body.get("id"))))
             return {"ok": True}, 200
         if verb == "share":  # shared as one project on the hub this computer sends to, from its next push
             project = str(body.get("hub_project") or "") or None
@@ -138,10 +148,12 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
         paths = body.get("paths")
         if not isinstance(paths, list) or not paths:
             return {"error": tr("Pick a project to move.")}, 400
-        groups.move(ctx.conn, [str(p) for p in paths], gid(body.get("group")))
+        changed(lambda c: groups.move(c, [str(p) for p in paths], gid(body.get("group"))))
         return {"ok": True}, 200
     except groups.GroupError as exc:
         return {"error": tr(str(exc))}, 400
+    except ProfileError as exc:  # the hubs couldn't follow: nothing changed
+        return {"error": str(exc)}, 409
 
 
 def project(ctx: Context, path: str, here: bool = False, limited: bool = False) -> dict | None:
