@@ -160,10 +160,11 @@ TOOLS = [
     },
 ]
 
-# a folder that waits for you to choose its profile (two could claim it, or its profile let it go): agents get
-# nothing from the archive until you do
-WAITING_TEXT = ("Interlatch shows nothing for this folder: it waits for you to choose which of your profiles it belongs "
-                "to (`interlatch profile waiting`, then `interlatch profile choose <folder> <profile|personal>`).")
+# a folder that waits for you to choose its hub (two could claim it, or its group let it go): agents get nothing
+# from the archive until you do
+WAITING_TEXT = ("Interlatch shows nothing for this folder: it waits for you to choose which of your hubs it belongs to "
+                "(`interlatch group waiting`, then `interlatch group choose <folder> <hub|personal>`, or put it in a "
+                "connected group).")
 
 
 class Tools:

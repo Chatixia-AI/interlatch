@@ -76,7 +76,7 @@ def hub_of_another_profile(cfg: Config, url: str) -> str | None:
     try:
         reg = load_registry(personal)
     except Exception:  # an unreadable registry: refuse rather than guess (RegistryError)
-        return "another profile (profiles.toml can't be read)"
+        return "another of its hubs (profiles.toml can't be read)"
     if not reg or not reg.profiles:
         return None
     for label, other in [("Personal", personal), *((p.label, p.home) for p in reg.profiles.values())]:

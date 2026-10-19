@@ -1,6 +1,7 @@
-"""Named profiles, as `interlatch profile` and (later) the dashboard change them: making one, moving folders in and
-out with their history, settling waiting folders, removing one (core.profiles has the rules, projects.owners the
-owner of each session).
+"""Several hubs on one computer (docs/profiles.md), as `interlatch hubs`, `interlatch group` and the dashboard change
+them: adding a hub, connecting your groups of projects to it (their history moves with them), settling waiting
+folders, removing a hub. core.profiles has the rules (a hub here is a "profile"), projects.hubgroups works out what
+each hub's groups hold, projects.owners records the owner of each session.
 
 Every change runs against Personal's folder, under the registry's lock, in this order: check, look at what Personal's
 hub already has of the sessions that move, write the registry, then record the new owners. A session never moves
@@ -18,7 +19,7 @@ from ..core.paths import clean_abs_path
 from ..core.profiles import (PERSONAL, WAITING, Profile, Registry, RegistryError, load_registry, registry_lock,
                              registry_path, route, save_registry)
 from ..projects import owners
-from ..storage.sqlite import connect
+from ..storage.sqlite import connect as open_db
 
 
 class ProfileError(RuntimeError):
@@ -29,6 +30,7 @@ class ProfileError(RuntimeError):
 class Moved:
     """What a change did, or (preview) would do."""
     sessions: dict[str, int] = field(default_factory=dict)  # {old owner: sessions} that move
+    to: dict[str, int] = field(default_factory=dict)  # {new owner: sessions}: where they go
     owner: str = ""  # where they go
     labels: dict[str, str] = field(default_factory=dict)  # {owner: name}, as the change leaves them (a new profile's too)
     on_hub: int = 0  # of them, how many Personal's hub has
@@ -37,10 +39,10 @@ class Moved:
 
 
 def personal_cfg(cfg: Config) -> Config:
-    """The config of Personal's folder, refusing to work from a named profile's."""
+    """The config of Personal's folder, refusing to work from another hub's."""
     if is_profile_home(cfg.home):
-        raise ProfileError("This is a named profile's folder. Profiles are changed from Personal: run the command "
-                           "without --profile.")
+        raise ProfileError("This is another hub's folder. Hubs and groups are changed from Personal: run the command "
+                           "without --hub.")
     return cfg
 
 
@@ -63,7 +65,7 @@ def find_profile(home: Path, key: str) -> Profile:
     p = reg.find(key) if reg else None
     if p is None:
         names = ", ".join(sorted(x.label for x in reg.profiles.values())) if reg and reg.profiles else "none yet"
-        raise ProfileError(f"No profile named {key!r} (profiles: {names}). `interlatch profile list` shows them.")
+        raise ProfileError(f"No hub named {key!r} (hubs: {names}). `interlatch hubs` lists them.")
     return p
 
 
@@ -82,8 +84,8 @@ def _folder(raw: str) -> str:
 def _check_share_mode(cfg: Config) -> None:
     if cfg.is_spoke and cfg.hub_share == "everything":
         raise ProfileError(f"This computer sends its transcripts to the hub at {cfg.hub_url}, which would send every "
-                           "profile's sessions there. Named profiles share knowledge only: run `interlatch config set "
-                           "hub.share knowledge` first.")
+                           "hub's sessions there. With several hubs, each shares knowledge only: run `interlatch config "
+                           "set hub.share knowledge` first.")
 
 
 def _hub_has(cfg: Config, ids: set[str]) -> tuple[int, bool]:
@@ -121,14 +123,17 @@ def _moving(conn, cfg: Config, before: Registry, after: Registry, folders: list[
 
 def _apply(cfg: Config, before: Registry, after: Registry, folders: list[str], *, leave_on_hub: bool, dry_run: bool,
            owner: str) -> Moved:
-    conn = connect(cfg.db_path)
+    conn = open_db(cfg.db_path)
     try:
         owners.ensure_table(conn)
         moves, old = _moving(conn, cfg, before, after, folders)
         leaving = {sid for sid, new in moves.items() if new != PERSONAL}  # what leaves Personal's hub's reach
         on_hub, checked = _hub_has(cfg, leaving) if leaving else (0, True)
-        result = Moved(sessions=old, owner=owner, on_hub=on_hub, hub=cfg.hub_url if cfg.is_spoke else "", checked=checked,
-                       labels={o: after.label(o) for o in {*old, owner}})
+        to: dict[str, int] = {}
+        for new in moves.values():
+            to[new] = to.get(new, 0) + 1
+        result = Moved(sessions=old, to=to, owner=owner, on_hub=on_hub, hub=cfg.hub_url if cfg.is_spoke else "",
+                       checked=checked, labels={o: after.label(o) for o in {*old, *to, owner} if o})
         if dry_run:
             return result
         if leaving and not leave_on_hub:
@@ -144,42 +149,163 @@ def _apply(cfg: Config, before: Registry, after: Registry, folders: list[str], *
         save_registry(after)
         for new in set(moves.values()):
             owners.move(conn, [sid for sid, o in moves.items() if o == new], new, folders[0] if folders else "")
-        owners.assign_all(conn, cfg, after if after.profiles or after.choices else None)
+        owners.assign_all(conn, cfg, after if after.profiles or after.choices or after.held else None)
         conn.commit()
         return result
     finally:
         conn.close()
 
 
-def create(cfg: Config, label: str, *, owns: list[str] = (), remotes: list[str] = (), leave_on_hub: bool = False,
-           dry_run: bool = False) -> tuple[Profile, Moved]:
-    """A new named profile with its own folder (<Personal>/profiles/<id>) and port, owning `owns` and the
-    repositories matching `remotes`. The sessions already recorded there move to it."""
+def add_hub(cfg: Config, label: str, *, remotes: list[str] = ()) -> Profile:
+    """Another hub for this computer: its own folder (<Personal>/profiles/<id>) with its token, computer identity and
+    port, which reads Personal's archive. It owns nothing until a group is connected to it (connect), or by
+    `remotes`, git remotes such as github.com/acme-corp/*. Join it with `interlatch --hub <name> hub join`."""
     personal_cfg(cfg)
     _check_share_mode(cfg)
     label = " ".join((label or "").split())
     if not label or label.casefold() in ("personal", "waiting"):
-        raise ProfileError("Give the profile a name of its own, such as Acme.")
-    folders = [_folder(f) for f in owns]
+        raise ProfileError("Give the hub a name of its own, such as Acme.")
     with registry_lock(cfg.home):
         before = _registry(cfg)
         if any(p.label.casefold() == label.casefold() for p in before.profiles.values()):
-            raise ProfileError(f"There is already a profile named {label}.")
-        for f in folders:
-            if (o := before.owner_of_folder(f)) is not None:
-                raise ProfileError(f"{f} already belongs to {before.label(o)}.")
-        after = Registry(path=before.path, profiles=dict(before.profiles), choices=dict(before.choices))
+            raise ProfileError(f"There is already a hub named {label}.")
+        after = _copy(before)
         pid = after.new_id()
-        p = Profile(id=pid, label=label, home=cfg.home / "profiles" / pid, owns=folders,
-                    remotes=[_remote(r) for r in remotes], port=after.next_port())
+        p = Profile(id=pid, label=label, home=cfg.home / "profiles" / pid, remotes=[_remote(r) for r in remotes],
+                    port=after.next_port())
         after.profiles[pid] = p
-        for f in folders:
-            after.choices.pop(f, None)  # owning it settles a choice made there
-        moved = _apply(cfg, before, after, folders + _remote_folders(cfg, p), leave_on_hub=leave_on_hub,
-                       dry_run=dry_run, owner=pid)
-        if not dry_run:
-            _make_home(p)
-    return p, moved
+        _apply(cfg, before, after, _remote_folders(cfg, p), leave_on_hub=False, dry_run=False, owner=pid)
+        _make_home(p)
+    return p
+
+
+def _group(conn, key) -> dict:
+    """A group by its name (any case) or id."""
+    from ..projects.groups import groups
+
+    gs = groups(conn)
+    hit = [g for g in gs if str(g["id"]) == str(key).strip() or g["name"].casefold() == str(key).strip().casefold()]
+    if len(hit) != 1:
+        names = ", ".join(g["name"] for g in gs) or "none yet"
+        raise ProfileError(f"No group named {key!r} (groups: {names}). `interlatch group list` shows them.")
+    return hit[0]
+
+
+def _derived(cfg: Config, reg: Registry) -> Registry:
+    from ..projects.hubgroups import derive
+
+    conn = open_db(cfg.db_path)
+    try:
+        return derive(conn, reg)
+    finally:
+        conn.close()
+
+
+def _check_overlap(after: Registry) -> None:
+    """Two hubs can't own the same folder: a group connected to each with the same folder rule, or project."""
+    seen: dict[str, str] = {}
+    for p in after.profiles.values():
+        for f in p.owns:
+            if f in seen and seen[f] != p.id:
+                raise ProfileError(f"{f} would belong to both {after.label(seen[f])} and {p.label}. Take it out of one "
+                                   "of their groups first.")
+            seen[f] = p.id
+
+
+def connect(cfg: Config, group_key, hub_key: str, *, leave_on_hub: bool = False, dry_run: bool = False) -> Moved:
+    """Connect a group to a hub: its folders and the projects picked into it go to that hub only, the sessions
+    recorded there so far included. A group is connected to one hub at a time."""
+    personal_cfg(cfg)
+    _check_share_mode(cfg)
+    conn = connect_db(cfg)
+    try:
+        g = _group(conn, group_key)
+    finally:
+        conn.close()
+    with registry_lock(cfg.home):
+        before = _registry(cfg)
+        p = before.find(hub_key)
+        if p is None:
+            raise ProfileError(f"No hub named {hub_key!r}. `interlatch hubs` lists them; `interlatch hubs add <name>` "
+                               "adds one.")
+        after = _copy(before)
+        for q in after.profiles.values():
+            if g["id"] in q.groups:
+                q.groups.remove(g["id"])
+        after.profiles[p.id].groups.append(g["id"])
+        after = _derived(cfg, after)
+        for f in after.profiles[p.id].owns:
+            after.choices.pop(f, None)  # connecting it settles a choice made there
+        _check_overlap(after)
+        return _apply(cfg, before, after, changed(before, after), leave_on_hub=leave_on_hub, dry_run=dry_run,
+                      owner=p.id)
+
+
+def disconnect(cfg: Config, group_key, *, dry_run: bool = False) -> tuple[str, Moved]:
+    """Disconnect a group from its hub. What it held waits for you to choose (never straight to Personal, so a
+    client's folder isn't shared with your Personal hub by mistake)."""
+    from ..projects.hubgroups import hub_of_group
+
+    personal_cfg(cfg)
+    conn = connect_db(cfg)
+    try:
+        g = _group(conn, group_key)
+    finally:
+        conn.close()
+    with registry_lock(cfg.home):
+        before = _registry(cfg)
+        p = hub_of_group(before, g["id"])
+        if p is None:
+            raise ProfileError(f"The group {g['name']} isn't connected to a hub.")
+        mine = _derived(cfg, _only(before, p.id, g["id"])).profiles[p.id].owns  # what this group gave the hub
+        after = _copy(before)
+        after.profiles[p.id].groups.remove(g["id"])
+        after = _derived(cfg, after)
+        for f in mine:
+            if not any(f in q.owns for q in after.profiles.values()):
+                after.choices[f] = WAITING
+        return p.label, _apply(cfg, before, after, changed(before, after), leave_on_hub=True, dry_run=dry_run,
+                               owner=WAITING)
+
+
+def _only(reg: Registry, pid: str, gid: int) -> Registry:
+    out = _copy(reg)
+    out.profiles = {pid: out.profiles[pid]}
+    out.profiles[pid].groups = [gid]
+    out.profiles[pid].manual = []
+    return out
+
+
+def sync(cfg: Config, *, leave_on_hub: bool = False, dry_run: bool = False) -> Moved:
+    """After a group changed (its folders, the projects in it, or it was removed): what each hub owns follows, the
+    sessions that change hands included. Raises ProfileError, changing nothing, when Personal's hub has some of the
+    sessions that would leave it."""
+    if cfg.owner != PERSONAL:
+        return Moved()
+    try:
+        before = load_registry(cfg.home)
+    except RegistryError as exc:
+        raise ProfileError(str(exc)) from None
+    if before is None or not before.profiles:
+        return Moved()
+    with registry_lock(cfg.home):
+        before = _registry(cfg)
+        after = _derived(cfg, before)
+        _check_overlap(after)
+        folders = changed(before, after)
+        if not folders and after.held == before.held:
+            return Moved()
+        return _apply(cfg, before, after, folders, leave_on_hub=leave_on_hub, dry_run=dry_run, owner="")
+
+
+def connect_db(cfg: Config):
+    return open_db(cfg.db_path)
+
+
+def changed(before: Registry, after: Registry) -> list[str]:
+    from ..projects.hubgroups import changed as diff
+
+    return diff(before, after)
 
 
 def _remote(pattern: str) -> str:
@@ -197,7 +323,7 @@ def _remote_folders(cfg: Config, p: Profile) -> list[str]:
         return []
     from ..core.profiles import remote_matches
 
-    conn = connect(cfg.db_path, readonly=True)
+    conn = open_db(cfg.db_path, readonly=True)
     try:
         import json
 
@@ -214,9 +340,9 @@ def _remote_folders(cfg: Config, p: Profile) -> list[str]:
 
 
 def _make_home(p: Profile) -> None:
-    """The profile's own folder: config, port and a fresh computer identity (made on first load). It reads no
-    agent's folder itself and, until it copies its sessions from Personal (docs/profiles.md), records nothing: an
-    older Interlatch run there records and sends nothing either (exclude_projects = ["*"])."""
+    """The hub's own folder: config, port and a fresh computer identity (made on first load). It reads Personal's
+    archive (core.config._as_profile); an older Interlatch run there records and sends nothing (exclude_projects =
+    ["*"], no agent folders)."""
     p.home.mkdir(parents=True, exist_ok=True)
     if os.name == "posix":
         p.home.chmod(0o700)
@@ -228,45 +354,8 @@ def _make_home(p: Profile) -> None:
     load_config(p.home).ensure_dirs()
 
 
-def own(cfg: Config, folder: str, key: str, *, leave_on_hub: bool = False, dry_run: bool = False) -> Moved:
-    """Move `folder` into profile `key`, its sessions recorded so far included."""
-    personal_cfg(cfg)
-    _check_share_mode(cfg)
-    folder = _folder(folder)
-    with registry_lock(cfg.home):
-        before = _registry(cfg)
-        p = before.find(key)
-        if p is None:
-            raise ProfileError(f"No profile named {key!r}. `interlatch profile list` shows them.")
-        if (o := before.owner_of_folder(folder)) is not None:
-            if o == p.id:
-                raise ProfileError(f"{folder} already belongs to {p.label}.")
-            raise ProfileError(f"{folder} belongs to {before.label(o)}. `interlatch profile disown {folder}` first.")
-        after = _copy(before)
-        after.profiles[p.id].owns.append(folder)
-        after.choices.pop(folder, None)
-        return _apply(cfg, before, after, [folder], leave_on_hub=leave_on_hub, dry_run=dry_run, owner=p.id)
-
-
-def disown(cfg: Config, folder: str, *, dry_run: bool = False) -> tuple[str, Moved]:
-    """Take `folder` from the profile that owns it. Its sessions wait for you to choose (never straight to Personal,
-    so a company folder isn't shared with your Personal hub by mistake)."""
-    personal_cfg(cfg)
-    folder = _folder(folder)
-    with registry_lock(cfg.home):
-        before = _registry(cfg)
-        o = before.owner_of_folder(folder)
-        if o is None:
-            raise ProfileError(f"No profile owns {folder} itself. `interlatch profile where {folder}` says what "
-                               "decides it.")
-        after = _copy(before)
-        after.profiles[o].owns.remove(folder)
-        after.choices[folder] = WAITING
-        return before.label(o), _apply(cfg, before, after, [folder], leave_on_hub=True, dry_run=dry_run, owner=WAITING)
-
-
 def choose(cfg: Config, folder: str, key: str, *, leave_on_hub: bool = False, dry_run: bool = False) -> Moved:
-    """Settle `folder` (a waiting one, or any other): its sessions belong to `key`, a profile or "personal"."""
+    """Settle `folder` (a waiting one, or any other): its sessions belong to `key`, a hub's name or "personal"."""
     personal_cfg(cfg)
     folder = _folder(folder)
     with registry_lock(cfg.home):
@@ -276,7 +365,7 @@ def choose(cfg: Config, folder: str, key: str, *, leave_on_hub: bool = False, dr
         else:
             p = before.find(key)
             if p is None:
-                raise ProfileError(f"No profile named {key!r}: choose one from `interlatch profile list`, or personal.")
+                raise ProfileError(f"No hub named {key!r}: choose one from `interlatch hubs`, or personal.")
             owner = p.id
             _check_share_mode(cfg)
         after = _copy(before)
@@ -284,9 +373,9 @@ def choose(cfg: Config, folder: str, key: str, *, leave_on_hub: bool = False, dr
         return _apply(cfg, before, after, [folder], leave_on_hub=leave_on_hub, dry_run=dry_run, owner=owner)
 
 
-def remove(cfg: Config, key: str, *, delete_data: bool = False) -> tuple[Profile, Moved]:
-    """Remove a profile from the registry. Its folders and sessions wait for you; its own folder stays unless
-    `delete_data`."""
+def remove_hub(cfg: Config, key: str, *, delete_data: bool = False) -> tuple[Profile, Moved]:
+    """Remove a hub from this computer. Its groups are no longer connected, and what they held waits for you; its own
+    folder (token, identity) stays unless `delete_data`. Leave the hub first (`interlatch --hub <name> hub leave`)."""
     import shutil
 
     personal_cfg(cfg)
@@ -294,11 +383,11 @@ def remove(cfg: Config, key: str, *, delete_data: bool = False) -> tuple[Profile
         before = _registry(cfg)
         p = before.find(key)
         if p is None:
-            raise ProfileError(f"No profile named {key!r}. `interlatch profile list` shows them.")
+            raise ProfileError(f"No hub named {key!r}. `interlatch hubs` lists them.")
         after = _copy(before)
         del after.profiles[p.id]
         held = list(p.owns)
-        conn = connect(cfg.db_path)
+        conn = open_db(cfg.db_path)
         try:  # the repositories it got by their remote, outside its folders: held as well
             owners.ensure_table(conn)
             held += [r[0] for r in conn.execute("SELECT DISTINCT folder FROM session_owner WHERE owner = ? "
@@ -317,16 +406,17 @@ def remove(cfg: Config, key: str, *, delete_data: bool = False) -> tuple[Profile
 
 
 def _copy(reg: Registry) -> Registry:
-    return Registry(path=reg.path, choices=dict(reg.choices),
+    return Registry(path=reg.path, choices=dict(reg.choices), held=list(reg.held),
                     profiles={k: Profile(id=v.id, label=v.label, home=v.home, owns=list(v.owns), remotes=list(v.remotes),
-                                         port=v.port) for k, v in reg.profiles.items()})
+                                         port=v.port, groups=list(v.groups), manual=list(v.manual))
+                              for k, v in reg.profiles.items()})
 
 
 def where(cfg: Config, folder: str):
     """(Route, registry) for a folder as a new session there would be routed."""
     folder = _folder(folder)
     reg = _registry(cfg)
-    conn = connect(cfg.db_path)
+    conn = open_db(cfg.db_path)
     try:
         _top, remote = owners.repo_of(conn, folder)
         known = owners.known_remotes(conn)
@@ -337,23 +427,28 @@ def where(cfg: Config, folder: str):
 
 
 def summary(cfg: Config) -> list[dict]:
-    """Personal and each named profile: label, id, folder, port, owned folders and patterns, sessions it owns."""
+    """Personal and each other hub: name, id, folder, port, its groups, the folders and patterns it owns, sessions it
+    owns, the address it sends to; then what waits."""
+    from ..projects.groups import groups
+
     reg = _registry(cfg)
     counts: dict[str, int] = {}
+    names: dict[int, str] = {}
     if cfg.db_path.exists():
-        conn = connect(cfg.db_path, readonly=True)
+        conn = open_db(cfg.db_path, readonly=True)
         try:
             counts = owners.counts(conn)
+            names = {g["id"]: g["name"] for g in groups(conn)}
         finally:
             conn.close()
     out = [{"id": PERSONAL, "label": "Personal", "home": str(cfg.home), "port": cfg.server_port, "owns": [],
-            "remotes": [], "sessions": counts.get(PERSONAL), "hub": cfg.hub_url if cfg.is_spoke else ""}]
+            "remotes": [], "groups": [], "sessions": counts.get(PERSONAL), "hub": cfg.hub_url if cfg.is_spoke else ""}]
     for p in reg.profiles.values():
         pcfg = load_config(p.home, create=False) if (p.home / "config.toml").exists() else None
         out.append({"id": p.id, "label": p.label, "home": str(p.home), "port": p.port, "owns": p.owns,
-                    "remotes": p.remotes, "sessions": counts.get(p.id, 0),
-                    "hub": pcfg.hub_url if pcfg and pcfg.is_spoke else ""})
-    out.append({"id": WAITING, "label": "Waiting", "sessions": counts.get(WAITING, 0),
+                    "remotes": p.remotes, "groups": [names.get(g, str(g)) for g in p.groups],
+                    "sessions": counts.get(p.id, 0), "hub": pcfg.hub_url if pcfg and pcfg.is_spoke else ""})
+    out.append({"id": WAITING, "label": "Waiting", "sessions": counts.get(WAITING, 0), "held": list(reg.held),
                 "choices": {f: reg.label(o) for f, o in reg.choices.items()}})
     return out
 
@@ -384,3 +479,28 @@ def joined(cfg: Config) -> list[Config]:
             if pcfg.is_spoke:
                 out.append(pcfg)
     return out
+
+
+def change_groups(cfg: Config, change, *, leave_on_hub: bool = False) -> tuple[object, Moved]:
+    """Run `change(conn)` (a projects.groups edit), then let each hub's folders follow (sync). If the hubs can't
+    follow (Personal's hub has sessions that would leave it, two hubs would own one folder), the groups are put back
+    as they were and ProfileError says why. Returns (what `change` returned, what moved)."""
+    conn = open_db(cfg.db_path)
+    try:
+        kept = ([tuple(r) for r in conn.execute("SELECT id, name, folders_json, created_at, hub_project FROM project_groups")],
+                [tuple(r) for r in conn.execute("SELECT project_path, group_id FROM project_group_picks")])
+        result = change(conn)
+        conn.commit()
+        try:
+            moved = sync(cfg, leave_on_hub=leave_on_hub)
+        except ProfileError:
+            conn.execute("DELETE FROM project_groups")
+            conn.execute("DELETE FROM project_group_picks")
+            conn.executemany("INSERT INTO project_groups(id, name, folders_json, created_at, hub_project) "
+                             "VALUES (?, ?, ?, ?, ?)", kept[0])
+            conn.executemany("INSERT INTO project_group_picks(project_path, group_id) VALUES (?, ?)", kept[1])
+            conn.commit()
+            raise
+        return result, moved
+    finally:
+        conn.close()

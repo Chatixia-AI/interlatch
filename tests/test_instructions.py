@@ -349,12 +349,14 @@ def test_with_profiles_the_user_level_file_gets_only_personals_lessons(archive):
         a.session(f"x{i}", p)
         _knowledge(conn, f"x{i}", p, title, body)
     conn.commit()
-    ops.create(cfg, "Acme", owns=paths[:2])
+    from hubs_fixture import group, hub_with
+
+    hub_with(cfg, "Acme", paths[:2])
     out = ins.candidates(conn, cfg)
     user = [c for c in out if c["project_path"] is None]
     assert user and all("ACME_CANARY" not in c["text"] for c in user)
 
-    ops.own(cfg, paths[2], "Acme")  # all three Acme's: no user-level line at all, a line in each project instead
+    ops.connect(cfg, group(cfg, "More", [paths[2]]), "Acme")  # all three Acme's: no user-level line, a line each
     out = ins.candidates(conn, cfg)
     assert [c for c in out if c["project_path"] is None] == []
     assert {c["project_path"] for c in out} == set(paths)

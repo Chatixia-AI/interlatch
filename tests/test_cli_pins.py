@@ -51,6 +51,8 @@ EXPECTED_COMMANDS = {
     "tailnet": [],
     "hub": [],
     "push": [],
+    "hubs": [],
+    "group": [],
     "profile": [],
     "container": [],
     "hook": [],
@@ -136,7 +138,7 @@ def test_cli_commands_and_aliases_pinned():
     commands = _snapshot(parser)["subcommands"]["commands"]
     assert {name: c["aliases"] for name, c in commands.items()} == EXPECTED_COMMANDS
     assert set(_subparsers(parser).choices) == set(EXPECTED_COMMANDS) | {a for v in EXPECTED_COMMANDS.values() for a in v}
-    assert {name for name, c in commands.items() if c["hidden"]} == {"hook", "ingest-session"}
+    assert {name for name, c in commands.items() if c["hidden"]} == {"hook", "ingest-session", "profile"}  # profile: 0.28.1's name, says where it went
 
 
 def test_every_command_has_a_handler():

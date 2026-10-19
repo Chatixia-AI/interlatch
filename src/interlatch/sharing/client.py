@@ -410,7 +410,7 @@ def redeem_invite(cfg: Config, url: str, code: str, client: HubClient | None = N
     if joined := other_hub(cfg, url):
         raise HubError(f"this computer sends to the hub at {joined}; leave it first (`interlatch hub leave`)")
     if elsewhere := hub_of_another_profile(cfg, url):
-        raise HubError(f"{elsewhere} already sends to the hub at {url}: a hub gets one profile's sessions")
+        raise HubError(f"this computer already sends to the hub at {url} as {elsewhere}: each hub is joined once")
     me = local_machine(cfg)
     client = client or HubClient(url, "")
     if read_token(cfg) and cfg.hub_url and same_hub(cfg.hub_url, client.url):

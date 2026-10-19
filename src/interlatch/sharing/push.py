@@ -82,8 +82,8 @@ def push(cfg: Config, *, progress=None, client: HubClient | None = None) -> Push
             if cfg.shares_knowledge:
                 return _push_knowledge(cfg, progress=progress, client=client)
             if cfg.profiles is not None:  # transcripts would carry every profile's sessions: never with profiles
-                raise HubError("named profiles share knowledge only, and this computer is set to send transcripts: run "
-                               "`interlatch config set hub.share knowledge`")
+                raise HubError("with several hubs, each shares knowledge only, and this computer is set to send "
+                               "transcripts: run `interlatch config set hub.share knowledge`")
             return _push_files(cfg, progress=progress, client=client)
 
 

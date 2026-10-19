@@ -417,7 +417,7 @@ class Config:
         from .profiles import load_registry
 
         reg = load_registry(self.archive_home or self.home)
-        return reg if reg and (reg.profiles or reg.choices) else None
+        return reg if reg and (reg.profiles or reg.choices or reg.held) else None
 
     @property
     def hub_filters(self) -> bool:

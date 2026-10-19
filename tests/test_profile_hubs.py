@@ -18,6 +18,7 @@ from interlatch.sharing.push import push
 from interlatch.storage.sqlite import connect
 
 from test_hub import SPOKE_CWD, SPOKE_SID, _analyzed_on_spoke, _serve
+from hubs_fixture import hub_with
 from test_team import teamenv  # noqa: F401  (the fixture)
 
 MINE, MINE_SID = "/home/test/code/mine", "mine-0000-1111-2222-333333333333"
@@ -46,7 +47,7 @@ def twohubs(teamenv, tmp_path):  # noqa: F811
     conn.execute(f"INSERT INTO sessions({', '.join(row)}) VALUES ({', '.join('?' for _ in row)})", list(row.values()))
     conn.commit()
     conn.close()
-    p, _ = ops.create(spoke, "Acme", owns=[SPOKE_CWD])
+    p, _ = hub_with(spoke, "Acme", [SPOKE_CWD])
     acme = load_config(p.home)
     set_config_value(acme, "hub", "url", json.dumps(url))
     set_config_value(acme, "hub", "all_folders", "true")  # hub B has no projects yet: share every folder Acme owns
