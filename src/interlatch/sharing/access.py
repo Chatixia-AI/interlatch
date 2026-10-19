@@ -6,7 +6,7 @@ Two layers, so one forgotten filter can't show another project:
 2. Data: the request's database connection gets TEMP views named like the tables they shadow (SQLite looks in the
    temp schema first), so every query an allowed endpoint makes sees only the person's projects (limit()):
    - sessions: theirs, analyzed, with only the columns a member's computer shares as knowledge (protocol.SHARED_COLS,
-     the analysis); prompts, paths, commands and prompt-made titles read as NULL
+     SHARED_ANALYSIS_COLS); prompts, paths, commands, prompt-made titles, mood and friction notes read as NULL
    - knowledge: project lessons from those sessions' analysis (never lessons about a person, never global ones)
    - project_kb: their projects' knowledge bases; api_calls: their sessions' token counts
    - hub_news: what computers sent to their projects (news.py), no computer joining
@@ -47,10 +47,10 @@ def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
 
 def limit(conn: sqlite3.Connection, projects: list[str]) -> None:
     """Shadow the tables on this connection with views of `projects` only (see the module docstring)."""
-    from .protocol import ANALYSIS_COLS, SHARED_COLS
+    from .protocol import SHARED_ANALYSIS_COLS, SHARED_COLS
 
     lit = ", ".join(_quote(p) for p in projects) or "NULL"  # views can't take parameters: quoted literals
-    visible = set(_ALWAYS) | set(SHARED_COLS) | (set(ANALYSIS_COLS) - {"analysis_json"})
+    visible = set(_ALWAYS) | set(SHARED_COLS) | set(SHARED_ANALYSIS_COLS)  # no mood or friction notes either
     cols = []
     for c in _columns(conn, "sessions"):
         if c == "title":
@@ -85,7 +85,7 @@ def session_page(s: dict) -> dict:
     """A session as a limited person sees it: what a member's computer shares as knowledge, nothing it ran on."""
     keep = {"id", "source", "agent", "title", "project_name", "project_path", "started_at", "ended_at", "duration_s",
             "active_s", "primary_model", "n_prompts", "n_tool_calls", "n_tool_errors", "n_subagents", "n_files",
-            "lines_added", "lines_removed", "total_tokens", "est_cost_usd", "outcome", "outcome_note", "sentiment",
+            "lines_added", "lines_removed", "total_tokens", "est_cost_usd", "outcome", "outcome_note",
             "summary", "goal", "analysis_status", "analyzed_at", "llm_title", "work_types", "tags", "highlights",
             "open_threads", "knowledge", "machine_name"}
     out = {k: v for k, v in s.items() if k in keep}

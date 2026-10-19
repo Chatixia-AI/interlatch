@@ -154,7 +154,8 @@ standalone Interlatch: it records its own sessions, analyzes them itself (with i
 Bob API key or model provider), and keeps its dashboard and MCP tools up to date. After each analysis it sends the hub only:
 
 - each analyzed session's details: when it ran, agent, model, branch, tokens and cost, which tools it used;
-- its analysis: title, summary, outcome, highlights and what went wrong;
+- its analysis: title, summary, goal, outcome, highlights, open threads and tags, with secrets redacted again on the
+  way out. Never its mood or what slowed it down (friction notes), nor the model's full reply;
 - the lessons it produced about the project.
 
 It does that only for sessions the hub files under one of its projects: those in a folder added with

@@ -11,6 +11,7 @@ import time
 
 from ..core.config import Config
 from ..core.machine import MACHINE_RE
+from ..core.redact import redact, redact_json
 from ..core.sessions import best_title
 from ..sharing.protocol import ANALYSES_FILE, ANALYSES_MAX_AGE, ANALYSIS_COLS, KNOWLEDGE_COLS, SESSION_ID_RE
 
@@ -49,6 +50,9 @@ def apply_analyses(cfg: Config, conn) -> int:
             if s["analysis_status"] in ("done", "running"):
                 continue  # the hub's own analysis wins
             values = {c: rec.get(c) for c in ANALYSIS_COLS}
+            if isinstance(values["llm_title"], str):  # stored redacted, as an analysis made here (an older spoke didn't)
+                values["llm_title"] = redact(values["llm_title"])
+            values["friction_json"] = redact_json(values["friction_json"])
             if values["analyzed_prompts"] and (s["n_prompts"] or 0) < values["analyzed_prompts"]:
                 values["analyzed_prompts"] = s["n_prompts"]  # counted by an older parser that saw replayed prompts twice
             if (s["n_prompts"] or 0) > (values["analyzed_prompts"] or 0):

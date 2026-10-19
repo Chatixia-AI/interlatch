@@ -21,6 +21,7 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -36,8 +37,24 @@ MAX_LESSONS = 2000  # sent to one computer per pull
 MAX_SOURCES = 50    # session ids per lesson sent with it (its confirmations)
 PING_AFTER_S = 60   # check an idle connection before using it again
 
+
+def _redact_shared_text(conn, s: str) -> None:
+    """Step 0002: titles (and, to be sure, summaries, goals and lessons) as computers used to send them, unredacted,
+    redacted again. A lesson keeps its key: the next time its session is shared it is filed under the redacted
+    title, and the old row goes once no session states it (put_sessions)."""
+    from ..core.redact import redact
+
+    for table, cols in (("sessions", ("title", "summary", "goal")), ("lessons", ("title", "body"))):
+        for row in conn.execute(f"SELECT id, {', '.join(cols)} FROM {s}.{table}").fetchall():
+            new = [redact(v) if isinstance(v, str) else v for v in row[1:]]
+            if new != list(row[1:]):
+                conn.execute(f"UPDATE {s}.{table} SET {', '.join(f'{c} = %s' for c in cols)} WHERE id = %s",
+                             (*new, row[0]))
+
+
 # Named upgrade steps: each runs once, in this order, recorded by name in <schema>.migrations. Append, never edit.
-STEPS: list[tuple[str, str]] = [
+# A step is SQL ({s}: the schema) or a function of (connection, schema).
+STEPS: list[tuple[str, str | Callable]] = [
     ("0001-team-tables", """
 CREATE TABLE {s}.computers (
     id uuid PRIMARY KEY,
@@ -102,6 +119,7 @@ CREATE TABLE {s}.audit (
     detail jsonb NOT NULL DEFAULT '{{}}'::jsonb
 );
 """),
+    ("0002-redact-shared-text", _redact_shared_text),
 ]
 
 SESSION_COLS = ("project", "project_name", "remote", "agent", "started_at", "ended_at", "title", "summary", "goal",
@@ -250,7 +268,10 @@ class TeamStore:
             for name, sql in STEPS:
                 if name not in done:
                     log.info("team store: upgrade step %s", name)
-                    conn.execute(sql.format(s=s))
+                    if callable(sql):
+                        sql(conn, s)
+                    else:
+                        conn.execute(sql.format(s=s))
                     conn.execute(f"INSERT INTO {s}.migrations(name) VALUES (%s)", (name,))
 
     # -------------------------------------------------------------- writes

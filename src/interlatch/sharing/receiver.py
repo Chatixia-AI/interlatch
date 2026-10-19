@@ -27,9 +27,10 @@ from . import news
 from .client import _walk
 from .identity import read_token
 from .projects import LEFT_KV, folders_report, hub_projects, left_of, refile
-from .protocol import (ANALYSES_FILE, ANALYSIS_COLS, KNOWLEDGE_COLS, MAX_ANALYSES_JSON, MAX_FILE_BYTES,
-                       MAX_SESSIONS_JSON, PROTOCOL, SESSION_ID_RE, SHARE_BATCH, SHARE_KV, SHARED_AGENTS, SHARED_COLS,
-                       HubError, UnknownInvite, clean_left, safe_rel)
+from .protocol import (ANALYSES_FILE, KNOWLEDGE_COLS, MAX_ANALYSES_JSON, MAX_FILE_BYTES, MAX_SESSIONS_JSON,
+                       PERSONAL_ANALYSIS_COLS, PROTOCOL, SESSION_ID_RE, SHARE_BATCH, SHARE_KV, SHARED_AGENTS,
+                       SHARED_ANALYSIS_COLS, SHARED_COLS, HubError, UnknownInvite, clean_left, safe_rel, shared_analysis,
+                       shared_lesson)
 from .push import _shared_records
 
 log = logging.getLogger("interlatch.hub")
@@ -362,15 +363,20 @@ def receive_sessions(cfg: Config, conn, params: dict, rfile, length: int, person
             refused += 1  # a person limited to projects: only what belongs to theirs is kept
             continue
         name = project_name_for(project)
-        row = {c: _cell(rec.get(c)) for c in SHARED_COLS + ANALYSIS_COLS}
+        # what is about the project only, its text redacted again: an older computer still sends its raw analysis,
+        # mood and friction notes, which are cleared (None), here and in what it stored before
+        row = {c: _cell(rec.get(c)) for c in SHARED_COLS + SHARED_ANALYSIS_COLS}
+        row.update(shared_analysis(row))
+        row.update(dict.fromkeys(PERSONAL_ANALYSIS_COLS))
         row.update(id=sid, source="remote", machine_id=machine_id, project_path=project, project_name=name,
                    machine_path=recorded if recorded != project else None, source_present=1, ingested_at=now,
-                   analysis_status="done", title=best_title({"llm_title": rec.get("llm_title")}),
+                   analysis_status="done", title=best_title({"llm_title": row["llm_title"]}),
                    ended_flag=1 if rec.get("ended_flag") else 0)
         # lessons about the project only: one about the person should not have been sent, and is not kept
-        lessons = [k for k in rec.get("knowledge") or [] if isinstance(k, dict) and k.get("title") and k.get("kind")
-                   and k.get("scope") == "project" and k.get("kind") != "preference"]
-        accepted.append((sid, {**rec, "knowledge": lessons}, row, remote))
+        lessons = [shared_lesson(k) for k in rec.get("knowledge") or [] if isinstance(k, dict) and k.get("title")
+                   and k.get("kind") and k.get("scope") == "project" and k.get("kind") != "preference"]
+        shared = {k: v for k, v in rec.items() if k not in PERSONAL_ANALYSIS_COLS}
+        accepted.append((sid, {**shared, **{c: row[c] for c in SHARED_ANALYSIS_COLS}, "knowledge": lessons}, row, remote))
     store = _store(cfg)
     if store and accepted:  # the team's record first: if it fails, nothing is kept and the computer sends it again
         from ..storage.team import payload
