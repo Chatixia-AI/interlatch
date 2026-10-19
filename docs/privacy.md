@@ -13,7 +13,7 @@ the second). If you connect Codex Cloud, each sync also runs the
 `codex cloud` CLI, which fetches your own tasks from OpenAI with your Codex login; nothing is sent the other way.
 If you sign in to the **Leaderboard** with Google (in Innerlatch, behind the door at the bottom of the dashboard's rail), each sync sends Interlatch's Firebase project your totals for the
 last 7, 30 and 90 days (active hours, sessions, tokens) with the name and picture you show: no email, project,
-prompt or title. Nothing is sent before you sign in, and `interlatch leaderboard leave` deletes your row.
+prompt or title. Nothing is sent before you sign in or while game mode is off, and `interlatch leaderboard leave` deletes your row.
 Signing in with Google for the [Party](party.md) page alone sends nothing: your characters are worked out on your
 computer, and only **Join the board** on the Leaderboard starts sending totals. Once signed in, the Party reads
 public job-market numbers (open roles per roadmap track) from Interlatch's Firebase project, at most every six hours.

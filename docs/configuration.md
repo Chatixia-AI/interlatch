@@ -85,6 +85,14 @@ Proposed fixes for what keeps going wrong ([Suggestions and What goes wrong](sug
 | `enabled` | `true` | refresh the suggestions after each background sync (no model is called). Nothing is written until you apply one; **Check again** and `interlatch suggest refresh` work either way |
 | `notify` | `false` | show a desktop notification when a background sync finds new suggestions |
 
+## `[game]`
+
+Game mode: Innerlatch, with the [Party](party.md), the Leaderboard and the Arena ([Getting there](party.md#getting-there)).
+
+| Key | Default | |
+| --- | --- | --- |
+| `enabled` | `false` | show the door to Innerlatch and serve its pages; off, its routes refuse and nothing is sent to the leaderboard. `interlatch install` asks once; **Settings › Appearance › Game mode** switches it. A config.toml from before it was optional has no key: the game is then on only where a Google sign-in for the Party or the leaderboard is kept. On a hub, it decides for everyone signed in to it |
+
 ## `[systems]`
 
 The [Systems map](dashboard.md#systems-map).

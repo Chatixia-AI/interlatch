@@ -258,6 +258,12 @@ def no_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)  # Linux apps' settings: under HOME, as above
 
 
+@pytest.fixture()
+def game_on(monkeypatch):
+    """Game mode on, as for someone who turned it on ([game] enabled is off by default): Innerlatch's own tests."""
+    monkeypatch.setattr("interlatch.core.config._game_enabled", lambda home, game: True)
+
+
 AGENT_MANAGERS = ("launchctl", "systemctl", "schtasks")
 
 

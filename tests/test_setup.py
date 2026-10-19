@@ -61,8 +61,9 @@ def test_install_asks_per_agent_and_connects_the_chosen(machine, monkeypatch, ca
     out = capsys.readouterr().out
     assert [q.split("?")[0] for q in asked] == ["Which one", "Record Claude Code sessions", "Record Codex sessions",
                                                  "Give Cursor Interlatch's MCP tools (search your past sessions)",
-                                                 "Analyze it now and show the progress"]
+                                                 "Turn on game mode", "Analyze it now and show the progress"]
     cfg = load_config(machine["home"])
+    assert not cfg.game_enabled  # opt-in: Enter says no
     assert hooks_installed(cfg).get("SessionEnd") and machine["mcp_calls"] == ["/opt/bin/chronicle"]
     assert cfg.codex_dirs == [] and not cfg.codex_cloud
     cursor = json.loads((machine["home_dir"] / ".cursor" / "mcp.json").read_text())
@@ -85,6 +86,7 @@ def test_yes_records_everything_found_but_codex_cloud(machine, monkeypatch, caps
     cfg = load_config(machine["home"])
     assert hooks_installed(cfg).get("SessionEnd") and cfg.codex_dirs and not cfg.codex_cloud
     assert (machine["home_dir"] / ".cursor" / "mcp.json").exists()
+    assert not cfg.game_enabled  # opt-in: never turned on without asking
     assert "imported" not in capsys.readouterr().out
 
 
@@ -96,6 +98,20 @@ def test_rerun_only_asks_about_new_agents(machine, monkeypatch, capsys):
     assert asked == []
     cfg = load_config(machine["home"])
     assert hooks_installed(cfg).get("SessionEnd") and cfg.codex_dirs
+
+
+def test_game_mode_is_asked_once_and_the_flag_sets_it(machine, monkeypatch, capsys):
+    _answer(monkeypatch, {"game mode": "y"})
+    assert _install("--no-sync") == 0
+    assert load_config(machine["home"]).game_enabled
+    assert "game mode on" in capsys.readouterr().out
+    asked = _answer(monkeypatch, {})
+    assert _install("--no-sync", "--no-game") == 0
+    assert not any("game mode" in q for q in asked) and not load_config(machine["home"]).game_enabled
+    assert _install("--no-sync") == 0  # answered before: not asked again, and left as it is
+    assert not any("game mode" in q for q in asked) and not load_config(machine["home"]).game_enabled
+    assert _install("--no-sync", "--game", "--dry-run") == 0
+    assert "would turn game mode on" in capsys.readouterr().out and not load_config(machine["home"]).game_enabled
 
 
 def test_dry_run_changes_nothing(machine, capsys):

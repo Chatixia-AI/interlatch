@@ -190,6 +190,12 @@ enabled = true
 # Show a desktop notification when new suggestions arrive.
 notify = false
 
+[game]
+# Game mode: Innerlatch, the door at the bottom of the dashboard's rail (the Party, study battles, the usage
+# leaderboard and the arena). Off: no door, no Innerlatch pages, nothing sent to the leaderboard. `interlatch install`
+# asks; Settings › Appearance switches it. On a hub, this decides for everyone signed in to it.
+enabled = false
+
 [systems]
 # The Systems map reads a few manifest files in each project folder (package.json, pyproject.toml, compose files,
 # Dockerfiles, Terraform, CI workflows, vite configs, .env.example, deploy configs), read-only and nothing else.
@@ -329,6 +335,7 @@ class Config:
     update_notify: bool = False
     suggestions_enabled: bool = True
     suggestions_notify: bool = False
+    game_enabled: bool = False
     systems_read_manifests: bool = True
     providers: dict[str, dict] = field(default_factory=dict)  # [providers.<name>]: see analysis/runners/settings.py
     loaded: tuple[int, int] | None = field(default=None, repr=False, compare=False)  # config.toml when read: current()
@@ -437,6 +444,14 @@ def _installed_bin(name: str, candidates: tuple[str, ...]) -> str | None:
     return next((str(p) for p in map(lambda c: Path(c).expanduser(), paths) if p.exists()), None)
 
 
+def _game_enabled(home: Path, game: dict) -> bool:
+    """[game] enabled; a config.toml from before game mode was optional has none, and there the game stays on for
+    someone who already played (a Google sign-in for the Party or the leaderboard is kept here)."""
+    if isinstance(game.get("enabled"), bool):
+        return game["enabled"]
+    return (home / "leaderboard.json").exists()
+
+
 def _section(data: dict, name: str) -> dict:
     value = data.get(name, {})
     return value if isinstance(value, dict) else {}
@@ -533,6 +548,7 @@ def load_config(home: Path | None = None, *, create: bool = True) -> Config:
         update_notify=bool(_section(data, "updates").get("notify", False)),
         suggestions_enabled=bool(_section(data, "suggestions").get("enabled", True)),
         suggestions_notify=bool(_section(data, "suggestions").get("notify", False)),
+        game_enabled=_game_enabled(home, _section(data, "game")),
         systems_read_manifests=bool(_section(data, "systems").get("read_manifests", True)),
         providers={str(k): v for k, v in _section(data, "providers").items() if isinstance(v, dict)},
         loaded=loaded,

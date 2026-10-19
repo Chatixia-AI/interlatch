@@ -1433,6 +1433,23 @@
       "type": null
      },
      {
+      "action": "BooleanOptionalAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "game",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--game",
+       "--no-game"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
       "action": "_StoreTrueAction",
       "choices": null,
       "const": true,

@@ -360,6 +360,7 @@ JA: dict[str, str] = {
     "you're not on this hub; ask an admin to add you": "あなたはこのハブに登録されていません。管理者に追加を頼んでください",
     "only an admin of this hub can do this": "これができるのはこのハブの管理者だけです",
     "the leaderboard is on the dashboard of your own computer": "リーダーボードは自分のコンピューターのダッシュボードで開けます",
+    "game mode is off: turn it on in Settings › Appearance": "ゲームモードはオフです。「設定 › 外観」でオンにしてください",
     # ---- the Party (party.py)
     "the Party opens on the dashboard of your own computer, or of a hub you're signed in to":
         "パーティーは自分のコンピューターのダッシュボードか、サインインしているハブのダッシュボードで開けます",

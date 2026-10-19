@@ -9,6 +9,12 @@ modules, with four milestones each. Chats imported from claude.ai or ChatGPT don
 
 ## Getting there
 
+Innerlatch is part of **game mode**, which is off until you turn it on: `interlatch install` asks once (*Turn on game
+mode?*, no unless you say yes), and **Settings › Appearance › Game mode** or `interlatch config set game.enabled true`
+switches it any time. Off, there is no door, Innerlatch's addresses say game mode is off, and nothing is sent to the
+leaderboard; what you played is kept for when you turn it back on. If you had signed in for the Party or the
+leaderboard before game mode was optional, it stays on. On a hub, its admins turn it on for everyone signed in to it.
+
 The Party lives in **Innerlatch**, an area of the dashboard of its own, drawn in violet. The door icon at the bottom of
 the rail brings up a large door: click it to go through. Innerlatch opens only to someone signed in (see below): signed
 out, the door is locked and asks you to sign in with Google, then opens by itself once you have. Once through, you stay
@@ -22,8 +28,7 @@ some projects.
 The Party's address is `#/innerlatch`; old `#/party` and `#/leaderboard` links still work, and every address in
 Innerlatch meets the door first. A lesson link anywhere in Innerlatch opens the lesson in a window over the page, with
 its roadmap modules and, for a case file, the scene, question and answer; **Open the session in Interlatch** leaves for
-the dashboard's session page. To hide the door icon, set **Settings › Appearance › The door** to **Hidden** (this
-browser only). Innerlatch still opens from its address.
+the dashboard's session page.
 
 ## Signing in
 

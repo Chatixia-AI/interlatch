@@ -237,6 +237,7 @@ def _analyze_now(cfg, console, ids: list[str], waiting: int, later: str) -> str:
 
 NOTIFY_ASKED_KEY = "update_notify_asked"  # kv: install asked about release notifications, so it asks only once
 MENU_BAR_ASKED_KEY = "menu_bar_asked"  # kv: install asked about the menu-bar icon, so it asks only once
+GAME_ASKED_KEY = "game_asked"  # kv: install asked about game mode, so it asks only once
 
 
 def _notify_choice(cfg, conn, args, *, ask, background_sync: bool) -> bool | None:
@@ -268,6 +269,19 @@ def _menu_bar_choice(cfg, conn, args, *, ask, login_dashboard: bool) -> bool | N
         return None
     return ask("Show Interlatch's icon in the menu bar? (what it's doing, a search and your recent sessions, a click "
                "away)", False)
+
+
+def _game_choice(cfg, conn, args, *, ask) -> bool | None:
+    """Turn game mode on or off (True/False), or leave the setting alone (None). It is opt-in: asked once, and not
+    when it is on already. Settings › Appearance switches it later."""
+    from ....storage.kv import kv_get
+
+    if args.game is not None:
+        return args.game
+    if ask is None or cfg.game_enabled or cfg.hub_dedicated or kv_get(conn, GAME_ASKED_KEY):
+        return None
+    return ask("Turn on game mode? (Innerlatch: your agents as a party, study battles from your own lessons, and a "
+               "usage leaderboard if you join it; Settings › Appearance switches it later)", False)
 
 
 def cmd_install(args) -> int:
@@ -310,6 +324,7 @@ def cmd_install(args) -> int:
                             background_sync=background_on and not args.no_launchd)
     menu_bar = _menu_bar_choice(cfg, conn, args, ask=_ask if interactive else None,
                                 login_dashboard=background_on and not args.no_ui)
+    game = _game_choice(cfg, conn, args, ask=_ask if interactive else None)
     if args.dry_run:
         console.print("Would record: " + (", ".join(picked) or "nothing") +
                       (f"; would add the MCP server to: {', '.join(mcp_clients)}" if mcp_clients else ""))
@@ -341,6 +356,8 @@ def cmd_install(args) -> int:
             actions.append(f"would turn release notifications {'on' if notify else 'off'}")
         if menu_bar is not None:
             actions.append(f"would turn the menu-bar icon {'on' if menu_bar else 'off'}")
+        if game is not None:
+            actions.append(f"would turn game mode {'on' if game else 'off'}")
         for a in actions:
             console.print(f"• {a}", highlight=False, soft_wrap=True)
         return 0
@@ -357,6 +374,12 @@ def cmd_install(args) -> int:
         kv_set(conn, MENU_BAR_ASKED_KEY, utcnow_iso())
         conn.commit()
         actions.append(_menu_bar_line(menu_bar))
+    if game is not None:
+        set_config_value(cfg, "game", "enabled", "true" if game else "false")
+        kv_set(conn, GAME_ASKED_KEY, utcnow_iso())
+        conn.commit()
+        actions.append("game mode on: the door at the bottom of the dashboard's rail (turn off in Settings › Appearance)"
+                       if game else "game mode off (turn on in Settings › Appearance)")
     for a in actions:
         console.print(f"• {a}", highlight=False, soft_wrap=True)
 
@@ -871,6 +894,9 @@ def add_install(sub) -> None:
     s.add_argument("--menu-bar", action=argparse.BooleanOptionalAction, default=None,
                    help="macOS: show Interlatch's icon in the menu bar while the dashboard runs at login (needs the "
                         "`app` extra); asked once when omitted, off by default")
+    s.add_argument("--game", action=argparse.BooleanOptionalAction, default=None,
+                   help="game mode: Innerlatch, the door at the bottom of the dashboard's rail; asked once when "
+                        "omitted, off by default")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(fn=cmd_install)
 

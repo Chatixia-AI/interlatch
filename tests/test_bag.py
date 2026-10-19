@@ -24,6 +24,8 @@ from test_party import ATTRS, BOB_PC, _lesson, _session, catalog, home  # noqa: 
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 SWORD = "g:M-python:weapon:1"  # craft's tier I weapon
 
 

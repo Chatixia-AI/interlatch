@@ -21,6 +21,8 @@ from test_party import ATTRS, BOB_PC, TEAMMATE_PC, _lesson, _session, catalog, h
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 LESSON_KEYS = {"id", "title", "kind", "stage", "agent", "at", "xp", "modules", "session_id", "project", "study", "friction"}
 
 

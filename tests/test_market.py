@@ -21,6 +21,8 @@ from test_party import _lesson, _sign_in, catalog  # noqa: F401  (catalog: the f
 from test_people_web import _as, hubweb, team  # noqa: F401  (the fixtures)
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 READ_LIVE = market.read_live  # the real read: conftest replaces it in every test with one that can't connect
 
 MARKET = {

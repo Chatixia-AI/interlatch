@@ -1488,6 +1488,7 @@ mark.qhit.on { background: var(--warning); color: #1a1a1a; box-shadow: 0 0 0 2px
 /* settings pages */
 .narrow-page { max-width: 760px !important; }
 .set-card { padding: 4px 18px; }
+.set-card + .set-card { margin-top: 16px; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; border-top: 1px solid var(--grid); }
 .set-row:first-child { border-top: 0; }
 .set-row b { font-weight: 600; }

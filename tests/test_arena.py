@@ -24,6 +24,8 @@ from test_party import _lesson, _session, catalog, home  # noqa: F401  (fixtures
 from test_people_web import TAILNET, hubweb  # noqa: F401
 from test_people_web import _call as _http
 
+pytestmark = pytest.mark.usefixtures("game_on")  # Innerlatch: game mode is off by default
+
 RULES = Path(__file__).resolve().parent.parent / "leaderboard" / "firestore.rules"
 WEEK = "2026-W42"
 

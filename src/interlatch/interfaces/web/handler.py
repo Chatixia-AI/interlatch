@@ -185,7 +185,8 @@ def make_handler(app: App, port: int):
             from ...sharing import people
 
             return {"viewer": {**people.public(self.viewer), "here": self._from_here()},
-                    "people_mode": people.has_people(app.conn), "can_admin": self._can_admin(), "hub": api.team.hub_info(ctx)}
+                    "people_mode": people.has_people(app.conn), "can_admin": self._can_admin(), "hub": api.team.hub_info(ctx),
+                    "game": ctx.cfg.game_enabled}
 
         def _address(self) -> str:
             """The hub's address as others reach it: [hub] address, or a guess from how this page was opened."""
@@ -483,8 +484,8 @@ def make_handler(app: App, port: int):
                         self.limited = True
                 route, m = routes.find(routes.GET, p)
                 if route:
-                    if not route.access.allows(self, ctx):
-                        return self._json({"error": tr(route.access.refusal)}, 403)
+                    if why := route.access.refused(self, ctx):
+                        return self._json({"error": tr(why)}, 403)
                     return route.answer(self, ctx, m, q)
                 if p.startswith("/api/"):
                     return self._json({"error": tr("not found")}, 404)
@@ -553,8 +554,8 @@ def make_handler(app: App, port: int):
                 return self._json({"error": tr("bad json")}, 400)
             try:
                 route, m = routes.find(routes.POST, p)
-                if not route.access.allows(self, ctx):
-                    return self._json({"error": tr(route.access.refusal)}, 403)
+                if why := route.access.refused(self, ctx):
+                    return self._json({"error": tr(why)}, 403)
                 scope = people.projects_of(self.viewer)
                 if scope is not None:
                     access.limit(app.conn, scope)
@@ -612,8 +613,8 @@ def make_handler(app: App, port: int):
                 route, m = routes.find(routes.POST, p)
                 if not route:
                     return self._json({"error": tr("not found")}, 404)
-                if not route.access.allows(self, ctx):
-                    return self._json({"error": tr(route.access.refusal)}, 403)
+                if why := route.access.refused(self, ctx):
+                    return self._json({"error": tr(why)}, 403)
                 return route.answer(self, ctx, m, body)
             except Exception as exc:
                 log.exception("POST %s failed", p)
