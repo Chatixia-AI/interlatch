@@ -372,3 +372,23 @@ def test_a_computer_that_shares_knowledge_keeps_doing_so_with_the_next_hub(tmp_p
     (old.home / "hub-token").unlink()
     assert main(["hub", "join", "https://hub-b.example.com", "--token", "token-of-b", "--no-push"]) == 0
     assert load_config(old.home).shares_knowledge
+
+
+def test_leaving_a_hub_whose_folders_were_written_as_their_own_section(tmp_path):
+    """[hub.folders] written by hand as a section of its own: setting hub.folders (as leaving does) replaces it
+    instead of failing on a table declared twice, so leaving never stops halfway."""
+    home = tmp_path / "home"
+    home.mkdir()
+    cfg = load_config(home)
+    set_config_value(cfg, "hub", "url", json.dumps(HUB_A))
+    set_config_value(cfg, "hub", "share", '"knowledge"')
+    set_config_value(cfg, "server", "port", "11599")
+    text = "\n".join(l for l in cfg.config_path.read_text().splitlines() if l.strip() != "folders = {}")
+    cfg.config_path.write_text(text + f'\n\n[hub.folders]\n"/home/test/code/a" = "{A_PROJECT}"\n')
+    cfg = load_config(home)
+    assert cfg.hub_folders == {"/home/test/code/a": A_PROJECT}
+    write_token(cfg, "a-token")
+    cfg = leave_hub(cfg)
+    assert cfg.hub_url == "" and cfg.hub_folders == {} and read_token(cfg) is None
+    assert cfg.hub_share == "knowledge" and cfg.server_port == 11599  # the rest of the file is untouched
+    assert "[hub.folders]" not in cfg.config_path.read_text()
