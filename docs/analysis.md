@@ -73,7 +73,8 @@ instance, have no cache split (so no cost estimate), Bob tasks have no per-call 
    `INTERLATCH_INTERNAL=1` makes Interlatch's own hooks inert for these runs. Switch in **Status › Analysis**, with
    `interlatch config set analysis.backend codex`, or for one run with `interlatch analyze --backend codex`.
 4. The JSON reply is validated leniently (with one repair pass) and stored. When a project gains
-   `min_new_items` new items, its knowledge base is re-synthesized; items that are outdated, contradicted or
+   `min_new_items` new items, its knowledge base is re-synthesized (or once a week, on the day you pick, with fewer, where you turned on
+   [weekly re-analysis](dashboard.md#project-groups) for it); items that are outdated, contradicted or
    duplicated get marked *superseded*, each naming the item that replaced it (pinned and memory items are never
    superseded). A duplicate also counts as a confirmation: see [how knowledge earns trust](#how-knowledge-earns-trust). Once every session of
    a finished week is analyzed, the model writes that week's review (a three-line TL;DR, themes, accomplishments,

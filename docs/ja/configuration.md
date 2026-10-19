@@ -62,6 +62,7 @@
 | キー | 既定値 | |
 | --- | --- | --- |
 | `synthesis.auto` / `model` / `min_new_items` | `true` / `sonnet` / `3` | 新しい項目がこの件数たまると、プロジェクトのナレッジベースを再構築する |
+| `synthesis.weekly_day` | `"mon"` | [毎週の再分析](dashboard.md#プロジェクトのグループ)を実行する曜日（`mon` … `sun`、このコンピューターのタイムゾーン）。**Settings › Re-analysis** で設定する |
 | `export.markdown` | `true` | すべてを Markdown 保管庫にミラーする |
 | `export.notes_dir` | `""` | 保管庫の場所（空の場合：`~/.interlatch/notes`） |
 | `server.host` / `port` | `127.0.0.1` / `11524` | ダッシュボード。このポートが使用中の場合、アプリは空いているポートを使います。11524 が既定になる前のインストールは `config.toml` に `port = 8765` を持ったままです。移すには `interlatch config set server.port 11524` を実行し、ダッシュボードを再起動して（`launchctl kickstart -k gui/$(id -u)/com.interlatch.ui`）。ハブとして送ってくるコンピューターでは、それぞれ `interlatch config set hub.url http://<hub>:11524` で新しいアドレスを設定します |

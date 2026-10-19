@@ -987,6 +987,7 @@ function navKey(path) {
   if (path.startsWith("/devices")) return "devices";
   if (path.startsWith("/appearance")) return "appearance";
   if (path.startsWith("/storage")) return "storage";
+  if (path.startsWith("/reanalysis")) return "reanalysis";
   if (path.startsWith("/search")) return "search";
   if (path.startsWith("/suggestions")) return "suggestions";
   if (path.startsWith("/friction")) return "friction";
@@ -3136,6 +3137,104 @@ function planCard(p, { title = t("Roadmap") } = {}) { // title: on a group's pag
       h("p", { class: "lo-foot" }, t("From the knowledge base, updated {ago}.", { ago: ago(p.kb.updated_at) }))] : null);
 }
 
+// A project's or group's weekly re-analysis (knowledge/weekly.py): the background sync refreshes it once a week, on the
+// day set in Settings › Re-analysis, and a week with nothing new costs no model call. A group's covers its projects'
+// knowledge bases and its Mindmap and Connections. Not shown where the hub analyzes this computer's sessions (st null).
+const reanDateFmt = new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric" });
+function weekdayName(i, style) { return new Intl.DateTimeFormat(LOCALE, { weekday: style }).format(new Date(2024, 0, 1 + i)); } // 2024-01-01: a Monday
+function reanalyzeNote(st) {
+  const said = { refreshed: t("refreshed"), unchanged: t("nothing new"), failed: t("failed") };
+  const next = st.next ? t("next {date}", { date: reanDateFmt.format(new Date(st.next)) }) : t("next at the next sync");
+  return !st.on ? t("off")
+    : !st.last_run ? (st.next ? t("first run {date}", { date: reanDateFmt.format(new Date(st.next)) }) : t("first runs at the next sync"))
+    : t("ran {ago} ({result}) · {next}", { ago: ago(st.last_run), result: said[st.result] || st.result || "", next });
+}
+// "Project" or "Group" as a colored tag, so a list that mixes them reads at a glance
+function kindTag(kind) {
+  const group = kind === "group";
+  return h("span", { class: `badge kind-tag kind-${group ? "group" : "project"}` }, icon(group ? "hubproject" : "projects"), group ? t("Group") : t("Project"));
+}
+function reanalyzeSwitch(kind, target, st) {
+  if (!st) return null;
+  const note = h("span", { class: "rean-note muted" });
+  const what = kind === "group"
+    ? t("Once a week, on the day set in Settings › Re-analysis, the background sync re-synthesizes this group's knowledge bases and checks its Mindmap and Connections links again, when something is new. A week with nothing new costs no model call.")
+    : t("Once a week, on the day set in Settings › Re-analysis, the background sync re-synthesizes this project's knowledge base and glossary, when it has new knowledge items. A week with nothing new costs no model call.");
+  const show = () => {
+    sw.setAttribute("aria-checked", String(!!st.on));
+    note.textContent = reanalyzeNote(st);
+    wrap.title = st.on && st.result === "failed" && st.detail?.error ? `${what}\n\n${st.detail.error}` : what;
+  };
+  const sw = h("button", { class: "switch", type: "button", role: "switch", "aria-label": t("Weekly re-analysis"), onclick: async () => {
+    sw.disabled = true;
+    try {
+      const r = await post("/api/reanalyze", { kind, target, on: !st.on });
+      if (r.error) toast(r.error);
+      else { st = r; show(); toast(st.on ? t("Weekly re-analysis on") : t("Weekly re-analysis off")); }
+    } catch (e) { if (!e.handled) toast(e.message); }
+    sw.disabled = false;
+  } });
+  const wrap = h("div", { class: "rean admin-only" }, sw, h("span", { class: "rean-text" }, h("b", null, t("Weekly re-analysis")), note));
+  show();
+  return wrap;
+}
+// Settings › Re-analysis: the day weekly re-analyses run ([synthesis] weekly_day), each project and group that has one
+// (off from here too), and a way to turn one on without opening its page
+route(/^\/reanalysis$/, async () => {
+  const r = await api("/api/reanalysis");
+  const row = (label, hint, control) => h("div", { class: "set-row" }, h("div", null, h("b", null, label), hint ? h("div", { class: "muted" }, hint) : null), control);
+  const head = h("div", { class: "page-head" }, h("div", null, h("h1", null, t("Re-analysis")),
+    h("div", { class: "sub" }, t("Projects and groups the background sync re-analyzes once a week, when something is new."))));
+  if (r.on_hub) return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, t("This computer sends its sessions to the hub, which analyzes them.")));
+  const turn = async (kind, target, on) => {
+    try {
+      const x = await post("/api/reanalyze", { kind, target, on });
+      if (x.error) { toast(x.error); return; }
+      toast(on ? t("Weekly re-analysis on") : t("Weekly re-analysis off"));
+      render();
+    } catch (e) { if (!e.handled) toast(e.message); }
+  };
+  const days = segControl(r.days.map((d, i) => [d, weekdayName(i, "short")]), r.day, async (v) => {
+    if (v === r.day) return;
+    try {
+      const x = await post("/api/reanalysis/day", { day: v });
+      if (x.error) { toast(x.error); return; }
+      toast(t("Weekly re-analyses now run on {day}.", { day: weekdayName(r.days.indexOf(v), "long") }));
+      render();
+    } catch (e) { if (!e.handled) toast(e.message); }
+  });
+  days.setAttribute("aria-label", t("Re-analysis day"));
+  const item = (it) => {
+    const href = it.kind === "group" ? `#/group?id=${it.target}` : `#/project?path=${encodeURIComponent(it.target)}`;
+    const sw = h("button", { class: "switch", type: "button", role: "switch", "aria-checked": "true", "aria-label": t("Weekly re-analysis of {name}", { name: it.name }),
+      onclick: () => { sw.disabled = true; turn(it.kind, it.target, false); } });
+    return h("div", { class: "set-row rean-item", title: it.result === "failed" && it.detail?.error ? it.detail.error : null },
+      h("div", null, h("div", { class: "rean-name" }, h("b", null, h("a", { href }, it.name)), kindTag(it.kind)),
+        h("div", { class: "muted" }, reanalyzeNote(it))), sw);
+  };
+  // a search box over the groups, then the projects most recently worked on: type part of a name or a folder
+  const pick = pickBox({ label: t("Project or group"), placeholder: t("Choose a project or group…"),
+    items: [...r.choices.groups.map((g) => ({ kind: "group", target: g.id, name: g.name, path: "" })),
+      ...r.choices.projects.map((p) => ({ kind: "project", target: p.path, name: p.name, path: p.path }))],
+    line: (x) => kindTag(x.kind) });
+  const add = h("button", { class: "btn", type: "button", onclick: () => {
+    const x = pick.value();
+    if (!x) { toast(t("Choose a project or group…")); pick.input.focus(); return; }
+    add.disabled = true;
+    turn(x.kind, x.target, true);
+  } }, t("Turn on"));
+  // Enter picks the highlighted match (pickBox); once picked, Enter turns it on
+  pick.input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.defaultPrevented && pick.value()) add.click(); });
+  return h("div", { class: "narrow-page" }, head, h("div", { class: "grid" },
+    h("section", { class: "card set-card" },
+      row(t("Day"), t("Weekly re-analyses run at the first background sync of this day, in this computer's time zone. A computer that is off or asleep all day catches up at its next sync."), days)),
+    h("section", { class: "card set-card" },
+      h("div", { class: "subhead" }, t("Re-analyzed weekly")),
+      r.items.length ? r.items.map(item)
+        : h("p", { class: "muted" }, t("Nothing yet. Turn it on here, or with the switch at the top of a project's or group's page.")),
+      r.choices.groups.length || r.choices.projects.length ? h("div", { class: "rean-add" }, pick.el, add) : null)));
+});
+
 route(/^\/project$/, async (params) => {
   const path = params.path || "";
   const token = renderSeq;
@@ -3206,7 +3305,7 @@ route(/^\/project$/, async (params) => {
     h("div", { class: "page-head" }, titled("folder", h("div", { class: "muted", style: { fontSize: "12.5px" } }, h("a", { href: "#/projects" }, t("Projects")), " / "),
       h("h1", null, p.label, p.shared ? [" ", sharedBadge()] : null, p.hub ? [" ", hubBadge(p)] : null), h("div", { class: "sub mono", style: { fontSize: "12px" } }, path, ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
       usage),
-      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map")), synth)),
+      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map")), reanalyzeSwitch("project", path, p.reanalyze), synth)),
     lead,
     h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
     Object.values(panes).filter(Boolean));
@@ -3539,7 +3638,7 @@ route(/^\/group$/, async (params) => {
       h("div", { class: "sub mono", style: { fontSize: "12px" } }, g.folders.map((f) => shortPath(f)).join(" · ") || tn(g.members.length, "{n} project", "{n} projects"),
         ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
       usage),
-      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/sessions?group=${g.id}` }, icon("sessions"), t("Sessions")), edit)),
+      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/sessions?group=${g.id}` }, icon("sessions"), t("Sessions")), reanalyzeSwitch("group", g.id, g.reanalyze), edit)),
     h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
     Object.values(panes).filter(Boolean));
 });
@@ -6365,7 +6464,8 @@ function pickBox({ items, label, placeholder, line, typed }) {
     list.replaceChildren(...matches.map((x, i) => h("li", { id: `${listId}-${i}`, role: "option", "aria-selected": "false", class: "sp-option",
       onmousedown: (e) => { e.preventDefault(); choose(x); } },
       x.typed ? [icon("projects"), h("span", null, tx("The folder {path}", { path: h("b", null, x.path) }))]
-        : [h("b", null, x.name), h("span", { class: "muted" }, ` ${line(x)}`), h("small", { class: "muted sp-opt-path" }, shortPath(x.path))])),
+        : [h("b", null, x.name), ((l) => (typeof l === "string" ? h("span", { class: "muted" }, ` ${l}`) : l))(line(x)),
+          h("small", { class: "muted sp-opt-path" }, shortPath(x.path))])),
       ...(q && !matches.length ? [h("li", { class: "sp-option muted", "aria-disabled": "true" }, typed ? t("Nothing matches. Type a folder, starting with / or ~.") : t("Nothing matches."))] : []));
     list.hidden = !matches.length && !q;
     input.setAttribute("aria-expanded", String(!list.hidden));
@@ -7879,9 +7979,9 @@ const SECTIONS = [
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings", reanalysis: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
-const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), appearance: t("Appearance") };
+const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 let shellRealm = false, realmReturn = "#/"; // in Innerlatch; the page its door leads back to
@@ -8107,6 +8207,7 @@ function settingsSidebar(box) {
       own ? sbRow("MCP", "#/mcp", "mcp", null, ["/mcp"]) : null,
       own ? sbRow(t("Devices"), "#/devices", "devices", null, ["/devices"]) : null,
       canAdmin() ? sbRow(t("Storage"), "#/storage", "data", null, ["/storage"]) : null, // a password: admins only
+      canAdmin() ? sbRow(t("Re-analysis"), "#/reanalysis", "calendar", null, ["/reanalysis"]) : null,
       sbRow(t("Appearance"), "#/appearance", "appearance", null, ["/appearance"])));
 }
 function teamSidebar(box) {
@@ -8261,7 +8362,7 @@ function paletteCommands() {
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
       : doorShown() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
-    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
+    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },

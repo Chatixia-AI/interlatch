@@ -161,6 +161,19 @@ def action_language(ctx: Context, lang: str) -> dict:
     return analysis_backends(ctx)
 
 
+def action_weekly_day(ctx: Context, day: str) -> dict:
+    """Settings › Re-analysis: [synthesis] weekly_day, the day weekly re-analyses run."""
+    from ....core.config import load_config, set_config_value
+    from ....knowledge.weekly import DAYS
+    from .projects import reanalysis
+
+    if day not in DAYS:
+        return {**reanalysis(ctx), "error": tr("not saved: {keys}", keys="weekly_day")}
+    set_config_value(ctx.cfg, "synthesis", "weekly_day", json.dumps(day))
+    ctx.cfg = load_config(ctx.cfg.home)
+    return reanalysis(ctx)
+
+
 def action_menu_bar(ctx: Context, on: bool) -> dict:
     """Status › Recording's switch: the macOS menu-bar icon on or off, adding the `app` extra when it is missing."""
     from ....core.config import load_config

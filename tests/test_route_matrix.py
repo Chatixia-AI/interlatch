@@ -111,6 +111,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/group/map"): SIGNED_IN.ok(404),
     ("GET", "/api/group/map.excalidraw"): SIGNED_IN.ok(404),
     ("GET", "/api/group/graph"): SIGNED_IN.ok(404),
+    ("GET", "/api/reanalysis"): ADMIN,
     ("GET", "/api/artifacts"): SIGNED_IN,
     ("GET", "/api/artifacts/{n}/open"): SIGNED_IN.ok(404),
     ("GET", "/api/artifacts/{n}/file"): SIGNED_IN.ok(404),
@@ -213,6 +214,8 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/connectors/{id}/connect"): POST_ADMIN,
     ("POST", "/api/connectors/{id}/disconnect"): POST_ADMIN,
     ("POST", "/api/group/graph/analyze"): POST_ADMIN.ok(404),  # no such group
+    ("POST", "/api/reanalyze"): POST_ADMIN.ok(404),  # no such group
+    ("POST", "/api/reanalysis/day"): POST_ADMIN,
     ("POST", "/api/map/themes"): POST_ADMIN,
     ("POST", "/api/glossary/rebuild"): POST_ADMIN,
     ("POST", "/api/review"): POST_ADMIN,
@@ -289,6 +292,7 @@ QUERY = {
 }
 BODY = {
     "/api/group/graph/analyze": {"id": 999999},
+    "/api/reanalyze": {"kind": "group", "target": 999999, "on": True},
     "/api/team-store/save": {"enabled": False},
     "/api/mirror/save": {"enabled": False},
     "/api/team/settings": {"name": "Matrix hub"},
