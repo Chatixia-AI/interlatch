@@ -4,6 +4,7 @@ nothing of a repository the hub has no project for. Every request body is checke
 
 import gzip
 import json
+import re
 import textwrap
 from pathlib import Path
 
@@ -286,7 +287,8 @@ def test_invite_codes_and_sign_in_links_are_redacted(text, leaked):
 
     out = redact(text)
     assert leaked not in out and "[REDACTED" in out
-    assert ("https://hub.example" in out) == ("https://hub.example" in text)  # the address stays: only the credential goes
+    hosts = re.compile(r"https://[\w.]+")
+    assert hosts.findall(out) == hosts.findall(text)  # the address stays: only the credential goes
 
 
 def test_redaction_keeps_placeholders_and_prose():
