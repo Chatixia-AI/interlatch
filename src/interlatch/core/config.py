@@ -608,13 +608,18 @@ def toml_table(d: dict[str, str]) -> str:
 def set_config_value(cfg: "Config", section: str, key: str, value: str) -> None:
     """Set `key = value` (value is a TOML literal) inside [section] of config.toml, keeping comments and layout.
 
-    Replaces an existing key (including a multi-line array), inserts into an existing section, or appends the
-    section. The result is validated before it is written, so a bad edit never corrupts the file.
+    Replaces an existing key (including a multi-line array, or a table written as its own [section.key] section),
+    inserts into an existing section, or appends the section. The result is validated before it is written, so a bad
+    edit never corrupts the file.
     """
     import re
 
     path = cfg.config_path
     lines = (path.read_text() if path.exists() else DEFAULT_CONFIG_TOML).splitlines()
+    sub = next((i for i, l in enumerate(lines) if l.strip() == f"[{section}.{key}]"), None)
+    if sub is not None:  # written by hand as a section of its own: the key = value below takes its place
+        sub_end = next((j for j in range(sub + 1, len(lines)) if lines[j].lstrip().startswith("[")), len(lines))
+        del lines[sub:sub_end]
     header = next((i for i, l in enumerate(lines) if l.strip() == f"[{section}]"), None)
     new_line = f"{key} = {value}"
     if header is None:
