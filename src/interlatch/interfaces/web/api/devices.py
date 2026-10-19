@@ -134,7 +134,8 @@ def action_hub_project(ctx: Context, verb: str, body: dict) -> tuple[dict, int]:
 
 
 def action_leave_hub(ctx: Context) -> dict:
-    """Settings › Devices › Leave the hub (`interlatch hub leave`)."""
+    """Settings › Devices › Leave the hub: the same as `interlatch hub leave` (client.leave_hub). What this computer
+    kept for the hub is put aside; joining that hub again from the command line offers to bring it back."""
     from ....sharing.client import leave_hub
 
     if not ctx.cfg.is_spoke:
@@ -149,7 +150,7 @@ def action_rejoin_hub(ctx: Context, body: dict) -> tuple[dict, int]:
     away (`interlatch hub join <its address> --code`), for the same hub and the same sharing; then a push."""
     from ....core.config import load_config, set_config_value
     from ....sharing.client import redeem_invite
-    from ....sharing.identity import write_token
+    from ....sharing.membership import keep_token
     from ....sharing.protocol import HubError
 
     if not ctx.cfg.is_spoke:
@@ -161,7 +162,7 @@ def action_rejoin_hub(ctx: Context, body: dict) -> tuple[dict, int]:
         got = redeem_invite(ctx.cfg, ctx.cfg.hub_url, code)
     except HubError as exc:
         return {"error": str(exc)}, 400
-    write_token(ctx.cfg, got["token"])
+    keep_token(ctx.cfg, ctx.cfg.hub_url, got["token"])
     if got.get("share") == "knowledge" and not ctx.cfg.shares_knowledge:  # what `hub join` does: this hub takes no more
         set_config_value(ctx.cfg, "hub", "share", json.dumps("knowledge"))
     ctx.cfg = load_config(ctx.cfg.home)

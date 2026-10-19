@@ -41,6 +41,10 @@ If your computer already sends to another hub, leave it first:
 interlatch hub leave
 ```
 
+`interlatch hub join` refuses a second hub until you do, before it contacts the new one: joining sends your
+computer's key, which is how a hub recognises it. Joining the hub you already send to again, with a new code, only
+gives your computer a new token there and keeps everything else.
+
 Then run, in a terminal, the `interlatch hub join …` command your admin sent you. It lists the projects you share:
 
 ```text
@@ -93,7 +97,10 @@ dashboard, where you see your projects.
 To stop sharing to one project, choose **Leave** next to it in **Settings › Devices** (or run `interlatch hub leave
 --project <name>`). What you shared there stays on the hub. Added the wrong folder? **Remove** next to it takes the
 folder back, and the hub deletes what your computer shared from it. To stop sending altogether, choose **Leave the
-hub…** (or run `interlatch hub leave`). What you already sent stays on the hub.
+hub…** (or run `interlatch hub leave`). What you already sent stays on the hub. Your teammates' lessons from it are
+removed from your computer, and the folders, left projects and shared groups you had for that hub are put aside in
+`~/.interlatch/hub-left/`: another hub you join later never gets them. If you join the same hub again, `interlatch hub
+join` asks whether to bring them back (`--restore` or `--no-restore` answers without asking).
 
 ## If something goes wrong
 
@@ -103,3 +110,7 @@ hub…** (or run `interlatch hub leave`). What you already sent stays on the hub
 - **"This computer is a hub itself".** Your computer is a hub that other computers may send to. Check with
   whoever set it up, then run `interlatch hub disable` before you join.
 - **A certificate error.** Your computer doesn't trust the hub's HTTPS certificate. Tell your admin.
+- **"This computer sends to the hub at …".** It is still in another hub. Run `interlatch hub leave` first, then join.
+- **The hub moved to a new address.** Run `interlatch hub set-url <new address>`: your computer keeps its token,
+  folders and groups, and sends to the new address from the next push. Only for the same hub: it sends your token and
+  your computer's key there.

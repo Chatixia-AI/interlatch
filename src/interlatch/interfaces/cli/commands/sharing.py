@@ -38,7 +38,9 @@ def cmd_hub(args) -> int:
     from ....ingestion.persistence import register_local
     from ....runtime.install import background_status, hooks_installed
     from ....sharing.client import dashboard_signin, leave_hub, redeem_invite
-    from ....sharing.identity import new_token, read_token, token_path, write_token
+    from ....sharing.identity import new_token, read_token, token_path
+    from ....sharing.membership import (clear_leftovers, drop_left_token, forget, hub_origin, keep_token, left_token,
+                                        other_hub, restore, stash_path, stashed)
     from ....sharing.projects import machines
     from ....sharing.protocol import HubError, join_command
     from ....sharing.pull import last_team
@@ -53,6 +55,9 @@ def cmd_hub(args) -> int:
             console.print(f"This computer sends its sessions to the hub at {cfg.hub_url}. Run `interlatch hub leave` "
                           "first to make it a hub itself.", highlight=False)
             return 1
+        if left_token(cfg):  # the token of a hub it sent to, still on file: no hub's own, never handed out
+            drop_left_token(cfg)
+            console.print("The token on file here was the one this computer sent to a hub with; making a new one.")
         token = read_token(cfg)
         if not token or args.rotate:
             token = new_token(cfg)
@@ -103,12 +108,31 @@ def cmd_hub(args) -> int:
             console.print("Usage: interlatch hub join <hub address> --code <invite code> (from the hub's admin), or "
                           "--token <token> (the hub's `interlatch hub enable` prints the whole command).")
             return 2
-        if read_token(cfg) and not cfg.is_spoke:
-            console.print("This computer is a hub itself (`interlatch hub disable` first).")
-            return 1
         url = args.url.rstrip("/")
         if "://" not in url:
             url = f"https://{url}"
+        try:
+            hub_origin(url)
+        except HubError as exc:
+            console.print(f"Can't join: {exc}", highlight=False)
+            return 2
+        if joined := other_hub(cfg, url):  # before anything goes out: joining sends this computer's key
+            console.print(f"This computer sends to the hub at {joined}. To send to {url} instead, leave that hub "
+                          "first (`interlatch hub leave`), then join again. If it is the same hub at a new address, "
+                          f"`interlatch hub set-url {url}` keeps everything as it is.", highlight=False)
+            return 1
+        refresh = cfg.is_spoke  # the same hub: a new token for it, and everything else stays
+        if refresh:
+            url = cfg.hub_url  # as it was spelled
+        if not refresh and read_token(cfg):
+            if not left_token(cfg):
+                console.print("This computer is a hub itself (`interlatch hub disable` first).")
+                return 1
+            drop_left_token(cfg)  # a token it sent to a hub with, still on file
+        kept = None if refresh else stashed(cfg, url)
+        bring_back = _bring_back(console, kept, args.restore) if kept else False
+        if args.restore and not kept and not refresh:
+            console.print("Nothing was kept from this hub to bring back.")
         token = args.token
         if args.code:
             try:
@@ -132,11 +156,19 @@ def cmd_hub(args) -> int:
                 console.print(f"Projects you share with it: [bold]{names}[/]. Add your folder for each one: "
                               "`interlatch hub add-folder <folder> --project <name>`; sessions elsewhere stay here.",
                               highlight=False)
-        write_token(cfg, token)
-        set_config_value(cfg, "hub", "url", json.dumps(url))
+        if not refresh:  # nothing of a hub joined before goes to this one, unless it is this one and you said so
+            if earlier := clear_leftovers(cfg):
+                console.print(f"Folders and groups left here from a hub this computer joined before were cleared, so "
+                              f"they don't go to this one (kept in {earlier}).", highlight=False)
+            if bring_back:
+                restore(cfg, kept, share=args.share, all_folders=args.all_folders)
+                forget(cfg, url)
+        set_config_value(cfg, "hub", "url", json.dumps(url))  # the address first: a token alone makes a hub
+        keep_token(cfg, url, token)
         if args.share:
             set_config_value(cfg, "hub", "share", json.dumps(args.share))
-        set_config_value(cfg, "hub", "all_folders", "true" if args.all_folders else "false")
+        if not bring_back:
+            set_config_value(cfg, "hub", "all_folders", "true" if args.all_folders else "false")
         from ....core.config import load_config
 
         cfg = load_config(cfg.home)
@@ -183,8 +215,14 @@ def cmd_hub(args) -> int:
             return 0
         leave_hub(cfg)
         console.print(f"Left the hub at {cfg.hub_url}. This computer records and analyzes its own sessions again; "
-                      "the hub keeps what it was sent.", highlight=False)
+                      "the hub keeps what it was sent. Its teammates' lessons from that hub are removed here, and the "
+                      "folders, left projects and shared groups it had for that hub are put aside "
+                      f"({stash_path(cfg, cfg.hub_url)}): joining that hub again offers to bring them back; another hub "
+                      "never gets them.", highlight=False)
         return 0
+
+    if action == "set-url":
+        return _hub_set_url(cfg, console, args)
 
     if action == "disable":
         if cfg.is_spoke or not read_token(cfg):
@@ -872,15 +910,82 @@ def _hub_folders(cfg, console, args) -> int:
     return code
 
 
+def _bring_back(console, kept: dict, restore: bool | None) -> bool:
+    """Whether a join brings back what this computer kept for the hub when it left it: --restore or --no-restore,
+    else asked in a terminal, else not."""
+    what = (f"{len(kept.get('folders') or {})} folder(s), {len(kept.get('left') or [])} project(s) left, "
+            f"{len(kept.get('groups') or [])} shared group(s)")
+    if restore is not None:
+        if restore:
+            console.print(f"Bringing back what this computer had for this hub when it left: {what}.", highlight=False)
+        return restore
+    if not sys.stdin.isatty():
+        console.print(f"This computer left this hub before with {what}; they are not brought back (join with "
+                      "--restore to bring them back).", highlight=False)
+        return False
+    try:
+        answer = input(f"This computer left this hub before with {what}. Bring them back? [y/N] ")
+    except EOFError:
+        answer = ""
+    return answer.strip().lower() in ("y", "yes")
+
+
+def _hub_set_url(cfg, console, args) -> int:
+    """`interlatch hub set-url <address>`: the hub this computer joined moved to a new address."""
+    from ....sharing.client import move_hub
+    from ....sharing.membership import hub_origin, same_hub
+    from ....sharing.protocol import HubError
+
+    if not cfg.is_spoke:
+        console.print("This computer has not joined a hub.")
+        return 1
+    if not args.url:
+        console.print("Usage: interlatch hub set-url <the hub's new address> (only for the same hub at a new address)")
+        return 2
+    url = args.url.rstrip("/")
+    if "://" not in url:
+        url = f"https://{url}"
+    try:
+        hub_origin(url)
+    except HubError as exc:
+        console.print(f"Can't change the address: {exc}", highlight=False)
+        return 2
+    if same_hub(cfg.hub_url, url):
+        console.print(f"This computer already sends to the hub at {cfg.hub_url}.", highlight=False)
+        return 0
+    console.print(f"Only for the same hub at a new address: from the next push, this computer sends its token, its key "
+                  f"and what it shares to {url} instead of {cfg.hub_url}. For a different hub, `interlatch hub leave` "
+                  "first, then `interlatch hub join`.", highlight=False)
+    if not args.yes:
+        if not sys.stdin.isatty():
+            console.print("Nothing changed: run it in a terminal, or add --yes.")
+            return 1
+        try:
+            answer = input("Is it the same hub? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() not in ("y", "yes"):
+            console.print("Nothing changed.")
+            return 1
+    try:
+        move_hub(cfg, url)
+    except HubError as exc:
+        console.print(f"Can't change the address: {exc}", highlight=False)
+        return 1
+    console.print(f"This computer now sends to the hub at {url}; its token, folders and everything else stay. "
+                  "`interlatch push` sends now.", highlight=False)
+    return 0
+
+
 def add_hub(sub) -> None:
     s = sub.add_parser("hub", help="one archive for several computers: this one records them all (enable), "
                                    "or sends its sessions to one that does (join)")
     s.add_argument("action", nargs="?", choices=["status", "enable", "join", "leave", "disable", "folders", "add-folder",
                                                  "remove-folder", "store", "people", "invite", "role", "access",
-                                                 "remove", "shared-token", "signin", "project", "purge", "rejoin"],
+                                                 "remove", "shared-token", "signin", "project", "purge", "rejoin", "set-url"],
                    default="status")
     s.add_argument("url", nargs="?", metavar="address|folder|name|email",
-                   help="with join: the hub's address; with add-folder and remove-folder: a folder on this computer; "
+                   help="with join and set-url: the hub's address; with add-folder and remove-folder: a folder on this computer; "
                         "with invite: the person's name; with role, access and remove: their email or id; with "
                         "shared-token: on or off; with project: add, remove or list")
     s.add_argument("value", nargs="?", metavar="role|folder",
@@ -909,7 +1014,13 @@ def add_hub(sub) -> None:
                         "the hub's projects and repositories it knows")
     s.add_argument("--outside-access", action="store_true",
                    help="with purge: remove what the person's computers sent outside the projects they see now")
-    s.add_argument("--yes", action="store_true", help="with purge: don't ask before removing")
+    s.add_argument("--yes", action="store_true",
+                   help="with purge: don't ask before removing; with set-url: don't ask whether it is the same hub")
+    s.add_argument("--restore", dest="restore", action="store_true", default=None,
+                   help="with join: bring back the folders, left projects and shared groups this computer had for "
+                        "this hub when it left it (in a terminal, join asks)")
+    s.add_argument("--no-restore", dest="restore", action="store_false", default=None,
+                   help="with join: start afresh with this hub, whatever this computer had for it before")
     s.add_argument("--list", action="store_true", help="with folders: list the hub's projects")
     s.add_argument("--no-push", action="store_true",
                    help="with join, add-folder, remove-folder, leave --project, rejoin: don't send anything to the hub yet")

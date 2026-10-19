@@ -6435,7 +6435,7 @@ function spokeHubCard(dv) {
     if (r.started) watchJob("push");
   } }, knowledge ? t("Share now") : t("Send now"));
   const leave = h("button", { class: "btn small danger", type: "button", disabled: !dv.here, title: dv.here ? "" : notHere(), onclick: async () => {
-    if (!confirm(t("Leave the hub at {host}? This computer stops sending to it, and records and analyzes its own sessions again. The hub keeps what it was sent. Joining again takes a new invite.", { host }))) return;
+    if (!confirm(t("Leave the hub at {host}? This computer stops sending to it, and records and analyzes its own sessions again. The hub keeps what it was sent. Teammates' lessons from it are removed here, and its folders and shared groups are put aside: joining this hub again from the command line, with a new invite, offers to bring them back; another hub never gets them.", { host }))) return;
     leave.disabled = true;
     if (await devicesPost("/api/devices/leave-hub")) { toast(t("This computer left the hub.")); render(); } else leave.disabled = false;
   } }, t("Leave the hub…"));
