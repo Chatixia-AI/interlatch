@@ -473,6 +473,11 @@ select:focus, .input:focus { outline: 2px solid var(--accent-wash-2); border-col
 .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
 .filters .spacer { flex: 1; }
 .grid { display: grid; gap: 16px; }
+/* Settings › Hubs: each hub, then its projects and what this computer shares with it, set in under it */
+.hubs-grid { gap: 28px; }
+.hub-block { display: grid; gap: 12px; scroll-margin-top: 16px; }
+.hub-block > .card ~ .card { margin-left: 20px; }
+@media (max-width: 640px) { .hub-block > .card ~ .card { margin-left: 10px; } }
 .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cols-main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }

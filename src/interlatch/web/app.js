@@ -7141,42 +7141,46 @@ async function waitingHomeCard(box) {
 // Settings › Hubs (docs/profiles.md): Personal's hub and each other one this computer sends to, one card each: how
 // sending goes, what it gets (its groups), Share now, its dashboard, joining and leaving it; then the folders that wait
 // for you, and adding a hub. Only from the computer itself (/api/hubs).
-route(/^\/hubs$/, async () => {
+route(/^\/hubs$/, (params) => hubsPage(params.focus));
+route(/^\/hub$/, (params) => hubsPage(params.name || "personal")); // a link to one hub: Settings › Hubs, at that hub
+
+// Settings › Hubs (docs/profiles.md): every hub this computer sends to, Personal's too, each the same: how sending goes,
+// then its projects (join one with a folder here, remove a folder, leave, rejoin) and what this computer shares with it.
+// Then adding a hub. Only from the computer itself (/api/hubs). `focus`: a hub's name, scrolled to.
+async function hubsPage(focus) {
   const head = h("div", { class: "page-head" }, titled("gateway", h("h1", null, t("Hubs")),
     h("div", { class: "sub" }, t("Where this computer's knowledge goes: Personal's hub, and a hub for each group you connect to one."))));
   let hb;
   try { hb = await api("/api/hubs"); } catch (e) {
-    return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, e.status === 403 ? notHere() : e.message));
+    if (e.status !== 403 || (focus && focus.toLowerCase() !== "personal")) {
+      return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, e.status === 403 ? notHere() : e.message));
+    }
+    // from another device: Personal's hub only, as Settings › Devices showed it
+    const dv = await api("/api/devices");
+    return h("div", { class: "narrow-page" }, head, dv.role === "spoke"
+      ? h("div", { class: "grid" }, spokeHubCard(dv, t("Personal")), spokeProjectsCard(dv), spokeSharingCard(dv))
+      : h("section", { class: "card empty" }, notHere()));
   }
   const draw = () => render();
   const others = hb.hubs.filter((x) => x.id !== "personal");
-  const cards = hb.hubs.map((x) => hubCard(x, hb.groups.filter((g) => (x.id === "personal" ? !g.hub : g.hub === x.label)), others.length, draw));
+  const blocks = await Promise.all(hb.hubs.map(async (x) => {
+    const key = x.id === "personal" ? "" : x.label;
+    const card = hubCard(x, hb.groups.filter((g) => (x.id === "personal" ? !g.hub : g.hub === x.label)), others.length, draw);
+    const dv = x.joined ? await api("/api/devices", key ? { hub: key } : null).catch(() => null) : null;
+    return h("div", { class: "hub-block", "data-hub": (key || "personal").toLowerCase() }, card,
+      dv?.role === "spoke" ? [spokeProjectsCard(dv), spokeSharingCard(dv)] : null);
+  }));
   const waiting = hb.waiting.length ? h("section", { class: "card needs-you" },
     cardHead(t("Waiting for you"), { iconName: "flame", hint: tn(hb.waiting.length, "{n} folder waits for a hub", "{n} folders wait for a hub") }),
     h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
     h("ul", { class: "hub-list" }, hb.waiting.map((w) => waitingRow(w, others, draw)))) : null;
+  const want = (focus || "").toLowerCase();
+  const target = want ? blocks.find((b) => b.dataset.hub === want) : null;
+  if (target) setTimeout(() => target.scrollIntoView({ block: "start" }), 0);
   return h("div", { class: "narrow-page" }, head,
     hb.error ? h("section", { class: "card", role: "alert" }, h("p", { class: "warn-line" }, hb.error)) : null,
-    h("div", { class: "grid" }, waiting, ...cards, addHubCard(draw)));
-});
-
-// One hub's page (Settings › Hubs › a hub): the same for every hub, Personal's or another. How sending goes, the hub's
-// projects this computer's folders go to (join one, add or remove a folder, leave, rejoin) and what it shares.
-route(/^\/hub$/, async (params) => {
-  const key = params.name && params.name.toLowerCase() !== "personal" ? params.name : "";
-  const dv = await api("/api/devices", key ? { hub: key } : null);
-  const name = key || t("Personal");
-  const head = h("div", { class: "page-head" }, titled("gateway", h("h1", null, name),
-    h("div", { class: "sub" }, h("a", { href: "#/hubs" }, t("Hubs")), " › ", key ? t("A hub for the groups you connect to it.")
-      : t("Personal's hub: everything no other hub's groups hold."))));
-  if (dv.role !== "spoke") {
-    return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, key
-      ? t("{name} hasn't joined a hub yet: join it on Settings › Hubs.", { name })
-      : t("Personal hasn't joined a hub. Joining one shares what you learn with your team: ask its admin for an invite.")));
-  }
-  return h("div", { class: "narrow-page" }, head,
-    h("div", { class: "grid" }, spokeHubCard(dv, t("Sending")), spokeProjectsCard(dv), spokeSharingCard(dv)));
-});
+    h("div", { class: "grid hubs-grid" }, waiting, ...blocks, addHubCard(draw)));
+}
 
 // One hub on Settings › Hubs. `groups`: the groups it gets (Personal's: those connected to no other hub)
 function hubCard(x, groups, otherCount, draw) {
@@ -7225,7 +7229,6 @@ function hubCard(x, groups, otherCount, draw) {
     !x.joined && !personal ? joinHubForm(x.label, draw) : null,
     !x.joined && personal ? h("p", { class: "muted hl-note" }, t("Personal hasn't joined a hub. Joining one shares what you learn with your team: ask its admin for an invite.")) : null,
     h("div", { class: "hl-actions" }, shareNow, x.joined ? hubDashboardLink(x.hub, "btn small", personal ? "" : x.label) : null,
-      x.joined ? h("a", { class: "btn small", href: `#/hub?name=${encodeURIComponent(key)}` }, t("Projects and sharing")) : null,
       h("span", { class: "grow" }), leave, remove));
 }
 function joinHubForm(label, draw) {
