@@ -272,3 +272,57 @@ def test_settings_hubs_shows_and_drives_each_hub(twohubs, monkeypatch):
     out, code = action_hubs(ctx, "push", {"hub": "Acme"})
     assert code == 409 and "hasn't joined" in out["error"]
     conn.close()
+
+
+class _Here:  # the dashboard's request handler, as the routes see it
+    viewer = None
+
+    def __init__(self, here=True):
+        self.here = here
+
+    def _json(self, data, status=200):
+        return data, status
+
+    def _from_here(self):
+        return self.here
+
+    def _can_admin(self):
+        return True
+
+    def _me(self):
+        return {}
+
+
+def test_every_hub_has_the_same_device_actions(twohubs):
+    """A hub's page (#/hub) runs Devices' actions for that hub: its link, folders and sharing, never Personal's; and
+    another hub's only from this computer. Transcripts stay Personal's alone."""
+    from interlatch.interfaces.web import routes
+    from interlatch.interfaces.web.context import Context
+
+    spoke, acme = twohubs["spoke"], twohubs["acme"]
+    conn = connect(spoke.db_path)
+    jobs = _Jobs()
+    ctx = Context(lambda: spoke, lambda c: None, lambda: conn, jobs, None)
+    here = _Here()
+
+    dv, code = routes._devices(here, ctx, None, {"hub": "Acme"})
+    assert code == 200 and dv["role"] == "spoke" and dv["hub_url"] == twohubs["url_b"] and dv["hub_key"] == "Acme"
+    mine, _ = routes._devices(here, ctx, None, {})
+    assert mine["hub_url"] == spoke.hub_url and mine["hub_key"] is None
+    assert routes._devices(_Here(here=False), ctx, None, {"hub": "Acme"})[1] == 403  # from another device: no
+    assert routes._devices(here, ctx, None, {"hub": "Nope"})[1] == 400
+
+    out, code = routes._share(here, ctx, None, {"hub": "Acme", "all_folders": False})
+    assert code == 200 and out.get("ok") and not load_config(acme.home).hub_all_folders
+    assert load_config(spoke.home).hub_all_folders  # Personal's as it was
+    out, _ = routes._share(here, ctx, None, {"hub": "Acme", "share": "everything"})
+    assert "summaries and lessons only" in out["error"] and load_config(acme.home).hub_share == "knowledge"
+
+    routes._share(here, ctx, None, {"hub": "Acme", "all_folders": True})  # hub B has no projects: every folder again
+    push_route, _ = routes.find(routes.POST, "/api/devices/push")
+    out, code = push_route.answer(here, ctx, None, {"hub": "Acme"})
+    assert code == 200 and out["started"] and "to " + twohubs["url_b"] in jobs.ran[-1] and _hub_has(twohubs["hub_b"])
+    leave_route, _ = routes.find(routes.POST, "/api/devices/leave-hub")
+    out, code = leave_route.answer(here, ctx, None, {"hub": "Acme"})
+    assert code == 200 and not load_config(acme.home).is_spoke and load_config(spoke.home).is_spoke
+    conn.close()

@@ -37,10 +37,11 @@ The sessions already recorded in the group's folders move to Acme, and go to Acm
 Personal's hub already has, it takes back first (see [Moving takes sessions back](#moving-takes-sessions-back)).
 `--dry-run` shows what would move, and how many of them a hub has, without changing anything.
 
-**On the dashboard:** **Settings › Hubs** has a card for each hub: whether sending to it works, when it last got
-something, **Share now**, its dashboard, and joining or leaving it. It also adds a hub (its name, address and invite
-code). A group's page has **Goes to**, where you pick the hub its sessions go to. In the **Projects** sidebar, a group
-connected to a hub shows that hub's name, and folders waiting for you are listed first.
+**On the dashboard:** **Settings › Hubs** lists every hub, Personal's too, and adds one (its name, address and
+invite code). Each hub has a page of its own, the same for every hub: whether sending to it works, **Share now**, its
+dashboard, **Projects on the hub** (join one of its projects with a folder here, or leave one) and what this computer
+shares with it. A group's page has **Goes to**, where you pick the hub its sessions go to. In the **Projects** sidebar,
+a group connected to a hub shows that hub's name, and folders waiting for you are listed first.
 
 As on any computer, a hub gets only the folders added to one of its projects
 (`interlatch --hub Acme hub add-folder ~/work/acme/app --project App`), unless you joined with `--all-folders`.

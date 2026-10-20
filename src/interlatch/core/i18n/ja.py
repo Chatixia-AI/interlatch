@@ -483,4 +483,6 @@ JA: dict[str, str] = {
     "This computer doesn't send to a hub.": "このコンピューターはハブに送っていません。",
     "Chronicle is now Interlatch. Updating moves this install from the agents-chronicle package to interlatch; the chronicle command keeps working.": "Chronicle は Interlatch になりました。更新すると、このインストールは agents-chronicle パッケージから interlatch に移ります。chronicle コマンドはそのまま使えます。",
     "{hub} hasn't joined a hub yet.": "{hub} はまだハブに参加していません。",
+    "Change this on the computer itself, not from another device.": "別のデバイスからではなく、このコンピューターで変更してください。",
+    "With several hubs, every hub but Personal's gets summaries and lessons only.": "複数のハブがあるときは、Personal 以外のハブには要約とナレッジだけを送ります。",
 }

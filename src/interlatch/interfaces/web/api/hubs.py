@@ -32,6 +32,46 @@ def hubs(ctx: Context) -> dict:
     return {"hubs": hubs, "groups": gs, "waiting": _waiting(waiting(ctx.conn), reg)}
 
 
+class HubView:
+    """The dashboard as one of this computer's hubs sees it: that hub's config (Personal's, or another's own folder,
+    which reads Personal's archive), the same archive, jobs and state. What a device action writes back to its config
+    stays with that hub; only Personal's replaces the dashboard's."""
+
+    def __init__(self, ctx: Context, cfg):
+        self._ctx = ctx
+        self._cfg = cfg
+
+    @property
+    def cfg(self):
+        return self._cfg
+
+    @cfg.setter
+    def cfg(self, cfg) -> None:
+        self._cfg = cfg
+        if cfg.owner == "personal":
+            self._ctx.cfg = cfg
+
+    def __getattr__(self, name):
+        return getattr(self._ctx, name)
+
+
+def for_hub(ctx: Context, key) -> tuple[object, str | None]:
+    """(the dashboard as hub `key` sees it, None), or (None, why not). No key, or "personal": Personal's, as before."""
+    from ....application.profiles import ProfileError, find_profile
+    from ....core.config import load_config
+
+    key = str(key or "").strip()
+    if not key or key.casefold() == "personal":
+        return ctx, None
+    try:
+        p = find_profile(ctx.cfg.home, key)
+    except ProfileError as exc:
+        return None, str(exc)
+    if not (p.home / "config.toml").exists():
+        return None, tr("{hub} hasn't joined a hub yet.", hub=p.label)
+    return HubView(ctx, load_config(p.home, create=False)), None
+
+
 def _hub_cfg(ctx: Context, hub_id: str, reg):
     """The config that sends to hub `hub_id`: Personal's, or that hub's own folder's (None: no such hub)."""
     from ....core.config import load_config

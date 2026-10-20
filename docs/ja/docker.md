@@ -198,7 +198,7 @@ docker compose exec hub interlatch hub invite "Yuma" --email yuma@example.com --
 
 リンクではなく `interlatch hub join …` の行を、[チームのハブに参加する](join-a-hub.md)と一緒に送ってください。
 残りの手順はそのページが案内します。コードは一度しか使えないので、両方は送らないでください。コンピューターが参加したあとは、
-本人の Interlatch からダッシュボードを開けます：**Settings › Devices › Open the hub's dashboard**、または
+本人の Interlatch からダッシュボードを開けます：**Settings › Hubs › (the hub) › Open the hub's dashboard**、または
 `interlatch hub signin`。スマートフォン用や、ダッシュボードを見るだけの人には、
 `docker compose exec hub interlatch hub invite yuma@example.com`（または **Team › People** のその人の行の **New invite**）で
 新しいコードを作り、その**リンク**を送ります。

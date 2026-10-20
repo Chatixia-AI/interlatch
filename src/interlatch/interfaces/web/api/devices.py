@@ -220,6 +220,8 @@ def action_share_mode(ctx: Context, share: str) -> dict:
         return {"error": tr("this computer has not joined a hub")}
     if share not in SHARE_MODES:
         return {"error": tr("unknown share mode {share!r}", share=share)}
+    if share != "knowledge" and ctx.cfg.owner != "personal":  # its transcripts would carry every hub's sessions
+        return {"error": tr("With several hubs, every hub but Personal's gets summaries and lessons only.")}
     set_config_value(ctx.cfg, "hub", "share", json.dumps(share))
     ctx.cfg = load_config(ctx.cfg.home)
     return {"ok": True, "share": ctx.cfg.hub_share}

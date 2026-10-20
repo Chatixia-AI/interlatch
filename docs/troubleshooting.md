@@ -92,7 +92,7 @@ computer sent to the hub before, and the hub has no key on record from it, or an
 for that computer, with the id the message shows: `interlatch hub invite <name> --computer <id>`; join with that code
 ([Joining a computer](devices.md#joining-a-computer)).
 
-**The status bar says "Not sending to the hub".** Click it: **Settings › Devices** says why. "The hub no longer
+**The status bar says "Not sending to the hub".** Click it: **Settings › Hubs** says why. "The hub no longer
 accepts this computer" means the hub turned this computer's token away, so nothing it learns reaches the hub. Usually
 an admin revoked or replaced that computer in **Team › People**. Ask an admin for a new invite for this computer, then
 paste the code into **Join again** in the Hub card, or run `interlatch hub join <hub address> --code <code>`. The
