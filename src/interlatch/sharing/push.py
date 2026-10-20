@@ -20,11 +20,12 @@ from ..core.machine import local_machine
 from ..core.paths import normalize_project_path
 from ..core.util import parse_ts, utcnow, utcnow_iso
 from ..projects import routing  # git_info through routing: one patch there reaches every caller
-from .client import PUSH_WAIT_S, HubClient, _Exclusions, root_files, say_hello, sharing, spoke_roots
+from .client import (PUSH_WAIT_S, HubClient, _Exclusions, root_files, say_hello, sharing, spoke_roots,
+                     withdraw_sessions)
 from .identity import read_token
 from .projects import GroupRoutes, destination, group_routes
 from .protocol import (ANALYSIS_COLS, KNOWLEDGE_COLS, SHARE_BATCH, SHARED_AGENTS, SHARED_ANALYSIS_COLS, SHARED_COLS,
-                       HubError, HubUnauthorized, HubUnreachable, shared_analysis, shared_lesson)
+                       HubError, HubTooOld, HubUnauthorized, HubUnreachable, shared_analysis, shared_lesson)
 from .pull import pull_team_lessons
 
 
@@ -40,6 +41,7 @@ class PushReport:
     seconds: float = 0.0
     kind: str = "files"  # or "knowledge": sessions this computer analyzed itself
     team: int | None = None  # teammates' lessons held here after the pull (a hub with a team store sends them)
+    withdrawn: int = 0  # sessions the hub took back: another of this computer's hubs owns them now, or they wait
 
     def summary(self) -> str:
         what = "session" if self.kind == "knowledge" else "file"
@@ -47,6 +49,8 @@ class PushReport:
         parts = [f"{self.sent} {what}{'s' * (self.sent != 1)} {verb} ({self.bytes / 1e6:.1f} MB)", f"{self.unchanged} unchanged"]
         if self.skipped:  # sharing knowledge: sessions outside the hub's projects, or in excluded ones, stay here
             parts.append(f"{self.skipped} kept here" if self.kind == "knowledge" else f"{self.skipped} excluded")
+        if self.withdrawn:
+            parts.append(f"{self.withdrawn} taken back (they moved to another hub)")
         if self.analyses:
             parts.append(f"{self.analyses} earlier analyses handed over")
         if self.team is not None:
@@ -253,6 +257,30 @@ def owned_ids(cfg: Config, conn) -> set[str] | None:
     return {r[0] for r in conn.execute("SELECT session_id FROM session_owner WHERE owner = ?", (cfg.owner,))}
 
 
+def _strays(cfg: Config, have: dict) -> list[str]:
+    """Of the sessions the hub has from this computer, those another of its hubs owns now or that wait for you
+    (projects.owners): a folder moved while this hub couldn't take them back (application.profiles). None without
+    named profiles."""
+    if not have or cfg.profiles is None or not cfg.db_path.exists():
+        return []
+    from ..projects.owners import has_table
+    from ..storage.sqlite import connect
+
+    conn = connect(cfg.db_path, readonly=True)
+    try:
+        if not has_table(conn):
+            return []
+        ids, out = [str(x) for x in have], []
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            out += [r[0] for r in conn.execute(
+                f"SELECT session_id FROM session_owner WHERE owner != ? AND session_id IN ({', '.join('?' for _ in chunk)})",
+                (cfg.owner, *chunk))]
+        return out
+    finally:
+        conn.close()
+
+
 def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = None) -> PushReport:
     token = read_token(cfg)
     if not cfg.hub_url or not token:
@@ -267,6 +295,15 @@ def _push_knowledge(cfg: Config, *, progress=None, client: HubClient | None = No
         have = hello.get("knowledge")
         if not isinstance(have, dict):
             raise HubError(f"the hub runs version {hello.get('version')}, which can't take knowledge only; update it")
+        if strays := _strays(cfg, have):  # moved to another hub while this one couldn't take them back
+            try:
+                report.withdrawn = len(withdraw_sessions(cfg, strays, client))
+            except HubUnreachable:
+                raise
+            except HubTooOld:  # it keeps them: moving them was asked with --leave-on-hub (application.profiles)
+                pass
+            except HubError as exc:
+                report.errors.append(f"taking back sessions that moved: {exc}")
         scope = hello.get("scope") if isinstance(hello.get("scope"), list) else None  # the hub limits this person
         records, report.unchanged, report.skipped = _shared_records(cfg, have, scope=scope,
                                                                     remotes=hello.get("remotes") or {},

@@ -168,7 +168,7 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
     except groups.GroupError as exc:
         return {"error": tr(str(exc))}, 400
     except ProfileError as exc:  # the hubs couldn't follow: nothing changed
-        return {"error": str(exc)}, 409
+        return {"error": str(exc), "on_hub": exc.can_leave}, 409
 
 
 def project(ctx: Context, path: str, here: bool = False, limited: bool = False) -> dict | None:

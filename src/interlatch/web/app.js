@@ -1109,7 +1109,8 @@ function suggestFolders(paths) {
   return out;
 }
 async function moveToGroup(paths, group) {
-  const r = await post("/api/project-groups/move", { paths, group });
+  const r = await leaveOnHubIfAsked("/api/project-groups/move", { paths, group }, await post("/api/project-groups/move", { paths, group }));
+  if (r.cancelled) return;
   if (r.error) return toast(r.error, 6000);
   refreshProjects();
 }
@@ -1223,7 +1224,9 @@ async function groupDialog(g, preset = []) {
           "Send the whole transcripts of {n} projects to {name} on the hub, unredacted, and of any project that joins the group later?", vars))) return;
     }
     const members = projects.filter(inGroup).map((p) => p.project_path);
-    const r = await post("/api/project-groups/save", { id: g?.id, name: nameIn.value, folders: rules, members });
+    const saving = { id: g?.id, name: nameIn.value, folders: rules, members };
+    const r = await leaveOnHubIfAsked("/api/project-groups/save", saving, await post("/api/project-groups/save", saving));
+    if (r.cancelled) return;
     if (r.error) { err.textContent = r.error; return; }
     const to = shareSel && groupsCanShare ? shareSel.value : null, name = nameIn.value.trim();
     if (to != null && to !== (g?.hub_project || "")) {
@@ -1504,6 +1507,8 @@ async function activityView(params, own = false) {
   const counts = { sessions: fmtNum(tot.sessions), projects: fmtNum(tot.projects), date: tot.first_at ? fmtDateY(tot.first_at) : "" };
   const sgBox = h("div"); // filled in when the queue has something to review; Home does not wait for it
   suggestionsHomeCard(sgBox, project);
+  const waitBox = h("div"); // folders that wait for you to choose a hub: likewise
+  waitingHomeCard(waitBox);
   return h("div", null,
     h("div", { class: "page-head" }, titled("dashboard", h("h1", null, own ? t("Activity") : t("Home")),
       h("div", { class: "sub" }, tot.first_at ? t("{sessions} sessions across {projects} projects since {date}", counts) : t("{sessions} sessions across {projects} projects", counts))),
@@ -1513,6 +1518,7 @@ async function activityView(params, own = false) {
           .map((a) => [a, agentName(a)])], agent, (v) => update({ agent: v })),
         h("select", { "aria-label": t("Project"), onchange: (e) => update({ project: e.target.value }) }, await projectOptions(project)))),
     tiles,
+    waitBox,
     sgBox,
     data.agents.length ? h("div", { class: "section-gap" }, agentsCard(data.agents, { agent, project, period: days === "all" ? t("All time") : t("Last {n} days", { n: days }), pick: (a) => update({ agent: a }) })) : null,
     h("div", { class: "grid cols-main section-gap" }, dailyCard, outcomesCard),
@@ -7082,6 +7088,42 @@ route(/^\/devices$/, async () => {
       dv.here && dv.role !== "hub" ? hubsCard() : null));
 });
 
+// A folder that waits for you to choose its hub (docs/profiles.md), with a Choose: on Settings › Devices › Hubs and Home
+function waitingRow(w, others, done) {
+  const sel = h("select", { "aria-label": t("Which hub") }, h("option", { value: "personal" }, t("Personal")),
+    others.map((x) => h("option", { value: x.label }, x.label)));
+  const go = h("button", { class: "btn small", type: "button", onclick: async () => {
+    go.disabled = true;
+    const r = await hubsPost("/api/hubs/choose", { folder: w.folder, hub: sel.value });
+    if (!r) { go.disabled = false; return; }
+    if (r.taken) toast(tn(r.taken, "The hub it was on took back {n} session.", "The hub it was on took back {n} sessions."));
+    done();
+  } }, t("Choose"));
+  const count = w.projects > 1 ? t("{sessions} in {projects} projects", { sessions: tn(w.sessions, "{n} session", "{n} sessions"), projects: fmtNum(w.projects) })
+    : tn(w.sessions, "{n} session", "{n} sessions");
+  const why = w.let_go ? t("Its group was disconnected from a hub, or the hub removed: choose for all of them here, or connect its group to a hub.")
+    : w.held ? t("Inside a connected group's folders, but in no connected group: choose for all of them here, or connect its group to a hub.") : w.why;
+  return h("li", { class: "hub-row" }, h("div", { class: "mono" }, shortPath(w.folder || "")),
+    h("div", { class: "muted" }, count), why ? h("div", { class: "muted" }, why) : null, h("div", { class: "hub-pick" }, sel, go));
+}
+// Home: the folders that wait for you to choose a hub, when there are any. Only on the computer itself (/api/hubs).
+async function waitingHomeCard(box) {
+  if (limited()) return;
+  let hb;
+  try { hb = await api("/api/hubs"); } catch { return; }
+  if (!hb.waiting?.length) { box.replaceChildren(); box.classList.remove("section-gap"); return; }
+  const SHOWN = 3, others = hb.hubs.filter((x) => x.id !== "personal");
+  const redraw = () => waitingHomeCard(box);
+  box.classList.add("section-gap");
+  box.replaceChildren(h("section", { class: "card needs-you hub-waiting-home" },
+    cardHead(t("Needs you"), { iconName: "flame", hint: tn(hb.waiting.length, "{n} folder waits for a hub", "{n} folders wait for a hub"),
+      tools: h("a", { href: "#/devices", class: "hint link-arrow" }, t("Hubs"), icon("arrow")) }),
+    h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
+    h("ul", { class: "hub-list" }, hb.waiting.slice(0, SHOWN).map((w) => waitingRow(w, others, redraw))),
+    hb.waiting.length > SHOWN ? h("p", { class: "lo-foot" }, h("a", { href: "#/devices" },
+      tn(hb.waiting.length - SHOWN, "{n} more on Devices", "{n} more on Devices"))) : null));
+}
+
 // Settings › Devices › Hubs (docs/profiles.md): Personal's hub and this computer's others, the groups each one gets,
 // adding and joining one, and the folders that wait for you to choose. Only from the computer itself.
 function hubsCard() {
@@ -7122,19 +7164,7 @@ function hubsCard() {
     } }, t("Add the hub"));
     const waiting = hb.waiting.length ? h("div", { class: "hub-waiting" }, h("h3", null, t("Waiting for you")),
       h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
-      h("ul", { class: "hub-list" }, hb.waiting.map((w) => {
-        const sel = h("select", { "aria-label": t("Which hub") }, h("option", { value: "personal" }, t("Personal")),
-          others.map((x) => h("option", { value: x.label }, x.label)));
-        const go = h("button", { class: "btn small", type: "button", onclick: async () => {
-          go.disabled = true;
-          if (await hubsPost("/api/hubs/choose", { folder: w.folder, hub: sel.value })) draw(); else go.disabled = false;
-        } }, t("Choose"));
-        const count = w.projects > 1 ? t("{sessions} in {projects} projects", { sessions: tn(w.sessions, "{n} session", "{n} sessions"), projects: fmtNum(w.projects) })
-          : tn(w.sessions, "{n} session", "{n} sessions");
-        const why = w.held ? t("Inside a connected group's folders, but in no connected group: choose for all of them here, or connect its group to a hub.") : w.why;
-        return h("li", { class: "hub-row" }, h("div", { class: "mono" }, shortPath(w.folder || "")),
-          h("div", { class: "muted" }, count), why ? h("div", { class: "muted" }, why) : null, h("div", { class: "hub-pick" }, sel, go));
-      }))) : null;
+      h("ul", { class: "hub-list" }, hb.waiting.map((w) => waitingRow(w, others, draw)))) : null;
     body.replaceChildren(...[ // replaceChildren draws a null as "null": only what there is
       h("p", { class: "muted" }, t("Sessions in a group connected to another hub go to that hub only, and agents working there see only what belongs to it. Personal still records and analyzes everything.")),
       h("ul", { class: "hub-list" }, rows),
@@ -7156,14 +7186,16 @@ function hubsCard() {
   return card;
 }
 
-// a change of hubs the hubs can't make (Personal's hub has some of the sessions): ask, and move them anyway on a yes
+// a change a hub can't follow now (it can't take back the sessions that move): ask, and move them anyway on a yes
+async function leaveOnHubIfAsked(path, body, r) {
+  if (!r?.error || !r.on_hub) return r;
+  if (!confirm(t("{why}\n\nMove them anyway?", { why: r.error }))) return { cancelled: true };
+  return post(path, { ...body, leave_on_hub: true });
+}
 async function hubsPost(path, body) {
   let r;
-  try { r = await post(path, body); } catch (e) { if (!e.handled) toast(e.message, 7000); return null; }
-  if (r.error && r.on_hub) {
-    if (!confirm(t("{why}\n\nMove them anyway? The copies on Personal's hub stay there.", { why: r.error }))) return null;
-    return hubsPost(path, { ...body, leave_on_hub: true });
-  }
+  try { r = await leaveOnHubIfAsked(path, body, await post(path, body)); } catch (e) { if (!e.handled) toast(e.message, 7000); return null; }
+  if (r.cancelled) return null;
   if (r.error) { toast(r.error, 8000); return null; }
   return r;
 }
@@ -7179,8 +7211,9 @@ async function groupHubPicker(g) {
     const r = await hubsPost("/api/hubs/connect", { group: g.id, hub: sel.value });
     sel.disabled = false;
     if (!r) { sel.value = g.goes_to || "personal"; return; }
-    toast(sel.value === "personal" ? t("{group} no longer goes to another hub. What it held waits for you in Settings › Devices.", { group: g.name })
-      : t("{group} goes to {hub} only.", { group: g.name, hub: sel.value }), 7000);
+    const said = sel.value === "personal" ? t("{group} no longer goes to another hub. What it held waits for you in Settings › Devices.", { group: g.name })
+      : t("{group} goes to {hub} only.", { group: g.name, hub: sel.value });
+    toast(r.taken ? `${said} ${tn(r.taken, "The hub it was on took back {n} session.", "The hub it was on took back {n} sessions.")}` : said, 7000);
     render();
   } }, h("option", { value: "personal" }, t("Personal")), others.map((x) => h("option", { value: x.label, selected: g.goes_to === x.label }, x.label)));
   return h("label", { class: "hub-pick" }, h("span", { class: "muted" }, t("Goes to")), sel);

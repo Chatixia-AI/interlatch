@@ -179,3 +179,36 @@ def test_a_session_goes_by_its_recorded_owner_not_only_its_folder(twohubs):
     conn.commit()
     conn.close()
     assert push(acme).sent == 0 and not _hub_has(hub_b)
+
+
+def test_a_disconnected_group_is_taken_back_from_its_hub(twohubs, monkeypatch):
+    """What a disconnected group held waits, and no hub keeps what waits: Acme's hub takes it back at once, or (out of
+    reach then) the next time Acme sends to it."""
+    from interlatch.sharing.protocol import HubUnreachable
+
+    spoke, acme, hub_b = twohubs["spoke"], twohubs["acme"], twohubs["hub_b"]
+    pid = twohubs["profile"].id
+    assert push(acme).sent == 1 and _hub_has(hub_b)
+    _was, moved = ops.disconnect(spoke, "Acme work")
+    assert moved.to == {"waiting": 1} and moved.taken == {pid: 1} and not _hub_has(hub_b)
+
+    ops.connect(spoke, "Acme work", "Acme")
+    assert push(acme).sent == 1 and _hub_has(hub_b)  # connected again: shared again
+
+    def down(*a, **kw):
+        raise HubUnreachable("can't reach the hub")
+
+    with monkeypatch.context() as m:
+        m.setattr(client, "withdraw_sessions", down)
+        _was, moved = ops.disconnect(spoke, "Acme work")
+    assert moved.kept == {pid: "can't reach the hub"} and _hub_has(hub_b)
+    assert push(acme).withdrawn == 1 and not _hub_has(hub_b)
+
+
+def test_choosing_a_folder_for_another_hub_takes_it_back_at_once(twohubs):
+    spoke, acme, hub_a, hub_b = twohubs["spoke"], twohubs["acme"], twohubs["cfg"], twohubs["hub_b"]
+    assert push(acme).sent == 1 and _hub_has(hub_b)
+    moved = ops.choose(spoke, SPOKE_CWD, "personal")
+    assert moved.taken == {twohubs["profile"].id: 1} and moved.hubs == {twohubs["profile"].id: twohubs["url_b"]}
+    assert not _hub_has(hub_b)
+    assert push(acme).sent == 0 and push(spoke).sent >= 1 and _hub_has(hub_a) and not _hub_has(hub_b)

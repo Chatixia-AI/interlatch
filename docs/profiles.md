@@ -33,10 +33,9 @@ hub only, and agents working there see only what belongs to it.
     interlatch group connect "Acme work" Acme
     ```
 
-The sessions already recorded in the group's folders move to Acme, and go to Acme's hub from then on. Personal's hub
-keeps its copies of any it already has. So if it has some, nothing changes, and the command says how many. Take them
-back first (`interlatch hub remove-folder <folder>` for a folder added there, or ask the hub's admin to purge them),
-or pass `--leave-on-hub` to move them anyway. `--dry-run` shows what would move without changing anything.
+The sessions already recorded in the group's folders move to Acme, and go to Acme's hub from then on. Any that
+Personal's hub already has, it takes back first (see [Moving takes sessions back](#moving-takes-sessions-back)).
+`--dry-run` shows what would move, and how many of them a hub has, without changing anything.
 
 **On the dashboard:** **Settings › Devices › Hubs** adds a hub (its name, address and invite code), and a group's page
 has **Goes to**, where you pick the hub its sessions go to.
@@ -57,8 +56,20 @@ hand on the **Projects** page. Change the group and its hub follows, sessions so
 | Connect a group to another hub inside a connected group's folder | Go to that hub: the narrower group wins |
 | Disconnect a group (`interlatch group disconnect "Acme work"`) | Wait for you |
 
-If Personal's hub already has sessions a change would take away from it, the change isn't made, on the dashboard
-too, and you're told why.
+<a id="moving-takes-sessions-back"></a>
+
+### Moving takes sessions back
+
+A session is on one hub at a time. When a change moves sessions away from a hub (to another hub, or to wait for
+you), that hub takes back the ones this computer sent it: their summaries and lessons go, there and in its team
+store. This happens before anything goes to the new hub. A session chosen for that hub again is simply sent again.
+
+If the hub can't be reached, or this computer is still sending to it, nothing changes, on the dashboard too, and
+you're told why. Try again later, or move them anyway (`--leave-on-hub`, or **OK** on the dashboard's question): the
+hub takes them back the next time this computer sends to it. A hub older than this version can't take sessions back.
+Update it, or move them anyway and its copies stay there.
+
+Removing a hub (`interlatch hubs remove`) takes nothing back: leave it first.
 
 A folder can belong to one hub: connecting two hubs' groups to the same folder is refused.
 
@@ -73,7 +84,7 @@ interlatch group choose ~/work/acme/notes Acme       # or: personal
 interlatch group where ~/work/acme/app               # who gets a folder, and why
 ```
 
-**Settings › Devices › Hubs** lists them too, with a **Choose** for each. Projects a folder holds waiting (a group
+**Settings › Devices › Hubs** lists them too, with a **Choose** for each, and **Home** shows them under **Needs you**. Projects a folder holds waiting (a group
 connected to no hub inside a connected one) are listed once, under that folder.
 
 ## What agents see
@@ -132,8 +143,3 @@ An archive without one is never changed.
 
 **From 0.28.1:** `interlatch profile` became `interlatch hubs` and `interlatch group`, and `--profile` is now `--hub`
 (the old name still works). Folders a profile was given with `--owns` stay that hub's.
-
-## What comes next
-
-**Moving a folder takes its sessions back** from the hub that had them, session by session, instead of asking you to
-take them back first.

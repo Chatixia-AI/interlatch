@@ -602,10 +602,16 @@ def withdraw(cfg: Config, conn, body: dict, person: dict | None = None) -> dict:
     """POST /api/hub/withdraw: a computer that shares knowledge takes back what it shared from a folder it added to a
     project here (`interlatch hub remove-folder`: the wrong folder). The sessions it sent from that folder that are
     filed under the folder's project go, with their lessons, here and in the team store. Unlike purge they aren't
-    kept out: once their folder is added to the right project, they are shared again."""
+    kept out: once their folder is added to the right project, they are shared again.
+
+    With `sessions` (ids) instead of a folder: those of them it sent go, wherever they are filed. A computer with
+    several hubs does this when a folder moves to another hub (docs/profiles.md). The answer's `withdrawn` lists the
+    ones that went; an older hub doesn't send it."""
     from .people import actor_of
 
     machine_id = check_machine(cfg, str(body.get("machine") or ""))
+    if "sessions" in body:
+        return _withdraw_sessions(cfg, conn, machine_id, body.get("sessions"), person)
     folder = str(body.get("folder") or "").strip()
     folder = folder.rstrip("/") or "/"
     project = folders_of(conn, machine_id).get(folder)
@@ -624,3 +630,35 @@ def withdraw(cfg: Config, conn, body: dict, person: dict | None = None) -> dict:
     except RuntimeError as exc:  # the hub is syncing: the computer asks again
         raise HubError(str(exc)) from None
     return {"sessions": done["sessions"], "project": project}
+
+
+WITHDRAW_MAX = 1000  # session ids in one request: the computer sends more in batches
+
+
+def _withdraw_sessions(cfg: Config, conn, machine_id: str, ids, person: dict | None) -> dict:
+    """withdraw() by session id: the ones this computer sent, here or only in the team store."""
+    from .people import actor_of
+
+    if not isinstance(ids, list) or len(ids) > WITHDRAW_MAX or not all(isinstance(x, str) and SESSION_ID_RE.match(x)
+                                                                       for x in ids):
+        raise HubError(f"bad sessions: a list of at most {WITHDRAW_MAX} session ids")
+    ids = list(dict.fromkeys(ids))
+    marks = ", ".join("?" for _ in ids) or "NULL"
+    here = {r["id"]: dict(r) for r in conn.execute(
+        f"SELECT id, machine_id, source, project_path, project_name, title, transcript_path FROM sessions "
+        f"WHERE id IN ({marks})", ids)}
+    targets = [r for r in here.values() if r["machine_id"] == machine_id and r["source"] == "remote"]
+    store = _store(cfg)
+    if store:  # shared as knowledge, the team store may hold it with no row here
+        shared = _in_store(store.shared, machine_id)
+        targets += [{"id": x, "project_path": None, "project_name": None, "title": None, "transcript_path": None}
+                    for x in ids if x not in here and x in shared]
+    if not targets:
+        return {"sessions": 0, "withdrawn": []}
+    name = conn.execute("SELECT name FROM machines WHERE id = ?", (machine_id,)).fetchone()
+    try:
+        purge(cfg, conn, targets, by=actor_of(person), person_id=person and person["id"], action="withdraw",
+              keep_out=False, owner=machine_id, machine=machine_id, name=name[0] if name else None, moved=True)
+    except RuntimeError as exc:  # the hub is syncing: the computer asks again
+        raise HubError(str(exc)) from None
+    return {"sessions": len(targets), "withdrawn": [t["id"] for t in targets]}

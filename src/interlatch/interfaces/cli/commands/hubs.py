@@ -28,11 +28,18 @@ def _moved_words(moved) -> str:
 
 def _report(console, moved, *, done: bool = True) -> None:
     console.print(_moved_words(moved), highlight=False)
-    if moved.on_hub:
-        console.print(f"[yellow]The hub at {moved.hub} has {moved.on_hub} of them[/]"
-                      + (": those copies stay there." if done else "."), highlight=False)
-    elif not moved.checked:
-        console.print(f"[yellow]The hub at {moved.hub} couldn't be asked which of them it has.[/]", highlight=False)
+    for o, url in sorted(moved.hubs.items()):
+        if done and moved.taken.get(o):
+            console.print(f"The hub at {url} took back {moved.taken[o]} of them.", highlight=False)
+        elif not done and moved.on_hub.get(o):
+            console.print(f"The hub at {url} has {moved.on_hub[o]} of them: it takes them back first.", highlight=False)
+        if o in moved.too_old:
+            console.print(f"[yellow]The hub at {url} runs an older version that can't take them back: its copies stay "
+                          "there.[/]", highlight=False)
+        elif o in moved.kept:
+            console.print(f"[yellow]The hub at {url} couldn't be asked ({moved.kept[o]})[/]"
+                          + (": it takes them back the next time this computer sends to it." if done else "."),
+                          highlight=False)
 
 
 # ------------------------------------------------------------------ interlatch hubs
@@ -205,7 +212,8 @@ def cmd_group(args) -> int:
             _report(console, moved, done=not args.dry_run)
             return 0
     except (ops.ProfileError, RegistryError, gr.GroupError) as exc:
-        console.print(str(exc), highlight=False)
+        console.print(str(exc) + (" Pass --leave-on-hub to move them anyway." * getattr(exc, "can_leave", False)),
+                      highlight=False)
         return 1
     return 2
 
@@ -303,7 +311,8 @@ def add_group(sub) -> None:
                                            "<hub>; disconnect|remove <group>; where <folder>; choose <folder> <hub>")
     s.add_argument("--folder", action="append", metavar="FOLDER", help="create: a folder rule (repeatable)")
     s.add_argument("--leave-on-hub", action="store_true",
-                   help="move sessions even if Personal's hub has them (those copies stay there)")
+                   help="move sessions even if the hub they were sent to can't take them back now (it does at "
+                        "the next send; a hub too old to take them back keeps them)")
     s.add_argument("--dry-run", action="store_true", help="connect, disconnect, choose: say what would move")
     s.set_defaults(fn=cmd_group)
 

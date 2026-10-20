@@ -27,13 +27,14 @@ def hubs(ctx: Context) -> dict:
     for g in groups(ctx.conn):
         hub = hub_of_group(reg, g["id"])
         gs.append({"id": g["id"], "name": g["name"], "hub": hub.label if hub else None})
-    return {"hubs": hubs, "groups": gs, "waiting": _waiting(waiting(ctx.conn))}
+    return {"hubs": hubs, "groups": gs, "waiting": _waiting(waiting(ctx.conn), reg)}
 
 
-def _waiting(rows: list[dict]) -> list[dict]:
+def _waiting(rows: list[dict], reg=None) -> list[dict]:
     """What waits, one entry per choice to make: the projects a folder holds waiting (a group connected to no hub
     inside a connected one, a project picked out of one) together under that folder, with how many projects and
-    sessions; any other waiting project on its own, with why."""
+    sessions; any other waiting project on its own, with why. `let_go`: held because a group was disconnected or its
+    hub removed (the registry's choices), not by the groups as they are."""
     from ....core.paths import is_abs_path
 
     out: dict[str, dict] = {}
@@ -41,6 +42,7 @@ def _waiting(rows: list[dict]) -> list[dict]:
         held = r.get("rule") == "held" and is_abs_path(r.get("why"))  # held by that folder (route(): its detail)
         key = r["why"] if held else r["folder"] or ""
         e = out.setdefault(key, {"folder": key, "sessions": 0, "projects": 0, "held": held,
+                                 "let_go": held and reg is not None and key not in reg.held,
                                  "why": None if held else r.get("why")})
         e["sessions"] += r["sessions"]
         e["projects"] += 1
@@ -83,11 +85,11 @@ def action_hubs(ctx: Context, verb: str, body: dict) -> tuple[dict, int]:
                 _, moved = ops.disconnect(ctx.cfg, gid)
             else:
                 moved = ops.connect(ctx.cfg, body.get("group"), hub, leave_on_hub=leave)
-            return {"ok": True, "moved": sum(moved.sessions.values()), "to": {moved.labels.get(k, k): v
-                                                                             for k, v in moved.to.items()}}, 200
+            return {"ok": True, "moved": sum(moved.sessions.values()), "taken": sum(moved.taken.values()),
+                    "to": {moved.labels.get(k, k): v for k, v in moved.to.items()}}, 200
         if verb == "choose":
             moved = ops.choose(ctx.cfg, str(body.get("folder") or ""), str(body.get("hub") or ""), leave_on_hub=leave)
-            return {"ok": True, "moved": sum(moved.sessions.values())}, 200
+            return {"ok": True, "moved": sum(moved.sessions.values()), "taken": sum(moved.taken.values())}, 200
     except (ops.ProfileError, RegistryError, GroupError) as exc:
-        return {"error": str(exc), "on_hub": "has " in str(exc) and "sessions that move" in str(exc)}, 409
+        return {"error": str(exc), "on_hub": getattr(exc, "can_leave", False)}, 409
     return {"error": "unknown action"}, 404

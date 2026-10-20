@@ -521,6 +521,42 @@ def remove_folder(cfg: Config, folder: str, client: HubClient | None = None) -> 
     return _save_hub(cfg, folders=rest, left=left if left != cfg.hub_left else None), taken
 
 
+WITHDRAW_BATCH = 500  # session ids per request (the hub takes up to 1000)
+
+
+def withdraw_sessions(cfg: Config, ids, client: HubClient | None = None) -> list[str]:
+    """Have the hub take back these sessions, the ones this computer sent it (receiver.withdraw): when they move to
+    another of this computer's hubs (docs/profiles.md). Returns the ones it took back. Raises HubTooOld when the hub
+    can't take back sessions one by one, HubError (HubUnreachable) when it can't be asked. The caller holds sharing()."""
+    from .protocol import HubTooOld
+
+    ids = sorted(set(ids))
+    token = read_token(cfg)
+    if not cfg.hub_url or not token:
+        raise HubError("this computer has not joined a hub (`interlatch hub join`)")
+    if not ids:
+        return []
+    mine = client is None
+    client = client or HubClient(cfg.hub_url, token)
+    me = local_machine(cfg)["id"]
+    out: list[str] = []
+    try:
+        for i in range(0, len(ids), WITHDRAW_BATCH):
+            try:
+                r = client.request("POST", "/api/hub/withdraw", body={"machine": me, "sessions": ids[i:i + WITHDRAW_BATCH]})
+            except HubError as exc:
+                if str(exc).startswith("hub error 404"):
+                    raise HubTooOld(f"the hub at {cfg.hub_url} runs an older version that can't take back sessions") from None
+                raise
+            if not isinstance(r.get("withdrawn"), list):
+                raise HubTooOld(f"the hub at {cfg.hub_url} runs an older version that can't take back sessions")
+            out += [str(x) for x in r["withdrawn"]]
+    finally:
+        if mine:
+            client.close()
+    return out
+
+
 @_one_change
 def leave_project(cfg: Config, project: str) -> Config:
     """This computer leaves a project on the hub ([hub] left): it no longer shares sessions filed there or gets their

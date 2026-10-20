@@ -3,9 +3,11 @@ them: adding a hub, connecting your groups of projects to it (their history move
 folders, removing a hub. core.profiles has the rules (a hub here is a "profile"), projects.hubgroups works out what
 each hub's groups hold, projects.owners records the owner of each session.
 
-Every change runs against Personal's folder, under the registry's lock, in this order: check, look at what Personal's
-hub already has of the sessions that move, write the registry, then record the new owners. A session never moves
-while a copy of it may sit on another hub, unless you say it may stay there (`leave_on_hub`).
+Every change runs against Personal's folder, under the registry's lock, in this order: check, have the hub each moving
+session was sent to take it back (session by session, holding that hub's sharing lock so no send races it), write
+the registry, then record the new owners. A session never moves while a copy of it may sit on another hub, unless you
+say it may (`leave_on_hub`): then a hub that can't be asked now takes its copies back the next time this computer
+sends to it (sharing.push), and one too old to take them back keeps them.
 """
 
 from __future__ import annotations
@@ -23,7 +25,9 @@ from ..storage.sqlite import connect as open_db
 
 
 class ProfileError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, can_leave: bool = False):
+        super().__init__(message)
+        self.can_leave = can_leave  # passing leave_on_hub would make the change: a hub can't take its copies back now
 
 
 @dataclass
@@ -33,9 +37,11 @@ class Moved:
     to: dict[str, int] = field(default_factory=dict)  # {new owner: sessions}: where they go
     owner: str = ""  # where they go
     labels: dict[str, str] = field(default_factory=dict)  # {owner: name}, as the change leaves them (a new profile's too)
-    on_hub: int = 0  # of them, how many Personal's hub has
-    hub: str = ""
-    checked: bool = True  # False: Personal's hub couldn't be asked
+    hubs: dict[str, str] = field(default_factory=dict)  # {old owner: the address of its hub}, for those that have one
+    on_hub: dict[str, int] = field(default_factory=dict)  # preview: {old owner: how many of them its hub has}
+    taken: dict[str, int] = field(default_factory=dict)  # {old owner: how many of them its hub took back}
+    kept: dict[str, str] = field(default_factory=dict)  # {old owner: why its hub couldn't take them back} (leave_on_hub)
+    too_old: list[str] = field(default_factory=list)  # of `kept`, the hubs too old to ever take them back
 
 
 def personal_cfg(cfg: Config) -> Config:
@@ -88,25 +94,30 @@ def _check_share_mode(cfg: Config) -> None:
                            "set hub.share knowledge` first.")
 
 
-def _hub_has(cfg: Config, ids: set[str]) -> tuple[int, bool]:
-    """How many of `ids` Personal's hub has, and whether it could be asked."""
-    if not ids or not cfg.is_spoke:
-        return 0, True
+def _hub_cfg(cfg: Config, reg: Registry, owner: str) -> Config | None:
+    """The config that sends `owner`'s sessions to a hub, knowledge only, when it does: Personal's, or a hub's folder
+    still listed in `reg`. A hub being removed isn't asked: you left it, or chose to leave what it has."""
+    if owner == PERSONAL:
+        hub = cfg
+    elif owner in reg.profiles and (reg.profiles[owner].home / "config.toml").exists():
+        hub = load_config(reg.profiles[owner].home, create=False)
+    else:
+        return None
+    return hub if hub.shares_knowledge else None
+
+
+def _hub_has(hub: Config, ids: set[str]) -> int:
+    """How many of `ids` the hub has (a hello). Raises HubError when it can't be asked."""
     from ..sharing.client import handshake
-    from ..sharing.protocol import HubError
 
-    try:
-        have = handshake(cfg).get("knowledge") or {}
-    except HubError:
-        return 0, False
-    return len(ids & set(have)), True
+    have = handshake(hub).get("knowledge") or {}
+    return len(ids & set(have))
 
 
-def _moving(conn, cfg: Config, before: Registry, after: Registry, folders: list[str]) -> tuple[dict[str, str], dict[str, int]]:
-    """{session: new owner} for this computer's sessions in `folders` whose owner changes from `before` to `after`
-    (a fresh route: the history moves), and {old owner: count}."""
-    moves: dict[str, str] = {}
-    old: dict[str, int] = {}
+def _moving(conn, cfg: Config, before: Registry, after: Registry, folders: list[str]) -> dict[str, tuple[str, str]]:
+    """{session: (owner, new owner)} for this computer's sessions in `folders` whose owner changes from `before` to
+    `after` (a fresh route: the history moves)."""
+    moves: dict[str, tuple[str, str]] = {}
     known = owners.known_remotes(conn)
     for folder in folders:
         for s in owners.sessions_in(conn, folder, cfg):
@@ -116,41 +127,81 @@ def _moving(conn, cfg: Config, before: Registry, after: Registry, folders: list[
             now = s["owner"] or route(before, s["folder"], remote, known=known).owner
             new = route(after, s["folder"], remote, known=known).owner
             if new != now:
-                moves[s["id"]] = new
-                old[now] = old.get(now, 0) + 1
-    return moves, old
+                moves[s["id"]] = (now, new)
+    return moves
+
+
+def _take_back(result: Moved, hubs: dict[str, Config], leaving: dict[str, set[str]], *, leave_on_hub: bool) -> None:
+    """Have each old owner's hub take back the sessions that leave it (sharing.client.withdraw_sessions). Raises
+    ProfileError when one can't, unless `leave_on_hub`: then `result.kept` says which kept them, and why. The caller
+    holds each hub's sharing lock."""
+    from ..sharing.client import withdraw_sessions
+    from ..sharing.protocol import HubError, HubTooOld
+
+    for o, hub in sorted(hubs.items()):
+        try:
+            result.taken[o] = len(withdraw_sessions(hub, leaving[o]))
+        except HubTooOld:
+            if not leave_on_hub:
+                raise ProfileError(f"The hub at {hub.hub_url} runs an older version that can't take back the "
+                                   f"{len(leaving[o])} sessions that move, so nothing changed. Update that hub first, "
+                                   "or move them anyway and leave its copies there.", can_leave=True) from None
+            result.kept[o] = "too old"
+            result.too_old.append(o)
+        except HubError as exc:
+            if not leave_on_hub:
+                raise ProfileError(f"Can't have the hub at {hub.hub_url} take back the {len(leaving[o])} sessions that "
+                                   f"move ({exc}), so nothing changed. Try again when it can be reached, or move them "
+                                   "anyway: it takes them back the next time this computer sends to it.",
+                                   can_leave=True) from None
+            result.kept[o] = str(exc)
 
 
 def _apply(cfg: Config, before: Registry, after: Registry, folders: list[str], *, leave_on_hub: bool, dry_run: bool,
            owner: str) -> Moved:
+    from contextlib import ExitStack
+
+    from ..core.util import file_lock
+    from ..sharing.client import CHANGE_WAIT_S, SHARING_LOCK
+    from ..sharing.protocol import HubError
+
     conn = open_db(cfg.db_path)
     try:
         owners.ensure_table(conn)
-        moves, old = _moving(conn, cfg, before, after, folders)
-        leaving = {sid for sid, new in moves.items() if new != PERSONAL}  # what leaves Personal's hub's reach
-        on_hub, checked = _hub_has(cfg, leaving) if leaving else (0, True)
+        moves = _moving(conn, cfg, before, after, folders)
+        old: dict[str, int] = {}
         to: dict[str, int] = {}
-        for new in moves.values():
+        leaving: dict[str, set[str]] = {}  # {old owner: its sessions that move}
+        for sid, (was, new) in moves.items():
+            old[was] = old.get(was, 0) + 1
             to[new] = to.get(new, 0) + 1
-        result = Moved(sessions=old, to=to, owner=owner, on_hub=on_hub, hub=cfg.hub_url if cfg.is_spoke else "",
-                       checked=checked, labels={o: after.label(o) for o in {*old, *to, owner} if o})
+            leaving.setdefault(was, set()).add(sid)
+        hubs = {o: hub for o in leaving if (hub := _hub_cfg(cfg, after, o)) is not None}
+        result = Moved(sessions=old, to=to, owner=owner, hubs={o: hub.hub_url for o, hub in hubs.items()},
+                       labels={o: (after if o in after.profiles else before).label(o) for o in {*old, *to, owner} if o})
         if dry_run:
+            for o, hub in hubs.items():
+                try:
+                    if n := _hub_has(hub, leaving[o]):
+                        result.on_hub[o] = n
+                except HubError as exc:
+                    result.kept[o] = str(exc)
             return result
-        if leaving and not leave_on_hub:
-            if not checked:
-                raise ProfileError(f"Can't ask the hub at {cfg.hub_url} which of the {len(leaving)} sessions that move "
-                                   "it already has, so nothing changed. Try again when it can be reached, or pass "
-                                   "--leave-on-hub to move them anyway.")
-            if on_hub:
-                raise ProfileError(f"The hub at {cfg.hub_url} has {on_hub} of the {len(leaving)} sessions that move. "
-                                   "Nothing changed. Take them back first (`interlatch hub remove-folder <folder>` "
-                                   "for a folder added there, or ask its admin to purge them), or pass --leave-on-hub "
-                                   "to move them and leave those copies there.")
-        save_registry(after)
-        for new in set(moves.values()):
-            owners.move(conn, [sid for sid, o in moves.items() if o == new], new, folders[0] if folders else "")
-        owners.assign_all(conn, cfg, after if after.profiles or after.choices or after.held else None)
-        conn.commit()
+        with ExitStack() as held:
+            for o, hub in sorted(hubs.items()):  # no send to these hubs until the sessions have their new owner
+                if not held.enter_context(file_lock(hub.locks_dir / SHARING_LOCK, timeout=CHANGE_WAIT_S)):
+                    if not leave_on_hub:
+                        raise ProfileError(f"This computer is still sending to the hub at {hub.hub_url}, so nothing "
+                                           "changed. Try again in a minute, or move them anyway: it takes them back the "
+                                           "next time this computer sends to it.", can_leave=True)
+                    result.kept[o] = "busy sending"
+            _take_back(result, {o: h for o, h in hubs.items() if o not in result.kept}, leaving,
+                       leave_on_hub=leave_on_hub)
+            save_registry(after)
+            for new in {n for _was, n in moves.values()}:
+                owners.move(conn, [sid for sid, (_w, n) in moves.items() if n == new], new, folders[0] if folders else "")
+            owners.assign_all(conn, cfg, after if after.profiles or after.choices or after.held else None)
+            conn.commit()
         return result
     finally:
         conn.close()

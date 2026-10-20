@@ -60,6 +60,10 @@ class HubUnreachable(HubError):
     pass
 
 
+class HubTooOld(HubError):
+    """The hub runs a version that can't do what was asked (it answered without the part a newer one sends)."""
+
+
 class UnknownInvite(HubError):
     """An invite code the hub never issued: the server counts it against the address that sent it (people.CodeAttempts)."""
 
