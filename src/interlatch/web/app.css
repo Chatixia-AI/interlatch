@@ -2336,6 +2336,12 @@ td.pg-cell { width: 1%; text-align: right; }
 /* On a computer that sends to a hub: the hub's projects, each over the folders here that go to it (projectsSidebar) */
 .sb-hub-head .sb-hub-ic { flex: none; width: 14px; height: 14px; margin-left: -4px; color: var(--hub-ink); }
 .sb-row.sb-hubproj { font-weight: 600; }
+/* a group connected to another hub names it; folders waiting for a hub come first (docs/profiles.md) */
+.sb-fold-head .sb-hub-badge { flex: none; max-width: 45%; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; line-height: 18px; color: var(--hub-ink); background: color-mix(in srgb, var(--hub-ink) 12%, transparent); }
+.sb-hub-badge .icon { flex: none; width: 11px; height: 11px; }
+.sb-wait-head .sb-wait-ic { flex: none; width: 14px; height: 14px; margin-left: -4px; color: var(--warning-ink); }
+.sb-waiting > .sb-row .icon { color: var(--warning-ink); }
 .sb-row.sb-hubproj .sb-ext { display: none; width: 12px; height: 12px; }
 .sb-row.sb-hubproj:is(:hover, :focus-visible) .sb-ext { display: block; }
 .sb-row.sb-hubproj:is(:hover, :focus-visible) em { display: none; }

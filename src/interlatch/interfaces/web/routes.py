@@ -363,8 +363,17 @@ def _hub_signin(h, ctx, m, body):
     from ...sharing.client import dashboard_signin
     from ...sharing.protocol import HubError
 
+    cfg = ctx.cfg
+    if str(body.get("hub") or "personal").strip().casefold() != "personal":  # another hub: signed in as its own link
+        from ...application.profiles import ProfileError, find_profile
+        from ...core.config import load_config
+
+        try:
+            cfg = load_config(find_profile(ctx.cfg.home, str(body["hub"])).home, create=False)
+        except ProfileError as exc:
+            return h._json({"error": str(exc)}, 400)
     try:
-        return h._json({"url": dashboard_signin(ctx.cfg, page=body.get("next"))})
+        return h._json({"url": dashboard_signin(cfg, page=body.get("next"))})
     except HubError as exc:
         return h._json({"error": tr(str(exc))}, 400)
 
@@ -430,7 +439,7 @@ POST: list[Route] = [
     Route(r"/api/projects/shared/(add|remove)", HERE_OR_HUB_ADMIN, lambda h, ctx, m, b: h._json(
         *api.devices.action_shared_project(ctx, m.group(1), _body(b), by=h.viewer, here=h._from_here()))),
     # which hub each group goes to, and joining one: what leaves this computer, only from here
-    Route(r"/api/hubs/(add|join|remove|connect|choose)", HERE,
+    Route(r"/api/hubs/(add|join|remove|connect|choose|push|leave)", HERE,
           lambda h, ctx, m, b: h._json(*api.hubs.action_hubs(ctx, m.group(1), _body(b)))),
     Route("/api/project-groups/share", HERE,  # what leaves this computer: only from here
           lambda h, ctx, m, b: h._json(*api.projects.action_project_groups(ctx, "share", _body(b)))),

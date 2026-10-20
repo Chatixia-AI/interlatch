@@ -199,7 +199,10 @@ def cmd_hub(args) -> int:
             console.print(f"Joined the hub at {url}, sharing knowledge only. This computer keeps recording and "
                           "analyzing its own sessions; the hub gets each analyzed session's summary and project "
                           "lessons. Transcripts and lessons about you stay here.", highlight=False)
-            if cfg.hub_all_folders:
+            if cfg.hub_all_folders and cfg.owner != "personal":  # another hub: it gets what its groups hold
+                console.print("It shares sessions from every folder its groups hold (--all-folders): nothing until you "
+                              "connect a group to it (`interlatch group connect <group> <hub>`).", highlight=False)
+            elif cfg.hub_all_folders:
                 console.print("It shares sessions from every folder on this computer (--all-folders).", highlight=False)
             elif not args.code or got.get("projects") is None:  # a limited person heard which projects above
                 console.print("Only sessions in the hub's projects are shared: add your folder for each one with "

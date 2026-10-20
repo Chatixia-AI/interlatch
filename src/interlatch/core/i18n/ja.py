@@ -482,4 +482,5 @@ JA: dict[str, str] = {
     "Pick a project to move.": "移動するプロジェクトを選んでください。",
     "This computer doesn't send to a hub.": "このコンピューターはハブに送っていません。",
     "Chronicle is now Interlatch. Updating moves this install from the agents-chronicle package to interlatch; the chronicle command keeps working.": "Chronicle は Interlatch になりました。更新すると、このインストールは agents-chronicle パッケージから interlatch に移ります。chronicle コマンドはそのまま使えます。",
+    "{hub} hasn't joined a hub yet.": "{hub} はまだハブに参加していません。",
 }

@@ -236,7 +236,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/suggestions/{n}/move"): POST_ADMIN.ok(404),
     # POST: only the computer itself (what leaves it, its own sign-ins, software it installs, its files)
     ("POST", "/api/project-groups/share"): POST_HERE.ok(400),
-    **{("POST", f"/api/hubs/{verb}"): POST_HERE.ok(409) for verb in ("add", "join", "remove", "connect", "choose")},
+    **{("POST", f"/api/hubs/{verb}"): POST_HERE.ok(409) for verb in ("add", "join", "remove", "connect", "choose", "push", "leave")},
     ("POST", "/api/devices/share"): POST_HERE,
     ("POST", "/api/devices/hub-signin"): POST_HERE,
     ("POST", "/api/devices/leave-hub"): POST_HERE,

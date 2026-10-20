@@ -1007,6 +1007,7 @@ function navKey(path) {
   if (path.startsWith("/map")) return "map";
   if (path.startsWith("/systems")) return "systems";
   if (path.startsWith("/devices")) return "devices";
+  if (path === "/hubs") return "hubs";
   if (path.startsWith("/appearance")) return "appearance";
   if (path.startsWith("/storage")) return "storage";
   if (path.startsWith("/reanalysis")) return "reanalysis";
@@ -1279,6 +1280,7 @@ function groupSection(g, list, body) {
   const sum = (k) => list.reduce((a, p) => a + (p[k] || 0), 0);
   return h("details", { class: "pgroup", open: !groupFolded(key), ontoggle: (e) => foldGroup(key, !e.target.open) },
     h("summary", null, icon("right", "pg-caret"), h("h2", null, g ? g.name : t("Other projects")),
+      g?.goes_to ? h("span", { class: "badge hub", title: t("Goes to {hub} only", { hub: g.goes_to }) }, icon("cloud"), g.goes_to) : null,
       h("span", { class: "pg-meta" }, tn(list.length, "{n} project", "{n} projects"), " · ", tn(sum("sessions"), "{n} session", "{n} sessions", { n: fmtNum(sum("sessions")) }),
         " · ", t("{dur} active", { dur: fmtDur(sum("active_s")) })),
       g?.hub_project ? h("span", { class: "badge accent", title: t("Every project in this group goes to {name} on the hub, including ones that join it later", { name: hubProjectName(g.hub_project) }) },
@@ -6455,7 +6457,7 @@ function hubProblemTitle(pb) {
     : pb.reason === "unreachable" ? t("Can't reach the hub") : t("The hub refuses this computer's sends");
 }
 
-function spokeHubCard(dv) {
+function spokeHubCard(dv, personal = false) { // personal: other hubs too, so this card is Personal's hub's
   const lp = dv.last_push, knowledge = dv.share === "knowledge", host = hubHost(dv.hub_url);
   const failed = !!lp?.errors?.length;
   const sendNow = h("button", { class: "btn small primary", type: "button", onclick: async () => {
@@ -6477,7 +6479,7 @@ function spokeHubCard(dv) {
     : failed ? h("span", { class: "badge warning" }, h("i", { class: "sdot" }), t("Last send had problems"))
       : h("span", { class: "badge good" }, h("i", { class: "sdot" }), t("Connected"));
   return h("section", { class: "card hl-card" },
-    cardHead(t("Hub"), { iconName: "organization", tools: state }),
+    cardHead(personal ? t("Personal's hub") : t("Hub"), { iconName: "organization", tools: state }),
     h("div", { class: "hl-name" }, h("b", null, dv.hub_name || host), dv.hub_name ? h("span", { class: "codeline" }, host) : null),
     pb ? h("div", { class: "hp-inline", role: "alert" }, h("b", null, hubProblemTitle(pb)), hubProblemBody(pb, dv.here)) : null,
     lp && lp.sent != null ? h("div", { class: "hero-facts" },
@@ -6734,10 +6736,10 @@ function teamStoreCard(dv) {
 // On a computer that sends to a hub: the hub's dashboard opens in a new tab signed in as this computer's person,
 // through a short-lived link the hub gives this computer's token, on page (a hash route) when given. An older hub
 // opens on Home; no token: the plain address.
-async function openHub(hubUrl, page = "") {
+async function openHub(hubUrl, page = "", hub = "") { // hub: another of this computer's hubs, signed in as its own link
   let url = `${hubUrl}/${page ? `#${page}` : ""}`;
   try {
-    const r = await post("/api/devices/hub-signin", page ? { next: page } : {});
+    const r = await post("/api/devices/hub-signin", { ...(page ? { next: page } : {}), ...(hub ? { hub } : {}) });
     if (safeUrl(r.url)) url = r.url;
     else if (r.error) toast(t("Opening the hub's dashboard without signing in: {error}", { error: r.error }), 6000);
   } catch (err) { /* already said, or not reachable: the plain address */ }
@@ -6748,8 +6750,8 @@ async function openHub(hubUrl, page = "") {
 }
 // a hub project's page on the hub; one with nothing filed yet has none, and the hub's Projects page lists it
 const hubProjectPage = (hp) => (hp.sessions === 0 ? "/projects" : `/project?path=${encodeURIComponent(hp.path)}`);
-function hubDashboardLink(hubUrl, cls) {
-  return h("a", { href: `${hubUrl}/`, target: "_blank", rel: "noopener", class: cls || null, onclick: (e) => { e.preventDefault(); openHub(hubUrl); } },
+function hubDashboardLink(hubUrl, cls, hub = "") {
+  return h("a", { href: `${hubUrl}/`, target: "_blank", rel: "noopener", class: cls || null, onclick: (e) => { e.preventDefault(); openHub(hubUrl, "", hub); } },
     t("Open the hub's dashboard"));
 }
 
@@ -7058,6 +7060,7 @@ function peopleCard(dv) {
 
 route(/^\/devices$/, async () => {
   const dv = await api("/api/devices");
+  const hubCount = dv.here && dv.role !== "hub" ? await api("/api/hubs").then((x) => x.hubs.filter((y) => y.joined).length).catch(() => 0) : 0;
   const ts = dv.allowed_hosts.find((x) => x.endsWith(".ts.net"));
   const cmd = (text) => h("pre", { class: "mcp-code" }, text);
   const role = {
@@ -7084,11 +7087,18 @@ route(/^\/devices$/, async () => {
   return h("div", { class: "narrow-page" },
     h("div", { class: "page-head" }, titled("laptop", h("h1", null, t("Devices")), h("div", { class: "sub" }, t("One Interlatch for your computers and your phone.")))),
     h("div", { class: "grid" }, ...(dv.role === "spoke"
-      ? [spokeHubCard(dv), spokeProjectsCard(dv), spokeSharingCard(dv), phone] : [thisCard, phone, computers]),
-      dv.here && dv.role !== "hub" ? hubsCard() : null));
+      ? [spokeHubCard(dv, hubCount > 1), dv.here ? hubsPointer(hubCount) : null, spokeProjectsCard(dv), spokeSharingCard(dv), phone]
+      : [thisCard, phone, computers, dv.here && dv.role !== "hub" ? hubsPointer(hubCount) : null])));
 });
 
-// A folder that waits for you to choose its hub (docs/profiles.md), with a Choose: on Settings › Devices › Hubs and Home
+// Settings › Devices: this computer's hubs are on a page of their own
+function hubsPointer(n) {
+  return h("section", { class: "card" }, cardHead(t("Hubs"), { iconName: "organization",
+    tools: h("a", { href: "#/hubs", class: "hint link-arrow" }, t("Open Hubs"), icon("arrow")) }),
+    h("p", { class: "muted" }, n > 1 ? tn(n, "This computer sends to {n} hub.", "This computer sends to {n} hubs.", { n: fmtNum(n) })
+      : t("Send a group of projects to a hub of its own, such as a client's: Settings › Hubs.")));
+}
+// A folder that waits for you to choose its hub (docs/profiles.md), with a Choose: on Settings › Hubs and Home
 function waitingRow(w, others, done) {
   const sel = h("select", { "aria-label": t("Which hub") }, h("option", { value: "personal" }, t("Personal")),
     others.map((x) => h("option", { value: x.label }, x.label)));
@@ -7117,73 +7127,112 @@ async function waitingHomeCard(box) {
   box.classList.add("section-gap");
   box.replaceChildren(h("section", { class: "card needs-you hub-waiting-home" },
     cardHead(t("Needs you"), { iconName: "flame", hint: tn(hb.waiting.length, "{n} folder waits for a hub", "{n} folders wait for a hub"),
-      tools: h("a", { href: "#/devices", class: "hint link-arrow" }, t("Hubs"), icon("arrow")) }),
+      tools: h("a", { href: "#/hubs", class: "hint link-arrow" }, t("Hubs"), icon("arrow")) }),
     h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
     h("ul", { class: "hub-list" }, hb.waiting.slice(0, SHOWN).map((w) => waitingRow(w, others, redraw))),
-    hb.waiting.length > SHOWN ? h("p", { class: "lo-foot" }, h("a", { href: "#/devices" },
-      tn(hb.waiting.length - SHOWN, "{n} more on Devices", "{n} more on Devices"))) : null));
+    hb.waiting.length > SHOWN ? h("p", { class: "lo-foot" }, h("a", { href: "#/hubs" },
+      tn(hb.waiting.length - SHOWN, "{n} more on Hubs", "{n} more on Hubs"))) : null));
 }
 
-// Settings › Devices › Hubs (docs/profiles.md): Personal's hub and this computer's others, the groups each one gets,
-// adding and joining one, and the folders that wait for you to choose. Only from the computer itself.
-function hubsCard() {
-  const body = h("div", null, h("p", { class: "muted" }, t("Loading…")));
-  const card = h("section", { class: "card" }, cardHead(t("Hubs"), { iconName: "organization" }), body);
-  const fact = (text) => h("div", { class: "muted" }, text);
-  const draw = async () => {
-    let hb;
-    try { hb = await api("/api/hubs"); } catch (e) { body.replaceChildren(fact(e.message)); return; }
-    const others = hb.hubs.filter((x) => x.id !== "personal");
-    const rows = hb.hubs.map((x) => {
-      const groups = hb.groups.filter((g) => (x.id === "personal" ? !g.hub : g.hub === x.label));
-      const remove = x.id === "personal" ? null : h("button", { class: "btn small danger", type: "button", onclick: async () => {
-        if (!confirm(t("Remove the hub {name} from this computer? Its groups stop going to it, and what they held waits for you to choose. Leave it first if you joined it: {command}", { name: x.label, command: `interlatch --hub "${x.label}" hub leave` }))) return;
-        if (await devicesPost("/api/hubs/remove", { hub: x.label })) { toast(t("Removed the hub {name}.", { name: x.label })); draw(); }
-      } }, t("Remove"));
-      const join = x.id !== "personal" && !x.hub ? joinForm(x.label) : null;
-      return h("li", { class: "hub-row" },
-        h("div", null, h("b", null, x.id === "personal" ? t("Personal") : x.label), " ",
-          h("span", { class: "muted" }, x.hub ? t("sends to {host}", { host: hubHost(x.hub) }) : t("not joined")),
-          x.sessions != null ? h("span", { class: "muted" }, " · ", tn(x.sessions, "{n} session", "{n} sessions")) : null),
-        h("div", { class: "muted" }, x.id === "personal" ? t("Everything no other hub's groups hold")
-          : groups.length ? t("Groups: {names}", { names: groups.map((g) => g.name).join(", ") })
-          : t("No group connected yet: open a group's page and choose this hub.")),
-        join, remove);
-    });
-    const name = h("input", { class: "input", placeholder: t("Name, e.g. Acme"), "aria-label": t("Hub name"), maxlength: 60 });
-    const address = h("input", { class: "input", placeholder: t("Address, e.g. https://hub.acme.example"), "aria-label": t("Hub address") });
-    const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
-    const add = h("button", { class: "btn small primary", type: "button", onclick: async () => {
-      add.disabled = true;
-      const r = await devicesPost("/api/hubs/add", { name: name.value, address: address.value, code: code.value });
-      add.disabled = false;
-      if (!r) return;
-      toast(r.join_error ? t("Added {name}, but couldn't join it: {why}", { name: r.hub, why: r.join_error })
-        : r.joined ? t("Added and joined {name}.", { name: r.hub }) : t("Added {name}.", { name: r.hub }), 7000);
-      draw();
-    } }, t("Add the hub"));
-    const waiting = hb.waiting.length ? h("div", { class: "hub-waiting" }, h("h3", null, t("Waiting for you")),
-      h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
-      h("ul", { class: "hub-list" }, hb.waiting.map((w) => waitingRow(w, others, draw)))) : null;
-    body.replaceChildren(...[ // replaceChildren draws a null as "null": only what there is
-      h("p", { class: "muted" }, t("Sessions in a group connected to another hub go to that hub only, and agents working there see only what belongs to it. Personal still records and analyzes everything.")),
-      h("ul", { class: "hub-list" }, rows),
-      h("div", { class: "hub-add" }, name, address, code, add),
-      waiting].filter(Boolean));
-  };
-  const joinForm = (label) => {
-    const address = h("input", { class: "input", placeholder: t("Address"), "aria-label": t("Hub address") });
-    const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
-    const go = h("button", { class: "btn small", type: "button", onclick: async () => {
-      go.disabled = true;
-      const r = await devicesPost("/api/hubs/join", { hub: label, address: address.value, code: code.value });
-      go.disabled = false;
-      if (r) { toast(t("Joined {name}.", { name: r.hub || label })); draw(); }
-    } }, t("Join"));
-    return h("div", { class: "hub-pick" }, address, code, go);
-  };
-  draw();
-  return card;
+// Settings › Hubs (docs/profiles.md): Personal's hub and each other one this computer sends to, one card each: how
+// sending goes, what it gets (its groups), Share now, its dashboard, joining and leaving it; then the folders that wait
+// for you, and adding a hub. Only from the computer itself (/api/hubs).
+route(/^\/hubs$/, async () => {
+  const head = h("div", { class: "page-head" }, titled("gateway", h("h1", null, t("Hubs")),
+    h("div", { class: "sub" }, t("Where this computer's knowledge goes: Personal's hub, and a hub for each group you connect to one."))));
+  let hb;
+  try { hb = await api("/api/hubs"); } catch (e) {
+    return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, e.status === 403 ? notHere() : e.message));
+  }
+  const draw = () => render();
+  const others = hb.hubs.filter((x) => x.id !== "personal");
+  const cards = hb.hubs.map((x) => hubCard(x, hb.groups.filter((g) => (x.id === "personal" ? !g.hub : g.hub === x.label)), others.length, draw));
+  const waiting = hb.waiting.length ? h("section", { class: "card needs-you" },
+    cardHead(t("Waiting for you"), { iconName: "flame", hint: tn(hb.waiting.length, "{n} folder waits for a hub", "{n} folders wait for a hub") }),
+    h("p", { class: "muted" }, t("Recorded here, but no hub gets them and no agent sees them until you choose.")),
+    h("ul", { class: "hub-list" }, hb.waiting.map((w) => waitingRow(w, others, draw)))) : null;
+  return h("div", { class: "narrow-page" }, head,
+    hb.error ? h("section", { class: "card", role: "alert" }, h("p", { class: "warn-line" }, hb.error)) : null,
+    h("div", { class: "grid" }, waiting, ...cards, addHubCard(draw)));
+});
+
+// One hub on Settings › Hubs. `groups`: the groups it gets (Personal's: those connected to no other hub)
+function hubCard(x, groups, otherCount, draw) {
+  const personal = x.id === "personal", name = personal ? t("Personal") : x.label, key = personal ? "personal" : x.label;
+  const lp = x.last_push, pb = x.push_problem, host = x.hub ? hubHost(x.hub) : "";
+  const state = !x.joined ? h("span", { class: "badge" }, h("i", { class: "sdot" }), t("Not joined"))
+    : pb ? h("span", { class: "badge critical" }, h("i", { class: "sdot" }), t("Not sending"))
+    : !lp?.at ? h("span", { class: "badge" }, h("i", { class: "sdot" }), t("Nothing sent yet"))
+    : lp.errors?.length ? h("span", { class: "badge warning" }, h("i", { class: "sdot" }), t("Last send had problems"))
+      : h("span", { class: "badge good" }, h("i", { class: "sdot" }), t("Connected"));
+  const fact = (value, label) => h("div", { class: "fact" }, h("b", null, value), h("span", null, label));
+  const shareNow = x.joined ? h("button", { class: "btn small primary", type: "button", onclick: async () => {
+    shareNow.disabled = true;
+    const r = await devicesPost("/api/hubs/push", { hub: key });
+    if (!r) { shareNow.disabled = false; return; }
+    toast(r.started ? t("Sharing with {name}…", { name }) : t("Already sending"));
+    if (r.started) watchJob("push");
+  } }, t("Share now")) : null;
+  const leave = x.joined ? h("button", { class: "btn small danger", type: "button", onclick: async () => {
+    if (!confirm(t("Leave the hub at {host}? This computer stops sending to it; the hub keeps what it was sent, and its teammates' lessons are removed here.", { host }))) return;
+    leave.disabled = true;
+    if (await devicesPost("/api/hubs/leave", { hub: key })) { toast(t("This computer left {host}.", { host })); draw(); } else leave.disabled = false;
+  } }, t("Leave…")) : null;
+  const remove = personal ? null : h("button", { class: "btn small danger", type: "button", onclick: async () => {
+    if (!confirm(t("Remove the hub {name} from this computer? Its groups stop going to it, and what they held waits for you to choose.", { name: x.label }))) return;
+    if (await devicesPost("/api/hubs/remove", { hub: x.label })) { toast(t("Removed the hub {name}.", { name: x.label })); draw(); }
+  } }, t("Remove"));
+  const gets = personal
+    ? [otherCount ? t("Everything no other hub's groups hold.") : t("Everything this computer records."), " ",
+      x.joined && !x.all_folders ? t("Only folders added to one of its projects are shared.") : null]
+    : groups.length ? [t("The groups connected to it:"), " ", ...groups.flatMap((g, i) => [i ? ", " : "", h("a", { href: `#/group?id=${g.id}` }, g.name)])]
+    : [t("No group connected yet: open a group's page and choose this hub.")];
+  return h("section", { class: "card hl-card" },
+    cardHead(name, { iconName: personal ? "home" : "organization", tools: state }),
+    x.joined ? h("div", { class: "hl-name" }, h("b", null, x.hub_name || host), x.hub_name ? h("span", { class: "codeline" }, host) : null) : null,
+    pb ? h("div", { class: "hp-inline", role: "alert" }, h("b", null, hubProblemTitle(pb)),
+      personal ? hubProblemBody(pb, true) : h("div", { class: "hp-body" }, h("p", null, pb.reason === "token"
+        ? t("The hub turned this computer's token away. Ask its admin for a new invite, then run: {command}", { command: `interlatch --hub "${x.label}" hub join ${x.hub} --code <code>` })
+        : t("Nothing has reached {host} since {time}.", { host, time: fmtDT(pb.since) })))) : null,
+    lp && lp.sent != null ? h("div", { class: "hero-facts" },
+      fact(ago(lp.at), t("last shared")), fact(fmtNum(lp.sent + lp.unchanged), t("sessions shared")),
+      lp.kept ? fact(fmtNum(lp.kept), t("kept here")) : null,
+      fact(fmtNum(x.team_lessons || 0), t("teammates' lessons"))) : null,
+    ...(lp?.errors || []).map((e) => h("div", { class: "warn-line" }, e)),
+    h("p", { class: "muted hl-note" }, x.sessions != null ? [tn(x.sessions, "{n} session belongs to it.", "{n} sessions belong to it."), " "] : null, ...gets),
+    !x.joined && !personal ? joinHubForm(x.label, draw) : null,
+    !x.joined && personal ? h("p", { class: "muted hl-note" }, tx("Personal hasn't joined a hub. {page} says how.", { page: h("a", { href: "#/devices" }, t("Devices")) })) : null,
+    h("div", { class: "hl-actions" }, shareNow, x.joined ? hubDashboardLink(x.hub, "btn small", personal ? "" : x.label) : null,
+      personal ? h("a", { class: "btn small", href: "#/devices" }, t("Its projects and sharing")) : null,
+      h("span", { class: "grow" }), leave, remove));
+}
+function joinHubForm(label, draw) {
+  const address = h("input", { class: "input", placeholder: t("Address, e.g. https://hub.acme.example"), "aria-label": t("Hub address") });
+  const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
+  const go = h("button", { class: "btn small primary", type: "button", onclick: async () => {
+    go.disabled = true;
+    const r = await devicesPost("/api/hubs/join", { hub: label, address: address.value, code: code.value });
+    go.disabled = false;
+    if (r) { toast(t("Joined {name}.", { name: r.hub || label })); draw(); }
+  } }, t("Join"));
+  return h("div", { class: "hub-pick" }, address, code, go);
+}
+function addHubCard(draw) {
+  const name = h("input", { class: "input", placeholder: t("Name, e.g. Acme"), "aria-label": t("Hub name"), maxlength: 60 });
+  const address = h("input", { class: "input", placeholder: t("Address, e.g. https://hub.acme.example"), "aria-label": t("Hub address") });
+  const code = h("input", { class: "input", placeholder: t("Invite code"), "aria-label": t("Invite code") });
+  const add = h("button", { class: "btn small primary", type: "button", onclick: async () => {
+    add.disabled = true;
+    const r = await devicesPost("/api/hubs/add", { name: name.value, address: address.value, code: code.value });
+    add.disabled = false;
+    if (!r) return;
+    toast(r.join_error ? t("Added {name}, but couldn't join it: {why}", { name: r.hub, why: r.join_error })
+      : r.joined ? t("Added and joined {name}.", { name: r.hub }) : t("Added {name}.", { name: r.hub }), 7000);
+    draw();
+  } }, t("Add the hub"));
+  return h("section", { class: "card" }, cardHead(t("Add a hub"), { iconName: "organization" }),
+    h("p", { class: "muted" }, t("Sessions in a group connected to another hub go to that hub only, and agents working there see only what belongs to it. Personal still records and analyzes everything.")),
+    h("div", { class: "hub-add" }, name, address, code, add));
 }
 
 // a change a hub can't follow now (it can't take back the sessions that move): ask, and move them anyway on a yes
@@ -7211,7 +7260,7 @@ async function groupHubPicker(g) {
     const r = await hubsPost("/api/hubs/connect", { group: g.id, hub: sel.value });
     sel.disabled = false;
     if (!r) { sel.value = g.goes_to || "personal"; return; }
-    const said = sel.value === "personal" ? t("{group} no longer goes to another hub. What it held waits for you in Settings › Devices.", { group: g.name })
+    const said = sel.value === "personal" ? t("{group} no longer goes to another hub. What it held waits for you in Settings › Hubs.", { group: g.name })
       : t("{group} goes to {hub} only.", { group: g.name, hub: sel.value });
     toast(r.taken ? `${said} ${tn(r.taken, "The hub it was on took back {n} session.", "The hub it was on took back {n} sessions.")}` : said, 7000);
     render();
@@ -8166,9 +8215,9 @@ const SECTIONS = [
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", appearance: "settings", storage: "settings", reanalysis: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", hubs: "settings", appearance: "settings", storage: "settings", reanalysis: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
-const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance") };
+const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), hubs: t("Hubs"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 let shellRealm = false, realmReturn = "#/"; // in Innerlatch; the page its door leads back to
@@ -8322,6 +8371,9 @@ async function knowledgeSidebar(box) {
 }
 async function projectsSidebar(box) {
   const projects = await loadProjects();
+  // this computer's other hubs (docs/profiles.md): a connected group says which, and folders waiting for a hub come first
+  const hubsInfo = limited() ? null : await api("/api/hubs").catch(() => null);
+  const severalHubs = (hubsInfo?.hubs || []).length > 1, waitingFolders = hubsInfo?.waiting || [];
   const list = h("div", { class: "sb-scroll" });
   const row = (p, sub = false) => {
     const a = sbRow(p.label, projectHref(p) || "#/projects", projIcon(p), p.sessions, ["/project", "path", p.project_path || ""]);
@@ -8346,23 +8398,36 @@ async function projectsSidebar(box) {
     const match = (p) => !q || p.label.toLowerCase().includes(q) || (p.project_path || "").toLowerCase().includes(q);
     const top = [sbRow(t("All projects"), "#/projects", "overview", projects.length, ["/projects"]),
       sbRow(t("Systems map"), "#/systems", "systems", null, ["/systems"])];
-    const fold = (key, label, n, open, { lead = null, title = null, cls = "" } = {}) => h("button", { type: "button", class: `sb-group sb-fold-head${cls}`,
+    const fold = (key, label, n, open, { lead = null, title = null, cls = "", badge = null } = {}) => h("button", { type: "button", class: `sb-group sb-fold-head${cls}`,
       "aria-expanded": String(open), title, onclick: () => { foldGroup(key, open); draw(); } },
-      icon("right", "sb-caret"), lead, h("span", null, label), h("em", null, fmtNum(n)));
+      icon("right", "sb-caret"), lead, h("span", null, label), badge, h("em", null, fmtNum(n)));
+    const hubBadge = (name) => h("span", { class: "sb-hub-badge", title: t("Goes to {hub} only", { hub: name }) }, icon("cloud"), name);
+    const waitOpen = !groupFolded("waiting");
+    const waitShown = waitingFolders.filter((w) => !q || (w.folder || "").toLowerCase().includes(q));
+    const waitPart = waitShown.length ? h("div", { class: "sb-fold sb-waiting" },
+      fold("waiting", t("Waiting for a hub"), waitShown.length, waitOpen || !!q, { lead: icon("flame", "sb-wait-ic"), cls: " sb-wait-head",
+        title: t("Recorded here, but no hub gets them and no agent sees them until you choose.") }),
+      waitOpen || q ? waitShown.map((w) => {
+        const a = sbRow(baseName(w.folder || "") || w.folder, "#/hubs", "flame", w.sessions, ["/hubs"]);
+        a.title = `${w.folder} · ${t("Choose its hub on Settings › Hubs")}`;
+        return a;
+      }) : null) : null;
     const hubShown = hubs.map(([hp, ps]) => [hp, q && hp.name.toLowerCase().includes(q) ? ps : ps.filter(match)]).filter(([, ps]) => ps.length);
     const hubOpen = !!q || !groupFolded("hub");
     const hubPart = hubShown.length ? h("div", { class: "sb-fold sb-hub" },
-      fold("hub", hubName, hubs.length, hubOpen, { lead: icon("cloud", "sb-hub-ic"), cls: " sb-hub-head",
-        title: t("The projects on {hub} that this computer's folders go to", { hub: hubName }) }),
+      fold("hub", severalHubs ? t("{hub} · Personal", { hub: hubName }) : hubName, hubs.length, hubOpen, { lead: icon("cloud", "sb-hub-ic"), cls: " sb-hub-head",
+        title: severalHubs ? t("Personal's hub: the projects on {hub} that this computer's folders go to", { hub: hubName })
+          : t("The projects on {hub} that this computer's folders go to", { hub: hubName }) }),
       hubOpen ? hubShown.map(([hp, ps]) => [hubRow(hp), ...ps.map((p) => row(p, true))]) : null) : null;
     const groups = groupsCache.length || hubs.length ? byGroup(projects, { hub: true }).map(([g, ps]) => { // a group's name matches all of it
       const shown = q && g && g.name.toLowerCase().includes(q) ? ps : ps.filter(match);
       if (!shown.length && (q || !g)) return null;
       const key = g ? String(g.id) : "none", open = !!q || !groupFolded(key);
       const whole = g && open && !q && ps.some((p) => p.sessions) ? sbRow(t("The whole group"), `#/group?id=${g.id}`, "overview", null, ["/group", "id", String(g.id)]) : null;
-      return h("div", { class: "sb-fold" }, fold(key, g ? g.name : t("Other projects"), ps.length, open), whole, open ? shown.map((p) => row(p)) : null);
+      return h("div", { class: "sb-fold" }, fold(key, g ? g.name : t("Other projects"), ps.length, open, { badge: g?.goes_to ? hubBadge(g.goes_to) : null }),
+        whole, open ? shown.map((p) => row(p)) : null);
     }).filter(Boolean) : projects.some(match) ? [h("div", { class: "sb-group" }, t("Most recent first")), ...projects.filter(match).map((p) => row(p))] : [];
-    const parts = [hubPart, ...groups].filter(Boolean);
+    const parts = [waitPart, hubPart, ...groups].filter(Boolean);
     list.replaceChildren(...top, ...parts,
       ...(parts.length ? [] : [h("div", { class: "sb-empty" }, t("No projects match"))])); // replaceChildren would print a null
     const { path, params } = parseHash();
@@ -8392,6 +8457,7 @@ function settingsSidebar(box) {
       own ? sbRow(t("Sources"), "#/sources", "sources", null, ["/sources"]) : null,
       own ? sbRow("MCP", "#/mcp", "mcp", null, ["/mcp"]) : null,
       own ? sbRow(t("Devices"), "#/devices", "devices", null, ["/devices"]) : null,
+      own && !limited() ? sbRow(t("Hubs"), "#/hubs", "organization", null, ["/hubs"]) : null,
       canAdmin() ? sbRow(t("Storage"), "#/storage", "data", null, ["/storage"]) : null, // a password: admins only
       canAdmin() ? sbRow(t("Re-analysis"), "#/reanalysis", "calendar", null, ["/reanalysis"]) : null,
       sbRow(t("Appearance"), "#/appearance", "appearance", null, ["/appearance"])));
@@ -8548,7 +8614,7 @@ function paletteCommands() {
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
       : gameOn() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
-    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
+    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },
@@ -8672,7 +8738,7 @@ const LIMITED_SECTIONS = new Set(["home", "teamhome", "sessions", "knowledge", "
 // devices) is left out.
 function dedicated() { return !!ME?.hub?.dedicated && !!ME?.hub?.team; }
 const DEDICATED_HIDDEN = new Set(["home", "artifacts", "suggestions"]);
-const DEDICATED_HIDDEN_HREFS = new Set(["#/", "#/artifacts", "#/suggestions", "#/friction", "#/sources", "#/mcp", "#/devices"]);
+const DEDICATED_HIDDEN_HREFS = new Set(["#/", "#/artifacts", "#/suggestions", "#/friction", "#/sources", "#/mcp", "#/devices", "#/hubs"]);
 function teamProjectsLabel() { return dedicated() ? t("Projects") : t("Shared projects"); }
 async function loadMe() {
   try { ME = await api("/api/me"); } catch (e) { ME = null; return; } // an older server, or the sign-in screen is up
@@ -8776,6 +8842,7 @@ async function pollStatus() {
     $("#status-queue").textContent = waiting ? tn(waiting, "{n} session queued for analysis", "{n} sessions queued for analysis", { n: fmtNum(waiting) }) : "";
     refreshQueueDialog(); // when it is open: the queue and its times move with the runs
     $("#status-sync").textContent = dedicated() ? "" // nothing of its own to sync: the status bar's hub line says what it is
+      : st.hub_urls?.length > 1 ? t("Sends to {hosts}", { hosts: st.hub_urls.map(hubHost).join(" · ") })
       : st.hub_url ? t("Sends its sessions to {host}", { host: st.hub_url.replace(/^https?:\/\//, "") })
       : st.last_sync ? t("Synced {ago}", { ago: ago(st.last_sync) }) : t("Not synced yet");
     $("#status-version").textContent = st.version ? `Interlatch ${st.version}` : "";
@@ -8900,7 +8967,8 @@ function showHubProblem(pb) {
   if (!chip) return;
   chip.hidden = !pb || dedicated();
   if (chip.hidden) return;
-  chip.replaceChildren(h("span", { class: "dot" }), t("Not sending to the hub"));
+  chip.replaceChildren(h("span", { class: "dot" }), pb.profile ? t("Not sending to {hub}", { hub: pb.profile }) : t("Not sending to the hub"));
+  chip.dataset.page = pb.profile ? "#/hubs" : "#/devices";
   chip.title = `${hubProblemTitle(pb)} · ${t("since {time}", { time: fmtDT(pb.since) })}`;
 }
 // an update on offer: a chip in the status bar, a dot on Settings, and once per update a notification card
@@ -9078,7 +9146,7 @@ $("#status-pill").title = t("Background work: click for progress");
 document.addEventListener("mousedown", (e) => { if (!$("#activity").hidden && !e.target.closest("#activity, #status-pill")) toggleActivity(false); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#activity").hidden) toggleActivity(false); });
 $("#status-update").addEventListener("click", () => go("#/status?focus=updates"));
-$("#status-hub-problem").addEventListener("click", () => go("#/devices"));
+$("#status-hub-problem").addEventListener("click", (e) => go(e.currentTarget.dataset.page || "#/devices"));
 $("#status-queue").addEventListener("click", openQueueDialog);
 $("#status-queue").setAttribute("aria-haspopup", "dialog");
 $("#status-queue").setAttribute("aria-expanded", "false");

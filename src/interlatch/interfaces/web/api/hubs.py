@@ -1,8 +1,9 @@
-"""Several hubs on one computer (docs/profiles.md), on the dashboard: Settings › Devices › Hubs lists them and what
-waits for you; a group's page connects the group to one. application.profiles does the work."""
+"""Several hubs on one computer (docs/profiles.md), on the dashboard: Settings › Hubs lists them, how each one's sending
+goes and what waits for you; a group's page connects the group to one. application.profiles does the work."""
 
 from __future__ import annotations
 
+from ....core.i18n import tr
 from ..context import Context
 
 
@@ -22,12 +23,38 @@ def hubs(ctx: Context) -> dict:
         return {"error": str(exc), "hubs": [], "groups": [], "waiting": []}
     hubs = [r for r in rows if r["id"] != "waiting"]
     for r in hubs:
+        r.update(_sending(_hub_cfg(ctx, r["id"], reg)))
         r.pop("home", None)  # this computer's folders: not needed to show them
     gs = []
     for g in groups(ctx.conn):
         hub = hub_of_group(reg, g["id"])
         gs.append({"id": g["id"], "name": g["name"], "hub": hub.label if hub else None})
     return {"hubs": hubs, "groups": gs, "waiting": _waiting(waiting(ctx.conn), reg)}
+
+
+def _hub_cfg(ctx: Context, hub_id: str, reg):
+    """The config that sends to hub `hub_id`: Personal's, or that hub's own folder's (None: no such hub)."""
+    from ....core.config import load_config
+
+    if hub_id == "personal":
+        return ctx.cfg
+    p = reg.profiles.get(hub_id) if reg else None
+    return load_config(p.home, create=False) if p and (p.home / "config.toml").exists() else None
+
+
+def _sending(cfg) -> dict:
+    """How sending to the hub goes, as Settings › Devices shows it for Personal's: the hub's name as it last said, the
+    last share, a problem worth a warning, and the teammates' lessons it sent back."""
+    from ....sharing.projects import last_folders
+    from ....sharing.pull import last_team
+    from ....sharing.push import last_push, send_problem
+
+    if cfg is None or not cfg.is_spoke:
+        return {"joined": False}
+    pushed = last_push(cfg)
+    return {"joined": True, "hub_name": (last_folders(cfg) or {}).get("hub"), "share": cfg.hub_share,
+            "all_folders": cfg.hub_all_folders, "last_push": pushed, "push_problem": send_problem(pushed),
+            "team_lessons": (last_team(cfg) or {}).get("lessons")}
 
 
 def _waiting(rows: list[dict], reg=None) -> list[dict]:
@@ -51,7 +78,8 @@ def _waiting(rows: list[dict], reg=None) -> list[dict]:
 
 def action_hubs(ctx: Context, verb: str, body: dict) -> tuple[dict, int]:
     """add (name, and optionally address and code to join it), remove, connect (group, hub; personal disconnects),
-    choose (folder, hub or personal). A change the hubs can't make says why, 409, and changes nothing."""
+    choose (folder, hub or personal), push (hub: share with it now), leave (hub: stop sending to it). A change the hubs
+    can't make says why, 409, and changes nothing."""
     from ....application import profiles as ops
     from ....core.profiles import RegistryError
     from ....projects.groups import GroupError
@@ -87,6 +115,24 @@ def action_hubs(ctx: Context, verb: str, body: dict) -> tuple[dict, int]:
                 moved = ops.connect(ctx.cfg, body.get("group"), hub, leave_on_hub=leave)
             return {"ok": True, "moved": sum(moved.sessions.values()), "taken": sum(moved.taken.values()),
                     "to": {moved.labels.get(k, k): v for k, v in moved.to.items()}}, 200
+        if verb in ("push", "leave"):
+            key = str(body.get("hub") or "")
+            reg = ctx.cfg.profiles
+            hub_id = "personal" if key.strip().casefold() == "personal" else ops.find_profile(ctx.cfg.home, key).id
+            hcfg = _hub_cfg(ctx, hub_id, reg)
+            if hcfg is None or not hcfg.is_spoke:
+                return {"error": tr("{hub} hasn't joined a hub yet.", hub=key)}, 409
+            if verb == "push":
+                from ....sharing.push import push
+
+                return {"ok": True, "started": ctx.jobs.start("push", lambda progress: push(hcfg, progress=progress)
+                                                                 .summary())}, 200
+            from ....sharing.client import leave_hub
+
+            left = leave_hub(hcfg)
+            if hub_id == "personal":
+                ctx.cfg = left
+            return {"ok": True, "hub": hcfg.hub_url}, 200
         if verb == "choose":
             moved = ops.choose(ctx.cfg, str(body.get("folder") or ""), str(body.get("hub") or ""), leave_on_hub=leave)
             return {"ok": True, "moved": sum(moved.sessions.values()), "taken": sum(moved.taken.values())}, 200
