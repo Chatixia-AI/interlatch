@@ -3,6 +3,24 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.2 (2026-10-20)
+
+- **Several hubs: connect your groups.** `interlatch profile` became `interlatch hubs` and `interlatch group`: add a
+  hub (`interlatch hubs add Acme <address> --code <code>`), then connect a group of projects to it
+  (`interlatch group connect "Acme work" Acme`). What the group holds goes to that hub, and changing the group on the
+  dashboard's Projects page moves its sessions with it. A project taken out of a connected group waits for you
+  instead of going back to Personal. `--profile` is now `--hub`; the old name still works
+  ([Several hubs on one computer](docs/profiles.md)).
+- **Several hubs on the dashboard.** Settings › Devices › Hubs lists this computer's hubs and their groups, adds and
+  joins one, and settles folders that wait for you; a group's page has **Goes to**, which connects the group to a hub
+  ([Several hubs on one computer](docs/profiles.md)).
+- **Moving a folder takes its sessions back from the hub that had them.** When a group, a project or a waiting folder
+  moves to another hub (or a group is disconnected), the hub it left takes back the sessions this computer sent it,
+  before anything goes to the new one. One that can't be reached takes them back at the next send. Home now shows
+  folders that wait for you to choose a hub under **Needs you**
+  ([Moving takes sessions back](docs/profiles.md#moving-takes-sessions-back)). Update your hubs too: an older hub
+  can't take sessions back.
+
 ## 0.28.1 (2026-10-19)
 
 - **Profiles, first stage:** `interlatch profile create Acme --owns ~/work/acme` makes a named profile that owns a
