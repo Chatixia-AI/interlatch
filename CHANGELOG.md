@@ -3,6 +3,11 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.5 (2026-10-20)
+
+- **Settings › Hubs shows each hub's projects and sharing right under it**, on one page, instead of a page per hub
+  ([Several hubs on one computer](docs/profiles.md)).
+
 ## 0.28.4 (2026-10-20)
 
 - **Every hub has the same page.** Settings › Hubs lists each hub, Personal's too, and each one opens a page of its own
