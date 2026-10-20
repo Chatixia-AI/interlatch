@@ -1007,7 +1007,7 @@ function navKey(path) {
   if (path.startsWith("/map")) return "map";
   if (path.startsWith("/systems")) return "systems";
   if (path.startsWith("/devices")) return "devices";
-  if (path === "/hubs") return "hubs";
+  if (path === "/hubs" || path === "/hub") return "hubs";
   if (path.startsWith("/appearance")) return "appearance";
   if (path.startsWith("/storage")) return "storage";
   if (path.startsWith("/reanalysis")) return "reanalysis";
@@ -6404,6 +6404,8 @@ function queueRunRow(st) {
 // On a computer that sends to a hub (Settings › Devices): the hub, this computer's projects there, and what it
 // shares. What leaves the computer changes only at the computer itself (dv.here), never from a phone.
 function hubHost(url) { try { return new URL(url).host; } catch { return url || ""; } }
+// a device action for the hub a page is about (dv.hub_key: another of this computer's hubs; none: Personal's)
+const hubBody = (dv, body = {}) => (dv?.hub_key ? { ...body, hub: dv.hub_key } : body);
 async function devicesPost(path, body) { // null when it failed, after saying why
   try {
     const r = await post(path, body);
@@ -6415,14 +6417,14 @@ const notHere = () => t("Change this on the computer itself, not from another de
 
 // A computer whose pushes stopped getting through (devices.push_problem), in the Hub card: why, since when, and the
 // fix. A token the hub turned away takes a new invite, joined here; the rest resolve by themselves or on the hub.
-function hubProblemBody(pb, here) {
+function hubProblemBody(pb, here, hubKey = null) {
   const host = hubHost(pb.hub);
   const since = t("Nothing has reached {host} since {time} ({n} tries).", { host, time: fmtDT(pb.since), n: fmtNum(pb.attempts || 1) });
   const lastOk = pb.last_ok ? t("Last sent {ago}.", { ago: ago(pb.last_ok) }) : t("Nothing was ever sent from here.");
   if (pb.reason !== "token") {
     const tryNow = h("button", { class: "btn small", type: "button", disabled: !here, title: here ? "" : notHere(), onclick: async () => {
       tryNow.disabled = true;
-      const r = await devicesPost("/api/devices/push");
+      const r = await devicesPost("/api/devices/push", hubBody({ hub_key: hubKey }));
       if (!r) { tryNow.disabled = false; return; }
       toast(r.started ? t("Sending to the hub…") : t("Already sending"));
       if (r.started) watchJob("push");
@@ -6440,7 +6442,7 @@ function hubProblemBody(pb, here) {
     e.preventDefault();
     if (!code.value.trim()) { code.focus(); return; }
     join.disabled = true;
-    const r = await devicesPost("/api/devices/rejoin-hub", { code: code.value.trim() });
+    const r = await devicesPost("/api/devices/rejoin-hub", hubBody({ hub_key: hubKey }, { code: code.value.trim() }));
     if (!r) { join.disabled = false; return; }
     toast(t("Joined {host} again as {name}. Sending now…", { host, name: r.person?.name || "" }), 6000);
     watchJob("push");
@@ -6457,12 +6459,12 @@ function hubProblemTitle(pb) {
     : pb.reason === "unreachable" ? t("Can't reach the hub") : t("The hub refuses this computer's sends");
 }
 
-function spokeHubCard(dv, personal = false) { // personal: other hubs too, so this card is Personal's hub's
+function spokeHubCard(dv, title = t("Hub")) {
   const lp = dv.last_push, knowledge = dv.share === "knowledge", host = hubHost(dv.hub_url);
   const failed = !!lp?.errors?.length;
   const sendNow = h("button", { class: "btn small primary", type: "button", onclick: async () => {
     sendNow.disabled = true;
-    const r = await devicesPost("/api/devices/push");
+    const r = await devicesPost("/api/devices/push", hubBody(dv));
     if (!r) { sendNow.disabled = false; return; }
     toast(r.started ? t("Sending to the hub…") : t("Already sending"));
     if (r.started) watchJob("push");
@@ -6470,7 +6472,7 @@ function spokeHubCard(dv, personal = false) { // personal: other hubs too, so th
   const leave = h("button", { class: "btn small danger", type: "button", disabled: !dv.here, title: dv.here ? "" : notHere(), onclick: async () => {
     if (!confirm(t("Leave the hub at {host}? This computer stops sending to it, and records and analyzes its own sessions again. The hub keeps what it was sent. Teammates' lessons from it are removed here, and its folders and shared groups are put aside: joining this hub again from the command line, with a new invite, offers to bring them back; another hub never gets them.", { host }))) return;
     leave.disabled = true;
-    if (await devicesPost("/api/devices/leave-hub")) { toast(t("This computer left the hub.")); render(); } else leave.disabled = false;
+    if (await devicesPost("/api/devices/leave-hub", hubBody(dv))) { toast(t("This computer left the hub.")); go("#/hubs"); } else leave.disabled = false;
   } }, t("Leave the hub…"));
   const fact = (value, label) => h("div", { class: "fact" }, h("b", null, value), h("span", null, label));
   const pb = dv.push_problem;
@@ -6479,9 +6481,9 @@ function spokeHubCard(dv, personal = false) { // personal: other hubs too, so th
     : failed ? h("span", { class: "badge warning" }, h("i", { class: "sdot" }), t("Last send had problems"))
       : h("span", { class: "badge good" }, h("i", { class: "sdot" }), t("Connected"));
   return h("section", { class: "card hl-card" },
-    cardHead(personal ? t("Personal's hub") : t("Hub"), { iconName: "organization", tools: state }),
+    cardHead(title, { iconName: "organization", tools: state }),
     h("div", { class: "hl-name" }, h("b", null, dv.hub_name || host), dv.hub_name ? h("span", { class: "codeline" }, host) : null),
-    pb ? h("div", { class: "hp-inline", role: "alert" }, h("b", null, hubProblemTitle(pb)), hubProblemBody(pb, dv.here)) : null,
+    pb ? h("div", { class: "hp-inline", role: "alert" }, h("b", null, hubProblemTitle(pb)), hubProblemBody(pb, dv.here, dv.hub_key)) : null,
     lp && lp.sent != null ? h("div", { class: "hero-facts" },
       fact(ago(lp.at), knowledge ? t("last shared") : t("last sent")),
       fact(fmtNum(lp.sent + lp.unchanged), knowledge ? t("sessions shared") : t("files sent")),
@@ -6493,7 +6495,7 @@ function spokeHubCard(dv, personal = false) { // personal: other hubs too, so th
       ? [t("Teammates' lessons are read-only here: your MCP tools answer with them, and the start-of-session notes list them as teammates'."), " ",
         h("a", { href: "#/knowledge/all?source=team" }, t("Read them"))]
       : t("No teammates' lessons yet: a hub with a team store sends them back after each share.")) : null,
-    h("div", { class: "hl-actions" }, sendNow, hubDashboardLink(dv.hub_url, "btn small"), h("span", { class: "grow" }), leave));
+    h("div", { class: "hl-actions" }, sendNow, hubDashboardLink(dv.hub_url, "btn small", dv.hub_key || ""), h("span", { class: "grow" }), leave));
 }
 
 // A search box over a list (the hub's projects, this computer's folders), or a typed folder when `typed` allows it
@@ -6552,7 +6554,7 @@ function spokeProjectsCard(dv) {
   const knowledge = dv.share === "knowledge", projects = dv.projects || [];
   const panel = h("div", { class: "mp-join", hidden: true });
   const act = async (verb, body, said) => {
-    const r = await devicesPost(`/api/devices/projects/${verb}`, body);
+    const r = await devicesPost(`/api/devices/projects/${verb}`, hubBody(dv, body));
     if (!r) return false;
     toast(said(r), 7000);
     if (r.pushing) watchJob("push");
@@ -6596,7 +6598,7 @@ function spokeProjectsCard(dv) {
   const openJoin = async () => {
     panel.hidden = false;
     panel.replaceChildren(h("div", { class: "muted" }, t("Asking the hub for its projects…")));
-    const r = await devicesPost("/api/devices/projects/choices");
+    const r = await devicesPost("/api/devices/projects/choices", hubBody(dv));
     if (!r) { panel.hidden = true; return; }
     const proj = pickBox({ items: r.projects, label: t("Project on the hub"), placeholder: t("Search the hub's projects"),
       line: (x) => tn(x.sessions, "{n} session", "{n} sessions", { n: fmtNum(x.sessions) }) });
@@ -6633,14 +6635,14 @@ function spokeSharingCard(dv) {
   const pickShare = async (share) => {
     if (share === dv.share) return;
     if (share === "everything" && !confirm(t("Send this computer's transcripts to the hub? The hub then records and analyzes them, and this computer stops analyzing its own sessions."))) return;
-    if (!await devicesPost("/api/devices/share", { share })) return;
+    if (!await devicesPost("/api/devices/share", hubBody(dv, { share }))) return;
     toast(share === "knowledge" ? t("This computer now shares only summaries and project lessons.") : t("This computer now sends its transcripts to the hub."));
     render();
   };
   const pickFolders = async (all) => {
     if (all === dv.all_folders) return;
     if (all && !confirm(t("Share the summaries and project lessons of sessions in every folder on this computer, including projects the hub doesn't have?"))) return;
-    if (!await devicesPost("/api/devices/share", { all_folders: all })) return;
+    if (!await devicesPost("/api/devices/share", hubBody(dv, { all_folders: all }))) return;
     toast(all ? t("This computer now shares sessions from every folder.") : t("This computer now shares only sessions in the hub's projects."));
     render();
   };
@@ -6653,10 +6655,11 @@ function spokeSharingCard(dv) {
       h("div", null, h("b", null, t("What it sends")),
         h("div", { class: "muted" }, knowledge ? t("Analyzed here with your own login. The hub gets each session's summary and project lessons; transcripts and lessons about you stay here.")
           : t("The hub records and analyzes the transcripts; this computer no longer analyzes its own sessions. This dashboard shows what it had before it joined."))),
-      seg(t("What it sends"), [["knowledge", t("Summaries and lessons")], ["everything", t("Transcripts")]], dv.share, pickShare)),
+      dv.hub_key ? null : seg(t("What it sends"), [["knowledge", t("Summaries and lessons")], ["everything", t("Transcripts")]], dv.share, pickShare)),
     knowledge && dv.all_folders != null ? h("div", { class: "set-row" },
       h("div", null, h("b", null, t("Which sessions")),
-        h("div", { class: "muted" }, dv.all_folders ? t("Every folder's, including projects the hub doesn't have.")
+        h("div", { class: "muted" }, dv.all_folders ? (dv.hub_key ? t("Every folder its groups hold, including ones in no project on the hub: each becomes a project of its own there.")
+          : t("Every folder's, including projects the hub doesn't have."))
           : t("Only those in the hub's projects: the folders above, and repositories whose git remote the hub knows. The rest stay here."))),
       seg(t("Which sessions"), [[false, t("The hub's projects")], [true, t("Every folder")]], dv.all_folders, pickFolders)) : null,
     dv.here ? null : h("p", { class: "muted" }, notHere()));
@@ -7066,7 +7069,9 @@ route(/^\/devices$/, async () => {
   const role = {
     single: t("Records and analyzes its own sessions."),
     hub: t("The hub: records and analyzes its own sessions and the ones your other computers send it."),
-  }[dv.role]; // a computer that sends to a hub has cards of its own (spokeHubCard)
+    spoke: dv.share === "knowledge" ? t("Records and analyzes its own sessions, and shares what it learned with its hubs.")
+      : t("Sends its sessions to its hub, which records and analyzes them."),
+  }[dv.role]; // what it sends each hub, and how that goes: Settings › Hubs (a page per hub)
   const thisCard = h("section", { class: "card" }, cardHead(t("This computer"), { iconName: "devices" }),
     h("p", null, h("b", null, dv.this.name), ` · ${role}`));
   const phone = h("section", { class: "card" }, cardHead(t("On your phone"), { iconName: "devices" }),
@@ -7086,17 +7091,16 @@ route(/^\/devices$/, async () => {
         h("p", { class: "muted" }, t("It prints a {command} command to run on each other computer.", { command: "interlatch hub join …" }))) : null;
   return h("div", { class: "narrow-page" },
     h("div", { class: "page-head" }, titled("laptop", h("h1", null, t("Devices")), h("div", { class: "sub" }, t("One Interlatch for your computers and your phone.")))),
-    h("div", { class: "grid" }, ...(dv.role === "spoke"
-      ? [spokeHubCard(dv, hubCount > 1), dv.here ? hubsPointer(hubCount) : null, spokeProjectsCard(dv), spokeSharingCard(dv), phone]
-      : [thisCard, phone, computers, dv.here && dv.role !== "hub" ? hubsPointer(hubCount) : null])));
+    h("div", { class: "grid" }, thisCard, dv.role !== "hub" ? hubsPointer(hubCount, dv.here) : null, phone, computers));
 });
 
-// Settings › Devices: this computer's hubs are on a page of their own
-function hubsPointer(n) {
+// Settings › Devices: this computer's hubs have pages of their own (Settings › Hubs; from another device, Personal's)
+function hubsPointer(n, here) {
+  const href = here ? "#/hubs" : "#/hub?name=personal";
   return h("section", { class: "card" }, cardHead(t("Hubs"), { iconName: "organization",
-    tools: h("a", { href: "#/hubs", class: "hint link-arrow" }, t("Open Hubs"), icon("arrow")) }),
-    h("p", { class: "muted" }, n > 1 ? tn(n, "This computer sends to {n} hub.", "This computer sends to {n} hubs.", { n: fmtNum(n) })
-      : t("Send a group of projects to a hub of its own, such as a client's: Settings › Hubs.")));
+    tools: h("a", { href, class: "hint link-arrow" }, t("Open Hubs"), icon("arrow")) }),
+    h("p", { class: "muted" }, n ? tn(n, "This computer sends to {n} hub.", "This computer sends to {n} hubs.", { n: fmtNum(n) })
+      : t("Join a hub to share what you learn with a team, or send a group of projects to a hub of its own: Settings › Hubs.")));
 }
 // A folder that waits for you to choose its hub (docs/profiles.md), with a Choose: on Settings › Hubs and Home
 function waitingRow(w, others, done) {
@@ -7156,6 +7160,24 @@ route(/^\/hubs$/, async () => {
     h("div", { class: "grid" }, waiting, ...cards, addHubCard(draw)));
 });
 
+// One hub's page (Settings › Hubs › a hub): the same for every hub, Personal's or another. How sending goes, the hub's
+// projects this computer's folders go to (join one, add or remove a folder, leave, rejoin) and what it shares.
+route(/^\/hub$/, async (params) => {
+  const key = params.name && params.name.toLowerCase() !== "personal" ? params.name : "";
+  const dv = await api("/api/devices", key ? { hub: key } : null);
+  const name = key || t("Personal");
+  const head = h("div", { class: "page-head" }, titled("gateway", h("h1", null, name),
+    h("div", { class: "sub" }, h("a", { href: "#/hubs" }, t("Hubs")), " › ", key ? t("A hub for the groups you connect to it.")
+      : t("Personal's hub: everything no other hub's groups hold."))));
+  if (dv.role !== "spoke") {
+    return h("div", { class: "narrow-page" }, head, h("section", { class: "card empty" }, key
+      ? t("{name} hasn't joined a hub yet: join it on Settings › Hubs.", { name })
+      : t("Personal hasn't joined a hub. Joining one shares what you learn with your team: ask its admin for an invite.")));
+  }
+  return h("div", { class: "narrow-page" }, head,
+    h("div", { class: "grid" }, spokeHubCard(dv, t("Sending")), spokeProjectsCard(dv), spokeSharingCard(dv)));
+});
+
 // One hub on Settings › Hubs. `groups`: the groups it gets (Personal's: those connected to no other hub)
 function hubCard(x, groups, otherCount, draw) {
   const personal = x.id === "personal", name = personal ? t("Personal") : x.label, key = personal ? "personal" : x.label;
@@ -7201,9 +7223,9 @@ function hubCard(x, groups, otherCount, draw) {
     ...(lp?.errors || []).map((e) => h("div", { class: "warn-line" }, e)),
     h("p", { class: "muted hl-note" }, x.sessions != null ? [tn(x.sessions, "{n} session belongs to it.", "{n} sessions belong to it."), " "] : null, ...gets),
     !x.joined && !personal ? joinHubForm(x.label, draw) : null,
-    !x.joined && personal ? h("p", { class: "muted hl-note" }, tx("Personal hasn't joined a hub. {page} says how.", { page: h("a", { href: "#/devices" }, t("Devices")) })) : null,
+    !x.joined && personal ? h("p", { class: "muted hl-note" }, t("Personal hasn't joined a hub. Joining one shares what you learn with your team: ask its admin for an invite.")) : null,
     h("div", { class: "hl-actions" }, shareNow, x.joined ? hubDashboardLink(x.hub, "btn small", personal ? "" : x.label) : null,
-      personal ? h("a", { class: "btn small", href: "#/devices" }, t("Its projects and sharing")) : null,
+      x.joined ? h("a", { class: "btn small", href: `#/hub?name=${encodeURIComponent(key)}` }, t("Projects and sharing")) : null,
       h("span", { class: "grow" }), leave, remove));
 }
 function joinHubForm(label, draw) {
@@ -8386,7 +8408,7 @@ async function projectsSidebar(box) {
   // hub project opens on the hub, signed in; the team's sessions there are as of the last push.
   const hubs = groupsHub ? byHubProject(projects) : [];
   const hubName = groupsHub?.name || t("Hub"), hubUrl = safeUrl(groupsHub?.url);
-  const hubRow = (hp) => h("a", { class: "sb-row sb-hubproj", href: hubUrl ? `${hubUrl}/#${hubProjectPage(hp)}` : "#/devices",
+  const hubRow = (hp) => h("a", { class: "sb-row sb-hubproj", href: hubUrl ? `${hubUrl}/#${hubProjectPage(hp)}` : "#/hub?name=personal",
     target: hubUrl ? "_blank" : null, rel: hubUrl ? "noopener" : null,
     title: [t("{name} on {hub}", { name: hp.name, hub: hubName }),
       hp.sessions != null ? tn(hp.sessions, "{n} session from the team", "{n} sessions from the team", { n: fmtNum(hp.sessions) }) : null,
@@ -8968,7 +8990,7 @@ function showHubProblem(pb) {
   chip.hidden = !pb || dedicated();
   if (chip.hidden) return;
   chip.replaceChildren(h("span", { class: "dot" }), pb.profile ? t("Not sending to {hub}", { hub: pb.profile }) : t("Not sending to the hub"));
-  chip.dataset.page = pb.profile ? "#/hubs" : "#/devices";
+  chip.dataset.page = `#/hub?name=${encodeURIComponent(pb.profile || "personal")}`;
   chip.title = `${hubProblemTitle(pb)} · ${t("since {time}", { time: fmtDT(pb.since) })}`;
 }
 // an update on offer: a chip in the status bar, a dot on Settings, and once per update a notification card

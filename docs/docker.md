@@ -199,7 +199,7 @@ docker compose exec hub interlatch hub invite "Yuma" --email yuma@example.com --
 
 Send them the `interlatch hub join …` line, not the link, with [Joining your team's hub](join-a-hub.md), which
 walks them through the rest. The code works once, so don't send both. Once their computer has joined, they open the
-dashboard from their own Interlatch: **Settings › Devices › Open the hub's dashboard**, or `interlatch hub signin`. For
+dashboard from their own Interlatch: **Settings › Hubs › (the hub) › Open the hub's dashboard**, or `interlatch hub signin`. For
 a phone, or someone who only views the dashboard, make a new code with
 `docker compose exec hub interlatch hub invite yuma@example.com` (or **New invite** on their row in **Team › People**)
 and send its **link**.

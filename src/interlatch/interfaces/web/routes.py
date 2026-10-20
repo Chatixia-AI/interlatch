@@ -189,13 +189,26 @@ def _system(h, ctx, m, q):
     return h._json(found) if found else h._json({"error": tr("not found")}, 404)
 
 
+def _as_hub(fn):
+    """A Settings › Hubs action for the hub its body (or query) names, Personal's by default: every hub's page offers
+    the same ones (api.hubs.for_hub)."""
+    def run(h, ctx, m, body):
+        key = (body or {}).get("hub") if isinstance(body, dict) else None
+        if key and str(key).strip().casefold() != "personal" and not h._from_here():  # another hub: only from here
+            return h._json({"error": tr("Change this on the computer itself, not from another device.")}, 403)
+        view, problem = api.hubs.for_hub(ctx, key)
+        return h._json({"error": problem}, 400) if problem else fn(h, view, m, body)
+    return run
+
+
+@_as_hub
 def _devices(h, ctx, m, q):
     dv = api.devices.devices(ctx)
     if h.viewer is not None and not h._can_admin():  # computers, keys and the team store: admins'
         dv = {**dv, "this": {"name": dv["this"]["name"]}, "machines": [], "store": None,
               "allowed_hosts": [], "allowed_users": [], "path_map": {}, "folders": [], "projects": [],
               "team": None, "last_push": None}
-    return h._json({**dv, "here": h._from_here(), **h._me()})
+    return h._json({**dv, "here": h._from_here(), **h._me(), "hub_key": None if ctx.cfg.owner == "personal" else (q or {}).get("hub")})
 
 
 def _unseen_suggestions(h, ctx, m, q):
@@ -378,12 +391,14 @@ def _hub_signin(h, ctx, m, body):
         return h._json({"error": tr(str(exc))}, 400)
 
 
+@_as_hub
 def _share(h, ctx, m, body):
     if "all_folders" in body:
         return h._json(api.devices.action_share_folders(ctx, body.get("all_folders")))
     return h._json(api.devices.action_share_mode(ctx, str(body.get("share") or "")))
 
 
+@_as_hub
 def _hub_project(h, ctx, m, body):
     if m.group(1) == "choices":
         return h._json(api.devices.hub_project_choices(ctx))
@@ -431,8 +446,8 @@ POST: list[Route] = [
     Route("/api/devices/hub-signin", HERE, _hub_signin),
     # what leaves this computer, and for which projects: only from here
     Route(r"/api/devices/projects/(choices|add|remove|leave|rejoin)", HERE, _hub_project),
-    Route("/api/devices/leave-hub", HERE, lambda h, ctx, m, b: h._json(api.devices.action_leave_hub(ctx))),
-    Route("/api/devices/rejoin-hub", HERE, lambda h, ctx, m, b: h._json(*api.devices.action_rejoin_hub(ctx, b))),
+    Route("/api/devices/leave-hub", HERE, _as_hub(lambda h, ctx, m, b: h._json(api.devices.action_leave_hub(ctx)))),
+    Route("/api/devices/rejoin-hub", HERE, _as_hub(lambda h, ctx, m, b: h._json(*api.devices.action_rejoin_hub(ctx, b)))),
     Route("/api/team/settings", ADMIN,
           lambda h, ctx, m, b: h._json(*api.hub_admin.action_hub_settings(ctx, _body(b), h.viewer))),
     # what leaves this computer (its sessions go to the team store): only from here, or a dedicated hub's admin
@@ -450,7 +465,7 @@ POST: list[Route] = [
     # what this hub takes from the computers that send to it
     Route("/api/team/accept", ADMIN,
           lambda h, ctx, m, b: h._json(*api.devices.action_accept(ctx, str(b.get("accept") or ""), h.viewer))),
-    Route("/api/devices/push", ANYONE, lambda h, ctx, m, b: h._json({"started": api.devices.action_push(ctx)})),
+    Route("/api/devices/push", ANYONE, _as_hub(lambda h, ctx, m, b: h._json({"started": api.devices.action_push(ctx)}))),
     # a POST: with the daily check off, the dashboard's only call to PyPI
     Route("/api/update/check", ANYONE, lambda h, ctx, m, b: h._json(api.settings.update_info(ctx, remote=True))),
     Route("/api/analysis/backend", ANYONE,

@@ -69,7 +69,7 @@ then on:
 - **Analysis runs only on the hub.** If the computer already analyzed sessions with its own Interlatch, it hands
   those analyses over when it joins, so the hub does not pay to analyze them again.
 - **That computer's own dashboard and MCP tools stop updating.** They keep what they had; open the hub's dashboard
-  instead (**Settings › Devices** has a link).
+  instead (**Settings › Hubs** has a link).
 
 ### Same project, different folders
 
@@ -93,7 +93,7 @@ matching project of its own:
    already on the hub: they move with their knowledge, and both projects' knowledge bases are rebuilt. The more
    specific match wins, so a repository inside the folder whose git remote the hub knows still follows its remote. A
    folder inside a repository the hub files under another project is refused, because a repository belongs to one
-   project. `interlatch hub folders` shows what goes where. **Settings › Devices › Projects on the hub** does the same
+   project. `interlatch hub folders` shows what goes where. **Settings › Hubs › (the hub) › Projects on the hub** does the same
    from the dashboard: **Join a project** picks one of the hub's projects and a folder here. To take back a folder
    added by mistake, see [Leaving](#leaving). The hub's **Team › Computers** lists the folders each computer added.
    On this computer's **Projects** page and sidebar, the hub's projects that folders here go to come first, under
@@ -126,7 +126,7 @@ projects there from its next push, as if you had added each of their folders to 
   above. A project recorded on another computer (such as `server:/root/app`) can't go from here.
 
 The project must already be on the hub (a member's computer can't make one), and the choice is made on this computer
-itself, not from another device. **Settings › Devices › Projects on the hub** shows the group under that project, and
+itself, not from another device. **Settings › Hubs › (the hub) › Projects on the hub** shows the group under that project, and
 the Projects page and sidebar list the group's projects under that project as well as in the group.
 
 ### What is sent
@@ -153,7 +153,7 @@ A computer can keep its transcripts and still add to the hub's knowledge. Join w
 interlatch hub join https://pc.tail1234.ts.net --token … --share knowledge
 ```
 
-(or, on a computer that already joined, `interlatch config set hub.share knowledge`, or **Settings › Devices › What this
+(or, on a computer that already joined, `interlatch config set hub.share knowledge`, or **Settings › Hubs › (the hub) › What this
 computer sends** in its dashboard). That computer then works like a
 standalone Interlatch: it records its own sessions, analyzes them itself (with its own Claude Code or Codex login,
 Bob API key or model provider), and keeps its dashboard and MCP tools up to date. After each analysis it sends the hub only:
@@ -169,7 +169,7 @@ It does that only for sessions the hub files under one of its projects: those in
 computer, and its push counts them as "kept here". A hub that has never run a session in a repository itself doesn't
 know its remote, as with a hub in Docker or on a server, so add your folder for each project there. To share
 sessions from every folder, join with `--all-folders`, run `interlatch config set hub.all_folders true`, or choose
-**Every folder** under **Settings › Devices › What this computer sends**.
+**Every folder** under **Settings › Hubs › (the hub) › What this computer sends**.
 
 Prompts, shell commands, file paths, transcripts and lessons about you (global ones and preferences) never leave
 the computer. Sessions from GitHub Copilot, IBM Bob, Google Antigravity and OpenCode are shared too; imported chats are not.
@@ -238,13 +238,13 @@ unless the connection works, the password is never shown again, and only an admi
 - **Teammates' lessons come back.** Each time it shares, a computer that shares knowledge gets its teammates' lessons
   for the repositories it has clones of, the projects it shared sessions in, and those it added folders to. It shares
   after each analysis (when a session ends, and every 15 minutes with the background agent from `interlatch install`),
-  and at once with `interlatch push` or **Share now** in **Settings › Devices**. They are
+  and at once with `interlatch push` or **Share now** in **Settings › Hubs**. They are
   kept read-only in its own database, under its own folder for that repository, where its MCP tools answer with them
   (marked as teammates') and the start-of-session notes list them under **From teammates' sessions**. Its dashboard
   shows them on project pages and in **All knowledge**, marked **from** the computers whose sessions stated them;
-  the source **From teammates** there lists only them, and **Read them** in **Settings › Devices** opens that list.
+  the source **From teammates** there lists only them, and **Read them** in **Settings › Hubs** opens that list.
   Lessons it stated itself are not sent back. One it dismisses stays dismissed; one the team no longer has disappears.
-  `interlatch hub status` and its **Settings › Devices** show how many it holds; **Share now** there
+  `interlatch hub status` and its **Settings › Hubs** show how many it holds; **Share now** there
   pushes at once.
 - **Only the hub connects to the database.** Computers never get its address or password, so it can sit on a
   network only the hub reaches. Its tables live in the schema `team`, with an audit log of every push and pull
@@ -269,7 +269,7 @@ Devices › Projects on the hub**, each project has these buttons:
   command line: `interlatch hub remove-folder <folder>`. A computer that sends transcripts keeps them on the hub: the
   hub files them by their git remote or their own folder again.
 
-`interlatch hub leave`, or **Leave the hub…** in **Settings › Devices**, makes the computer record and analyze its own
+`interlatch hub leave`, or **Leave the hub…** in **Settings › Hubs**, makes the computer record and analyze its own
 sessions again; the hub keeps what it was sent. It also removes the teammates' lessons that came from the hub, and
 puts aside what the computer had for that hub (its folders, the projects it left, and its groups shared there) in
 `~/.interlatch/hub-left/`, so a different hub joined later never gets any of it. Whether it shares knowledge only
@@ -361,7 +361,7 @@ or the id the refused join printed. That code joins that computer only.
 
 ### Opening the hub's dashboard
 
-- **From your own Interlatch.** On a computer that joined, **Settings › Devices › Open the hub's dashboard** asks the
+- **From your own Interlatch.** On a computer that joined, **Settings › Hubs › (the hub) › Open the hub's dashboard** asks the
   hub for a sign-in link, valid for 5 minutes, and opens it in your browser. There is no password.
 - **With the invite link.** Opening `…/signin?code=…` shows who the code signs in as; **Sign in** signs that browser
   in. You can also paste the code on the hub's sign-in screen. Use this for a phone, or for someone with no computer

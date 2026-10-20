@@ -67,7 +67,7 @@ Use your folder for the project and the project's name from step 2. This sends w
 analyzed there. A clone of a git repository the hub already knows is filed under its project without this step,
 but running it does no harm.
 
-Your dashboard can do the same: **Settings › Devices › Projects on the hub › Join a project**, then pick the project
+Your dashboard can do the same: **Settings › Hubs › (the hub) › Projects on the hub › Join a project**, then pick the project
 and your folder.
 
 If the hub says it has no such project, or **Join a project** answers "Nothing matches.", you don't see that
@@ -81,21 +81,21 @@ interlatch hub status
 ```
 
 It shows the hub's address, when your computer last sent, and how many of your teammates' lessons it holds. Your
-dashboard's **Settings › Devices** shows the same. **Open the hub's dashboard** there signs you in to the hub's
+dashboard's **Settings › Hubs** shows the same. **Open the hub's dashboard** there signs you in to the hub's
 dashboard, where you see your projects.
 
 ## From then on
 
 - **After each analysis,** your computer sends the project's new summaries and lessons. `interlatch push`, or
-  **Share now** in **Settings › Devices**, sends right away.
+  **Share now** in **Settings › Hubs**, sends right away.
 - **Each time it sends,** it gets back what your teammates learned in the project. Your agents find those lessons
   through Interlatch's MCP tools, marked as teammates'. With start-of-session notes on (`interlatch install
   --inject-context`), new sessions also list them under "From teammates' sessions".
 - **Your own dashboard** keeps showing your own sessions, as before. Your teammates' lessons appear on its project
-  pages and in **All knowledge**, marked with the computers they came from; **Read them** in **Settings › Devices**
+  pages and in **All knowledge**, marked with the computers they came from; **Read them** in **Settings › Hubs**
   lists only those.
 
-To stop sharing to one project, choose **Leave** next to it in **Settings › Devices** (or run `interlatch hub leave
+To stop sharing to one project, choose **Leave** next to it in **Settings › Hubs** (or run `interlatch hub leave
 --project <name>`). What you shared there stays on the hub. Added the wrong folder? **Remove** next to it takes the
 folder back, and the hub deletes what your computer shared from it. To stop sending altogether, choose **Leave the
 hub…** (or run `interlatch hub leave`). What you already sent stays on the hub. Your teammates' lessons from it are

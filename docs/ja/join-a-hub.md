@@ -69,7 +69,7 @@ interlatch hub add-folder ~/code/website --project Website
 これで、そこで分析済みのものが送られます。ハブがすでに知っている git リポジトリのクローンは、この手順がなくても
 そのプロジェクトに入りますが、実行しても問題ありません。
 
-ダッシュボードでも同じことができます：**Settings › Devices › Projects on the hub › Join a project** で、
+ダッシュボードでも同じことができます：**Settings › Hubs › (the hub) › Projects on the hub › Join a project** で、
 プロジェクトとあなたのフォルダーを選びます。
 
 ハブにそのプロジェクトがないと言われたり、**Join a project** が「一致するものはありません。」となったりしたら、
@@ -83,21 +83,21 @@ interlatch hub status
 ```
 
 ハブのアドレス、最後に送った時刻、受け取ったチームメイトのナレッジの数が表示されます。ダッシュボードの
-**Settings › Devices** にも同じものが表示されます。そこの **Open the hub's dashboard** で、あなたのプロジェクトが
+**Settings › Hubs** にも同じものが表示されます。そこの **Open the hub's dashboard** で、あなたのプロジェクトが
 見えるハブのダッシュボードにサインインできます。
 
 ## その後
 
 - **分析のたびに、** あなたのコンピューターはプロジェクトの新しい要約とナレッジを送ります。今すぐ送るには
-  `interlatch push`、または **Settings › Devices** の **Share now** を使います。
+  `interlatch push`、または **Settings › Hubs** の **Share now** を使います。
 - **送るたびに、** チームメイトがそのプロジェクトで学んだことが返ってきます。エージェントは Interlatch の MCP
   ツールを通じて、チームメイトのものと分かる形でそのナレッジを使えます。セッション開始時のメモを有効にしている場合
   （`interlatch install --inject-context`）、新しいセッションの "From teammates' sessions" にも並びます。
 - **あなたのダッシュボード**には、これまでどおりあなた自身のセッションが表示されます。チームメイトのナレッジは、
-  プロジェクトのページと **All knowledge** に、どのコンピューターから来たかを示して並びます。**Settings › Devices** の
+  プロジェクトのページと **All knowledge** に、どのコンピューターから来たかを示して並びます。**Settings › Hubs** の
   **Read them** でそれだけの一覧が開きます。
 
-一つのプロジェクトへの共有をやめるには、**Settings › Devices** でその横の **Leave** を選びます（または
+一つのプロジェクトへの共有をやめるには、**Settings › Hubs** でその横の **Leave** を選びます（または
 `interlatch hub leave --project <name>`）。そこで共有したものはハブに残ります。間違ったフォルダーを追加したときは、
 その横の **Remove** でフォルダーを外すと、あなたのコンピューターがそこから共有したものをハブが削除します。送るのを
 すべてやめるには **Leave the hub…** を選びます（または `interlatch hub leave`）。すでに送ったものはハブに残ります。
