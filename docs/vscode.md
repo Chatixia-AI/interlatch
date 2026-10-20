@@ -24,6 +24,11 @@ button on the row, opens the session in the dashboard.
 It reads from the dashboard you already run (`interlatch ui`, or the background service `interlatch install` sets up),
 over `http://127.0.0.1:11524` (or `:8765`, where older installs run it). It sends nothing anywhere else and needs no account.
 
+**Interlatch: Send Feedback**, in the Command Palette, reports a problem (a new issue on GitHub) or suggests an idea (a
+new discussion in Ideas). It asks the dashboard for this install's details (`GET /api/feedback`), adds the editor's
+name and version and the extension's, shows them, and opens the GitHub page with them filled in only if you say so.
+Nothing is sent until you post it there.
+
 ## Install
 
 Install **Interlatch** from VS Code's Extensions view (search for Interlatch), or from its
@@ -33,8 +38,8 @@ repository, installed with their own command (`cursor --install-extension …`, 
 
 ```bash
 cd vscode-extension
-npx @vscode/vsce package          # writes interlatch-0.3.1.vsix
-code --install-extension interlatch-0.3.1.vsix
+npx @vscode/vsce package          # writes interlatch-0.4.0.vsix
+code --install-extension interlatch-0.4.0.vsix
 ```
 
 It needs Interlatch, or a Chronicle newer than 0.6.1, which adds the `/api/file` and `/api/files` endpoints the lists read. With an older one,

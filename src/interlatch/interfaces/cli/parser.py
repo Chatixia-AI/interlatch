@@ -9,7 +9,7 @@ from ... import __version__
 from .commands.archive import add_export, add_forget, add_projects, add_search, add_sessions, add_show, add_stats
 from .commands.knowledge import (add_analyze, add_context, add_friction, add_glossary, add_knowledge, add_review,
                                  add_suggest, add_synthesize, add_systems)
-from .commands.operations import add_container, add_leaderboard, add_mirror, add_status, add_tailnet
+from .commands.operations import add_container, add_feedback, add_leaderboard, add_mirror, add_status, add_tailnet
 from .commands.hubs import add_group, add_hubs, add_profile
 from .commands.recording import (add_connect, add_disconnect, add_hook, add_import, add_ingest_session, add_screen,
                                  add_sources, add_sync, add_work)
@@ -26,8 +26,8 @@ def prog_name() -> str:
 
 
 # every command, in the order `interlatch --help` lists them
-COMMANDS = (add_install, add_uninstall, add_status, add_sync, add_work, add_analyze, add_synthesize, add_sessions,
-            add_show, add_search, add_knowledge, add_projects, add_stats, add_ui, add_app, add_export, add_glossary,
+COMMANDS = (add_install, add_uninstall, add_status, add_feedback, add_sync, add_work, add_analyze, add_synthesize,
+            add_sessions, add_show, add_search, add_knowledge, add_projects, add_stats, add_ui, add_app, add_export, add_glossary,
             add_systems, add_review, add_suggest, add_friction, add_forget, add_sources, add_connect, add_disconnect,
             add_import, add_screen, add_context, add_config, add_migrate, add_mcp, add_leaderboard, add_mirror,
             add_tailnet, add_hub, add_push, add_hubs, add_group, add_profile, add_container, add_hook, add_ingest_session)

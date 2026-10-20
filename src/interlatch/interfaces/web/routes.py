@@ -291,6 +291,8 @@ GET: list[Route] = [
     Route("/api/jobs", ANYONE, lambda h, ctx, m, q: h._json(api.status.status_small(ctx, limited=h.limited))),
     Route("/api/analysis/queue", ANYONE, lambda h, ctx, m, q: h._json(api.status.analysis_queue(ctx))),
     Route("/api/update", ANYONE, lambda h, ctx, m, q: h._json(api.settings.update_info(ctx, remote=False))),
+    # the GitHub page for a report: the system's details only here or for an admin (api/settings.py)
+    Route("/api/feedback", ANYONE, lambda h, ctx, m, q: h._json(api.settings.feedback(ctx, q, full=h._can_admin()))),
     Route("/api/imports", ANYONE, lambda h, ctx, m, q: h._json(api.sources.imports(ctx))),
     Route("/api/devices", ANYONE, _devices),
     # this computer's hubs, its folders that wait: only from here (docs/profiles.md)

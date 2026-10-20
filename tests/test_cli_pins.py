@@ -18,6 +18,7 @@ EXPECTED_COMMANDS = {
     "install": ["setup"],
     "uninstall": [],
     "status": ["doctor"],
+    "feedback": ["bug"],
     "sync": [],
     "work": [],
     "analyze": [],

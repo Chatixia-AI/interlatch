@@ -103,6 +103,7 @@ const ICONS = {
   x: ["M18 6 6 18", "m6 6 12 12"],
   download: ["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"],
   mcp: ["M9 17H7A5 5 0 0 1 7 7h2", "M15 7h2a5 5 0 1 1 0 10h-2", "M8 12h8"],
+  feedback: ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", "M8 9h8", "M8 13h5"],
   devices: [["rect", { x: 2, y: 4, width: 13, height: 10, rx: 1.5 }], "M1 18h15", ["rect", { x: 17, y: 8, width: 6, height: 12, rx: 1.5 }], "M20 17h.01"],
   arrow: ["M5 12h14", "m12 5 7 7-7 7"],
   branch: ["M6 3v12", ["circle", { cx: 18, cy: 6, r: 3 }], ["circle", { cx: 6, cy: 18, r: 3 }], "M18 9a9 9 0 0 1-9 9"],
@@ -1009,6 +1010,7 @@ function navKey(path) {
   if (path.startsWith("/devices")) return "devices";
   if (path === "/hubs" || path === "/hub") return "hubs";
   if (path.startsWith("/appearance")) return "appearance";
+  if (path.startsWith("/feedback")) return "feedback";
   if (path.startsWith("/storage")) return "storage";
   if (path.startsWith("/reanalysis")) return "reanalysis";
   if (path.startsWith("/search")) return "search";
@@ -8206,6 +8208,29 @@ route(/^\/appearance$/, async () => {
           : h("span", { class: "muted" }, gameOn() ? t("On") : t("Off")))));
 });
 
+// Settings › Feedback: a GitHub page to report a problem (a new issue) or suggest an idea (a new discussion in Ideas),
+// with this install's details filled in (runtime/feedback.py). Nothing is sent from here: the person posts it there.
+// Someone the hub limits to projects can't ask for the details: the buttons then open the plain GitHub pages.
+const FEEDBACK_REPO = "https://github.com/Chatixia-AI/interlatch";
+route(/^\/feedback$/, async () => {
+  const [bug, idea] = await Promise.all(["bug", "idea"].map((kind) => api("/api/feedback", { kind }).catch(() => null)));
+  const card = (r, kind, title, hint, plain) => h("section", { class: "card fb-card" },
+    h("div", { class: "fb-head" }, icon(kind === "bug" ? "gotcha" : "sparkles"), h("h2", null, title)),
+    h("p", { class: "muted" }, hint),
+    h("a", { class: "btn primary with-icon", href: r?.url || plain, target: "_blank", rel: "noopener" }, icon("external"), t("Open on GitHub")));
+  const rows = (bug || idea)?.details || [];
+  return h("div", { class: "narrow-page" },
+    h("div", { class: "page-head" }, h("div", null, h("h1", null, t("Feedback")),
+      h("div", { class: "sub" }, t("Something wrong, or something that would help? Both open a page on GitHub with this install's details filled in. You write the rest and post it yourself, with a GitHub account.")))),
+    h("div", { class: "fb-grid" },
+      card(bug, "bug", t("Report a problem"), t("A new issue. Say what you did, what you expected, and what happened instead."), `${FEEDBACK_REPO}/issues/new`),
+      card(idea, "idea", t("Suggest an idea"), t("A new discussion in Ideas, where others can add to it."), `${FEEDBACK_REPO}/discussions/new?category=ideas`)),
+    rows.length ? h("section", { class: "card set-card" },
+      h("div", { class: "card-head" }, h("h2", null, t("What's filled in"))),
+      h("p", { class: "muted" }, t("Only what this install is, never your sessions, projects, folders or addresses. You can change it on GitHub before you post.")),
+      h("table", { class: "fb-details" }, h("tbody", null, rows.map(([k, v]) => h("tr", null, h("th", null, k), h("td", null, v)))))) : null);
+});
+
 // =====================================================================================
 // Shell: rail, section sidebar, toolbar, status bar, command palette
 // =====================================================================================
@@ -8223,9 +8248,9 @@ const SECTIONS = [
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", hubs: "settings", appearance: "settings", storage: "settings", reanalysis: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", hubs: "settings", appearance: "settings", feedback: "settings", storage: "settings", reanalysis: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
-const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), hubs: t("Hubs"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance") };
+const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), hubs: t("Hubs"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance"), feedback: t("Feedback") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 let shellRealm = false, realmReturn = "#/"; // in Innerlatch; the page its door leads back to
@@ -8468,7 +8493,8 @@ function settingsSidebar(box) {
       own && !limited() ? sbRow(t("Hubs"), "#/hubs", "organization", null, ["/hubs"]) : null,
       canAdmin() ? sbRow(t("Storage"), "#/storage", "data", null, ["/storage"]) : null, // a password: admins only
       canAdmin() ? sbRow(t("Re-analysis"), "#/reanalysis", "calendar", null, ["/reanalysis"]) : null,
-      sbRow(t("Appearance"), "#/appearance", "appearance", null, ["/appearance"])));
+      sbRow(t("Appearance"), "#/appearance", "appearance", null, ["/appearance"]),
+      sbRow(t("Feedback"), "#/feedback", "feedback", null, ["/feedback"])));
 }
 function teamSidebar(box) {
   box.replaceChildren(h("div", { class: "sb-head" }, h("h2", null, t("Team"))),
@@ -8622,7 +8648,7 @@ function paletteCommands() {
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
       : gameOn() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
-    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"),
+    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"), nav(t("Feedback"), "#/feedback", "feedback", t("report a problem, suggest an idea")),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },
@@ -9126,6 +9152,8 @@ function translateStatic() {
   set("#search-pill kbd", { text: keys("⌘K") });
   set("#sync-btn", { title: t("Sync transcripts and process the analysis queue"), text: t("Sync") });
   set("#theme-btn", { "aria-label": t("Toggle theme") });
+  set("#status-feedback", { title: t("Report a problem or suggest an idea"), "aria-label": t("Feedback") });
+  set("#status-feedback span", { text: t("Feedback") });
   set("#activity", { "aria-label": t("Activity") });
   // the language switch names the other language in that language, so it is found whichever one is showing
   const other = LANG === "ja" ? "en" : "ja", label = other === "ja" ? "日本語に切り替え" : "Switch to English";
@@ -9160,6 +9188,8 @@ $("#status-queue").setAttribute("aria-haspopup", "dialog");
 $("#status-queue").setAttribute("aria-expanded", "false");
 $("#status-queue").title = t("See the queued sessions and when each is analyzed");
 $("#theme-btn").addEventListener("click", flipTheme);
+$("#status-feedback").prepend(icon("feedback"));
+$("#status-feedback").addEventListener("click", () => { location.hash = "#/feedback"; });
 $("#lang-btn")?.addEventListener("click", () => setLang(LANG === "ja" ? "en" : "ja"));
 themeChanged();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", themeChanged);

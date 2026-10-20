@@ -2711,4 +2711,16 @@ window.INTERLATCH_JA = {
   "Records and analyzes its own sessions, and shares what it learned with its hubs.": "自分のセッションを記録・分析し、学んだことをハブと共有します。",
   "Sends its sessions to its hub, which records and analyzes them.": "セッションをハブに送り、ハブが記録・分析します。",
   "Personal hasn't joined a hub. Joining one shares what you learn with your team: ask its admin for an invite.": "Personal はハブに参加していません。参加すると学んだことをチームと共有できます。ハブの管理者に招待を頼んでください。",
+  // Settings › Feedback
+  "Feedback": "フィードバック",
+  "report a problem, suggest an idea": "不具合の報告、アイデアの提案",
+  "Report a problem or suggest an idea": "不具合を報告する、またはアイデアを提案する",
+  "Open on GitHub": "GitHub で開く",
+  "Something wrong, or something that would help? Both open a page on GitHub with this install's details filled in. You write the rest and post it yourself, with a GitHub account.": "うまく動かないこと、あると助かることはありますか？どちらも、このインストールの情報を記入済みの GitHub のページを開きます。残りを書いて、ご自身で投稿してください（GitHub アカウントが必要です）。",
+  "Report a problem": "不具合を報告",
+  "A new issue. Say what you did, what you expected, and what happened instead.": "新しい Issue を作ります。何をしたか、どうなるはずだったか、実際にどうなったかを書いてください。",
+  "Suggest an idea": "アイデアを提案",
+  "A new discussion in Ideas, where others can add to it.": "Ideas に新しいディスカッションを作ります。ほかの人も意見を足せます。",
+  "What's filled in": "記入される内容",
+  "Only what this install is, never your sessions, projects, folders or addresses. You can change it on GitHub before you post.": "このインストールが何かだけで、セッション、プロジェクト、フォルダー、アドレスは含みません。投稿する前に GitHub で書き換えられます。",
 };

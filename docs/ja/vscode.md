@@ -24,6 +24,11 @@ Interlatch 拡張機能は、VS Code のエクスプローラーに 2 つのセ�
 データは、すでに動いているダッシュボード（`interlatch ui`、または `interlatch install` が設定するバックグラウンド
 サービス）から `http://127.0.0.1:11524`（以前のインストールでは `:8765`）経由で読み込みます。ほかの場所には何も送らず、アカウントも不要です。
 
+コマンドパレットの **Interlatch: Send Feedback** で、不具合を報告（GitHub の新しい Issue）したり、アイデアを提案
+（Ideas の新しいディスカッション）したりできます。ダッシュボードにこのインストールの情報（`GET /api/feedback`）を
+尋ね、エディターの名前とバージョン、拡張機能のバージョンを加えて表示し、了承したときだけそれを記入済みの GitHub の
+ページを開きます。そこで投稿するまで何も送られません。
+
 ## インストール
 
 VS Code の拡張機能ビューで Interlatch を検索するか、
@@ -33,8 +38,8 @@ Marketplace を使わないエディター（Cursor、Windsurf、Antigravity、V
 
 ```bash
 cd vscode-extension
-npx @vscode/vsce package          # interlatch-0.3.1.vsix を作成
-code --install-extension interlatch-0.3.1.vsix
+npx @vscode/vsce package          # interlatch-0.4.0.vsix を作成
+code --install-extension interlatch-0.4.0.vsix
 ```
 
 一覧が読み込む `/api/file` と `/api/files` エンドポイントは、Interlatch と 0.6.1 より新しい Chronicle にあります。

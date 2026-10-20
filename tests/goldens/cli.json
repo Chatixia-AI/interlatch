@@ -496,6 +496,66 @@
      }
     ]
    },
+   "feedback": {
+    "aliases": [
+     "bug"
+    ],
+    "defaults": {
+     "fn": "<fn cmd_feedback>"
+    },
+    "hidden": false,
+    "options": [
+     {
+      "action": "_StoreAction",
+      "choices": [
+       "bug",
+       "idea"
+      ],
+      "const": null,
+      "default": "bug",
+      "dest": "kind",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": "?",
+      "option_strings": [],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreAction",
+      "choices": null,
+      "const": null,
+      "default": null,
+      "dest": "title",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": null,
+      "option_strings": [
+       "--title"
+      ],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "print",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--print"
+      ],
+      "required": false,
+      "type": null
+     }
+    ]
+   },
    "forget": {
     "aliases": [],
     "defaults": {

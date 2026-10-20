@@ -78,6 +78,39 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_feedback(args) -> int:
+    """`interlatch feedback`: report a problem or suggest an idea on GitHub, with this install's details filled in."""
+    from ....runtime.feedback import details, report
+
+    cfg = load_cfg()
+    console = new_console()
+    try:
+        conn = open_archive(cfg)
+    except Exception:  # a broken archive is worth reporting too: the report just doesn't list the agents
+        conn = None
+    rows = details(cfg, conn)
+    if conn is not None:
+        conn.close()
+    r = report(args.kind, rows, args.title or "")
+    if args.print:
+        print(r["url"])
+        return 0
+    where = "a new issue" if r["kind"] == "bug" else "a new discussion in Ideas"
+    console.print(f"[bold]{'Report a problem' if r['kind'] == 'bug' else 'Suggest an idea'}[/]: opens {where} on "
+                  "GitHub with these details filled in. Nothing is sent from here: you write the rest and post it "
+                  "yourself.", highlight=False)
+    for label, value in r["details"]:
+        console.print(f"  {label + ':':<17} {value}", highlight=False, markup=False)
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        if input("Open it in your browser? [Y/n] ").strip().lower() in ("", "y", "yes"):
+            import webbrowser
+
+            if webbrowser.open(r["url"]):
+                return 0
+    console.print(f"Open this address to write it:\n{r['url']}", highlight=False, markup=False, soft_wrap=True)
+    return 0
+
+
 def cmd_container(args) -> int:
     from ....runtime.container import main
 
@@ -257,6 +290,16 @@ def cmd_tailnet(args) -> int:
 def add_status(sub) -> None:
     s = sub.add_parser("status", aliases=["doctor"], help="show installation and queue status")
     s.set_defaults(fn=cmd_status)
+
+
+def add_feedback(sub) -> None:
+    s = sub.add_parser("feedback", aliases=["bug"],
+                       help="report a problem or suggest an idea on GitHub, with this install's details filled in")
+    s.add_argument("kind", nargs="?", choices=["bug", "idea"], default="bug",
+                   help="bug: a new issue (the default); idea: a new discussion in Ideas")
+    s.add_argument("--title", help="the title to start with")
+    s.add_argument("--print", action="store_true", help="only print the address, don't ask or open a browser")
+    s.set_defaults(fn=cmd_feedback)
 
 
 def add_leaderboard(sub) -> None:
