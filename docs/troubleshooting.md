@@ -6,6 +6,9 @@ Start with `interlatch status` (or **Settings › Status** in the dashboard). It
 agents, the MCP server and the `claude` CLI, and lists recent analysis failures. Logs are in
 `~/.interlatch/logs/` (`chronicle.log` for everything, `hooks.log` for session-end hooks).
 
+Still stuck? `interlatch feedback` (or **Settings › Feedback** in the dashboard) opens a new GitHub issue with your
+install's details filled in.
+
 ## Install and the app
 
 **macOS says Interlatch "cannot be opened" or "cannot verify the developer".** That release was not notarized. Open

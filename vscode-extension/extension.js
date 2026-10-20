@@ -324,6 +324,36 @@ async function suggestUninstallingChronicle(context) {
   }
 }
 
+// Send Feedback: a GitHub page to report a problem (a new issue) or suggest an idea (a new discussion in Ideas), with
+// the dashboard's details of this install filled in (GET /api/feedback) and the editor's. It asks before opening the
+// page, and nothing is sent until you post it there. A dashboard that doesn't answer leaves only the editor's details.
+const REPO = "https://github.com/Chatixia-AI/interlatch";
+async function sendFeedback(extensionVersion) {
+  const pick = await vscode.window.showQuickPick([
+    { label: "$(bug) Report a problem", description: "a new issue on GitHub", kind: "bug" },
+    { label: "$(lightbulb) Suggest an idea", description: "a new discussion in Ideas on GitHub", kind: "idea" },
+  ], { placeHolder: "Feedback about Interlatch" });
+  if (!pick) return;
+  const editor = `${vscode.env.appName} ${vscode.version}`;
+  const q = new URLSearchParams({ kind: pick.kind, client: "vscode", editor, extension: extensionVersion });
+  const { data } = await api(`/api/feedback?${q}`);
+  let rows = data && data.details, url = data && data.url;
+  if (!url) {
+    rows = [["Editor", editor], ["Extension", extensionVersion], ["Interlatch", "the dashboard didn't answer"]];
+    const body = `**Details** (filled in by the VS Code extension)\n\n| | |\n|---|---|\n${rows.map(([k, v]) => `| ${k} | ${v} |`).join("\n")}\n`;
+    const page = pick.kind === "bug" ? `${REPO}/issues/new?` : `${REPO}/discussions/new?category=ideas&`;
+    url = `${page}title=&body=${encodeURIComponent(body)}`;
+  }
+  const open = "Open GitHub";
+  const choice = await vscode.window.showInformationMessage(
+    pick.kind === "bug" ? "Report a problem on GitHub?" : "Suggest an idea on GitHub?",
+    { modal: true, detail: `The page opens with these details filled in:\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nNothing is sent until you post it there.` },
+    open);
+  // the address as a string: VS Code opens a string as it is, but writes a Uri out again with its query's = and &
+  // encoded (?title%3D…%26body…), and GitHub would then fill nothing in
+  if (choice === open) vscode.env.openExternal(url);
+}
+
 function activate(context) {
   const thisFile = new ThisFile();
   const fileView = vscode.window.createTreeView("interlatch.fileSessions", { treeDataProvider: thisFile });
@@ -348,6 +378,7 @@ function activate(context) {
     vscode.commands.registerCommand("interlatch.refresh", refresh),
     vscode.commands.registerCommand("interlatch.openFile", (item) => item && vscode.window.showTextDocument(vscode.Uri.file(item.filePath))),
     vscode.commands.registerCommand("interlatch.openDashboard", () => vscode.env.openExternal(vscode.Uri.parse(`${baseUrl()}/`))),
+    vscode.commands.registerCommand("interlatch.sendFeedback", () => sendFeedback(String(context.extension.packageJSON.version || ""))),
     // an id from a details row, or the session row itself from its inline button
     vscode.commands.registerCommand("interlatch.openSession", (arg) => {
       const id = typeof arg === "string" ? arg : arg && arg.session && arg.session.id;

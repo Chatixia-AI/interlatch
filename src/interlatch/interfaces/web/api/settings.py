@@ -4,6 +4,7 @@ menu-bar icon."""
 from __future__ import annotations
 
 import json
+import re
 import threading
 
 from ....analysis.runners.factory import BACKENDS, make_runner
@@ -23,6 +24,31 @@ def update_info(ctx: Context, remote: bool) -> dict:
     if remote:
         remember(ctx.conn)
     return {**info, "check_daily": ctx.cfg.update_check_daily, "notify": ctx.cfg.update_notify}
+
+
+def _client_value(value) -> str:
+    """An editor's name and version as a client sends it, kept to a short plain line for the report's table."""
+    return re.sub(r"[^\w .()+-]", "", str(value or ""))[:60].strip()
+
+
+def feedback(ctx: Context, q: dict, full: bool) -> dict:
+    """Settings › Feedback (and the VS Code extension's Send Feedback): the GitHub page to open, with this install's
+    details filled in. `full`: the system's details too (here, or an admin of a hub); a hub's other people get its
+    version and part only, which the dashboard shows them anyway."""
+    from .... import __version__
+    from ....core import i18n
+    from ....runtime.feedback import KINDS, details, hub_role, report
+
+    kind = q.get("kind") if q.get("kind") in KINDS else "bug"
+    rows = details(ctx.cfg, ctx.conn) if full else [("Interlatch", __version__), ("Hub", hub_role(ctx.cfg))]
+    if q.get("client") == "vscode":
+        via = "the VS Code extension"
+        rows += [(label, v) for label, key in (("Editor", "editor"), ("Extension", "extension"))
+                 if (v := _client_value(q.get(key)))]
+    else:
+        via = "the dashboard"
+        rows.append(("Dashboard language", i18n.lang.get()))
+    return report(kind, rows, via=via)
 
 
 def _maybe_check_daily(ctx: Context) -> None:

@@ -135,6 +135,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/systems"): SIGNED_IN,
     ("GET", "/api/system"): SIGNED_IN.ok(404),
     ("GET", "/api/update"): SIGNED_IN,
+    ("GET", "/api/feedback"): SIGNED_IN,
     ("GET", "/api/imports"): SIGNED_IN,
     ("GET", "/api/devices"): SIGNED_IN,  # non-admins get it trimmed: test_devices_is_trimmed_for_non_admins
     ("GET", "/api/hubs"): HERE,
