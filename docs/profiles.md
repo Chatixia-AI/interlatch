@@ -38,8 +38,8 @@ Personal's hub already has, it takes back first (see [Moving takes sessions back
 `--dry-run` shows what would move, and how many of them a hub has, without changing anything.
 
 **On the dashboard:** **Settings › Hubs** lists every hub, Personal's too, and adds one (its name, address and
-invite code). Under each hub, the same for every hub: whether sending to it works, **Share now**, its dashboard,
-**Projects on the hub** (join one of its projects with a folder here, or leave one) and what this computer shares with
+invite code). Each hub has a tab, the same for every hub: whether sending to it works, **Share now**, its dashboard,
+then **Projects** (join one of its projects with a folder here, or leave one) beside what this computer shares with
 it. A group's page has **Goes to**, where you pick the hub its sessions go to. In the **Projects** sidebar,
 a group connected to a hub shows that hub's name, and folders waiting for you are listed first.
 

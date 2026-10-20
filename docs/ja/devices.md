@@ -90,7 +90,7 @@ interlatch hub join https://pc.tail1234.ts.net --token …
    両方のプロジェクトのナレッジベースが作り直されます。より具体的な指定が優先されるので、フォルダーの中にあってもハブが
    git リモートを知っているリポジトリはそのリモートに従います。ハブが別のプロジェクトに入れているリポジトリの中のフォルダーは追加できません
    （1 つのリポジトリは 1 つのプロジェクトに属します）。`interlatch hub folders` でどこに入るかを確認できます。
-   ダッシュボードの **Settings › Hubs › (the hub) › Projects on the hub** でも同じことができ、**Join a project** でハブの
+   ダッシュボードの **Settings › Hubs › (the hub) › Projects** でも同じことができ、**Join a project** でハブの
    プロジェクトとこのコンピューターのフォルダーを選びます。間違えて追加したフォルダーを外すには[やめるとき](#やめるとき)を
    見てください。ハブの **Team › Computers** に、各コンピューターが追加したフォルダーが表示されます。
    このコンピューターの **Projects** ページとサイドバーでは、ここのフォルダーの送り先になっているハブのプロジェクトが
@@ -123,7 +123,7 @@ interlatch hub join https://pc.tail1234.ts.net --token …
   別のコンピューターで記録されたプロジェクト（`server:/root/app` など）は、ここからは送れません。
 
 プロジェクトはハブにすでにある必要があり（メンバーのコンピューターでは作れません）、選ぶのはこのコンピューター自身で、ほかの
-デバイスからはできません。**Settings › Hubs › (the hub) › Projects on the hub** ではそのプロジェクトの下にグループが表示され、グループの
+デバイスからはできません。**Settings › Hubs › (the hub) › Projects** ではそのプロジェクトの下にグループが表示され、グループの
 プロジェクトは Projects ページとサイドバーで、グループの中に加えてそのプロジェクトの下にも並びます。
 
 ### 送られるもの
@@ -148,7 +148,7 @@ interlatch hub join https://pc.tail1234.ts.net --token … --share knowledge
 ```
 
 （参加済みのコンピューターでは `interlatch config set hub.share knowledge`、またはそのダッシュボードの **Settings › Hubs › (the hub) ›
-What this computer sends**）。そのコンピューターは単独の Interlatch と同じように
+What this computer shares**）。そのコンピューターは単独の Interlatch と同じように
 動きます。自分のセッションを記録し、自分で分析し（自分の Claude Code か Codex のログイン、Bob API キー、または
 モデルプロバイダーで）、ダッシュボードと MCP ツールも更新され続けます。分析のたびにハブへ送るのは次のものだけです。
 
@@ -162,7 +162,7 @@ What this computer sends**）。そのコンピューターは単独の Interlat
 それ以外のフォルダーのセッションはコンピューターに残り、送信の結果には「kept here」として数えられます。Docker やサーバー上の
 ハブのように、ハブ自身がそのリポジトリでセッションを実行したことがなければ、ハブはその git リモートを知りません。その場合は
 プロジェクトごとに自分のフォルダーを追加してください。すべてのフォルダーのセッションを共有するには、`--all-folders` を付けて
-参加するか、`interlatch config set hub.all_folders true` を実行するか、**Settings › Hubs › (the hub) › What this computer sends** で
+参加するか、`interlatch config set hub.all_folders true` を実行するか、**Settings › Hubs › (the hub) › What this computer shares** で
 **すべてのフォルダー** を選びます。
 
 プロンプト、シェルのコマンド、ファイルのパス、トランスクリプト、あなた自身についてのナレッジ（全体のものと好み）は
@@ -222,8 +222,8 @@ interlatch hub store                          # 接続し、テーブルを用�
   15 分ごと）と、`interlatch push` または **Settings › Hubs** の **Share now** を使ったときです。自分のデータベースに読み取り専用で、そのリポジトリの自分のフォルダーの下に保存されます。MCP ツールはそれも
   （チームメイトのものと示して）答えに使い、セッション開始時のメモは **From teammates' sessions** の下に並べます。
   ダッシュボードでも、プロジェクトのページと **All knowledge** に、それを述べたセッションのコンピューター名を **from** で
-  示して表示します。そこで取得元に **From teammates** を選ぶとそれだけが並び、**Settings › Hubs** の **Read them** で
-  その一覧が開きます。自分が述べたナレッジは返ってきません。却下したものは却下されたまま残り、チームから消えたものは消えます。持っている数は
+  示して表示します。そこで取得元に **From teammates** を選ぶとそれだけが並び、**Settings › Hubs** の **teammates' lessons**
+  の数を押すとその一覧が開きます。自分が述べたナレッジは返ってきません。却下したものは却下されたまま残り、チームから消えたものは消えます。持っている数は
   `interlatch hub status` とそのコンピューターの **Settings › Hubs** で分かり、そこの **Share now** ですぐに
   プッシュできます。
 - **データベースにつなぐのはハブだけです。** 各コンピューターはそのアドレスもパスワードも知らないので、ハブだけが届く
@@ -237,7 +237,7 @@ interlatch hub store                          # 接続し、テーブルを用�
 ### やめるとき
 
 ナレッジを共有するコンピューターは、ハブのプロジェクトのうち一つから抜けて、ほかには残れます。**Settings › Hubs › (the hub) ›
-Projects on the hub** で、プロジェクトごとに次のボタンがあります。
+Projects** で、プロジェクトごとに次のボタンがあります。
 
 - **Leave**：このコンピューターはそこへのセッションの共有と、そのプロジェクトのチームメイトのナレッジの受け取りを
   やめます。すでに共有したものはチームのためにハブのそのプロジェクトに残ります。**Rejoin** で元に戻せます。コマンドでは
@@ -249,7 +249,7 @@ Projects on the hub** で、プロジェクトごとに次のボタンがあり�
   `interlatch hub remove-folder <folder>` です。トランスクリプトを送るコンピューターでは、ハブにトランスクリプトが残り、
   ハブは git リモートか元のフォルダーで振り分け直します。
 
-`interlatch hub leave`、または **Settings › Hubs** の **Leave the hub…** で、そのコンピューターは再び自分でセッションを
+`interlatch hub leave`、または **Settings › Hubs** の **Leave…** で、そのコンピューターは再び自分でセッションを
 記録・分析します。ハブは受け取ったものを残します。そのハブから来たチームメイトのナレッジも削除し、そのハブのための設定
 （フォルダー、抜けたプロジェクト、そこに共有したグループ）は `~/.interlatch/hub-left/` に保存するので、
 あとで参加するほかのハブには渡りません。ナレッジだけを共有するかどうか（`[hub] share`）はそのままです。再び参加するには新しい招待が必要です。同じハブにもう一度参加すると、それらを
