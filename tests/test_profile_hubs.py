@@ -212,3 +212,63 @@ def test_choosing_a_folder_for_another_hub_takes_it_back_at_once(twohubs):
     assert moved.taken == {twohubs["profile"].id: 1} and moved.hubs == {twohubs["profile"].id: twohubs["url_b"]}
     assert not _hub_has(hub_b)
     assert push(acme).sent == 0 and push(spoke).sent >= 1 and _hub_has(hub_a) and not _hub_has(hub_b)
+
+
+class _Jobs:  # runs a dashboard job at once, so its result can be checked
+    def __init__(self):
+        self.ran: list[str] = []
+
+    def start(self, name, fn):
+        self.ran.append(fn(lambda *_: None))
+        return True
+
+    def snapshot(self):
+        return {}
+
+
+def test_settings_hubs_shows_and_drives_each_hub(twohubs, monkeypatch):
+    """Settings › Hubs: each hub's sending (joined, last share, problem), Share now and Leave for any of them, the
+    status bar's list of hubs and a problem with another hub named, and signing in to another hub as its own link."""
+    from interlatch.interfaces.web import routes
+    from interlatch.interfaces.web.api import status
+    from interlatch.interfaces.web.api.hubs import action_hubs, hubs
+    from interlatch.interfaces.web.context import Context
+
+    spoke, acme, hub_b = twohubs["spoke"], twohubs["acme"], twohubs["hub_b"]
+    conn = connect(spoke.db_path)
+    jobs = _Jobs()
+    ctx = Context(lambda: spoke, lambda c: None, lambda: conn, jobs, None)
+    rows = {r["label"]: r for r in hubs(ctx)["hubs"]}
+    assert rows["Acme"]["joined"] and rows["Acme"]["last_push"] is None and rows["Personal"]["joined"]
+
+    out, code = action_hubs(ctx, "push", {"hub": "Acme"})  # Share now, for Acme's hub only
+    assert code == 200 and out["started"] and "to " + twohubs["url_b"] in jobs.ran[0] and _hub_has(hub_b)
+    acme_row = next(r for r in hubs(ctx)["hubs"] if r["label"] == "Acme")
+    assert acme_row["last_push"]["sent"] == 1 and acme_row["hub_name"] == "Hub B" and acme_row["push_problem"] is None
+
+    small = status.status_small(ctx)
+    assert small["hub_urls"] == [spoke.hub_url, twohubs["url_b"]] and small["hub_problem"] is None
+    monkeypatch.setattr("interlatch.sharing.push.last_push", lambda cfg: {"owner": cfg.owner})  # Acme's sends fail
+    monkeypatch.setattr("interlatch.sharing.push.send_problem",
+                        lambda last: {"reason": "unreachable"} if last["owner"] != "personal" else None)
+    assert status.status_small(ctx)["hub_problem"] == {"reason": "unreachable", "profile": "Acme"}
+    monkeypatch.undo()
+
+    signed = []
+    monkeypatch.setattr("interlatch.sharing.client.dashboard_signin", lambda cfg, page=None: signed.append(cfg.owner) or "x")
+
+    class H:
+        def _json(self, data, status=200):
+            return data, status
+
+    assert routes._hub_signin(H(), ctx, None, {"hub": "Acme"})[1] == 200
+    assert routes._hub_signin(H(), ctx, None, {})[1] == 200
+    assert signed == [twohubs["profile"].id, "personal"]
+    assert routes._hub_signin(H(), ctx, None, {"hub": "Nope"})[1] == 400
+
+    out, code = action_hubs(ctx, "leave", {"hub": "Acme"})  # Leave, for Acme's hub only
+    assert code == 200 and not load_config(acme.home).is_spoke and load_config(spoke.home).is_spoke
+    assert not next(r for r in hubs(ctx)["hubs"] if r["label"] == "Acme")["joined"]
+    out, code = action_hubs(ctx, "push", {"hub": "Acme"})
+    assert code == 409 and "hasn't joined" in out["error"]
+    conn.close()

@@ -156,12 +156,13 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
     if limited:  # the hub's own queue, jobs and updates are not theirs to see
         return {"pending": {"ready": 0, "queued": 0}, "analysis": {"auto": False, "max_per_run": 0, "label": ""}, "paused_until": None,
                 "last_sync": None, "jobs": {}, "version": __version__, "update": None, "ui_build": UI_BUILD,
-                "hub_url": None, "hub_problem": None, "limited": True}
+                "hub_url": None, "hub_urls": [], "hub_problem": None, "limited": True}
 
     recall(ctx.conn)  # a check made by another dashboard process, or before a restart
     _maybe_check_daily(ctx)
 
     pending = count_pending(ctx.conn, ctx.cfg)
+    sending = _sending_to(ctx)
     return {
         "pending": pending,
         "analysis": {"auto": ctx.cfg.analysis.auto, "max_per_run": ctx.cfg.analysis.max_per_run,
@@ -175,14 +176,35 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
         "update": available(),
         "ui_build": UI_BUILD,
         "hub_url": ctx.cfg.hub_url or None,  # set on a computer that sends its sessions to a hub
-        "hub_problem": _hub_problem(ctx),  # its pushes don't get through: the status bar warns
+        "hub_urls": [c.hub_url for c in sending],  # and the other hubs it sends to (docs/profiles.md)
+        "hub_problem": _hub_problem(sending),  # its pushes don't get through: the status bar warns
     }
 
 
-def _hub_problem(ctx: Context) -> dict | None:
+def _sending_to(ctx: Context) -> list:
+    """The configs that send to a hub: Personal's (when it joined one), then each other hub this computer joined."""
+    from ....application.profiles import joined
+
+    return ([ctx.cfg] if ctx.cfg.is_spoke else []) + joined(ctx.cfg)
+
+
+def _hub_problem(sending: list) -> dict | None:
+    """The first hub whose sends don't get through, with its name when it isn't Personal's (`profile`)."""
+    from ....core.profiles import PERSONAL
     from ....sharing.push import last_push, send_problem
 
-    return send_problem(last_push(ctx.cfg)) if ctx.cfg.is_spoke else None
+    for cfg in sending:
+        if problem := send_problem(last_push(cfg)):
+            if cfg.owner != PERSONAL:
+                from ....core.profiles import RegistryError
+
+                try:
+                    reg = cfg.profiles
+                except RegistryError:
+                    reg = None
+                problem["profile"] = reg.label(cfg.owner) if reg else cfg.owner
+            return problem
+    return None
 
 
 def status(ctx: Context) -> dict:
