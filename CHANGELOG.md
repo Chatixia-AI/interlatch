@@ -3,6 +3,11 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.6 (2026-10-20)
+
+- **Hubs page, tidier:** **Settings › Hubs** has a tab for each hub and one to add a hub. A hub's tab fits on one
+  screen: how sending goes and its buttons on top, then its projects beside what this computer shares with it.
+
 ## 0.28.5 (2026-10-20)
 
 - **Settings › Hubs shows each hub's projects and sharing right under it**, on one page, instead of a page per hub
