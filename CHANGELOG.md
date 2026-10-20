@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.4 (2026-10-20)
+
+- **Every hub has the same page.** Settings › Hubs lists each hub, Personal's too, and each one opens a page of its own
+  with how sending goes, **Projects on the hub** (join a project with a folder here, add or remove a folder, leave or
+  rejoin) and what this computer shares with it. Settings › Devices is about this computer and your phone again
+  ([Several hubs on one computer](docs/profiles.md)).
+
 ## 0.28.3 (2026-10-20)
 
 - **Settings › Hubs.** Each hub this computer sends to has its own card: whether sending works, the last share,
