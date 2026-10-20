@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.3 (2026-10-20)
+
+- **Settings › Hubs.** Each hub this computer sends to has its own card: whether sending works, the last share,
+  **Share now**, its dashboard (signed in as that hub's link), joining and leaving it. The Projects sidebar names the
+  hub each group goes to and lists folders waiting for a hub first, and the status bar names every hub
+  ([Several hubs on one computer](docs/profiles.md)).
+
 ## 0.28.2 (2026-10-20)
 
 - **Several hubs: connect your groups.** `interlatch profile` became `interlatch hubs` and `interlatch group`: add a
