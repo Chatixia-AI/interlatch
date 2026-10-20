@@ -164,7 +164,7 @@ def test_a_profiles_folder_never_reaches_personals_hub(teamenv, monkeypatch):  #
     spoke, hub = teamenv["spoke"], teamenv["conn"]
     _analyzed_on_spoke(spoke, title="Acme work", at="2026-10-02T00:00:00Z", lessons=[("p-gotcha", "project", "gotcha")])
     p, moved = hub_with(spoke, "Acme", [SPOKE_CWD])
-    assert moved.sessions == {PERSONAL: 1} and moved.on_hub == 0 and _owner(spoke) == p.id
+    assert moved.sessions == {PERSONAL: 1} and not moved.taken.get(PERSONAL) and _owner(spoke) == p.id
     sent = _bodies(monkeypatch)
     report = push(spoke)
     assert not report.errors and report.sent == 0
@@ -181,19 +181,85 @@ def test_a_profiles_folder_never_reaches_personals_hub(teamenv, monkeypatch):  #
     assert hub.execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()[0] == 1
 
 
-def test_moving_a_session_the_hub_has_asks_first(teamenv):  # noqa: F811
+def _on_hub(env, sid=SPOKE_SID) -> bool:
+    """Whether the hub has the session: its own copy, and the team store's."""
+    here = env["conn"].execute("SELECT COUNT(*) FROM sessions WHERE id = ?", (sid,)).fetchone()[0] == 1
+    assert here == (sid in env["fake"].sessions)
+    return here
+
+
+def test_a_session_that_moves_is_taken_back_from_its_hub_first(teamenv):  # noqa: F811
+    spoke, hub = teamenv["spoke"], teamenv["conn"]
+    _analyzed_on_spoke(spoke, title="Shared already", at="2026-10-02T00:00:00Z", lessons=[("p-gotcha", "project", "gotcha")])
+    assert push(spoke).sent == 1 and _on_hub(teamenv)
+    ops.add_hub(spoke, "Acme")
+    gid = group(spoke, "Acme work", [SPOKE_CWD])
+    preview = ops.connect(spoke, gid, "Acme", dry_run=True)
+    assert preview.on_hub == {PERSONAL: 1} and _on_hub(teamenv) and load_registry(spoke.home).find("Acme").owns == []
+    moved = ops.connect(spoke, gid, "Acme")
+    assert moved.taken == {PERSONAL: 1} and not moved.kept and _owner(spoke) == load_registry(spoke.home).find("Acme").id
+    assert not _on_hub(teamenv)  # gone from the hub's copy and the team store, its lessons with it
+    assert not hub.execute("SELECT 1 FROM knowledge WHERE session_id = ?", (SPOKE_SID,)).fetchone()
+    audit = hub.execute("SELECT action, detail FROM people_audit ORDER BY id DESC LIMIT 1").fetchone()
+    assert audit["action"] == "withdraw" and json.loads(audit["detail"])["moved"] is True
+    assert push(spoke).sent == 0 and not _on_hub(teamenv)  # and Personal's hub never gets it again
+
+    # chosen for Personal again, it is shared again: taking back doesn't keep it out
+    ops.disconnect(spoke, gid)
+    ops.choose(spoke, SPOKE_CWD, "personal")
+    assert push(spoke).sent == 1 and _on_hub(teamenv)
+
+
+def test_a_hub_that_cant_be_asked_stops_the_move_unless_you_say(teamenv, monkeypatch):  # noqa: F811
+    from interlatch.sharing.protocol import HubUnreachable
+
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Shared already", at="2026-10-02T00:00:00Z", lessons=[])
     assert push(spoke).sent == 1
     ops.add_hub(spoke, "Acme")
     gid = group(spoke, "Acme work", [SPOKE_CWD])
-    with pytest.raises(ops.ProfileError, match="has 1 of the 1 sessions"):
+
+    def down(*a, **kw):
+        raise HubUnreachable("can't reach the hub")
+
+    with monkeypatch.context() as m:
+        m.setattr(client, "withdraw_sessions", down)
+        with pytest.raises(ops.ProfileError, match="take back the 1 sessions") as exc:
+            ops.connect(spoke, gid, "Acme")
+        assert exc.value.can_leave
+        assert load_registry(spoke.home).find("Acme").owns == [] and _owner(spoke) == PERSONAL  # nothing changed
+        moved = ops.connect(spoke, gid, "Acme", leave_on_hub=True)
+    assert moved.kept == {PERSONAL: "can't reach the hub"} and not moved.taken and _on_hub(teamenv)
+    assert _owner(spoke) == load_registry(spoke.home).find("Acme").id
+
+    # reached again: the next send to Personal's hub takes it back before anything goes
+    report = push(spoke)
+    assert not report.errors and report.withdrawn == 1 and report.sent == 0 and not _on_hub(teamenv)
+    assert "1 taken back" in report.summary()
+    assert push(spoke).withdrawn == 0
+
+
+def test_a_hub_too_old_to_take_sessions_back_keeps_them_only_if_you_say(teamenv, monkeypatch):  # noqa: F811
+    spoke = teamenv["spoke"]
+    _analyzed_on_spoke(spoke, title="Shared already", at="2026-10-02T00:00:00Z", lessons=[])
+    assert push(spoke).sent == 1
+    ops.add_hub(spoke, "Acme")
+    gid = group(spoke, "Acme work", [SPOKE_CWD])
+    request = client.HubClient.request
+
+    def old_hub(self, method, path, **kw):  # 0.28's withdraw: by folder only, so an unknown folder takes nothing
+        if path == "/api/hub/withdraw":
+            return {"sessions": 0, "project": None}
+        return request(self, method, path, **kw)
+
+    monkeypatch.setattr(client.HubClient, "request", old_hub)
+    with pytest.raises(ops.ProfileError, match="older version") as exc:
         ops.connect(spoke, gid, "Acme")
-    assert load_registry(spoke.home).find("Acme").owns == [] and _owner(spoke) == PERSONAL  # nothing changed
-    preview = ops.connect(spoke, gid, "Acme", dry_run=True)
-    assert preview.on_hub == 1 and load_registry(spoke.home).find("Acme").owns == []
+    assert exc.value.can_leave and _owner(spoke) == PERSONAL
     moved = ops.connect(spoke, gid, "Acme", leave_on_hub=True)
-    assert moved.on_hub == 1 and _owner(spoke) == load_registry(spoke.home).find("Acme").id
+    assert moved.too_old == [PERSONAL] and _on_hub(teamenv)
+    report = push(spoke)  # it can't take it back: the send goes on, and says nothing of it
+    assert not report.errors and report.withdrawn == 0 and _on_hub(teamenv)
 
 
 def test_new_sessions_are_given_their_owner_as_they_are_recorded(teamenv):  # noqa: F811

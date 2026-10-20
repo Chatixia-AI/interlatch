@@ -79,15 +79,26 @@ def test_adding_a_folder_to_a_connected_group_moves_its_history(synced):
     assert _owner(cfg) == p.id
 
 
-def test_an_edit_the_hubs_cant_follow_changes_nothing(teamenv):  # noqa: F811
-    """Personal's hub has the session already: putting its folder in a connected group is refused, and the group
-    stays as it was (the dashboard says why)."""
+def _hub_down(monkeypatch):
+    from interlatch.sharing import client
+    from interlatch.sharing.protocol import HubUnreachable
+
+    def down(*a, **kw):
+        raise HubUnreachable("can't reach the hub")
+
+    monkeypatch.setattr(client, "withdraw_sessions", down)
+
+
+def test_an_edit_the_hubs_cant_follow_changes_nothing(teamenv, monkeypatch):  # noqa: F811
+    """Personal's hub has the session already and can't be reached to take it back: putting its folder in a connected
+    group is refused, and the group stays as it was (the dashboard says why)."""
     spoke = teamenv["spoke"]
     _analyzed_on_spoke(spoke, title="Shared", at="2026-10-02T00:00:00Z", lessons=[])
     assert push(spoke).sent == 1
     p, _ = hub_with(spoke, "Acme", ["/nowhere/acme"])
     gid = next(g["id"] for g in groups.groups(connect(spoke.db_path)) if g["name"] == "Acme work")
-    with pytest.raises(ops.ProfileError, match="has 1 of the 1 sessions"):
+    _hub_down(monkeypatch)
+    with pytest.raises(ops.ProfileError, match="take back the 1 sessions"):
         _change(spoke, lambda c: groups.save(c, gid, "Acme work", ["/nowhere/acme", SPOKE_CWD]))
     conn = connect(spoke.db_path)
     assert next(g for g in groups.groups(conn) if g["id"] == gid)["folders"] == ["/nowhere/acme"]
@@ -97,7 +108,18 @@ def test_an_edit_the_hubs_cant_follow_changes_nothing(teamenv):  # noqa: F811
     assert _owner(spoke, SPOKE_SID) == p.id
 
 
-def test_the_dashboard_refuses_what_the_hubs_cant_follow(teamenv):  # noqa: F811
+def test_an_edit_takes_the_sessions_back_from_the_hub(teamenv):  # noqa: F811
+    spoke, hub = teamenv["spoke"], teamenv["conn"]
+    _analyzed_on_spoke(spoke, title="Shared", at="2026-10-02T00:00:00Z", lessons=[])
+    assert push(spoke).sent == 1
+    p, _ = hub_with(spoke, "Acme", ["/nowhere/acme"])
+    gid = next(g["id"] for g in groups.groups(connect(spoke.db_path)) if g["name"] == "Acme work")
+    _, moved = _change(spoke, lambda c: groups.save(c, gid, "Acme work", ["/nowhere/acme", SPOKE_CWD]))
+    assert moved.taken == {PERSONAL: 1} and _owner(spoke, SPOKE_SID) == p.id
+    assert not hub.execute("SELECT 1 FROM sessions WHERE id = ?", (SPOKE_SID,)).fetchone()
+
+
+def test_the_dashboard_refuses_what_the_hubs_cant_follow(teamenv, monkeypatch):  # noqa: F811
     from interlatch.core.config import load_config
     from interlatch.interfaces.web.api.projects import action_project_groups
     from interlatch.interfaces.web.context import Context
@@ -111,9 +133,14 @@ def test_the_dashboard_refuses_what_the_hubs_cant_follow(teamenv):  # noqa: F811
 
     cfg = load_config(spoke.home)
     ctx = Context(lambda: cfg, lambda c: None, lambda: conn, None, None)
-    out, code = action_project_groups(ctx, "save", {"id": gid, "name": "Acme work",
-                                                    "folders": ["/nowhere/acme", SPOKE_CWD]})
-    assert code == 409 and "has 1 of the 1 sessions" in out["error"]
+    body = {"id": gid, "name": "Acme work", "folders": ["/nowhere/acme", SPOKE_CWD]}
+    with monkeypatch.context() as m:
+        _hub_down(m)
+        out, code = action_project_groups(ctx, "save", body)
+        assert code == 409 and "take back the 1 sessions" in out["error"] and out["on_hub"] is True
+        out, code = action_project_groups(ctx, "save", {**body, "leave_on_hub": True})  # the dashboard's "anyway"
+        assert code == 200
+    assert _owner(spoke, SPOKE_SID) != PERSONAL
     out, code = action_project_groups(ctx, "delete", {"id": gid})
     assert code == 400 and "connected to a hub" in out["error"]
     conn.close()
@@ -171,7 +198,7 @@ def test_the_dashboard_lists_hubs_and_connects_groups(synced):
     listed = hubs(ctx)
     assert [(x["label"], x["groups"]) for x in listed["hubs"]] == [("Personal", []), ("Acme", ["Acme work"])]
     assert [g for g in listed["groups"] if g["hub"]] == [{"id": work, "name": "Acme work", "hub": "Acme"}]
-    assert listed["waiting"] == [{"folder": CWD, "sessions": 1, "projects": 1, "held": True, "why": None}]
+    assert listed["waiting"] == [{"folder": CWD, "sessions": 1, "projects": 1, "held": True, "let_go": False, "why": None}]
     assert {g["name"]: g["goes_to"] for g in project_groups(ctx)["groups"]} == {"Acme work": "Acme", "Side": None}
 
     out, code = action_hubs(ctx, "choose", {"folder": CWD, "hub": "Acme"})
@@ -185,6 +212,7 @@ def test_the_dashboard_lists_hubs_and_connects_groups(synced):
     assert code == 409 and "No hub named" in out["error"]
     out, code = action_hubs(ctx, "remove", {"hub": "Acme"})
     assert code == 200 and load_registry(cfg.home).find("Acme") is None
+    assert [(w["folder"], w["let_go"]) for w in hubs(ctx)["waiting"]] == [(CWD, True)]  # what the hub had waits
 
 
 def test_the_dashboard_adds_a_hub_but_never_joins_one_this_computer_already_sends_to(teamenv):  # noqa: F811

@@ -84,6 +84,13 @@ def test_another_computer_cant_take_over_a_shared_session(two_spokes):
     status, r = _post(two_spokes["url"], "/api/hub/withdraw", "", json.dumps(
         {"machine": b_id, "folder": SPOKE_CWD}).encode(), two_spokes["token"])
     assert status == 200 and r["sessions"] == 0
+    status, r = _post(two_spokes["url"], "/api/hub/withdraw", "", json.dumps(  # nor by its id
+        {"machine": b_id, "sessions": [SPOKE_SID]}).encode(), two_spokes["token"])
+    assert status == 200 and r == {"sessions": 0, "withdrawn": []}
+    for bad in ("x", [1], ["../x"], ["a"] * (receiver.WITHDRAW_MAX + 1)):
+        status, r = _post(two_spokes["url"], "/api/hub/withdraw", "", json.dumps(
+            {"machine": b_id, "sessions": bad}).encode(), two_spokes["token"])
+        assert status == 400 and "bad sessions" in r["error"]
     targets = purge_targets(conn, [a_id], projects=[SPOKE_CWD])
     with pytest.raises(HubError, match="only the sessions it sent"):
         purge(cfg, conn, targets, action="withdraw", keep_out=False, owner=b_id)
