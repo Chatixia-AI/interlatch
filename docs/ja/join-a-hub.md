@@ -69,7 +69,7 @@ interlatch hub add-folder ~/code/website --project Website
 これで、そこで分析済みのものが送られます。ハブがすでに知っている git リポジトリのクローンは、この手順がなくても
 そのプロジェクトに入りますが、実行しても問題ありません。
 
-ダッシュボードでも同じことができます：**Settings › Hubs › (the hub) › Projects on the hub › Join a project** で、
+ダッシュボードでも同じことができます：**Settings › Hubs › (the hub) › Projects › Join a project** で、
 プロジェクトとあなたのフォルダーを選びます。
 
 ハブにそのプロジェクトがないと言われたり、**Join a project** が「一致するものはありません。」となったりしたら、
@@ -95,12 +95,12 @@ interlatch hub status
   （`interlatch install --inject-context`）、新しいセッションの "From teammates' sessions" にも並びます。
 - **あなたのダッシュボード**には、これまでどおりあなた自身のセッションが表示されます。チームメイトのナレッジは、
   プロジェクトのページと **All knowledge** に、どのコンピューターから来たかを示して並びます。**Settings › Hubs** の
-  **Read them** でそれだけの一覧が開きます。
+  **teammates' lessons** の数を押すと、それだけの一覧が開きます。
 
 一つのプロジェクトへの共有をやめるには、**Settings › Hubs** でその横の **Leave** を選びます（または
 `interlatch hub leave --project <name>`）。そこで共有したものはハブに残ります。間違ったフォルダーを追加したときは、
 その横の **Remove** でフォルダーを外すと、あなたのコンピューターがそこから共有したものをハブが削除します。送るのを
-すべてやめるには **Leave the hub…** を選びます（または `interlatch hub leave`）。すでに送ったものはハブに残ります。
+すべてやめるには **Leave…** を選びます（または `interlatch hub leave`）。すでに送ったものはハブに残ります。
 そのハブからのチームメイトのナレッジはあなたのコンピューターから削除され、そのハブのために追加したフォルダー、抜けた
 プロジェクト、共有したグループは `~/.interlatch/hub-left/` に保存されます。あとで参加するほかのハブには渡りません。
 同じハブにもう一度参加すると、`interlatch hub join` が元に戻すか尋ねます（`--restore` か `--no-restore` で尋ねずに

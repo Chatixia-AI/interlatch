@@ -93,7 +93,7 @@ matching project of its own:
    already on the hub: they move with their knowledge, and both projects' knowledge bases are rebuilt. The more
    specific match wins, so a repository inside the folder whose git remote the hub knows still follows its remote. A
    folder inside a repository the hub files under another project is refused, because a repository belongs to one
-   project. `interlatch hub folders` shows what goes where. **Settings › Hubs › (the hub) › Projects on the hub** does the same
+   project. `interlatch hub folders` shows what goes where. **Settings › Hubs › (the hub) › Projects** does the same
    from the dashboard: **Join a project** picks one of the hub's projects and a folder here. To take back a folder
    added by mistake, see [Leaving](#leaving). The hub's **Team › Computers** lists the folders each computer added.
    On this computer's **Projects** page and sidebar, the hub's projects that folders here go to come first, under
@@ -126,7 +126,7 @@ projects there from its next push, as if you had added each of their folders to 
   above. A project recorded on another computer (such as `server:/root/app`) can't go from here.
 
 The project must already be on the hub (a member's computer can't make one), and the choice is made on this computer
-itself, not from another device. **Settings › Hubs › (the hub) › Projects on the hub** shows the group under that project, and
+itself, not from another device. **Settings › Hubs › (the hub) › Projects** shows the group under that project, and
 the Projects page and sidebar list the group's projects under that project as well as in the group.
 
 ### What is sent
@@ -169,7 +169,7 @@ It does that only for sessions the hub files under one of its projects: those in
 computer, and its push counts them as "kept here". A hub that has never run a session in a repository itself doesn't
 know its remote, as with a hub in Docker or on a server, so add your folder for each project there. To share
 sessions from every folder, join with `--all-folders`, run `interlatch config set hub.all_folders true`, or choose
-**Every folder** under **Settings › Hubs › (the hub) › What this computer sends**.
+**Every folder** under **Settings › Hubs › (the hub) › What this computer shares**.
 
 Prompts, shell commands, file paths, transcripts and lessons about you (global ones and preferences) never leave
 the computer. Sessions from GitHub Copilot, IBM Bob, Google Antigravity and OpenCode are shared too; imported chats are not.
@@ -242,7 +242,8 @@ unless the connection works, the password is never shown again, and only an admi
   kept read-only in its own database, under its own folder for that repository, where its MCP tools answer with them
   (marked as teammates') and the start-of-session notes list them under **From teammates' sessions**. Its dashboard
   shows them on project pages and in **All knowledge**, marked **from** the computers whose sessions stated them;
-  the source **From teammates** there lists only them, and **Read them** in **Settings › Hubs** opens that list.
+  the source **From teammates** there lists only them, and the **teammates' lessons** count in **Settings › Hubs**
+  opens that list.
   Lessons it stated itself are not sent back. One it dismisses stays dismissed; one the team no longer has disappears.
   `interlatch hub status` and its **Settings › Hubs** show how many it holds; **Share now** there
   pushes at once.
@@ -257,7 +258,7 @@ Not yet: of the sessions the hub analyzes itself, only its own sessions in a pro
 ### Leaving
 
 A computer that shares knowledge can leave one of the hub's projects and stay in the others. In **Settings ›
-Devices › Projects on the hub**, each project has these buttons:
+Hubs › (the hub) › Projects**, each project has these buttons:
 
 - **Leave**: this computer stops sharing its sessions there and stops getting the project's teammates' lessons.
   What it already shared stays on the hub, in the project, for the team. **Rejoin** undoes it. On the command line:
@@ -269,7 +270,7 @@ Devices › Projects on the hub**, each project has these buttons:
   command line: `interlatch hub remove-folder <folder>`. A computer that sends transcripts keeps them on the hub: the
   hub files them by their git remote or their own folder again.
 
-`interlatch hub leave`, or **Leave the hub…** in **Settings › Hubs**, makes the computer record and analyze its own
+`interlatch hub leave`, or **Leave…** in **Settings › Hubs**, makes the computer record and analyze its own
 sessions again; the hub keeps what it was sent. It also removes the teammates' lessons that came from the hub, and
 puts aside what the computer had for that hub (its folders, the projects it left, and its groups shared there) in
 `~/.interlatch/hub-left/`, so a different hub joined later never gets any of it. Whether it shares knowledge only

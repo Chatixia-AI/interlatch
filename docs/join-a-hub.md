@@ -67,7 +67,7 @@ Use your folder for the project and the project's name from step 2. This sends w
 analyzed there. A clone of a git repository the hub already knows is filed under its project without this step,
 but running it does no harm.
 
-Your dashboard can do the same: **Settings › Hubs › (the hub) › Projects on the hub › Join a project**, then pick the project
+Your dashboard can do the same: **Settings › Hubs › (the hub) › Projects › Join a project**, then pick the project
 and your folder.
 
 If the hub says it has no such project, or **Join a project** answers "Nothing matches.", you don't see that
@@ -92,13 +92,13 @@ dashboard, where you see your projects.
   through Interlatch's MCP tools, marked as teammates'. With start-of-session notes on (`interlatch install
   --inject-context`), new sessions also list them under "From teammates' sessions".
 - **Your own dashboard** keeps showing your own sessions, as before. Your teammates' lessons appear on its project
-  pages and in **All knowledge**, marked with the computers they came from; **Read them** in **Settings › Hubs**
-  lists only those.
+  pages and in **All knowledge**, marked with the computers they came from; the **teammates' lessons** count in
+  **Settings › Hubs** lists only those.
 
 To stop sharing to one project, choose **Leave** next to it in **Settings › Hubs** (or run `interlatch hub leave
 --project <name>`). What you shared there stays on the hub. Added the wrong folder? **Remove** next to it takes the
-folder back, and the hub deletes what your computer shared from it. To stop sending altogether, choose **Leave the
-hub…** (or run `interlatch hub leave`). What you already sent stays on the hub. Your teammates' lessons from it are
+folder back, and the hub deletes what your computer shared from it. To stop sending altogether, choose **Leave…**
+(or run `interlatch hub leave`). What you already sent stays on the hub. Your teammates' lessons from it are
 removed from your computer, and the folders, left projects and shared groups you had for that hub are put aside in
 `~/.interlatch/hub-left/`: another hub you join later never gets them. If you join the same hub again, `interlatch hub
 join` asks whether to bring them back (`--restore` or `--no-restore` answers without asking).
