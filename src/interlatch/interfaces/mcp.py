@@ -15,6 +15,7 @@ from ..core.artifact_records import KINDS as ARTIFACT_KINDS
 from ..artifacts.queries import STATUS as ARTIFACT_STATUS
 from ..storage.sqlite import connect
 from ..sharing.pull import team_from
+from ..knowledge.freshness import stale_note
 from ..knowledge.ladder import stage_label
 from ..core.redact import redact
 from ..application.search import search_knowledge, search_sessions
@@ -230,6 +231,7 @@ class Tools:
             if k["source"] == "team":  # a teammate's lesson the team hub sent: whose sessions stated it
                 src = "teammates' sessions" + (f" on {', '.join(who)}" if (who := team_from(k)) else "") + ", via the team hub"
             trust = stage_label(k) + (f" ({k['stage_reason']})" if k.get("stage_reason") else "")
+            trust += stale_note(k.get("project_path"), k.get("sources_json"))
             out.append(f"## [{k['kind']} · {stage_label(k)}] {k['title']}\n_{k.get('project_name') or '-'} · {trust} · "
                        f"{k.get('confidence') or '-'} confidence · {src}_\n\n{truncate(k.get('body') or '', 1500)}\n"
                        + "".join(f"{line}\n" for line in case_lines(k)))

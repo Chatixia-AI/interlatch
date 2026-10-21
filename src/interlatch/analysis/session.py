@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from datetime import timedelta
 
-from ..knowledge import ladder
+from ..knowledge import freshness, ladder
 from ..sharing import news
 from ..knowledge.cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from ..core.config import Config
@@ -60,7 +60,7 @@ KNOWLEDGE_ITEM_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "required": ["kind", "title", "body", "tags", "scope", "confidence", "evidence", "basis", "scene", "question", "answer",
-                 "ruled_out", "clues", "principle", "checklist", "topics", "visual"],
+                 "ruled_out", "clues", "principle", "checklist", "topics", "visual", "files"],
     "properties": {
         "kind": {
             "type": "string",
@@ -97,6 +97,10 @@ KNOWLEDGE_ITEM_SCHEMA = {
         "topics": {"type": "array", "items": {"type": "string", "enum": list(TOPICS)},
                    "description": "Up to 4 engineering areas this item actually teaches. Empty for other kinds"},
         "visual": VISUAL_SCHEMA,
+        "files": {"type": "array", "items": {"type": "string"},
+                  "description": "Up to 5 paths, relative to the project folder, of the files whose code or contents "
+                  "this item describes, so it can be flagged when they change: only files the session read or "
+                  "changed. Empty when it isn't about particular files (a preference, a general learning)"},
     },
 }
 FRICTION_SCHEMA = {
@@ -319,6 +323,7 @@ def normalize_knowledge(items) -> list[dict]:
             **{k: str(item.get(k) or "").strip() if case else "" for k in ("scene", "question", "answer")},
             "ruled_out": _leads(item.get("ruled_out")) if case else [],
             **(lesson_of(item) if kind in LESSON_KINDS else {}),
+            "files": _str_list(item.get("files"))[:10],
         })
     return out
 
@@ -499,14 +504,14 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
         # and a diagram it lacked while its text is unchanged
         conn.execute(
             "INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, tags_json, scope, "
-            "confidence, evidence, basis, source, source_ref, fingerprint, created_at, updated_at, stage, case_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "confidence, evidence, basis, source, source_ref, fingerprint, created_at, updated_at, stage, case_json, "
+            "sources_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(fingerprint) DO UPDATE SET case_json = CASE WHEN knowledge.case_json IS NULL "
             "THEN excluded.case_json WHEN knowledge.body = excluded.body AND json_valid(knowledge.case_json) "
             "AND json_extract(knowledge.case_json, '$.visual') IS NULL "
             "AND json_extract(excluded.case_json, '$.visual') IS NOT NULL "
             "THEN json_set(knowledge.case_json, '$.visual', json_extract(excluded.case_json, '$.visual')) "
-            "ELSE knowledge.case_json END",
+            "ELSE knowledge.case_json END, sources_json = COALESCE(knowledge.sources_json, excluded.sources_json)",
             (
                 session_id, s["project_path"], s["project_name"], item["kind"], redact(item["title"]).strip(),
                 redact(item.get("body") or "").strip(), dumps([t.lower() for t in item.get("tags") or []]),
@@ -515,6 +520,7 @@ def store_analysis(conn: sqlite3.Connection, cfg: Config, session_id: str, data:
                 "guidance" if item.get("basis") == "guidance" else "observed", "analysis", f"prompt-v{PROMPT_VERSION}",
                 fingerprint(session_id, item["kind"], item["title"]), now, now, ladder.initial_stage(item),
                 dumps(case) if case else None,
+                freshness.sources_value(freshness.record(conn, session_id, s["project_path"], item.get("files"))),
             ),
         )
     ladder.after_reanalysis(conn, session_id, kept)
