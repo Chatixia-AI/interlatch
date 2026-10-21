@@ -1,0 +1,108 @@
+{
+  "written_by": {
+    "package": "agents-chronicle",
+    "version": "0.5.0",
+    "user_version": 7,
+    "source": "git+https://github.com/Chatixia-AI/interlatch@v0.5.0"
+  },
+  "counts": {
+    "sessions": 3,
+    "session_files": 3,
+    "events": 5,
+    "tool_calls": 3,
+    "knowledge": 6,
+    "kv": 1,
+    "machines": 1,
+    "project_kb": 1,
+    "glossary": 1
+  },
+  "sessions": {
+    "00000000-0000-4000-8000-000000000001": {
+      "title": "Set up the alpha build",
+      "project_name": "alpha",
+      "agent": "claude",
+      "source": "transcript"
+    },
+    "00000000-0000-4000-8000-000000000002": {
+      "title": "Fix the flaky alpha test",
+      "project_name": "alpha",
+      "agent": "codex",
+      "source": "transcript"
+    },
+    "00000000-0000-4000-8000-000000000003": {
+      "title": "Rotate the beta password=[REDACTED]",
+      "project_name": "beta",
+      "agent": "claude",
+      "source": "transcript"
+    }
+  },
+  "knowledge": {
+    "1": {
+      "kind": "fix",
+      "title": "Pass the zephyr cache flag to the alpha build",
+      "status": "active",
+      "pinned": 0,
+      "project_name": "alpha",
+      "stage": "provisional"
+    },
+    "2": {
+      "kind": "gotcha",
+      "title": "The alpha test shares a temp folder between runs",
+      "status": "active",
+      "pinned": 0,
+      "project_name": "alpha",
+      "stage": "provisional"
+    },
+    "3": {
+      "kind": "decision",
+      "title": "Beta keeps its credentials in the system keychain",
+      "status": "active",
+      "pinned": 1,
+      "project_name": "beta",
+      "stage": "canonical"
+    },
+    "4": {
+      "kind": "fix",
+      "title": "Clear the zephyr cache by hand before each build",
+      "status": "superseded",
+      "pinned": 0,
+      "project_name": "alpha",
+      "stage": "provisional"
+    },
+    "5": {
+      "kind": "command",
+      "title": "make build builds alpha",
+      "status": "active",
+      "pinned": 0,
+      "project_name": "alpha",
+      "stage": "established"
+    },
+    "6": {
+      "kind": "preference",
+      "title": "Prefer short commit messages in beta",
+      "status": "active",
+      "pinned": 0,
+      "project_name": "beta",
+      "stage": "wip"
+    }
+  },
+  "session_files": {
+    "00000000-0000-4000-8000-000000000001": [
+      "/home/fixture/projects/alpha/README.md",
+      "/home/fixture/projects/alpha/build.toml"
+    ]
+  },
+  "search": {
+    "knowledge zephyr": [
+      1
+    ],
+    "knowledge zephyr, inactive too": [
+      1,
+      4
+    ],
+    "sessions quokka": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "remote_session": null
+}
