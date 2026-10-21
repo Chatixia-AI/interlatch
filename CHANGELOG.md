@@ -3,6 +3,30 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.7 (2026-10-21)
+
+- **Feedback:** report a problem or suggest an idea from wherever you use Interlatch: `interlatch feedback` (or
+  `interlatch bug`), **Settings › Feedback** and the **Feedback** link in the dashboard's status bar, or **Interlatch:
+  Send Feedback** in VS Code (extension 0.4.0). Each opens a new GitHub issue, or a discussion in Ideas, with your
+  install's details filled in (versions, system, how it was installed), never your paths, addresses or sessions.
+  Nothing is sent until you post it there ([Command line](docs/cli.md)).
+- **`interlatch status` checks every agent:** it has a line for each coding agent found on this computer (Claude Code,
+  Codex, Copilot, Bob, Antigravity, OpenCode, Cursor and the other MCP clients) saying whether Interlatch's MCP server
+  is in it, and flags one whose command is gone or runs another install, such as an old `chronicle` or a checkout's
+  `.venv`; `interlatch connect <name>` points it back ([Troubleshooting](docs/troubleshooting.md)).
+- **New sessions get whole notes, never a cut-off one:** the knowledge digest a new session receives
+  (`interlatch install --inject-context`) now fits its length limit by leaving out the least useful notes and the
+  oldest sessions whole, and its last line says how many it left out so the agent knows to search for them. It is also
+  checked for secrets once more on its way out ([Configuration](docs/configuration.md#synthesis-export-server-inject-updates)).
+- **Agents can pick up where the last session left off:** the new `resume` MCP tool tells an agent starting in a project
+  what the last session set out to do, how it went and what it left open, what waits on you, and what other agents did
+  and learned since its own previous session there, all from the archive and within a length limit
+  ([MCP server](docs/mcp.md#tools)).
+- **Lessons say when their code has changed:** a lesson now records the files it was learned from (those the session
+  read or changed), and when one of them changes, the SessionStart digest and the MCP search mark it *may be out of
+  date* and name the file, so an agent checks it before relying on it
+  ([When a lesson may be out of date](docs/analysis.md#when-a-lesson-may-be-out-of-date)).
+
 ## 0.28.6 (2026-10-20)
 
 - **Hubs page, tidier:** **Settings › Hubs** has a tab for each hub and one to add a hub. A hub's tab fits on one
