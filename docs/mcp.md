@@ -14,6 +14,7 @@ the network. Every tool only reads the local vault.
 
 | Tool | What it returns | Arguments |
 | --- | --- | --- |
+| `resume` | Where a project stands for an agent starting work in it: the last session's goal, outcome and what it left open, what waits on you, and what other sessions did and which lessons became trusted since the asking agent's previous session there. Fits `max_chars` by leaving out whole items, and says how many. | `project`, `agent`, `max_chars` |
 | `search_knowledge` | Knowledge items (fixes, gotchas, decisions, facts, commands, preferences) matching the words, the most trusted first, each labelled with its [stage](analysis.md#how-knowledge-earns-trust) (`established ×3`); a [case file](analysis.md#case-files) adds how the problem first showed and the leads ruled out. The best first stop. | `query`, `project`, `kind`, `limit` |
 | `search_sessions` | Sessions whose transcript or summary matches, with snippets | `query`, `project`, `limit` |
 | `get_session` | One session: summary, outcome, knowledge, files changed, prompts | `session_id` (or a unique prefix) |
@@ -23,9 +24,11 @@ the network. Every tool only reads the local vault.
 | `find_artifacts` | What sessions made: documents, pages, diagrams, decks, published links, pull requests and commits, each with where it is, whether the file is still on disk as written, and the session that made it | `query`, `kind`, `project`, `limit` |
 | `recent_sessions` | Recent sessions, newest first | `project`, `days`, `limit` |
 
-`project` takes a path or a name (`billing-api`). When it is left out, `project_knowledge` and `glossary` use the
+`project` takes a path or a name (`billing-api`). When it is left out, `resume`, `project_knowledge` and `glossary` use the
 project of the directory the client started the server in. Coding agents start it in your project; desktop chat apps
-such as Claude Desktop don't, so name the project in your question there.
+such as Claude Desktop don't, so name the project in your question there. `resume` knows which agent is asking from
+the name its client gives when it connects (Claude Code, Codex, Copilot, OpenCode, Antigravity, Bob); another client can
+pass `agent`.
 
 All tools are marked read-only (`readOnlyHint`), so clients that honour the hint can run them without asking.
 

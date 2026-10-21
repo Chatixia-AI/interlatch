@@ -14,6 +14,7 @@ Interlatch には [Model Context Protocol](https://modelcontextprotocol.io) の�
 
 | ツール | 返すもの | 引数 |
 | --- | --- | --- |
+| `resume` | 作業を始めるエージェントのための、プロジェクトの現状：直前のセッションの目的と結果、残した未解決の事項、あなたの判断を待っているもの、そして尋ねたエージェントの前回のセッション以降にほかのセッションがしたことと信頼されるようになった教訓。`max_chars` に収まるよう項目を丸ごと省き、省いた数を示します。 | `project`, `agent`, `max_chars` |
 | `search_knowledge` | 語句に一致するナレッジ（修正、落とし穴、決定、事実、コマンド、好み）を信頼度の高い順に返し、各項目に[段階](analysis.md#ナレッジの信頼度)（`established ×3`）を付けます。[事件簿](analysis.md#事件簿)に載った項目には、問題が最初にどう見えたかと外れた手がかりも付きます。まず最初に使うツールです。 | `query`, `project`, `kind`, `limit` |
 | `search_sessions` | トランスクリプトか要約が一致するセッションと、その抜粋 | `query`, `project`, `limit` |
 | `get_session` | 1 つのセッション：要約、結果、ナレッジ、変更したファイル、プロンプト | `session_id`（または一意な先頭部分） |
@@ -23,9 +24,10 @@ Interlatch には [Model Context Protocol](https://modelcontextprotocol.io) の�
 | `find_artifacts` | セッションが作ったもの：ドキュメント、ページ、図、スライド、公開したリンク、プルリクエスト、コミット。それぞれの場所、ファイルが書いたときのままディスクにあるか、作ったセッション | `query`, `kind`, `project`, `limit` |
 | `recent_sessions` | 最近のセッション（新しい順） | `project`, `days`, `limit` |
 
-`project` にはパスか名前（`billing-api`）を渡します。省略すると、`project_knowledge` と `glossary` はクライアントがサーバーを
+`project` にはパスか名前（`billing-api`）を渡します。省略すると、`resume`、`project_knowledge` と `glossary` はクライアントがサーバーを
 起動したディレクトリのプロジェクトを使います。コーディングエージェントはプロジェクトの中で起動しますが、Claude Desktop のような
-チャットアプリはそうではないので、質問の中でプロジェクト名を挙げてください。
+チャットアプリはそうではないので、質問の中でプロジェクト名を挙げてください。`resume` は、接続時にクライアントが名乗る名前から
+どのエージェントが尋ねているかを知ります（Claude Code、Codex、Copilot、OpenCode、Antigravity、Bob）。ほかのクライアントは `agent` を渡せます。
 
 すべてのツールは読み取り専用（`readOnlyHint`）と宣言しているので、このヒントに対応したクライアントは確認なしで実行できます。
 

@@ -62,7 +62,7 @@
 `Sessions/YYYY/MM/*.md` with YAML frontmatter, `Projects/*.md` (knowledge base + session list),
 `Knowledge/<Kind>.md`, `Reviews/YYYY-Www.md`, `Glossary.md`, `Global Playbook.md`.
 
-**Inside your agents** (MCP tools, registered in Claude Code and in each connected agent): `search_knowledge`, `search_sessions`, `get_session`,
+**Inside your agents** (MCP tools, registered in Claude Code and in each connected agent): `resume`, `search_knowledge`, `search_sessions`, `get_session`,
 `get_transcript`, `project_knowledge`, `glossary`, `find_artifacts`, `recent_sessions`. Ask e.g. *"have we hit this error before?"*
 or *"what is the deployer_ip rule?"*.
 

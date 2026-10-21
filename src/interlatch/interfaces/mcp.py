@@ -32,7 +32,8 @@ INSTRUCTIONS = (
     "(fixes, gotchas, decisions, project facts, commands, preferences), per-project knowledge bases, and the artifacts "
     "sessions made (documents, pages, diagrams, decks, published links, pull requests, commits). "
     "Use it to recall how something was solved before, why a decision was made, how a project is run or "
-    "deployed, what the user prefers, or where an earlier deliverable is, before re-deriving it."
+    "deployed, what the user prefers, or where an earlier deliverable is, before re-deriving it. "
+    "When you start work in a project, call `resume` first: where the last session left things and what changed since."
 )
 
 _PROJECT_PROP = {"type": "string", "description": "Project path or name. Defaults to all projects."}
@@ -41,6 +42,25 @@ _AGENT_PROP = {"type": "string", "enum": list(AGENTS),
                + ". Defaults to all."}
 # every tool only reads the local vault: clients may run them without asking, and nothing reaches the network
 TOOLS = [
+    {
+        "name": "resume",
+        "annotations": {"title": "Resume a project", "readOnlyHint": True, "destructiveHint": False,
+                        "idempotentHint": True, "openWorldHint": False},
+        "description": "Call this when you start work in a project. Where the last session left things (its goal, "
+                       "outcome and what it left open), what waits on the user, and, given `agent`, what other "
+                       "sessions did and which lessons became trusted since your previous session here. Fits "
+                       "`max_chars` by leaving out whole items and says how many it left out.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project path or name. Defaults to the current folder's project."},
+                "agent": {"type": "string", "enum": list(AGENTS),
+                          "description": "You, the agent asking (" + ", ".join(f"{k}: {v[0]}" for k, v in AGENTS.items())
+                          + "). Defaults to what your MCP client said it is when it connected."},
+                "max_chars": {"type": "integer", "default": 6000, "minimum": 1000, "maximum": 20000},
+            },
+        },
+    },
     {
         "name": "search_knowledge",
         "annotations": {"title": "Search knowledge", "readOnlyHint": True, "destructiveHint": False,
@@ -176,6 +196,7 @@ class Tools:
         self.cwd = os.getcwd()
         # named profiles: only what the agent's folder owns (Personal's, a profile's, or nothing while it waits)
         self.owner = scoped_for(cfg, self.conn, self.cwd)
+        self.client: str | None = None  # the MCP client's own name, from `initialize`
 
     def _resolve_project(self, project: str | None) -> str | None:
         if not project:
@@ -189,6 +210,15 @@ class Tools:
             if label.lower() == project.lower() or path.lower().endswith("/" + project.lower()):
                 return path
         return project
+
+    def resume(self, project: str | None = None, agent: str | None = None, max_chars: int = 6000) -> str:
+        from ..projects.resume import agent_of_client, resume_text
+        from ..runtime.hooks import _project_here
+
+        path = self._resolve_project(project) if project else _project_here(self.conn, self.cwd)
+        name = project_labels(self.conn).get(path) or path.rstrip("/").rsplit("/", 1)[-1]
+        agent = agent if agent in AGENTS else agent_of_client(self.client)
+        return resume_text(self.conn, path, name, agent=agent, limit=max_chars)
 
     def search_knowledge(self, query: str, project: str | None = None, kind: str | None = None, limit: int = 15) -> str:
         rows = search_knowledge(self.conn, query, project=self._resolve_project(project), kind=kind, limit=limit)
@@ -367,6 +397,8 @@ def serve(cfg: Config) -> int:
                 sys.stdout.write(json.dumps(replies, ensure_ascii=False) + "\n")
                 sys.stdout.flush()
             continue
+        if isinstance(msg, dict) and msg.get("method") == "initialize":
+            tools.client = ((msg.get("params") or {}).get("clientInfo") or {}).get("name")
         reply = _handle(msg, handlers)
         if reply is not None:
             _write(reply)
