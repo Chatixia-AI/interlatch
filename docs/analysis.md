@@ -150,6 +150,15 @@ source, and syntheses see each item's stage. Leaving the ladder is a status, not
 its stage and names its successor, and when an established or canonical item is overturned by a newer one (not
 just merged as a duplicate), that week's review lists it under **Overturned**.
 
+### When a lesson may be out of date
+
+The analysis names the files each lesson is about. Interlatch keeps those that the session read or changed in the
+project's folder (up to five) with a hash of what they held when the session was analyzed. When the lesson is read
+later and one of those files has changed or gone, the SessionStart digest and the MCP search add *(may be out of date:
+src/billing.py changed since)*. In the digest, such a bullet is also among the first left out when space is short.
+Only the project's folder on this computer is read. A lesson from a teammate's hub, or from before this was recorded,
+carries no mark. Nothing changes the lesson itself: whether it still holds is for you or the agent to check.
+
 ## Case files
 
 Fixes, gotchas and decisions are also kept as case files, so you can learn from them as well as look them up. For

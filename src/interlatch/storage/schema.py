@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21  # 21: knowledge.sources_json, the files a lesson was learned from (freshness.py)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -231,7 +231,8 @@ CREATE TABLE IF NOT EXISTS knowledge (
     superseded_by INTEGER,                         -- the item that replaced this one, when there is one
     superseded_reason TEXT,                        -- duplicate | outdated | contradicted
     superseded_at TEXT,
-    case_json TEXT                                 -- lesson material (analysis.session.case_of): a fix, gotcha or decision's case file, and principle, checks, topics, diagram
+    case_json TEXT,                                -- lesson material (analysis.session.case_of): a fix, gotcha or decision's case file, and principle, checks, topics, diagram
+    sources_json TEXT                              -- the files it was learned from, each with a hash of what it held then (knowledge/freshness.py)
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_session ON knowledge(session_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_path);

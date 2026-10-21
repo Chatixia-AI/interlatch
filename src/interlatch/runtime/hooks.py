@@ -98,6 +98,7 @@ def _project_here(conn, cwd: str) -> str:
 # What a SessionStart text may hold, least useful to the next agent first: the oldest recent session goes before a
 # teammate's lesson, which goes before a knowledge bullet; within a group the later (weaker) one goes first.
 _SESSION, _TEAM, _NOTE = "session", "teammate lesson", "note"
+STALE_COST = 25  # a note whose files changed since it was learned ranks like one two or three places further down
 
 
 def _value(group: str, index: int, stage_rank: int = 0) -> int:
@@ -127,6 +128,7 @@ def build_session_context(cfg, cwd: str) -> str | None:
         return i["stage"] + (f" ×{i['sessions']}" if (i.get("sessions") or 0) > 1 else "")
     from ..knowledge.synthesize import kb_for_path, kb_sections
     from ..core.budget import Block, fit
+    from ..knowledge.freshness import stale_ids
     from ..core.redact import redact
     from ..core.util import local_str, one_line
 
@@ -149,6 +151,11 @@ def build_session_context(cfg, cwd: str) -> str | None:
         if kb:
             header.append(f"Interlatch knowledge base for {kb['project_name']} (from past coding-agent sessions, "
                           f"updated {local_str(kb['updated_at'], '%Y-%m-%d')}):")
+            # a bullet whose lessons' files changed since is marked, and goes before the others when space is short
+            stale = stale_ids(conn, [k for sec in kb_sections(kb) for i in sec.get("items") or [] for k in i.get("sources") or []])
+
+            def stale_of(i: dict) -> str:
+                return next((stale[k] for k in i.get("sources") or [] if k in stale), "")
             for section in kb_sections(kb):
                 # tentative bullets stay out: this text is read at the start of every session, and
                 # search_knowledge still finds them
@@ -160,23 +167,25 @@ def build_session_context(cfg, cwd: str) -> str | None:
                 if len(items) > per_section:
                     left_out[_NOTE] = left_out.get(_NOTE, 0) + len(items) - per_section
                 blocks.append(Block(f"{section.get('title')}:", [
-                    (_value(_NOTE, n, STAGE_RANK.get(i.get("stage") or "provisional", 1)), _NOTE,
-                     redact(f"- {one_line(i.get('text') or '', 300)}"
-                            + (f" ({trust_tag(i)})" if i.get("stage") in TRUSTED else "")))
+                    (_value(_NOTE, n, STAGE_RANK.get(i.get("stage") or "provisional", 1)) - (STALE_COST if stale_of(i) else 0),
+                     _NOTE, redact(f"- {one_line(i.get('text') or '', 300)}"
+                                   + (f" ({trust_tag(i)})" if i.get("stage") in TRUSTED else "") + stale_of(i)))
                     for n, i in enumerate(items[:per_section])]))
         else:
             rows = conn.execute(
-                "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json FROM knowledge k WHERE k.status = 'active' "
+                "SELECT k.id, k.kind, k.title, k.stage, k.session_id, k.confirmed_json FROM knowledge k WHERE k.status = 'active' "
                 "AND k.project_path = ? AND k.source != 'team' AND k.kind IN ('gotcha', 'fix', 'fact', 'decision', 'preference') "
                 "AND COALESCE(k.stage, '') != 'wip' "
                 f"ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, k.id DESC LIMIT 12",
                 (cwd,),
             ).fetchall()
             if rows:
+                stale = stale_ids(conn, [r["id"] for r in rows])
                 header.append("Interlatch notes from past coding-agent sessions in this project:")
                 blocks.append(Block(None, [
-                    (100 - 5 * n, _NOTE, redact(f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "")
-                                                + f"] {one_line(r['title'], 200)}"))
+                    (100 - 5 * n - (STALE_COST if r["id"] in stale else 0), _NOTE,
+                     redact(f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "")
+                            + f"] {one_line(r['title'], 200)}" + stale.get(r["id"], "")))
                     for n, r in enumerate(rows)]))
         team = conn.execute(  # teammates' lessons the team hub sent (sharing.pull.apply_team_lessons)
             "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json, k.source_ref FROM knowledge k "
