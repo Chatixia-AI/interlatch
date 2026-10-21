@@ -62,7 +62,7 @@
 `Sessions/YYYY/MM/*.md`、`Projects/*.md`（ナレッジベース＋セッション一覧）、`Knowledge/<Kind>.md`、`Reviews/YYYY-Www.md`、
 `Glossary.md`、`Global Playbook.md`。
 
-**エージェントの中から**（MCP ツール。Claude Code と接続済みの各エージェントに登録）：`search_knowledge`、`search_sessions`、
+**エージェントの中から**（MCP ツール。Claude Code と接続済みの各エージェントに登録）：`resume`、`search_knowledge`、`search_sessions`、
 `get_session`、`get_transcript`、`project_knowledge`、`glossary`、`find_artifacts`、`recent_sessions`。たとえば *「このエラー、前にも出た？」* や
 *「deployer_ip のルールって何だっけ？」* のように尋ねられます。
 
