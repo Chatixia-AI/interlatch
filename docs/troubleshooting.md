@@ -3,8 +3,11 @@
 [← Interlatch](../README.md) · [Docs index](README.md)
 
 Start with `interlatch status` (or **Settings › Status** in the dashboard). It checks the hook, the background
-agents, the MCP server and the `claude` CLI, and lists recent analysis failures. Logs are in
-`~/.interlatch/logs/` (`chronicle.log` for everything, `hooks.log` for session-end hooks).
+agents, the MCP server and the `claude` CLI, and lists recent analysis failures. Under **agents** it has a line for
+each coding agent found on this computer: whether Interlatch's MCP server is in it (and the hooks, for Claude Code), and
+whether the command it runs is gone or belongs to another install (an old `chronicle`, a checkout's `.venv`).
+`interlatch connect <name>` points it at this one. Logs are in `~/.interlatch/logs/` (`chronicle.log` for everything,
+`hooks.log` for session-end hooks).
 
 Still stuck? `interlatch feedback` (or **Settings › Feedback** in the dashboard) opens a new GitHub issue with your
 install's details filled in.

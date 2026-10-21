@@ -15,7 +15,8 @@ def cmd_status(args) -> int:
     from ....analysis.runners.factory import make_runner
     from ....analysis.runners.settings import env_only_key
     from ....core.util import human_cost, local_str
-    from ....runtime.install import UI_LABEL, hooks_installed, launchd_status, mcp_registered, statusline_installed
+    from ....runtime.connectors import agents_doctor
+    from ....runtime.install import UI_LABEL, executable, hooks_installed, launchd_status, statusline_installed
     from ....runtime.statusline import WINDOW_LABEL, plan_usage
     from ....storage.kv import kv_get
 
@@ -57,11 +58,12 @@ def cmd_status(args) -> int:
     console.print(f"  {ok(ld.get('loaded'))} background sync agent (runs: {ld.get('runs', '-')}, last exit: {ld.get('last_exit', '-')})")
     console.print(f"  {ok(ui.get('loaded'))} dashboard agent: http://127.0.0.1:{cfg.server_port}/")
     runner = make_runner(cfg)
-    console.print(f"  {ok(mcp_registered())} MCP server registered   {ok(runner.available())} analysis by {runner.label}: "
+    console.print(f"  {ok(runner.available())} analysis by {runner.label}: "
                   f"{runner.where() if runner.available() else runner.unavailable_reason()}")
     if runner.available() and (env := env_only_key(cfg, runner.name)):
         console.print(f"    [yellow]![/] its key is only in ${env}: background analysis and the dashboard don't see it "
                       f"(`interlatch config set-key {runner.name}` saves it)", highlight=False)
+    _print_agents(console, agents_doctor(cfg, conn, executable()), hooked=bool(hooks.get("SessionEnd")))
     console.print(f"  sessions: {sum(counts.values())} · " + " · ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
     console.print(f"  analysis queue: {pending['ready']} ready now, {pending['queued']} queued in all, {pending['held']} held · "
                   f"model {runner.model_label()} · auto={'on' if cfg.analysis.auto else 'off'} · spent {human_cost(spent)}")
@@ -76,6 +78,30 @@ def cmd_status(args) -> int:
     for r in conn.execute("SELECT id, analysis_reason FROM sessions WHERE analysis_status='error' ORDER BY ended_at DESC LIMIT 5"):
         console.print(f"  [red]error[/] {r['id'][:8]}: {(r['analysis_reason'] or '')[:160]}", highlight=False)
     return 0
+
+
+def _print_agents(console, rows: list[dict], *, hooked: bool) -> None:
+    """`interlatch status`: a line per agent found here, with Interlatch's MCP server (and Claude Code's hooks) in it,
+    and whether the command each one runs is still there and is this install."""
+    if not rows:
+        return
+    console.print("  agents:")
+    width = max(len(r["label"]) for r in rows)
+    for r in rows:
+        fix = f"`interlatch connect {r['name']}`"
+        what = {"mcp": "MCP server", "hook": "hook"}
+        problems = [f"{what[p['what']]} runs {p['command']}, " + ("which is gone" if p["problem"] == "missing" else "not this install")
+                    for p in r["problems"]]
+        if problems:
+            missing = any(p["problem"] == "missing" for p in r["problems"])
+            mark, text = "[red]✗[/]" if missing else "[yellow]![/]", "; ".join(problems) + f" ({fix} fixes it)"
+        elif r["mcp"]:
+            mark, text = "[green]✓[/]", "MCP server" + (" + SessionEnd hook" if r["name"] == "claude" and hooked else "")
+        elif r["optional"]:
+            mark, text = "[dim]–[/]", f"no MCP server (optional: {fix})"
+        else:
+            mark, text = "[red]✗[/]", f"no MCP server ({fix} adds it)"
+        console.print(f"    {mark} {r['label']:<{width}}  {text} · [dim]{r['config']}[/]", highlight=False)
 
 
 def cmd_feedback(args) -> int:

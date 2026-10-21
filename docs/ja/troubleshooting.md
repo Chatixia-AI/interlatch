@@ -3,7 +3,10 @@
 [← Interlatch](../../README.ja.md) · [ドキュメント一覧](README.md)
 
 まずは `interlatch status`（またはダッシュボードの **Settings › Status**）を実行してください。フック、バックグラウンドエージェント、
-MCP サーバー、`claude` CLI を確認し、最近の分析の失敗を一覧表示します。ログは `~/.interlatch/logs/` にあります
+MCP サーバー、`claude` CLI を確認し、最近の分析の失敗を一覧表示します。**agents** の下には、このコンピューターで
+見つかったコーディングエージェントごとに 1 行ずつ、Interlatch の MCP サーバーが登録されているか（Claude Code ではフックも）、
+そして実行するコマンドがもう存在しないか、別のインストール（古い `chronicle`、チェックアウトの `.venv`）のものかを表示します。
+`interlatch connect <name>` でこのインストールに向け直せます。ログは `~/.interlatch/logs/` にあります
 （すべてのログは `chronicle.log`、セッション終了フックのログは `hooks.log`）。
 
 それでも解決しないときは、`interlatch feedback`（またはダッシュボードの **設定 › フィードバック**）で、インストールの情報を

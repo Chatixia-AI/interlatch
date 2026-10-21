@@ -123,12 +123,16 @@ def disconnect_claude(cfg: Config) -> list[str]:
 # ------------------------------------------------------------------ Codex
 
 
-def codex_mcp_registered(home: Path | None = None) -> bool:
+def _codex_servers(home: Path) -> dict:
     try:
-        data = tomllib.loads(((home or codex_home()) / "config.toml").read_text())
+        servers = tomllib.loads((home / "config.toml").read_text()).get("mcp_servers")
     except (OSError, tomllib.TOMLDecodeError):
-        return False
-    return any(name in (data.get("mcp_servers") or {}) for name in MCP_NAMES)
+        return {}
+    return servers if isinstance(servers, dict) else {}
+
+
+def codex_mcp_registered(home: Path | None = None) -> bool:
+    return any(name in _codex_servers(home or codex_home()) for name in MCP_NAMES)
 
 
 def _codex_notify(home: Path) -> list | None:
@@ -194,7 +198,10 @@ def connect_codex(cfg: Config, exe: str) -> list[str]:
     binary = cfg.codex_bin()
     if not binary:
         return actions + [tr("MCP registration skipped: codex CLI not found")]
-    if not codex_mcp_registered(home):
+    servers = _codex_servers(home)
+    if _our_argv(servers) != [*exe_argv(exe), "mcp"]:
+        for name in [n for n in MCP_NAMES if n in servers]:  # one that runs another install, or a path that is gone
+            run_program([binary, "mcp", "remove", name], timeout=60)
         cmd = [binary, "mcp", "add", MCP_NAME, "--", *exe_argv(exe), "mcp"]
         proc = run_program(cmd, timeout=60)
         actions.append(tr("registered MCP server 'interlatch' in Codex") if proc.returncode == 0
@@ -724,3 +731,111 @@ def disconnect(cfg: Config, name: str) -> list[str]:
     if name not in CONNECTORS:
         raise KeyError(name)
     return CONNECTORS[name][2](cfg)
+
+
+# ------------------------------------------------------------------ doctor: is each agent's command this install?
+def _our_argv(servers) -> list[str] | None:
+    """The command line of our server in an MCP server map ('interlatch', else Chronicle's 'chronicle'): command and
+    args, or OpenCode's command list. None when neither is there or it has no command."""
+    entry = next((servers[n] for n in MCP_NAMES if isinstance(servers, dict) and n in servers), None)
+    if not isinstance(entry, dict):
+        return None
+    command, args = entry.get("command"), entry.get("args") or []
+    argv = command if isinstance(command, list) else [command, *(args if isinstance(args, list) else [])]
+    return [str(a) for a in argv] if argv and isinstance(argv[0], str) and argv[0] else None
+
+
+def _json_servers(path: Path, key: str, jsonc: bool = False) -> dict:
+    try:
+        text = path.read_text()
+        if jsonc:
+            from ..sources.opencode import _strip_jsonc
+
+            text = _strip_jsonc(text)
+        servers = json.loads(text).get(key)
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return servers if isinstance(servers, dict) else {}
+
+
+def registered_commands(cfg: Config, name: str) -> tuple[Path, list[tuple[str, Path, list[str]]]]:
+    """Where `name` (a recorded agent or an MCP client) keeps its MCP servers, and each command line of ours in its
+    configs as (what, file, argv): "mcp" for the MCP server's, "hook" for a Claude Code hook's (the part before
+    `hook`)."""
+    def mcp(*files: tuple[Path, str]) -> list[tuple[str, Path, list[str]]]:
+        return [("mcp", path, argv) for path, key in files
+                for argv in [_our_argv(_json_servers(path, key, jsonc=path.suffix == ".jsonc"))] if argv]
+
+    if name in MCP_CLIENTS:
+        path = mcp_client_config(name)
+        return path, mcp((path, "mcpServers"))
+    if name == "claude":
+        from .install import _claude_json, _is_ours, _load_settings, mcp_servers, settings_path
+
+        found = [("mcp", _claude_json(), argv) for argv in [_our_argv(mcp_servers())] if argv]
+        try:
+            hooks = [h for gs in (_load_settings(settings_path(cfg)).get("hooks") or {}).values() for g in gs or []
+                     if isinstance(g, dict) for h in g.get("hooks") or [] if isinstance(h, dict)]
+        except (OSError, ValueError, AttributeError):
+            hooks = []
+        found += [("hook", settings_path(cfg), exe_argv(h["command"].split(" hook ")[0].strip())) for h in hooks if _is_ours(h)]
+        return _claude_json(), found
+    if name == "codex":
+        path = (cfg.codex_dirs[0] if cfg.codex_dirs else codex_home()) / "config.toml"
+        return path, [("mcp", path, argv) for argv in [_our_argv(_codex_servers(path.parent))] if argv]
+    if name == "copilot":
+        home = next((d for d in cfg.copilot_dirs if (d / "session-state").is_dir()), copilot_home())
+        users = [d for d in cfg.copilot_dirs if (d / "workspaceStorage").is_dir()] or discovery.vscode_user_dirs()
+        files = [(u / "mcp.json", "servers") for u in users] + [(home / "mcp-config.json", "mcpServers")]
+        return files[0][0], mcp(*files)
+    if name == "bob":
+        current, legacy = bob_mcp_files(cfg.bob_dirs[0] if cfg.bob_dirs else bob_home())
+        return current, mcp((current if current.exists() else legacy, "mcpServers"))  # Bob copies it over on its next start
+    if name == "antigravity":
+        path = antigravity_mcp_config(cfg.antigravity_dirs[0] if cfg.antigravity_dirs else antigravity_home())
+        return path, mcp((path, "mcpServers"))
+    if name == "opencode":
+        from ..sources.opencode import config_files
+
+        return opencode_mcp_config(), mcp(*((p, "mcp") for p in config_files(opencode_config_dir())))
+    raise KeyError(name)
+
+
+def _program(argv: list[str]) -> Path | None:
+    """The program a command line runs, resolved (links followed), or None when it is not there."""
+    first = argv[0]
+    found = first if Path(first).is_absolute() or os.sep in first or "/" in first else shutil.which(first)
+    if not found or not Path(found).is_file():
+        return None
+    return Path(found).resolve()
+
+
+def command_problem(argv: list[str], current: str) -> str | None:
+    """Why a registered command line of ours does not run this install: "missing" (its program is gone: an install
+    that was removed, Chronicle's old commands), "other" (it runs another install than `current`, `executable()`), or
+    None when it runs this one. A trailing subcommand (mcp) is not compared."""
+    program = _program(argv)
+    if program is None:
+        return "missing"
+    want = exe_argv(current)
+    here = _program(want)
+    rest = argv[1:-1] if argv[-1:] == ["mcp"] else argv[1:]
+    return None if here == program and rest == want[1:] else "other"
+
+
+def agents_doctor(cfg: Config, conn: sqlite3.Connection, current: str) -> list[dict]:
+    """One row per agent found on this computer (recorded agents, then MCP clients): whether Interlatch's MCP server is
+    registered in it, the config that holds it, and each registered command of ours (the MCP server's, Claude Code's
+    hooks') that is gone or runs another install than `current`. Agents that are not installed get no row."""
+    found = [(s["name"], s["label"], False, any(c["ok"] for c in s["checks"] if c["key"] == "mcp"))
+             for s in all_status(cfg, conn) if s["detected"] and s["name"] != "codex-cloud"]
+    found += [(c["name"], c["label"], True, c["registered"]) for c in mcp_clients_status() if c["detected"]]
+    rows = []
+    for name, label, optional, mcp in found:
+        config, commands = registered_commands(cfg, name)
+        problems = dict.fromkeys((what, problem, _tilde(" ".join(argv[:-1] if argv[-1:] == ["mcp"] else argv)))  # said once
+                                 for what, _, argv in commands for problem in [command_problem(argv, current)] if problem)
+        rows.append({"name": name, "label": label, "optional": optional, "mcp": mcp,
+                     "config": _tilde(next((path for what, path, _ in commands if what == "mcp"), config)),
+                     "problems": [{"what": w, "problem": p, "command": c} for w, p, c in problems]})
+    return rows
