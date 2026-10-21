@@ -95,8 +95,30 @@ def _project_here(conn, cwd: str) -> str:
     return max((d for d in declared if under(cwd, d)), key=len, default=cwd)
 
 
+# What a SessionStart text may hold, least useful to the next agent first: the oldest recent session goes before a
+# teammate's lesson, which goes before a knowledge bullet; within a group the later (weaker) one goes first.
+_SESSION, _TEAM, _NOTE = "session", "teammate lesson", "note"
+
+
+def _value(group: str, index: int, stage_rank: int = 0) -> int:
+    if group == _SESSION:
+        return 10 - index
+    if group == _TEAM:
+        return 75 - 10 * index
+    return 100 - 10 * index + stage_rank
+
+
+def _footer(left_out: dict[str, int]) -> str:
+    from ..core.budget import counted
+
+    tools = "the interlatch MCP tools (search_sessions, search_knowledge, get_session)"
+    if not (left := counted(left_out, (_NOTE, _TEAM, _SESSION))):
+        return f"Use {tools} for details."
+    return f"Not shown here: {left}. Use {tools} to find them and for details."
+
+
 def build_session_context(cfg, cwd: str) -> str | None:
-    """A compact digest of what previous sessions learned about this project."""
+    """A compact digest of what previous sessions learned about this project, at most `inject_max_chars` long."""
     from ..storage.sqlite import connect
     from ..sharing.pull import team_from
     from ..knowledge.ladder import STAGE_ORDER_SQL, STAGE_RANK, TRUSTED, stage_label
@@ -104,11 +126,14 @@ def build_session_context(cfg, cwd: str) -> str | None:
     def trust_tag(i: dict) -> str:
         return i["stage"] + (f" ×{i['sessions']}" if (i.get("sessions") or 0) > 1 else "")
     from ..knowledge.synthesize import kb_for_path, kb_sections
+    from ..core.budget import Block, fit
+    from ..core.redact import redact
     from ..core.util import local_str, one_line
 
     from ..core.profiles import WAITING
     from ..projects.scope import scoped_for
 
+    per_section = 6
     conn = connect(cfg.db_path, readonly=True)
     try:
         # named profiles: only what this folder's owner has; nothing while it waits for you to choose
@@ -116,21 +141,29 @@ def build_session_context(cfg, cwd: str) -> str | None:
             return None
         kb = kb_for_path(conn, cwd)
         cwd = _project_here(conn, cwd)  # a folder inside a project set up on this hub belongs to that project
-        lines: list[str] = []
+        header: list[str] = []
+        blocks: list[Block] = []
+        left_out: dict[str, int] = {}
+        # every line is redacted before it is measured, so redaction can't push the text over its limit; the items
+        # were redacted when they were stored, and this catches any stored before a rule existed
         if kb:
-            lines.append(f"Interlatch knowledge base for {kb['project_name']} (from past coding-agent sessions, "
-                         f"updated {local_str(kb['updated_at'], '%Y-%m-%d')}):")
+            header.append(f"Interlatch knowledge base for {kb['project_name']} (from past coding-agent sessions, "
+                          f"updated {local_str(kb['updated_at'], '%Y-%m-%d')}):")
             for section in kb_sections(kb):
                 # tentative bullets stay out: this text is read at the start of every session, and
                 # search_knowledge still finds them
                 items = [i for i in section.get("items") or [] if i.get("stage") != "wip"]
                 if not items:
                     continue
-                lines.append(f"{section.get('title')}:")
                 # the best-established bullets first, each with its trust when it has earned some
                 items = sorted(items, key=lambda i: -STAGE_RANK.get(i.get("stage") or "provisional", 1))
-                lines += [f"- {one_line(i.get('text') or '', 300)}"
-                          + (f" ({trust_tag(i)})" if i.get("stage") in TRUSTED else "") for i in items[:6]]
+                if len(items) > per_section:
+                    left_out[_NOTE] = left_out.get(_NOTE, 0) + len(items) - per_section
+                blocks.append(Block(f"{section.get('title')}:", [
+                    (_value(_NOTE, n, STAGE_RANK.get(i.get("stage") or "provisional", 1)), _NOTE,
+                     redact(f"- {one_line(i.get('text') or '', 300)}"
+                            + (f" ({trust_tag(i)})" if i.get("stage") in TRUSTED else "")))
+                    for n, i in enumerate(items[:per_section])]))
         else:
             rows = conn.execute(
                 "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json FROM knowledge k WHERE k.status = 'active' "
@@ -140,31 +173,31 @@ def build_session_context(cfg, cwd: str) -> str | None:
                 (cwd,),
             ).fetchall()
             if rows:
-                lines.append("Interlatch notes from past coding-agent sessions in this project:")
-                lines += [f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "") + f"] {one_line(r['title'], 200)}"
-                          for r in rows]
+                header.append("Interlatch notes from past coding-agent sessions in this project:")
+                blocks.append(Block(None, [
+                    (100 - 5 * n, _NOTE, redact(f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "")
+                                                + f"] {one_line(r['title'], 200)}"))
+                    for n, r in enumerate(rows)]))
         team = conn.execute(  # teammates' lessons the team hub sent (sharing.pull.apply_team_lessons)
             "SELECT k.kind, k.title, k.stage, k.session_id, k.confirmed_json, k.source_ref FROM knowledge k "
             f"WHERE k.status = 'active' AND k.source = 'team' AND k.project_path = ? AND COALESCE(k.stage, '') != 'wip' "
             f"ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, k.updated_at DESC LIMIT 6", (cwd,),
         ).fetchall()
         if team:
-            lines.append("From teammates' sessions in this project (via the team hub):")
-            lines += [f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "") + f"] "
-                      f"{one_line(r['title'], 200)}" + (f" (from {', '.join(who)})" if (who := team_from(r)) else "")
-                      for r in team]
-        recent = conn.execute(
-            "SELECT started_at, title, outcome FROM sessions WHERE project_path = ? AND source != 'history' "
-            "ORDER BY started_at DESC LIMIT 3", (cwd,),
-        ).fetchall()
+            blocks.append(Block("From teammates' sessions in this project (via the team hub):", [
+                (_value(_TEAM, n), _TEAM, redact(
+                    f"- [{r['kind']}" + (f" · {stage_label(r)}" if r["stage"] in TRUSTED else "") + f"] "
+                    f"{one_line(r['title'], 200)}" + (f" (from {', '.join(who)})" if (who := team_from(r)) else "")))
+                for n, r in enumerate(team)]))
+        recent = [(_value(_SESSION, n), _SESSION, redact(f"{local_str(r['started_at'], '%m-%d')} "
+                                                         f"{one_line(r['title'] or '', 80)} ({r['outcome'] or 'not analyzed'})"))
+                  for n, r in enumerate(conn.execute(
+                      "SELECT started_at, title, outcome FROM sessions WHERE project_path = ? AND source != 'history' "
+                      "ORDER BY started_at DESC LIMIT 3", (cwd,)))]
         if recent:
-            lines.append("Recent sessions here: " + "; ".join(
-                f"{local_str(r['started_at'], '%m-%d')} {one_line(r['title'] or '', 80)} ({r['outcome'] or 'not analyzed'})"
-                for r in recent))
-        if not lines:
+            blocks.append(Block("Recent sessions here: ", recent, inline=True))
+        if not header and not blocks:
             return None
-        lines.append("Use the interlatch MCP tools (search_sessions, search_knowledge, get_session) for details.")
-        text = "\n".join(lines)
-        return text[: cfg.inject_max_chars]
+        return fit(header, blocks, _footer, cfg.inject_max_chars, left_out)
     finally:
         conn.close()

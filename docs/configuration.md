@@ -73,7 +73,7 @@ Settings for `analysis.backend = "<name>"`; [Model providers](analysis.md#model-
 | `server.trusted_proxies` | `["127.0.0.1", "::1"]` | addresses of the proxies whose `auth_header`, `X-Forwarded-Proto` and `X-Forwarded-For` the dashboard believes; the last `X-Forwarded-For` entry tells visitors apart when they try codes ([too many wrong codes](troubleshooting.md#a-hub)) ([Reaching the hub without Tailscale](devices.md#reaching-the-hub-without-tailscale)) |
 | `server.behind_proxy` | `false` | a reverse proxy on this computer forwards to the dashboard: no request through it counts as made at the hub itself (which is always an admin), so admins sign in or use the `interlatch hub` commands ([Reaching the hub without Tailscale](devices.md#reaching-the-hub-without-tailscale)) |
 | `server.menu_bar` | `false` | macOS: the dashboard that runs at login also shows Interlatch's icon in the menu bar (needs the `app` extra); `interlatch install --menu-bar` turns it on ([The menu-bar icon](install.md#the-menu-bar-icon)) |
-| `inject.session_start` / `max_chars` | `false` / `3000` | give new sessions a digest of the project's knowledge base (SessionStart hook) |
+| `inject.session_start` / `max_chars` | `false` / `3000` | give new sessions a digest of the project's knowledge base (SessionStart hook), at most `max_chars` characters: to fit, whole items are left out, least useful first, and its last line says how many |
 | `updates.check_daily` | `false` | ask pypi.org for the latest version once a day while the dashboard is open (Status › Updates) |
 | `updates.notify` | `false` | the background sync asks pypi.org once a day and shows a desktop notification once per new release (Status › Updates, or `interlatch install --notify-updates`) |
 

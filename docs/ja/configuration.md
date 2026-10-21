@@ -73,7 +73,7 @@
 | `server.trusted_proxies` | `["127.0.0.1", "::1"]` | ダッシュボードが `auth_header`、`X-Forwarded-Proto`、`X-Forwarded-For` を信頼するプロキシのアドレス。コードを試す訪問者は、`X-Forwarded-For` の最後の項目で見分けます（[間違ったコードが続いたとき](troubleshooting.md#ハブ)）（[Tailscale を使わずにハブにつなぐ](devices.md#tailscale-を使わずにハブにつなぐ)） |
 | `server.behind_proxy` | `false` | このコンピューター上のリバースプロキシがダッシュボードに転送する：それを通るリクエストはハブ自身から（常に管理者）とは見なされず、管理者はサインインするか `interlatch hub` コマンドを使う（[Tailscale を使わずにハブにつなぐ](devices.md#tailscale-を使わずにハブにつなぐ)） |
 | `server.menu_bar` | `false` | macOS：ログイン時に起動するダッシュボードが、メニューバーに Interlatch のアイコンも表示する（`app` エクストラが必要）。`interlatch install --menu-bar` でオンになります（[メニューバーアイコン](install.md#メニューバーアイコン)） |
-| `inject.session_start` / `max_chars` | `false` / `3000` | 新しいセッションにプロジェクトのナレッジベースの要約を渡す（SessionStart フック） |
+| `inject.session_start` / `max_chars` | `false` / `3000` | 新しいセッションにプロジェクトのナレッジベースの要約を渡す（SessionStart フック）。長さは `max_chars` 文字以内で、収まらないときは役立ちにくい項目から丸ごと省き、最後の行に省いた数を示す |
 | `updates.check_daily` | `false` | ダッシュボードを開いている間、1 日 1 回 pypi.org に最新バージョンを問い合わせる（Status › Updates） |
 | `updates.notify` | `false` | バックグラウンド同期が 1 日 1 回 pypi.org に問い合わせ、新しいリリースごとに 1 回デスクトップ通知を表示する（Status › Updates、または `interlatch install --notify-updates`） |
 
