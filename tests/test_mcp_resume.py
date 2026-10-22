@@ -100,6 +100,10 @@ def test_an_empty_project_says_so(synced):
 def test_the_mcp_tool_knows_the_client_from_initialize(synced):
     conn = synced["conn"]
     _story(conn)
+    # the server reads the real clock: the running session moved just now, not at NOW
+    conn.execute("UPDATE sessions SET ended_at = ? WHERE id = 'claude-now'",
+                 (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),))
+    conn.commit()
     msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize",
              "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "claude-code", "version": "2"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
