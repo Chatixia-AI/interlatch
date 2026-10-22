@@ -220,7 +220,7 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(not NODE, reason="node is not installed")
-@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js", "innerlatch.js", "adventure.js", "field.js", "battle.js"])
+@pytest.mark.parametrize("name", ["app.js", "i18n.js", "ja.js", "sprites.js", "scene.js", "innerlatch.js", "adventure.js", "field.js", "battle.js", "signin.js"])
 def test_scripts_parse(name):
     proc = subprocess.run([NODE, "--check", str(WEB / name)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
