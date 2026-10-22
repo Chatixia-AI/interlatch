@@ -115,6 +115,7 @@ def test_a_hub_without_people_answers_as_before(hubweb):
     assert _call(url, "/api/learning/interests") == (200, {"interests": []})
     status, headers, page = _raw(url, "/signin?code=AAAA-BBBB-CCCC")
     assert status == 400 and b"known on this hub" in page and headers["Content-Type"].startswith("text/html")
+    assert b'id="signin-lang"' not in page  # switching language here would try the wrong code again
 
 
 def test_who_may_look_and_who_may_change(team):
@@ -204,13 +205,17 @@ def test_a_link_alone_signs_nobody_in(team):
     url, conn = team["url"], team["conn"]
     code = people.invite(conn, team["vic"]["id"])
     status, headers, page = _raw(url, f"/signin?code={code}&next={quote('/project?path=%2Fx', safe='')}", headers=REMOTE)
-    assert status == 200 and "Set-Cookie" not in headers and b"Sign in as Vic (vic@example.com)?" in page
+    assert status == 200 and "Set-Cookie" not in headers and b"<b>Vic</b><span>vic@example.com</span>" in page
+    assert b">Sign in as Vic</button>" in page
     assert f'name="code" value="{code}"'.encode() in page and b'name="next" value="/project?path=%2Fx"' in page
-    csp = headers["Content-Security-Policy"]
-    assert "form-action 'self'" in csp and "frame-ancestors 'none'" in csp and "script-src" not in csp
+    csp = dict(d.strip().split(" ", 1) for d in headers["Content-Security-Policy"].split(";"))
+    assert csp["form-action"] == csp["script-src"] == csp["style-src"] == "'self'" and csp["frame-ancestors"] == "'none'"
+    assert b"<script>" not in page and b" style=" not in page  # the page's own files only: nothing inline
     assert people.peek_invite(conn, code)  # asking used nothing up
     page = _raw(url, f"/signin?code={code}", headers={**REMOTE, "Accept-Language": "ja"})[2]
-    assert "Vic (vic@example.com) としてサインインしますか？".encode() in page
+    assert "Vic としてサインイン</button>".encode() in page and b'id="signin-lang" lang="en"' in page
+    page = _raw(url, f"/signin?code={code}&lang=ja", headers=REMOTE)[2]  # the page's language button
+    assert "Vic としてサインイン</button>".encode() in page and f"code={code}&amp;lang=en".encode() in page
 
     for other in ({}, {"Origin": "https://evil.example"}, {"Origin": "null"}, {"Origin": "http://127.0.0.1.evil.example"},
                   {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, {"Sec-Fetch-Site": "same-site"}):

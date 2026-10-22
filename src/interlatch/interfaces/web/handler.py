@@ -79,6 +79,17 @@ SIGNIN_HELP = ("Ask an admin of this hub for a new invite, or open the hub's das
                "(Settings › Devices).")
 SIGNIN_CHECK = "Go on only if you opened this link from your own Interlatch or an admin of this hub sent it to you."
 TOO_MANY_CODES = "too many wrong codes from this address; try again in {seconds} s"  # people.CodeAttempts
+# The /signin page's policy: the dashboard's own stylesheet, fonts, logo and signin.js, nothing inline, and its form
+# posts only here. It may not be framed: a page that shows it in a frame can't trick a click on Sign in.
+SIGNIN_CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; "
+              "form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+# line icons, drawn as app.js's icon() draws them
+_ICON = '<svg class="icon{cls}" viewBox="0 0 24 24" aria-hidden="true">{paths}</svg>'
+SUN = _ICON.format(cls=" ic-sun", paths='<circle cx="12" cy="12" r="4"/>' + "".join(
+    f'<path d="{d}"/>' for d in ("M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41", "M2 12h2",
+                                 "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41")))
+MOON = _ICON.format(cls=" ic-moon", paths='<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>')
+SHIELD = _ICON.format(cls="", paths='<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/>')
 
 
 def make_handler(app: App, port: int):
@@ -280,16 +291,33 @@ def make_handler(app: App, port: int):
             origin = (self.headers.get("Origin") or "").strip().lower()
             return origin not in ("", "null") and urlparse(origin).netloc == self._host()
 
-        def _signin_page(self, status: int, title: str, body: str, retry: int = 0):
-            """The small page /signin answers with: asking before a sign-in, or why one didn't happen."""
+        def _signin_page(self, status: int, title: str, body: str, retry: int = 0, switch_lang: bool = False):
+            """The small page /signin answers with: asking before a sign-in, or why one didn't happen. The dashboard's
+            own sign-in card (app.css), with its theme and language buttons (signin.js), under a policy that lets in
+            the dashboard's own files and nothing inline."""
             import html
+            from urllib.parse import urlencode
 
             title = html.escape(title)
-            page = (f'<!doctype html><html lang="{i18n.lang.get()}"><meta charset="utf-8">'
+            hub = app.cfg.hub_name or self._host()
+            switch = ""
+            if switch_lang:  # the same link in the other language; not on a refusal, where it would try the code again
+                other = "en" if i18n.lang.get() == "ja" else "ja"
+                q = {k: v[-1] for k, v in parse_qs(urlparse(self.path).query).items()} | {"lang": other}
+                switch = (f'<a class="btn small" id="signin-lang" lang="{other}" href="/signin?{html.escape(urlencode(q))}">'
+                          f'{"日本語" if other == "ja" else "English"}</a>')
+            theme = html.escape(tr("Toggle theme"))
+            page = (f'<!doctype html><html lang="{i18n.lang.get()}"><head><meta charset="utf-8">'
                     '<meta name="viewport" content="width=device-width, initial-scale=1">'
                     f'<meta name="color-scheme" content="light dark"><title>{title} · Interlatch</title>'
-                    '<body style="font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 12vh auto; '
-                    f'padding: 0 16px"><h1 style="font-size: 1.3rem">{title}</h1>{body}</body></html>').encode()
+                    '<link rel="icon" href="/favicon.png" type="image/png"><link rel="stylesheet" href="/app.css">'
+                    '<script src="/signin.js"></script></head><body><main class="signin-screen">'
+                    '<div class="card signin-card"><div class="signin-brand">'
+                    '<img src="/icon.png" width="26" height="26" alt="">Interlatch'
+                    f'{f"<span class=signin-hub>{html.escape(hub)}</span>" if hub else ""}</div>'
+                    f'<h1>{title}</h1>{body}<div class="signin-foot">{switch}'
+                    f'<button class="btn small" id="signin-theme" type="button" aria-label="{theme}" title="{theme}">'
+                    f'{SUN}{MOON}</button></div></div></main></body></html>').encode()
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(page)))
@@ -298,8 +326,7 @@ def make_handler(app: App, port: int):
                 self.send_header("Retry-After", str(retry))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")  # the code is in this page's address
-            self.send_header("Content-Security-Policy",
-                             "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", SIGNIN_CSP)
             self.end_headers()
             self.wfile.write(page)
 
@@ -307,8 +334,8 @@ def make_handler(app: App, port: int):
             import html
 
             self._signin_page(429 if wait else status, tr("Could not sign in"),
-                              f"<p>{html.escape(exc.shown())}</p><p>{html.escape(tr(SIGNIN_HELP))}</p>"
-                              f'<p><a href="/">{html.escape(tr("Open the dashboard"))}</a></p>', wait)
+                              f'<p class="signin-note">{html.escape(exc.shown())}</p><p>{html.escape(tr(SIGNIN_HELP))}</p>'
+                              f'<a class="btn primary signin-go" href="/">{html.escape(tr("Open the dashboard"))}</a>', wait)
 
         def _signin_code(self, code: str, take):
             """take(code) for a sign-in, after the wrong-code wait (people.CodeAttempts): its answer, or None once the
@@ -316,7 +343,9 @@ def make_handler(app: App, port: int):
             from ...sharing import people
 
             accept = (self.headers.get("Accept-Language") or "").strip().lower()
-            i18n.lang.set("ja" if accept.startswith("ja") else "en")  # a link opened by hand sends no X-Interlatch-Lang
+            asked = parse_qs(urlparse(self.path).query).get("lang", [""])[-1]  # the page's language button
+            # a link opened by hand sends no X-Interlatch-Lang
+            i18n.lang.set(asked if asked in i18n.LANGS else "ja" if accept.startswith("ja") else "en")
             who = self._client()
             wait = app.code_attempts.wait(who)
             try:
@@ -340,15 +369,16 @@ def make_handler(app: App, port: int):
             person = self._signin_code(code, lambda c: people.code_person(app.conn, c))
             if person is None:
                 return
-            who = person["name"] + (f" ({person['email']})" if person.get("email") else "")
+            name, email = person["name"], person.get("email") or ""
             hidden = "".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">'
                              for k, v in (("code", code), ("next", page)) if v)
             self._signin_page(200, tr("Sign in to this hub"),
-                              f"<p>{html.escape(tr('Sign in as {who}?', who=who))}</p>"
-                              f"<p>{html.escape(tr(SIGNIN_CHECK))}</p>"
-                              f'<form method="post" action="/signin">{hidden}'
-                              f'<button type="submit" style="font: inherit; padding: 6px 16px">'
-                              f"{html.escape(tr('Sign in'))}</button></form>")
+                              f'<div class="signin-who"><span class="signin-avatar" aria-hidden="true">'
+                              f"{html.escape(name[:1].upper())}</span><div><b>{html.escape(name)}</b>"
+                              f'{f"<span>{html.escape(email)}</span>" if email else ""}</div></div>'
+                              f'<p class="signin-check">{SHIELD}<span>{html.escape(tr(SIGNIN_CHECK))}</span></p>'
+                              f'<form method="post" action="/signin">{hidden}<button class="btn primary signin-go" '
+                              f'type="submit">{html.escape(tr("Sign in as {name}", name=name))}</button></form>', switch_lang=True)
 
         def _signin(self, code: str, page: str | None = None):
             """POST /signin, from the page above or the dashboard's own sign-in form: opens a browser session, on the

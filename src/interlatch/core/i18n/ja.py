@@ -409,10 +409,10 @@ JA: dict[str, str] = {
         "このハブの管理者に新しい招待を頼むか、自分の Interlatch（「設定」›「デバイス」）からハブのダッシュボードを開き直してください。",
     "Open the dashboard": "ダッシュボードを開く",
     "Sign in to this hub": "このハブにサインイン",
-    "Sign in as {who}?": "{who} としてサインインしますか？",
+    "Sign in as {name}": "{name} としてサインイン",
     "Go on only if you opened this link from your own Interlatch or an admin of this hub sent it to you.":
         "このリンクを自分の Interlatch から開いた場合か、このハブの管理者から送られてきた場合だけ続けてください。",
-    "Sign in": "サインイン",
+    "Toggle theme": "テーマを切り替え",
     "open the sign-in link again": "サインインのリンクをもう一度開いてください",
     "bad form": "フォームが正しくありません",
     "no such computer or browser session": "そのコンピューターまたはブラウザーのセッションはありません",
