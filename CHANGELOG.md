@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.28.8 (2026-10-22)
+
+- **A sign-in page that looks like Interlatch:** opening a hub's sign-in or invite link now shows the dashboard's own
+  card, with the person you'll sign in as, a full-width **Sign in as …** button, and the light/dark and language
+  buttons, in place of a bare unstyled page. The page still asks before it signs anyone in.
+
 ## 0.28.7 (2026-10-21)
 
 - **Feedback:** report a problem or suggest an idea from wherever you use Interlatch: `interlatch feedback` (or
