@@ -504,6 +504,75 @@
 
   const CHARS = { claude, codex, copilot, bob, antigravity, opencode };
 
+  // ---- the hero: the person, a character they make (hero.py LOOK). A look is a choice per part, by index; heroKey()
+  // turns one into a character drawn like the agents (draw, animate), registered the first time it is asked for.
+  const HERO_LOOK = { body: 3, skin: 6, hair: 6, hair_color: 8, outfit: 8, accessory: 5 }; // hero.py LOOK: same counts
+  const HERO_SKIN = ["#ffdcc4", "#f2c29c", "#dba37c", "#b97d57", "#8e5b3c", "#5f3c27"];
+  const HERO_HAIR = ["#2b2331", "#5b3b27", "#a3673a", "#e8c66c", "#c9ced8", "#d6574f", "#4f7ce0", "#9b6cf0"];
+  const HERO_OUTFIT = ["#3f7de0", "#e0673f", "#2fa36b", "#8b6cf0", "#d1497b", "#e0a100", "#56627a", "#14b8a6"];
+  const heroHead = P(8, 4, [".....ffffff.....", "...ffffffffff...", "..ffffffffffff..", ".ffffffffffffff.",
+    "ffffffffffffffff", "ffffffffffffffff", "ffffffffffffffff", "ffffffffffffffff", "ffffffffffffffff",
+    "ffffffffffffffff", ".ffffffffffffff.", "..ffffffffffff..", "....ffffffff...."]);
+  const heroBodies = [ // round, straight, a robe
+    P(8, 17, ["...bbbbbbbbbb...", ".bbbbbbbbbbbbbb.", "bbbbbbbbbbbbbbbb", "bbbbbbbbbbbbbbbb", "bbbbbbbbbbbbbbbb",
+      "bbbbbbbbbbbbbbbb", "bbbbbbbbbbbbbbbb", ".bbbbbbbbbbbbbb.", "..bbbbbbbbbbbb..", "....bbbbbbbb...."]),
+    P(9, 17, ["..bbbbbbbbbb..", ".bbbbbbbbbbbb.", "bbbbbbbbbbbbbb", "bbbbbbbbbbbbbb", "bbbbbbbbbbbbbb",
+      "bbbbbbbbbbbbbb", "bbbbbbbbbbbbbb", "bbbbbbbbbbbbbb", "bbbbbbbbbbbbbb", ".bbbbbbbbbbbb."]),
+    P(7, 17, ["....bbbbbbbbbb....", "...bbbbbbbbbbbb...", "..bbbbbbbbbbbbbb..", "..bbbbbbbbbbbbbb..",
+      ".bbbbbbbbbbbbbbbb.", ".bbbbbbbbbbbbbbbb.", "bbbbbbbbbbbbbbbbbb", "bbbbbbbbbbbbbbbbbb", "bbbbbbbbbbbbbbbbbb",
+      "bbbbbbbbbbbbbbbbbb", ".bbbbbbbbbbbbbbbb."]),
+  ];
+  const heroTop = P(8, 2, ["....hhhhhhhh....", "..hhhhhhhhhhhh..", ".hhhhhhhhhhhhhh.", "hhhhhhhhhhhhhhhh",
+    "hhhhhhhhhhhhhhhh", "hhh..........hhh", "hh............hh"]);
+  const heroHairs = [ // short, spiky, long, a bob, a ponytail, cropped
+    { front: [heroTop] },
+    { front: [P(8, 0, ["..h....h....h...", ".hhh..hhh..hhh..", "hhhhhhhhhhhhhhh.", "hhhhhhhhhhhhhhhh", "hhhhhhhhhhhhhhhh",
+      "hhhhhhhhhhhhhhhh", "hhhhhhhhhhhhhhhh", "hh.hh......hh.hh", "h..............h"])] },
+    { back: [P(6, 6, ["hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", ".hh"]),
+      P(23, 6, ["hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hhh", "hh."])], front: [heroTop] },
+    { front: [heroTop, P(7, 8, ["hh", "hh", "hh", "hh", "hh", "hh", ".h"]), P(23, 8, ["hh", "hh", "hh", "hh", "hh", "hh", "h."])] },
+    { back: [P(23, 4, ["..hhh", ".hhhh", "hhhh.", "hhh..", "hhh..", "hhhh.", ".hhh.", "..hh.", "...h."])], front: [heroTop] },
+    { front: [P(9, 3, ["...hhhhhhhh...", ".hhhhhhhhhhhh.", "hhhhhhhhhhhhhh", "hh..........hh"])] },
+  ];
+  const heroAccessories = [
+    [],
+    [P(9, 10, [".gggg....gggg.", "g....gggg....g", "g....g..g....g", "g....g..g....g", ".gggg....gggg."])], // glasses
+    [P(8, 6, ["yyyyyyyyyyyyyyyy"]), P(22, 7, [".yy", "yy."])], // a headband
+    [P(9, 17, ["yyyyyyyyyyyyyy", ".yyyyyyyyyyyy."]), P(19, 19, ["yy", "yy", ".y"])], // a scarf
+    [P(8, 1, ["....eeeeeeee....", "..ee........ee..", ".e............e."]), P(6, 9, ["ee", "ee", "ee", "ee"]),
+      P(24, 9, ["ee", "ee", "ee", "ee"])], // headphones
+  ];
+  const heroBelt = (body) => body === 2 ? P(8, 23, ["yyyyyyyyyyyyyyyy"]) : P(9, 23, ["yyyyyyyyyyyyyy"]);
+  // a cape from the shoulders, behind the head and arms: it shows around them
+  const heroCape = P(4, 13, ["......DDDDDDDDDDDD......", "....DDDDDDDDDDDDDDDD....", "..DDDDDDDDDDDDDDDDDDDD..",
+    ".DDDDDDDDDDDDDDDDDDDDDD.", ...new Array(10).fill("DDDDDDDDDDDDDDDDDDDDDDDD"), ".DDDDDDDDDDDDDDDDDDDDDD.",
+    "..DDDDDDDDDDDDDDDDDDDD.."]);
+  const heroStar = P(14, 0, ["..y..", ".yYy.", "..y.."]);
+  const lookPart = (look, k) => { const v = Math.round(Number(look && look[k])); return v >= 0 && v < HERO_LOOK[k] ? v : 0; };
+  function heroKey(look) {
+    const v = Object.fromEntries(Object.keys(HERO_LOOK).map((k) => [k, lookPart(look, k)]));
+    const key = "hero-" + Object.values(v).join("");
+    if (CHARS[key]) return key;
+    const out = HERO_OUTFIT[v.outfit], hair = heroHairs[v.hair], acc = heroAccessories[v.accessory];
+    const body = [...(hair.back || []), heroBodies[v.body], ...ARMS(19), SHOES, heroHead, ...face(10, 11), ...hair.front, ...acc];
+    const belted = [...body, heroBelt(v.body)];
+    CHARS[key] = {
+      color: out,
+      pal: { f: HERO_SKIN[v.skin], h: HERO_HAIR[v.hair_color], b: "*" + out, a: out, s: mix(out, "#1c2456", 0.45),
+        D: mix(out, "#1c2456", 0.35), y: "*#f6c445", Y: "=#fff1b0", g: "=#2b2331", e: "*#3a3f55" },
+      waist: 17, blink: closed(10, 11, "f"),
+      tiers: {
+        novice: { body },
+        adept: { body: belted },
+        expert: { body: belted, back: [heroCape] },
+        master: { body: [...belted, heroStar], back: [heroCape], aura: "255, 214, 120",
+          sparks: [[27, 9], [29, 18], [4, 24], [3, 4], [28, 3]], spark: ["#fff6d6", "#ffd66b"] },
+      },
+    };
+    return key;
+  }
+
+
   // =====================================================================================
   // Composing a frame
   // =====================================================================================
@@ -937,5 +1006,6 @@
   }
 
   window.Sprites = Object.freeze({ SIZE, AGENTS: Object.freeze(AGENTS.slice()), TIERS: Object.freeze(TIERS.slice()),
-    draw, animate, sparkle, icon, color, art });
+    HERO_LOOK: Object.freeze({ ...HERO_LOOK }),
+    HERO_COLORS: Object.freeze({ skin: HERO_SKIN.slice(), hair_color: HERO_HAIR.slice(), outfit: HERO_OUTFIT.slice() }), draw, animate, sparkle, icon, color, art, heroKey });
 })();

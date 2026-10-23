@@ -171,6 +171,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     # POST: any signed-in person, for their own Party quest log (no such quest or track; here: not signed in)
     ("POST", "/api/party/quest"): POST_SIGNED_IN.ok(400).but(here=403),
     ("POST", "/api/party/goal"): POST_SIGNED_IN.ok(400).but(here=403),
+    ("POST", "/api/party/hero"): POST_SIGNED_IN.ok(403),  # a hub person has no hero there; here: not signed in
     ("POST", "/api/party/cleared"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     ("POST", "/api/party/pick"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     ("POST", "/api/party/buy"): POST_SIGNED_IN.ok(400).but(here=403),  # no such item
@@ -312,6 +313,7 @@ BODY = {
     "/api/update/daily": {"on": False},
     "/api/update/notify": {"on": False},
     "/api/party/goal": {"track": "no-such-track"},
+    "/api/party/hero": {"name": "", "look": {}},
     "/api/party/cleared": {"id": 999999, "cleared": True},
     "/api/party/pick": {"id": 999999, "choice": 0},
     "/api/party/buy": {"id": "c:nothing"},

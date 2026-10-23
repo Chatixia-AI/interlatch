@@ -71,7 +71,7 @@ HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub
             "/api/hub/withdraw")
 # POSTs any person signed in to a hub may make, not only admins: their own Party quest log, goal, cleared encounters,
 # bag and decks (routes.PARTY decides)
-PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/cleared", "/api/party/pick", "/api/party/buy",
+PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/hero", "/api/party/cleared", "/api/party/pick", "/api/party/buy",
              "/api/party/sell", "/api/party/equip", "/api/party/use", "/api/party/deck")
 
 log = logging.getLogger("interlatch.server")

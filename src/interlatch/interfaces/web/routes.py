@@ -359,12 +359,12 @@ def _party_sign(h, ctx, m, body):  # the Party's Google sign-in: the leaderboard
         return h._json({"error": str(e)}, 502)
 
 
-def _party_own(h, ctx, m, body):  # the viewer's own quest log, goal, cleared encounters, bag and decks
+def _party_own(h, ctx, m, body):  # the viewer's own quest log, goal, hero, cleared encounters, bag and decks
     if m.group(1) == "deck":
         return h._json(*api.party.action_party_deck(ctx, h.viewer, _body(body), here=h._from_here()))
     if m.group(1) in ("buy", "sell", "equip", "use"):
         return h._json(*api.party.action_party_bag(ctx, h.viewer, m.group(1), _body(body), here=h._from_here()))
-    act = {"quest": api.party.action_party_quest, "goal": api.party.action_party_goal,
+    act = {"quest": api.party.action_party_quest, "goal": api.party.action_party_goal, "hero": api.party.action_party_hero,
            "cleared": api.party.action_party_cleared, "pick": api.party.action_party_pick}[m.group(1)]
     return h._json(*act(ctx, h.viewer, _body(body), here=h._from_here()))
 
@@ -434,7 +434,7 @@ POST: list[Route] = [
     # a Google sign-in kept on this computer: only from here
     Route(r"/api/party/(signin|signout)", PARTY_SIGNIN, _party_sign),
     # the viewer's own quest log: from here, or any person signed in to a hub, not only admins (handler.PARTY_OWN)
-    Route(r"/api/party/(quest|goal|cleared|pick|buy|sell|equip|use|deck)", PARTY, _party_own),
+    Route(r"/api/party/(quest|goal|hero|cleared|pick|buy|sell|equip|use|deck)", PARTY, _party_own),
     Route(r"/api/artifacts/(\d+)/reveal", LOCAL_FILES, _reveal),
     # a password: at the hub itself, or an admin of a hub with people
     Route("/api/team-store/test", OWNER, lambda h, ctx, m, b: h._json(api.hub_admin.action_team_store_test(ctx, b))),
