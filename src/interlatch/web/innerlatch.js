@@ -523,7 +523,7 @@ function partyShell(title, sub, ...body) {
       h("div", null, h("h1", null, title), sub ? h("div", { class: "sub" }, sub) : null))) : null,
     body,
     h("p", { class: "party-foot" }, icon("fact"),
-      h("span", null, t("Levels show what your agents' lessons cover on the roadmap. They aren't your own level: the roadmap keeps that separate."))));
+      h("span", null, t("Your companions' levels show what their lessons cover on the roadmap. They are never your own: yours comes only from what you answer right and show with your own work."))));
 }
 function lvBadge(level, big = false) {
   return h("span", { class: `px-lv${big ? " big" : ""}` }, h("small", null, t("Lv")), h("b", null, String(level)));
@@ -623,6 +623,136 @@ function partyGate(p, seq = renderSeq) {
         p.error ? h("p", { class: "muted small" }, p.error) : null)));
 }
 
+// ------------------------------------------------------------------ the hero: you, a character of your own (hero.py).
+// Made once on this computer; levelled only by what you answer right (XP) and, at gates, show with your own work
+// (ranks). The agents are your companions: nothing moves between your levels and theirs.
+const HERO_PARTS = [ // the look's parts as the maker shows them: colours as swatches, the rest by name
+  ["body", t("Build"), [t("Round"), t("Straight"), t("Robe")]],
+  ["skin", t("Skin"), null],
+  ["hair", t("Hair"), [t("Short"), t("Spiky"), t("Long"), t("Bob"), t("Ponytail"), t("Cropped")]],
+  ["hair_color", t("Hair colour"), null],
+  ["outfit", t("Outfit"), null],
+  ["accessory", t("Accessory"), [tc("accessory", "None"), t("Glasses"), t("Headband"), t("Scarf"), t("Headphones")]],
+];
+function heroSprite(hx, { scale = 4, still = false, decorative = false } = {}) {
+  const SP = sprites();
+  let key = null;
+  try { key = SP?.heroKey ? SP.heroKey(hx.look) : null; } catch (e) { key = null; }
+  const label = t("{name}, your hero", { name: hx.name || "" });
+  if (!key) {
+    const size = (SP?.SIZE || 32) * scale;
+    return h("span", { class: "px-sprite px-standin", ...(decorative ? { "aria-hidden": "true" } : { role: "img", "aria-label": label }),
+      style: { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.46)}px`, "--ac": "var(--accent)" } },
+      (hx.name || "?").slice(0, 1));
+  }
+  return partySprite(key, { tier: tierOf(hx.level || 1), scale, still, decorative, label });
+}
+function heroRandomLook(counts) {
+  return Object.fromEntries(HERO_PARTS.map(([k]) => [k, Math.floor(Math.random() * (counts?.[k] || 1))]));
+}
+// making the hero (`edit`: changing the name and look of one already made; the path is changed on the Quests page)
+function heroMaker(p, { edit = null, cancel = null } = {}) {
+  const hx = p.hero, counts = hx.looks || {};
+  const look = { ...(edit ? edit.look : heroRandomLook(counts)) };
+  const name = h("input", { class: "hm-name", type: "text", maxlength: String(hx.name_max || 24), value: edit?.name || "",
+    placeholder: t("Your hero's name"), "aria-label": t("Your hero's name"), autocomplete: "off" });
+  const stage = h("div", { class: "hm-stage px-stage" });
+  const paint = () => stage.replaceChildren(heroSprite({ name: name.value, look, level: edit?.level || 1 }, { scale: 5, decorative: true }));
+  const rows = HERO_PARTS.map(([k, label, names]) => {
+    const colors = sprites()?.HERO_COLORS?.[k] || null, n = counts[k] || names?.length || 1;
+    const what = (i) => (names ? names[i] : t("Colour {n}", { n: i + 1 }));
+    const opts = Array.from({ length: n }, (_, i) => h("button", { type: "button", class: `hm-opt${colors ? " hm-sw" : ""}`,
+      "aria-pressed": String(look[k] === i), title: what(i), "aria-label": `${label}: ${what(i)}`,
+      style: colors ? { "--sw": colors[i] } : null,
+      onclick: (e) => {
+        look[k] = i;
+        e.currentTarget.parentNode.querySelectorAll(".hm-opt").forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+        paint();
+      } }, colors ? null : what(i)));
+    return h("div", { class: "hm-row", role: "group", "aria-label": label }, h("span", { class: "px-label" }, label), h("div", { class: "hm-opts" }, opts));
+  });
+  const parts = h("div", { class: "hm-parts" }, rows);
+  const shuffle = h("button", { class: "btn small", type: "button", onclick: () => {
+    Object.assign(look, heroRandomLook(counts));
+    parts.querySelectorAll(".hm-row").forEach((row, r) => row.querySelectorAll(".hm-opt").forEach((b, j) => b.setAttribute("aria-pressed", String(j === look[HERO_PARTS[r][0]]))));
+    paint();
+  } }, icon("sync"), t("Shuffle"));
+  // the path: what your agents' lessons cover most, the Generalist path, or any other track
+  let path = edit ? null : hx.suggest?.[0]?.id || "generalist";
+  const other = h("select", { class: "hm-other", "aria-label": t("Another track") }, h("option", { value: "" }, t("Another track…")));
+  const choice = (id, title, sub) => h("label", { class: "hm-path" },
+    h("input", { type: "radio", name: "hm-path", value: id, checked: id === path, onchange: () => { path = id; other.value = ""; } }),
+    h("span", null, h("b", null, title), sub ? h("small", null, sub) : null));
+  const paths = edit ? null : h("div", { class: "hm-paths", role: "radiogroup", "aria-label": t("Your path") },
+    h("span", { class: "px-label" }, t("Your path")),
+    (hx.suggest || []).map((x) => choice(x.id, x.name, t("{agent}'s lessons cover it most", { agent: agentShort(x.agent) }))),
+    choice("generalist", hx.generalist?.name || t("Generalist"),
+      tn(hx.generalist?.modules || 0, "The {n} module most tracks share", "The {n} modules most tracks share")),
+    other,
+    h("small", { class: "muted" }, t("You can change it any time on the Quests page: what you've shown stays with each module.")));
+  if (paths) {
+    other.addEventListener("change", () => {
+      if (!other.value) return;
+      path = other.value;
+      paths.querySelectorAll("input[name=hm-path]").forEach((r) => { r.checked = false; });
+    });
+    api("/api/party/tracks").then((r) => other.append(...(r.categories || []).map((c) =>
+      h("optgroup", { label: c.name }, c.tracks.map((tr) => h("option", { value: tr.id }, tr.name)))))).catch(() => { /* the three above stay */ });
+  }
+  const begin = h("button", { class: "btn primary", type: "submit" }, edit ? t("Save") : t("Begin"));
+  const form = h("form", { class: `card hero-maker px-frame${edit ? " editing" : ""}`, onsubmit: async (e) => {
+    e.preventDefault();
+    if (!name.value.trim()) { name.focus(); toast(t("Give your hero a name.")); return; }
+    begin.disabled = true;
+    const r = await lbPost("/api/party/hero", { name: name.value, look, ...(edit ? {} : { path }) });
+    begin.disabled = false;
+    if (!r) return;
+    partyRefresh(r);
+    toast(edit ? t("Saved.") : t("{name} sets out. Every lesson you get right now makes your hero stronger.", { name: r.hero?.name || name.value }));
+    render();
+  } },
+    h("div", { class: "hm-head" }, h("h2", null, edit ? t("Your hero") : t("Make your hero")),
+      edit ? null : h("p", { class: "muted" }, t("This is you. You start at level 1: your level rises from the lessons you answer right in study battles, and your rank in a module only from your own work at its gate. Your coding agents are your companions."))),
+    h("div", { class: "hm-body" },
+      h("div", { class: "hm-who" }, stage, name, shuffle),
+      parts,
+      paths),
+    h("div", { class: "hm-actions" }, begin, cancel ? h("button", { class: "btn", type: "button", onclick: cancel }, t("Cancel")) : null));
+  name.addEventListener("input", paint);
+  paint();
+  return form;
+}
+function heroModule(m, readyAt) {
+  const r = Math.min(m.ready, readyAt);
+  const tip = [m.name, t("{a} of {b} lessons understood toward its gate", { a: fmtNum(m.ready), b: readyAt }),
+    m.target ? t("Rank {r} of the {t} your path asks", { r: m.rank, t: m.target }) : null].filter(Boolean).join("\n");
+  return h("li", { title: tip }, pxIcon(m.attr, 1),
+    h("span", { class: "hc-mname" }, m.name, m.critical ? h("small", { class: "hc-crit", "aria-label": t("critical") }, " ★") : null),
+    h("span", { class: "hc-ready", role: "img", "aria-label": t("{a} of {b} lessons understood toward its gate", { a: fmtNum(m.ready), b: readyAt }) },
+      Array.from({ length: readyAt }, (_, i) => h("i", { class: i < r ? "on" : "" }))),
+    h("span", { class: "hc-rank" }, m.target ? t("Rank {r}/{t}", { r: m.rank, t: m.target }) : t("Rank {r}", { r: m.rank })));
+}
+function heroCard(p, edit) {
+  const hx = p.hero, path = hx.path, mods = path?.modules || [];
+  const stat = (label, v) => h("div", { class: "hc-stat" }, h("b", null, fmtNum(v)), h("span", null, label));
+  return h("section", { class: "card hero-card px-frame" },
+    h("div", { class: "hc-stage px-stage" }, heroSprite(hx, { scale: 4 }), tierBadge(tierOf(hx.level))),
+    h("div", { class: "hc-main" },
+      h("div", { class: "hc-head" },
+        h("div", { class: "hc-name" }, h("span", { class: "px-label" }, t("You")), h("h2", null, hx.name)),
+        lvBadge(hx.level, true),
+        h("button", { class: "btn small hc-edit", type: "button", onclick: edit }, t("Edit"))),
+      xpBar(hx.xp, hx.level_xp, hx.next_xp, hx.level),
+      h("div", { class: "hc-stats" }, stat(t("Lessons understood"), hx.understood), stat(t("Owned"), hx.owned),
+        stat(t("Ranks"), mods.reduce((n, m) => n + (m.rank || 0), 0))),
+      h("a", { class: "hc-path", href: "#/innerlatch/quests" }, h("span", { class: "px-label" }, t("Path")),
+        h("b", null, path ? path.name : t("No path yet: choose one")))),
+    mods.length ? h("div", { class: "hc-mods" },
+      h("span", { class: "px-label" }, t("Your path's modules")),
+      h("ul", null, mods.map((m) => heroModule(m, hx.ready_at || 5))),
+      h("small", { class: "muted" }, t("Five lessons understood open a module's gate. Ranks rise only there, with your own work: gates are coming next."))) : null);
+}
+
 // ------------------------------------------------------------------ #/innerlatch: the leader and the characters
 async function partySignout(p) {
   if (!confirm(p.who?.board ? t("Sign out of the Party? This also takes you off the leaderboard: your row there is deleted.")
@@ -643,7 +773,8 @@ function partyLeader(p) {
         h("div", { class: "muted small" }, who.kind === "hub" ? t("Signed in to this hub") : t("Signed in with Google")))),
     h("a", { class: "pl-quest", href: "#/innerlatch/quests" }, pxIcon("quest", 2),
       h("div", { class: "pl-quest-text" }, h("span", { class: "px-label" }, t("Main quest")),
-        p.goal ? [h("b", null, p.goal.name), h("div", { class: "pl-progress" }, questTrack(main), h("span", { class: "muted small" }, questCounts(main)))]
+        p.goal?.generalist ? [h("b", null, p.goal.name), h("div", { class: "muted small" }, t("No track's milestones: reach rank 2 in each of the modules most tracks share."))]
+          : p.goal ? [h("b", null, p.goal.name), h("div", { class: "pl-progress" }, questTrack(main), h("span", { class: "muted small" }, questCounts(main)))]
           : h("b", null, t("No main quest yet: pick a goal track")))),
     out);
 }
@@ -799,8 +930,13 @@ route(/^\/innerlatch$/, async () => {
   const token = renderSeq;
   const p = await partyGet();
   if (!p.signed_in) return partyGate(p, token);
-  return partyShell(t("Party"), t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
-    partyLeader(p), p.formations ? partyFormation(p) : null, marketNote(p.market),
+  const top = h("div", { class: "hero-top" });
+  const draw = (editing = false) => top.replaceChildren(!p.hero ? "" : !p.hero.made ? heroMaker(p)
+    : editing ? heroMaker(p, { edit: p.hero, cancel: () => draw(false) }) : heroCard(p, () => draw(true)));
+  draw();
+  return partyShell(t("Party"), p.hero ? t("You, and your coding agents as companions. You level up from what you answer right; they level up from the lessons their sessions produced.")
+    : t("Your coding agents as characters. Each levels up from the lessons its sessions produced, matched to the roadmap."),
+    top, partyLeader(p), p.hero ? h("h2", { class: "party-sub" }, t("Companions")) : null, p.formations ? partyFormation(p) : null, marketNote(p.market),
     h("div", { class: "party-grid" }, p.agents.map((a) => partyCard(a, p.attrs, partyMax(p), p.market))),
     h("p", { class: "muted small party-levels" }, t("Three kinds of level: a character's comes from all its XP, an attribute's from the XP of the skills under it, and a skill's from one roadmap module.")));
 });
@@ -861,6 +997,7 @@ function partyGoal(p, draw, tracksP) {
     const keep = filled ? sel.value : p.goal?.id || "", option = (tr) => h("option", { value: tr.id, selected: tr.id === keep }, label(tr));
     const cats = r.categories || [];
     sel.replaceChildren(...(keep ? [] : [h("option", { value: "", selected: true }, t("Choose a track…"))]),
+      h("option", { value: "generalist", selected: keep === "generalist" }, t("Generalist: the modules most tracks share")),
       ...(sort.value === "demand"
         ? cats.flatMap((c) => c.tracks).sort((a, b) => (b.global ?? -1) - (a.global ?? -1) || a.name.localeCompare(b.name, LOCALE)).map(option)
         : cats.map((c) => h("optgroup", { label: c.name }, c.tracks.map(option)))));
@@ -886,7 +1023,8 @@ function partyGoal(p, draw, tracksP) {
       row, marketNote(p.market));
   }
   return h("section", { class: "card pq-goal" }, cardHead(t("Your goal"), { iconName: "pin" }),
-    h("p", { class: "muted" }, p.goal.chosen ? t("You picked {track}: its four milestones are your main quest. Pick another track to change it.", { track: p.goal.name })
+    h("p", { class: "muted" }, p.goal.generalist ? t("You picked the Generalist path: the modules most tracks share. Pick a track to change it.")
+      : p.goal.chosen ? t("You picked {track}: its four milestones are your main quest. Pick another track to change it.", { track: p.goal.name })
       : t("Pick the roadmap track you're working toward: its four milestones become your main quest. Until you pick one, it's the class of your highest-level agent.")),
     row, marketNote(p.market));
 }
@@ -900,7 +1038,12 @@ function partyQuests(p, draw, tracksP) {
   }
   return [
     p.goal ? null : partyGoal(p, draw, tracksP),
-    p.goal ? h("section", { class: "card pq-main px-frame" },
+    p.goal?.generalist ? h("section", { class: "card pq-main px-frame" },
+      h("div", { class: "pq-head" }, pxIcon("quest", 2),
+        h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, p.goal.name),
+          h("div", { class: "muted small" }, t("No track's milestones: reach rank 2 in each of the modules most tracks share.")))),
+      p.hero?.path?.modules?.length ? h("ul", { class: "hc-mods-list" }, p.hero.path.modules.map((m) => heroModule(m, p.hero.ready_at || 5))) : null)
+    : p.goal ? h("section", { class: "card pq-main px-frame" },
       h("div", { class: "pq-head" }, pxIcon("quest", 2),
         h("div", { class: "pq-title" }, h("span", { class: "px-label" }, t("Main quest")), h("h2", null, p.goal.name),
           h("div", { class: "muted small" }, p.goal?.chosen ? t("The goal you picked") : t("Your highest-level agent's class, until you pick a goal")),
@@ -1494,6 +1637,10 @@ route(/^\/innerlatch\/adventure\/battle\/(\d+)$/, async (params, id) => {
     const r = await post("/api/party/pick", { id: Number(id), choice });
     if (!r || r.error) throw new Error(r?.error || t("no verdict came back"));
     if (mapCache) { mapCache.understood = r.understood; mapCache.readiness = r.readiness; }
+    if (r.hero?.gained > 0) { // what your hero earned by it (hero.py)
+      toast(r.hero.level > r.hero.was_level ? t("+{n} XP: your hero reached level {level}!", { n: r.hero.gained, level: r.hero.level })
+        : t("+{n} XP for your hero", { n: r.hero.gained }));
+    }
     return r;
   };
   let first = encounter; // a retry asks again: the items used in the lost fight are gone

@@ -45,10 +45,12 @@ def party(ctx: Context, viewer: dict | None, *, here: bool) -> dict:
     me = who(ctx, viewer)
     if me is None:  # the Party stays locked; at this computer, the week's lessons show (they aren't gated)
         return {"signed_in": False, **gate, **({"preview": pt.preview(ctx.conn, _here_id(ctx))} if here else {})}
+    from ....knowledge import hero
+
     data = pt.compute(ctx.conn, _here_id(ctx), viewer)
     # who's hiring for the classes it shows: read from Firebase only now, signed in (the numbers are public)
     return {"signed_in": True, **gate, "who": me, **data, "market": pt.market_block(pt.payload_tracks(data)),
-            "formations": _formations(ctx, viewer, data)}
+            "formations": _formations(ctx, viewer, data), "hero": hero.view(ctx.conn, _here_id(ctx), viewer, data)}
 
 
 def _levels(data: dict) -> dict[str, int]:
@@ -173,9 +175,12 @@ def action_party_pick(ctx: Context, viewer: dict | None, body: dict, *, here: bo
 
     if who(ctx, viewer) is None:
         return _refused()
+    from ....knowledge import hero
+
     lesson_id = body.get("id")
     if not pt.owns(ctx.conn, _here_id(ctx), viewer, lesson_id):
         return {"error": tr("no such lesson")}, 400
+    was = hero.xp_of(study.studied_of(ctx.conn, pt.scope_key(viewer)))
     try:
         got = study.pick(ctx.conn, ctx.cfg, pt.scope_key(viewer), lesson_id, body.get("choice"), here=viewer is None)
     except study.StudyError as exc:
@@ -183,7 +188,11 @@ def action_party_pick(ctx: Context, viewer: dict | None, body: dict, *, here: bo
     except Exception as exc:  # the model's call failed: nothing was kept
         return {"error": tr(study.NO_MODEL, reason=str(exc)[:200])}, 502
     m = pt.adventure_map(ctx.conn, _here_id(ctx), viewer)
-    return {**got, "understood": m["understood"], "readiness": m["readiness"]}, 200
+    out = {**got, "understood": m["understood"], "readiness": m["readiness"]}
+    if viewer is None and hero.load(ctx.conn) is not None:  # what the hero earned by it
+        now = hero.xp_of(study.studied_of(ctx.conn, pt.scope_key(viewer)))
+        out["hero"] = {"xp": now, "gained": now - was, "level": hero.level_of(now), "was_level": hero.level_of(was)}
+    return out, 200
 
 
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
@@ -274,6 +283,25 @@ def action_party_quest(ctx: Context, viewer: dict | None, body: dict, *, here: b
     try:
         pt.set_quest(ctx.conn, viewer, body.get("id"), bool(body.get("done")))
     except pt.PartyError as exc:
+        return {"error": tr(str(exc))}, 400
+    return party(ctx, viewer, here=here), 200
+
+
+def action_party_hero(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/hero {"name", "look", "path"?}: make the hero, or change its name and look; `path` (a track id
+    or "generalist") also sets the path, the Party's goal. Only at this computer. Answers the party as it is now."""
+    from ....knowledge import hero
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(hero.NOT_HERE)}, 403
+    try:
+        if "path" in body:  # checked first: a bad path keeps the hero as it was
+            pt.set_goal(ctx.conn, viewer, body.get("path"))
+        hero.save(ctx.conn, viewer, body.get("name"), body.get("look"))
+    except (hero.HeroError, pt.PartyError) as exc:
         return {"error": tr(str(exc))}, 400
     return party(ctx, viewer, here=here), 200
 

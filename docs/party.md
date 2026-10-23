@@ -41,6 +41,27 @@ your row off the leaderboard if you joined it, and takes you back out of Innerla
 On a team hub, sign in to the hub as usual ([Joining your team's hub](join-a-hub.md)). You see a party made from your
 own computers' sessions only. A teammate's sessions never level up your agents.
 
+## You, the hero
+
+On your own computer, the Party starts with **you**: the first time you go in, you make your hero (a name and a pixel
+look: build, skin, hair, hair colour, outfit and one accessory) and choose a **path**. The path is a roadmap track, or
+the **Generalist** path: the modules at least half of all tracks include, plus those at least five tracks mark as
+critical, eleven on the current roadmap, each with a target rank of 2. The tracks your agents' lessons cover most are
+offered first. You can change the path any time under **Quests**: it is your main quest, and what you have shown stays
+with each module.
+
+Your hero starts at level 1 with nothing granted for past work. It earns XP only from study battles in the
+[Adventure](#adventure): 10 for a lesson answered right the first time, 5 for each right answer when it comes back on a
+later day, and 20 more when the lesson becomes yours. Answers you gave before the hero existed count too. A wrong answer
+or time away takes nothing away. The hero card shows your level, the lessons you understood and owned, and each of your
+path's modules with how many of its lessons you understood toward its gate (five open it) and your rank there against
+the path's target. Ranks rise only at a module's gate, with your own work; gates come in a later release
+([design](design/innerlatch.md)).
+
+Your agents are your **companions**, listed under the hero. Their levels show what their lessons cover; they never
+move yours, and yours never moves theirs. Your hero, your answers and your path are kept on this computer: signed in to
+a hub, there is no hero, and the Arena stays companions only.
+
 ## How characters grow
 
 - **Experience.** A lesson counts once it is active and not a work in progress, and only if it is a fix, gotcha,
@@ -60,8 +81,8 @@ own computers' sessions only. A teammate's sessions never level up your agents.
 
 ## Quests and the journey
 
-The **main quest** is the four milestones of your goal track. It starts as your strongest agent's class, and you can
-pick another under **Quests**. Your agents' other classes add side quests. Interlatch marks a quest *possible evidence*
+The **main quest** is the four milestones of your goal track: your hero's path. Until you choose one it is your strongest
+agent's class, and you can pick another under **Quests**, or the Generalist path, which has no milestones of its own. Your agents' other classes add side quests. Interlatch marks a quest *possible evidence*
 when a pull request, commit, document or lesson matches it, but only you mark it done. The roadmap asks for a
 person's review before a milestone counts.
 

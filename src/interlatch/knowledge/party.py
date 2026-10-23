@@ -36,7 +36,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..core.agents import CODING_AGENTS, full_name, short_name
-from ..core.i18n import lang
+from ..core.i18n import lang, tr
 from ..core.util import loads, utcnow, utcnow_iso
 from ..storage.kv import kv_get, kv_set, kv_transaction
 
@@ -57,7 +57,8 @@ JOURNEY_SKILLS = 120  # the journey keeps every join, level, class and quest, an
 RECENT_DAYS = 7  # "recent": the counted lessons of today and the 6 days before (the journey's dates, in UTC)...
 RECENT_MAX = 60  # ...newest first, at most this many
 SKILL_LESSONS_MAX = 200
-GOAL_KEY = "party.goal:"  # + scope key: the track the person picked
+GOAL_KEY = "party.goal:"  # + scope key: the track the person picked, or GENERALIST
+GENERALIST = "generalist"  # hero.GENERALIST: the Generalist path, kept under GOAL_KEY like a track id
 QUESTS_KEY = "party.quests:"  # + scope key: {milestone id: {"at": iso}}, the milestones the person marked done
 CLEARED_KEY = "party.cleared:"  # + scope key: [lesson id, ...], the Adventure's encounters the person has beaten
 CLEARED_MAX = 100_000
@@ -694,12 +695,13 @@ def set_quest(conn: sqlite3.Connection, viewer: dict | None, milestone_id, done:
 
 
 def set_goal(conn: sqlite3.Connection, viewer: dict | None, track_id, *, catalog: Catalog | None = None) -> None:
-    """The track the viewer's main quest follows; None goes back to the default (the strongest agent's class)."""
+    """The track the viewer's main quest follows (the hero's path), or the Generalist path (hero.GENERALIST); None goes
+    back to the default (the strongest agent's class)."""
     cat = catalog or load_catalog()
     key = scope_key(viewer)
     if track_id is None:
         conn.execute("DELETE FROM kv WHERE key = ?", (GOAL_KEY + key,))
-    elif isinstance(track_id, str) and track_id in cat.track:
+    elif isinstance(track_id, str) and (track_id in cat.track or track_id == GENERALIST):
         kv_set(conn, GOAL_KEY + key, track_id)
     else:
         raise PartyError("no such track")
@@ -978,7 +980,8 @@ def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Les
         out, covs[a] = _agent_out(cat, a, tallies[a], sessions)
         agents.append(out)
     ranked = sorted(agents, key=lambda x: (-x["level"], -x["xp"], CODING_AGENTS.index(x["agent"])))
-    chosen = goal in cat.track
+    general = goal == GENERALIST  # the Generalist path: no track's milestones, the side quests stay
+    chosen = goal in cat.track or general
     goal_id = goal if chosen else next((x["class"]["id"] for x in ranked if x["class"]), None)
     side = []
     for x in ranked:
@@ -988,7 +991,7 @@ def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Les
     artifacts = _artifacts(conn, sc.where, sc.params)
     newest = lessons[::-1]
     quests = []
-    for tid, main in ([(goal_id, True)] if goal_id else []) + [(t, False) for t in side]:
+    for tid, main in ([(goal_id, True)] if goal_id and not general else []) + [(t, False) for t in side]:
         quests += [_quest(cat, ms["id"], main=main, done=done, artifacts=artifacts, newest=newest)
                    for ms in cat.track[tid].get("milestones") or []]
     journey, series, newest_skill = _journey(cat, lessons, done)
@@ -998,7 +1001,8 @@ def _build(conn: sqlite3.Connection, cat: Catalog, sc: _Scope, lessons: list[Les
                     "modules": len(cat.modules)},
         "attrs": [{"id": a["id"], "name": _t(a, "name"), "about": _t(a, "about")} for a in cat.attrs],
         "agents": agents,
-        "goal": {"id": goal_id, "name": _t(cat.track[goal_id], "name"), "chosen": chosen} if goal_id else None,
+        "goal": {"id": goal_id, "name": tr("Generalist") if general else _t(cat.track[goal_id], "name"), "chosen": chosen,
+                 **({"generalist": True} if general else {})} if goal_id else None,
         "quests": quests,
         "journey": journey,
         "series": series,
@@ -1163,7 +1167,7 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood, those
     back for another look and those owned, and how many are understood per module (study.py; empty for a person on a
     hub: their record stays on their computer)."""
-    from . import bag, study
+    from . import bag, hero, study
 
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
@@ -1197,7 +1201,7 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "agents": [{x: a[x] for x in ("agent", "name", "short", "level", "tier")} for a in data["agents"]],
         "gold": bag.load(conn, sc.key)["gold"],
         "towns": bag.towns(cat),
-        "goal": {**goal, "modules": list(cat.track[goal["id"]].get("modules") or [])} if goal else None,
+        "goal": {**goal, "modules": [m["id"] for m in hero.path_modules(cat, goal["id"])]} if goal else None,
         "understood": study.understood(studied),
         "back": [i for i, x in sched.items() if not x["resting"]],  # understood, and come back for another look
         "owned": [i for i, x in sched.items() if x["owned"]],
@@ -1284,7 +1288,7 @@ def _market_class(cat: Catalog, entry: dict) -> dict:
 def payload_tracks(data: dict) -> list[str]:
     """The tracks a compute() payload names: the agents' classes and the tracks they lean to, the goal, the quests'."""
     ids = [x["id"] for a in data.get("agents") or [] for x in ([a["class"]] if a.get("class") else []) + (a.get("classes") or [])]
-    ids += [data["goal"]["id"]] if data.get("goal") else []
+    ids += [data["goal"]["id"]] if data.get("goal") and not data["goal"].get("generalist") else []
     ids += [q["track"] for q in data.get("quests") or []]
     return list(dict.fromkeys(ids))
 
