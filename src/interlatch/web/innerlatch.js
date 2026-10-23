@@ -647,6 +647,11 @@ function heroSprite(hx, { scale = 4, still = false, decorative = false } = {}) {
   }
   return partySprite(key, { tier: tierOf(hx.level || 1), scale, still, decorative, label });
 }
+function heroOnField(hx) { // the hero as the field draws a party member: it leads (field.js opts.hero)
+  if (!hx?.made) return null;
+  try { const key = sprites()?.heroKey?.(hx.look); return key ? { agent: key, short: hx.name, name: hx.name, level: hx.level, tier: tierOf(hx.level) } : null; }
+  catch (e) { return null; }
+}
 function heroRandomLook(counts) {
   return Object.fromEntries(HERO_PARTS.map(([k]) => [k, Math.floor(Math.random() * (counts?.[k] || 1))]));
 }
@@ -730,7 +735,8 @@ function heroModule(m, readyAt) {
     h("span", { class: "hc-mname" }, m.name, m.critical ? h("small", { class: "hc-crit", "aria-label": t("critical") }, " ★") : null),
     h("span", { class: "hc-ready", role: "img", "aria-label": t("{a} of {b} lessons understood toward its gate", { a: fmtNum(m.ready), b: readyAt }) },
       Array.from({ length: readyAt }, (_, i) => h("i", { class: i < r ? "on" : "" }))),
-    h("span", { class: "hc-rank" }, m.target ? t("Rank {r}/{t}", { r: m.rank, t: m.target }) : t("Rank {r}", { r: m.rank })));
+    m.gate?.open ? h("a", { class: "hc-gate", href: `#/innerlatch/gate/${m.id}`, title: t("Rank {n} gate open", { n: m.gate.next }) }, "⚔ ", t("Gate"))
+      : h("span", { class: "hc-rank" }, m.target ? t("Rank {r}/{t}", { r: m.rank, t: m.target }) : t("Rank {r}", { r: m.rank })));
 }
 function heroCard(p, edit) {
   const hx = p.hero, path = hx.path, mods = path?.modules || [];
@@ -744,14 +750,142 @@ function heroCard(p, edit) {
         h("button", { class: "btn small hc-edit", type: "button", onclick: edit }, t("Edit"))),
       xpBar(hx.xp, hx.level_xp, hx.next_xp, hx.level),
       h("div", { class: "hc-stats" }, stat(t("Lessons understood"), hx.understood), stat(t("Owned"), hx.owned),
-        stat(t("Ranks"), mods.reduce((n, m) => n + (m.rank || 0), 0))),
+        stat(t("Ranks"), hx.ranks || 0)),
       h("a", { class: "hc-path", href: "#/innerlatch/quests" }, h("span", { class: "px-label" }, t("Path")),
         h("b", null, path ? path.name : t("No path yet: choose one")))),
     mods.length ? h("div", { class: "hc-mods" },
       h("span", { class: "px-label" }, t("Your path's modules")),
       h("ul", null, mods.map((m) => heroModule(m, hx.ready_at || 5))),
-      h("small", { class: "muted" }, t("Five lessons understood open a module's gate. Ranks rise only there, with your own work: gates are coming next."))) : null);
+      h("small", { class: "muted" }, t("Five lessons understood open a module's gate. Ranks rise only there, with your own work."))) : null,
+    hx.gates?.length ? h("div", { class: "hc-gates" }, h("span", { class: "px-label" }, t("Gates open")),
+      hx.gates.slice(0, 6).map((g) => h("a", { class: "hc-gate-chip", href: `#/innerlatch/gate/${g.module}` }, pxIcon(g.attr, 1),
+        h("span", null, g.name), h("b", null, t("Rank {n}", { n: g.rank }))))) : null);
 }
+
+// ------------------------------------------------------------------ #/innerlatch/gate/<module>: a module's gate (gates.py).
+// Its boss asks for the next rank's evidence: an explanation, then your own work; the analysis model judges it.
+const GATE_HINT = {
+  1: t("In your own words: what it is, why it works, and where it stops working."),
+  2: t("How does this work meet the check? Say what you decided, reviewed or verified, and why it works."),
+  3: t("How does this work meet the check, and what came of it: tests that now pass, a measured result, an incident closed?"),
+  4: t("Which of your decisions did others adopt, in which projects, and what tradeoffs did you weigh?"),
+};
+function gateLadder(g) {
+  return h("ol", { class: "gt-ladder", "aria-label": t("Ranks shown: {n} of {of}", { n: g.rank, of: g.ranks }) },
+    Array.from({ length: g.ranks }, (_, i) => h("li", { class: i < g.rank ? "on" : i === g.rank && g.next ? "next" : "" }, String(i + 1))));
+}
+function gateVerdict(v) { // what the examiner said: met, missing, and a word on what's next
+  if (!v) return null;
+  const passed = v.verdict === "passed";
+  return h("section", { class: `gt-verdict ${passed ? "passed" : "not-yet"}` },
+    h("div", { class: "gt-v-head" }, pxIcon(passed ? "quest-done" : "quest", 2),
+      h("b", null, passed ? t("Passed: rank {n} shown", { n: v.rank }) : t("Not yet")),
+      v.on ? h("span", { class: "muted small" }, fmtDateY(partyDay(v.on))) : null),
+    v.feedback ? h("p", null, v.feedback) : null,
+    v.met?.length ? h("ul", { class: "gt-met", "aria-label": t("What it shows") }, v.met.map((x) => h("li", null, x))) : null,
+    v.missing?.length ? h("ul", { class: "gt-missing", "aria-label": t("What's missing") }, v.missing.map((x) => h("li", null, x))) : null);
+}
+function gatePicker(g, chosen, sync) { // your own work, newest first: a filter and a list of checkboxes
+  const need = g.asks.artifacts, max = 5;
+  const list = h("ul", { class: "gt-work" });
+  const filter = h("input", { type: "search", class: "gt-filter", placeholder: t("Filter your work"), "aria-label": t("Filter your work") });
+  const draw = () => {
+    const q = filter.value.trim().toLowerCase();
+    const rows = g.work.filter((w) => chosen.has(w.id) || !q || `${w.title} ${w.project}`.toLowerCase().includes(q)).slice(0, 60);
+    list.replaceChildren(...(rows.length ? rows.map((w) => {
+      const box = h("input", { type: "checkbox", checked: chosen.has(w.id), onchange: () => {
+        if (box.checked && chosen.size >= max) { box.checked = false; toast(t("At most {n} pieces of work.", { n: max })); return; }
+        if (box.checked) chosen.add(w.id); else chosen.delete(w.id);
+        sync();
+      } });
+      const u = safeUrl(w.url);
+      return h("li", null, h("label", null, box, icon(ICONS[w.kind] ? w.kind : "artifacts"),
+        h("span", { class: "gt-w-title", title: w.title }, w.title),
+        h("span", { class: "muted small" }, [w.project, w.at ? fmtDateY(partyDay(w.at)) : null].filter(Boolean).join(" · "))),
+        u ? h("a", { href: u, target: "_blank", rel: "noopener", class: "gt-w-open", "aria-label": t("Open {title}", { title: w.title }) }, icon("external")) : null);
+    }) : [h("li", { class: "muted small" }, g.work.length ? t("Nothing matches.") : t("Interlatch hasn't found any pull requests, commits or documents in your sessions yet."))]));
+  };
+  filter.addEventListener("input", draw);
+  draw();
+  return h("div", { class: "gt-pick" },
+    h("div", { class: "gt-pick-head" }, h("span", { class: "px-label" }, tn(need, "Link {n} piece of your own work", "Link {n} pieces of your own work")),
+      g.asks.projects > 1 ? h("span", { class: "muted small" }, t("from at least {n} projects", { n: g.asks.projects })) : null),
+    filter, list);
+}
+function gateCard(p, g, draw, back) {
+  const a = g.asks, hx = p.hero;
+  const stage = h("div", { class: "gt-stage px-stage" },
+    hx?.made ? heroSprite(hx, { scale: 3, decorative: true }) : null,
+    h("span", { class: "gt-boss", "aria-hidden": "true" }, pxIcon(a.attr || "quest", 4)));
+  const parts = [];
+  if (!g.next) parts.push(h("p", { class: "gt-state" }, t("Rank {n} shown: this module has no gate left.", { n: g.rank })));
+  else {
+    parts.push(h("div", { class: "gt-asks" },
+      h("div", null, h("span", { class: "px-label" }, t("Rank {n}", { n: g.next })), h("b", null, a.means)),
+      a.gate ? h("div", null, h("span", { class: "px-label" }, t("The check")), h("span", null, a.gate)) : null,
+      a.practice ? h("div", null, h("span", { class: "px-label" }, t("The practice task")), h("span", { class: "muted" }, a.practice)) : null,
+      h("div", null, h("span", { class: "px-label" }, t("Bring")), h("span", null, a.evidence))));
+    if (!g.open && !g.resting) {
+      parts.push(h("p", { class: "gt-state" }, tn(Math.max(0, g.ready_at - g.ready), "Understand {n} more of this module's lessons to open its gate.",
+        "Understand {n} more of this module's lessons to open its gate."), " ", back ? h("a", { href: back }, t("Back to the field")) : null));
+    } else if (g.resting) parts.push(h("p", { class: "gt-state" }, t("You tried this gate today. It opens again tomorrow.")));
+  }
+  if (g.last) parts.push(gateVerdict(g.last)); // the last try at this rank: never a pass (a pass moves the gate on)
+  if (g.next && g.open) {
+    const chosen = new Set();
+    const text = h("textarea", { class: "gt-text", rows: 7, maxlength: String(g.text_max), placeholder: GATE_HINT[g.next] || GATE_HINT[1],
+      "aria-label": t("Your answer to the gate") });
+    const count = h("span", { class: "muted small gt-count" });
+    const go_ = h("button", { class: "btn primary", type: "submit" }, t("Face the gate"));
+    const sync = () => {
+      const n = text.value.trim().length;
+      count.textContent = t("{n} of at least {min} characters", { n: fmtNum(n), min: fmtNum(g.text_min) });
+      go_.disabled = n < g.text_min || chosen.size < a.artifacts;
+    };
+    text.addEventListener("input", sync);
+    const busyNote = h("p", { class: "muted small", hidden: true }, t("The examiner is reading your answer…"));
+    parts.push(h("form", { class: "gt-form", onsubmit: async (e) => {
+      e.preventDefault();
+      go_.disabled = true; busyNote.hidden = false;
+      const r = await lbPost("/api/party/gate", { module: g.module, artifacts: [...chosen], text: text.value });
+      busyNote.hidden = true;
+      if (!r) { sync(); return; }
+      if (r.gained > 0) toast(t("Rank {n} shown in {module}: +{xp} XP for your hero", { n: r.rank, module: a.name, xp: r.gained }));
+      partyCache = null; // the hero's ranks and level changed
+      draw(r.gate, r);
+    } },
+      a.artifacts ? gatePicker(g, chosen, sync) : null,
+      text, h("div", { class: "gt-actions" }, go_, count), busyNote));
+    sync();
+  }
+  return h("section", { class: "card gate-card px-frame" }, stage,
+    h("div", { class: "gt-body" },
+      h("div", { class: "gt-head" }, h("div", null, h("span", { class: "px-label" }, t("Gate")), h("h2", null, a.name)), gateLadder(g)),
+      parts));
+}
+route(/^\/innerlatch\/gate\/([\w-]+)$/, async (params, module) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const field = /^\w+$/.test(params.field || "") ? params.field : null;
+  const back = field ? `#/innerlatch/adventure/field/${field}` : null;
+  let g;
+  try { g = await api("/api/party/gate", { module }); } catch (e) {
+    if (e.handled) throw e;
+    setCrumbs([["Innerlatch", "#/innerlatch"], [t("Gate")]], token);
+    return partyShell(t("Gate"), null, h("section", { class: "card empty" }, e.status === 404 ? t("No such module.") : e.message));
+  }
+  setCrumbs([["Innerlatch", "#/innerlatch"], ...(back ? [[t("Adventure"), back]] : []), [t("Gate")], [g.asks.name]], token);
+  const box = h("div", { class: "gt" });
+  const draw = (gg, result = null) => {
+    // a pass shows above the next rank's gate; a "not yet" is the gate's last attempt, shown inside it
+    box.replaceChildren(result?.verdict === "passed" ? gateVerdict({ ...result, on: null }) : "", gateCard(p, gg, draw, back));
+    if (result?.verdict === "passed") partySparkle(box.querySelector(".gt-v-head canvas"));
+  };
+  draw(g);
+  return partyShell(t("Gate"), t("A module's rank rises only here: show it with your own words and your own work. The analysis model judges it against the module's check."), box,
+    back ? h("p", null, h("a", { class: "btn small", href: back }, t("Back to the field"))) : null);
+});
 
 // ------------------------------------------------------------------ #/innerlatch: the leader and the characters
 async function partySignout(p) {
@@ -1739,7 +1873,7 @@ function partyRegion(m) {
 function fieldLabels() { // the field engine's words (field.js LABELS), in the page's language
   return { "field": t("{region}: a field to explore. Click or tap where to walk, or use the arrow keys or WASD. Walk into a monster to battle it, or into the town's gate to shop."),
     "zoneLeft": t("{n} to battle here"), "zoneClear": t("All cleared here"), "zoneFog": t("Unexplored: no lessons here yet"),
-    "zoneYou": t("You understood {n}/{of}"), "zoneGoal": t("Main quest"),
+    "zoneYou": t("You understood {n}/{of}"), "zoneGoal": t("Main quest"), "zoneGate": t("Rank {n} gate open"),
     "level": t("Lv {n}"), "hint": t("Click to walk · arrow keys or WASD"), "empty": t("No lessons in this region yet: nothing to battle here.") };
 }
 route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
@@ -1772,9 +1906,11 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
     let field;
     try {
       field = Field.mountField(host, { data: { ...m, today: foughtToday() }, region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
+        hero: heroOnField(p.hero),
         onMove: (at) => keepFieldSpot(attr, at),
         onEncounter: (lesson) => { hideTip(); go(`#/innerlatch/adventure/battle/${lesson.id}?field=${attr}`); },
         onTown: () => { hideTip(); go(`#/innerlatch/adventure/town/${attr}?field=1`); },
+        onGate: (zone) => { hideTip(); go(`#/innerlatch/gate/${zone.id}?field=${attr}`); },
         onHover: (item, at) => {
           if (!item) { hideTip(); return; }
           const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 }, l = item.lesson;
@@ -1785,6 +1921,7 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
               item.back ? t("Back for another look: walk into it to battle") : t("Walk into it to battle"));
           }
           else if (item.type === "town") showTip(where, item.name, region.name, t("Walk into its gate to shop"));
+          else if (item.type === "sign" && item.zone.gate) showTip(where, item.zone.name, t("Rank {n} gate open", { n: item.zone.gate }), t("Walk up to the gate to face it"));
           else if (item.type === "sign") showTip(where, item.zone.name, region.name, !item.zone.lessons ? t("Unexplored: no lessons here yet")
             : item.zone.open ? t("{n} to battle here", { n: fmtNum(item.zone.open) }) : t("All cleared here"));
           else hideTip();

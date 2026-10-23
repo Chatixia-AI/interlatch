@@ -1207,8 +1207,24 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "owned": [i for i, x in sched.items() if x["owned"]],
         "readiness": study.readiness(counted, cat, studied),
         "ready_at": study.READY_AT,
+        # each module whose gate can be tried now, and the rank it gives (gates.py; the person's own computer only)
+        "gates": _open_gates(conn, cat, study.readiness(counted, cat, studied), today or utcnow().date())
+        if viewer is None else {},
         "studying": viewer is None,  # study battles (and their record) only at the person's own computer
     }
+
+
+def _open_gates(conn: sqlite3.Connection, cat: Catalog, ready: dict, today: date) -> dict[str, int]:
+    """{module id: the rank its gate gives} for each module whose gate can be tried now (gates.py)."""
+    from . import gates
+
+    tried = gates.attempts_of(conn)
+    out = {}
+    for m in cat.modules:
+        st = gates.state(m["id"], ready.get(m["id"], 0), tried, today)
+        if st["open"]:
+            out[m["id"]] = st["next"]
+    return out
 
 
 def owns(conn: sqlite3.Connection, here_id: str, viewer: dict | None, lesson_id, *, catalog: Catalog | None = None) -> bool:

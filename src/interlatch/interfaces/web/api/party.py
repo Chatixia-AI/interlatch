@@ -180,7 +180,7 @@ def action_party_pick(ctx: Context, viewer: dict | None, body: dict, *, here: bo
     lesson_id = body.get("id")
     if not pt.owns(ctx.conn, _here_id(ctx), viewer, lesson_id):
         return {"error": tr("no such lesson")}, 400
-    was = hero.xp_of(study.studied_of(ctx.conn, pt.scope_key(viewer)))
+    was = hero.total_xp(ctx.conn, study.studied_of(ctx.conn, pt.scope_key(viewer)))
     try:
         got = study.pick(ctx.conn, ctx.cfg, pt.scope_key(viewer), lesson_id, body.get("choice"), here=viewer is None)
     except study.StudyError as exc:
@@ -190,9 +190,47 @@ def action_party_pick(ctx: Context, viewer: dict | None, body: dict, *, here: bo
     m = pt.adventure_map(ctx.conn, _here_id(ctx), viewer)
     out = {**got, "understood": m["understood"], "readiness": m["readiness"]}
     if viewer is None and hero.load(ctx.conn) is not None:  # what the hero earned by it
-        now = hero.xp_of(study.studied_of(ctx.conn, pt.scope_key(viewer)))
+        now = hero.total_xp(ctx.conn, study.studied_of(ctx.conn, pt.scope_key(viewer)))
         out["hero"] = {"xp": now, "gained": now - was, "level": hero.level_of(now), "was_level": hero.level_of(was)}
     return out, 200
+
+
+# ------------------------------------------------------------------ gate bosses (knowledge/gates.py): a module's rank
+# rises only there, with the person's own work judged by the model; only at their own computer
+def gate(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
+    """GET /api/party/gate?module=<id>: what the module's gate asks, whether it's open, the last attempt, the work
+    that can be linked."""
+    from ....knowledge import gates
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(gates.NOT_HERE)}, 403
+    got = gates.view(ctx.conn, pt.load_catalog(), _here_id(ctx), q.get("module") or "")
+    return (got, 200) if got else ({"error": tr("not found")}, 404)
+
+
+def action_party_gate(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/gate {"module", "artifacts": [artifact id], "text"}: try the module's open gate. Answers the
+    verdict, what was met and what is missing, the rank shown now and the XP the hero gained, and the gate as it is."""
+    from ....knowledge import gates
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(gates.NOT_HERE)}, 403
+    cat, here_id, module = pt.load_catalog(), _here_id(ctx), body.get("module")
+    ready = gates.readiness(ctx.conn, cat, here_id).get(module, 0) if isinstance(module, str) else 0
+    try:
+        got = gates.attempt(ctx.conn, ctx.cfg, cat, here_id, module, body.get("artifacts"), body.get("text"),
+                            ready=ready, here=True)
+    except gates.GateError as exc:
+        return {"error": tr(exc.template, **exc.kw)}, 400
+    except Exception as exc:  # the model's call failed: nothing was kept
+        return {"error": tr(gates.NO_MODEL, reason=str(exc)[:200])}, 502
+    return {**got, "gate": gates.view(ctx.conn, cat, here_id, module)}, 200
 
 
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)

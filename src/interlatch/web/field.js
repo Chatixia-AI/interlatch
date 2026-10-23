@@ -22,10 +22,14 @@
        opts.labels         overrides for LABELS below (the page passes Japanese)
        opts.reducedMotion  no wandering, no bobbing, no camera easing
        opts.start          {x, y}: where the party stands, in world pixels (back from a battle); the spawn otherwise
+       opts.hero           {agent: Sprites.heroKey(look), short, level, tier}: the person's hero, who leads the party
+                           (its companions follow); none: the agents alone
        opts.onEncounter(lesson)   the party walked into a monster (once; the page opens its battle)
        opts.onTown(region)        the party walked into the town's gate
+       opts.onGate(zone)          the party walked into a zone's open gate (data.gates: {module id: rank}; gates.py)
        opts.onMove({x, y})        where the party stands now (now and then, for the page to keep)
-       opts.onHover(item, at)     item = {type: "monster", lesson, back} | {type: "town", name} | {type: "sign", zone} | null;
+       opts.onHover(item, at)     item = {type: "monster", lesson, back} | {type: "town", name} | {type: "sign", zone} | null
+                                  (a sign with an open gate: zone.gate, the rank it gives);
                                   at = {x, y} in client pixels
      layout(data, regionId, seed = 1) -> the field, pure and deterministic (no DOM): see layout() below
      path(field, from, to) -> [[x, y], …] tiles from one walkable tile to another (A*), [] when there is no way
@@ -41,6 +45,7 @@
        zoneFog     a zone with no lessons yet
        zoneYou     how many of the zone's lessons the person understood, of what makes it ready    {n} {of}
        zoneGoal    a zone of the main quest's track
+       zoneGate    under a zone's name while its gate is open    {n}
        level       a party member's level    {n}
        hint        how to move, in the corner
        empty       over the field when the region has no lessons at all */
@@ -51,6 +56,7 @@
     zoneFog: "Unexplored: no lessons here yet",
     zoneYou: "You understood {n}/{of}",
     zoneGoal: "Main quest",
+    zoneGate: "Rank {n} gate open",
     level: "Lv {n}",
     hint: "Click to walk · arrow keys or WASD",
     empty: "No lessons in this region yet: nothing to battle here.",
@@ -296,6 +302,7 @@
       && (data && data.studying ? !known.has(String(l.id)) || back.has(String(l.id)) : !cleared.has(String(l.id)));
     const zones = mods.map((m, i) => ({ index: i, id: m.id, name: m.name || m.id, lessons: byZone[i].length,
       open: byZone[i].filter(studyable).length, goal: goal.has(m.id), you: Number(ready[m.id]) || 0,
+      gate: Math.max(0, Math.round(Number(((data && data.gates) || {})[m.id]) || 0)),
       site: { x: sites[i].x, y: sites[i].y }, sign: sites[i].sign }));
     const monsters = [];
     zones.forEach((z) => {
@@ -376,6 +383,10 @@
       ".lllllllllllllllllll", ".llllllllllllllllll.", "..llllllllllllllll..", "....lllllltllllll...", ".......tttt.........",
       ".......tttt.........", "......tttttt........"], pal: { L: "#69b04f", l: "#4c9445", t: "#7a5232" } },
     sign: { k: 2, rows: ["wwwwwwww", "wkkwwkkw", "wwwwwwww", "...pp...", "...pp...", "...pp..."], pal: { w: "#c9a06a", k: "#8a6038", p: "#7a5232" } },
+    // a zone's open gate, where its sign stood: a stone arch with a gold light inside (gates.py)
+    gate: { k: 2, rows: ["....ssssss....", "..ssssssssss..", ".sssggggggsss.", ".ssgg....ggss.", "ssg........gss",
+      "ssg........gss", "ss..........ss", "ss..........ss", "ss..........ss", "ss..........ss", "SS..........SS",
+      "SS..........SS"], pal: { s: "#a7a2b6", S: "#7d7891", g: "=#ffd66b" } },
   };
   const LEAVES = { craft: ["#69b04f", "#4c9445"], data: ["#6fbf86", "#4f9a6a"], ops: ["#6a9a6c", "#4a7a52"],
     guard: ["#8aa65a", "#6a8a44"], arcana: ["#9a86d8", "#7a64c0"], lore: ["#e0a040", "#c8702e"] };
@@ -409,12 +420,14 @@
     const reduced = !!opts.reducedMotion;
     const data = opts.data || {};
     const F = layout(data, opts.region, 1);
+    const gateAt = new Set(F.zones.filter((z) => z.gate).map((z) => `${z.sign.x},${z.sign.y}`)); // signs that are gates now
     const A = root.Adventure && root.Adventure.art, SP = root.Sprites, SA = root.Scene && root.Scene.art;
     const bio = (A && A.BIOMES[F.region.id]) || { hue: "#3a7be0", deco: [] };
     const lessonOf = new Map((Array.isArray(data.lessons) ? data.lessons : []).map((l) => [String(l.id), l]));
     const agents = (Array.isArray(data.agents) ? data.agents : []).slice()
       .sort((a, b) => (b.level || 0) - (a.level || 0) || AGENT_ORDER.indexOf(a.agent) - AGENT_ORDER.indexOf(b.agent));
-    const team = (agents.filter((a) => (a.level || 0) > 0).length ? agents.filter((a) => (a.level || 0) > 0) : agents).slice(0, 4);
+    const lead0 = opts.hero && opts.hero.agent ? [opts.hero] : []; // you first, then your strongest companions
+    const team = [...lead0, ...(agents.filter((a) => (a.level || 0) > 0).length ? agents.filter((a) => (a.level || 0) > 0) : agents)].slice(0, 4);
     if (!team.length) team.push({ agent: "claude", tier: "novice", level: 1, short: "Claude" });
 
     // ---- the DOM: the canvas and the HUD over it (the party, the zone, the minimap, the hint)
@@ -466,6 +479,7 @@
         const [L, l] = F.region.id === "lore" && p.v === 2 ? ["#d0603a", "#a84a2e"] : LEAVES[F.region.id] || LEAVES.craft;
         return shaded(`tree|${p.v}`, FIELD_ART.tree.rows, { ...FIELD_ART.tree.pal, L: p.v === 1 ? mixHex(L, "#ffffff", 0.08) : L, l }, FIELD_ART.tree.k);
       }
+      if (p.type === "sign" && gateAt.has(`${p.x},${p.y}`)) return shaded("gate", FIELD_ART.gate.rows, FIELD_ART.gate.pal, FIELD_ART.gate.k);
       if (p.type === "sign") return shaded("sign", FIELD_ART.sign.rows, FIELD_ART.sign.pal, FIELD_ART.sign.k);
       if (A && A.DECO[p.type]) {
         const d = A.decoVariant(p.type === "house" ? "house" : p.type, bio, p.v);
@@ -738,7 +752,7 @@
       if (!zone) { zoneName.textContent = F.town.name; zoneSub.textContent = F.region.name; return; }
       zoneName.textContent = (zone.goal ? "★ " : "") + zone.name;
       const of = Number((opts.data || {}).ready_at) || 5;
-      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : [zone.goal ? lab("zoneGoal") : null,
+      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : [zone.gate ? lab("zoneGate", { n: zone.gate }) : null, zone.goal ? lab("zoneGoal") : null,
         zone.open ? lab("zoneLeft", { n: zone.open }) : lab("zoneClear"), lab("zoneYou", { n: Math.min(zone.you, of), of })].filter(Boolean).join(" · ");
       hudZone.classList.toggle("fd-goal", !!zone.goal);
     }
@@ -787,10 +801,10 @@
       for (const z of F.zones) {
         const sx = z.sign.x * T + T / 2, sy = z.sign.y * T - 10;
         if (!seen(sx, sy, 80)) continue;
-        const txt = (z.goal ? "★ " : "") + z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
+        const txt = (z.gate ? "⚔ " : z.goal ? "★ " : "") + z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
         ctx.fillStyle = "rgba(42, 30, 18, 0.78)";
         ctx.fillRect(Math.round(bx), Math.round(by), Math.round(w), Math.round(h));
-        ctx.fillStyle = z.goal ? "#ffd27a" : z.open ? "#ffe2a0" : "#d9e6d0";
+        ctx.fillStyle = z.gate || z.goal ? "#ffd27a" : z.open ? "#ffe2a0" : "#d9e6d0";
         ctx.fillText(txt, X(sx), Y(sy) - 3 * dpr);
       }
       if (themeDark()) { ctx.fillStyle = "rgba(14, 22, 56, 0.22)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
@@ -912,6 +926,7 @@
       const w = worldAt(e), th = thingAt(w);
       if (th && th.type === "monster") walkTo(tileOf(th.m.px, th.m.py));
       else if (th && th.type === "town") walkTo(F.gate);
+      else if (th && th.type === "sign" && th.zone.gate) walkTo(nearestOpen(th.zone.sign));
       else walkTo(tileOf(w.x, w.y));
       wake();
     }
@@ -947,7 +962,11 @@
     const townCheck = setInterval(() => {
       if (busy || !armed) return;
       const gx = F.gate.x * T + T / 2, gy = F.gate.y * T + T / 2;
-      if (Math.hypot(lead.x - gx, lead.y - gy) < T * 0.8) { busy = true; route = []; keys.clear(); call("onTown", F.region); }
+      if (Math.hypot(lead.x - gx, lead.y - gy) < T * 0.8) { busy = true; route = []; keys.clear(); call("onTown", F.region); return; }
+      for (const z of F.zones) { // a zone's open gate: walking up to it opens it
+        if (!z.gate || Math.hypot(lead.x - (z.sign.x * T + T / 2), lead.y - (z.sign.y * T + T / 2)) > T * 1.15) continue;
+        busy = true; route = []; keys.clear(); call("onGate", z); return;
+      }
     }, 120);
 
     const io = typeof IntersectionObserver === "function" ? new IntersectionObserver((en) => { for (const x of en) visible = x.isIntersecting; if (visible) wake(); }) : null;
