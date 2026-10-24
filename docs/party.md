@@ -89,6 +89,15 @@ the ranks still to go, the gates you could take next, and the track that fits th
 to make it your path. The job's modules hold more monsters on the field, marked ♜. Keep up to 20 jobs, one active at a
 time. The description stays on this computer and goes only to your analysis model.
 
+### The interview
+
+At the bottom of the job's page waits its **final boss: the interview**. Each sitting asks three questions written from
+the job description and grounded in your own past lessons ("In your project, you …: how would you …"). Answer each in
+a few sentences; the model grades it strong, fair or weak, says why, lists what a strong answer covers and sketches a
+better one from your own work. Until every must-have tower is lit, a sitting is practice. Once they are, the
+interviewer is awake: two strong answers and none weak beat it, and the castle gets its crown (♛). One sitting a day,
+with new questions each time. It changes no rank and no XP.
+
 Your agents are your **companions**, listed under the hero. Their levels show what their lessons cover; they never
 move yours, and yours never moves theirs. Your hero, your answers and your path are kept on this computer: signed in to
 a hub, there is no hero, and the Arena stays companions only.

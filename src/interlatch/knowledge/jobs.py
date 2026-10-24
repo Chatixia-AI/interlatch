@@ -264,6 +264,9 @@ def remove(conn: sqlite3.Connection, viewer: dict | None, job_id) -> None:
         if state["active"] == job_id:
             state["active"] = state["jobs"][-1]["id"] if state["jobs"] else None
         _save(conn, state)
+        from . import interview
+
+        interview.forget(conn, job_id)  # its interviews go with it
 
 
 # ------------------------------------------------------------------ the castle
@@ -336,9 +339,17 @@ def view(conn: sqlite3.Connection, cat, here_id: str, *, today=None) -> dict:
     active = next((j for j in st["jobs"] if j["id"] == st["active"]), None)
     return {"jobs": [summary(j) for j in reversed(st["jobs"])], "active": st["active"],
             "job": {**summary(active), "text": active["text"], "by": (active.get("mapping") or {}).get("by"),
+                    "crowned": _crowned(conn, active["id"]),
                     "unmapped": active.get("unmapped"), **castle(cat, active, ranks, ready, open_now)} if active else None,
             "limits": {"text_min": TEXT_MIN, "text_max": TEXT_MAX, "jobs": JOBS_MAX, "requirements": REQUIREMENTS_MAX},
             "modules": [{"id": m["id"], "name": _name(m), "attr": m.get("attr")} for m in cat.modules]}
+
+
+def _crowned(conn: sqlite3.Connection, job_id: str) -> bool:
+    """The job's interview, its final boss, was beaten (interview.py)."""
+    from . import interview
+
+    return interview.beaten(interview.record(conn, job_id))
 
 
 def _name(m: dict) -> str:

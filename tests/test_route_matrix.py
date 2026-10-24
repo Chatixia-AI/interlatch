@@ -165,6 +165,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/party/ask"): LIMITED_OK.ok(404).but(here=403),  # no such lesson; here: not signed in
     ("GET", "/api/party/gate"): LIMITED_OK.ok(403),  # gates are taken on your own computer; here: not signed in
     ("GET", "/api/party/jobs"): LIMITED_OK.ok(403),  # job goals are kept on your own computer; here: not signed in
+    ("GET", "/api/party/interview"): LIMITED_OK.ok(403),  # interviews are taken on your own computer; here: not signed in
     ("GET", "/api/party/bag"): LIMITED_OK.but(here=403),  # the viewer's own bag; here: not signed in
     ("GET", "/api/party/shop"): LIMITED_OK.ok(404).but(here=403),  # no such region; here: not signed in
     # POST: anyone, and any signed-in person (their own news)
@@ -176,6 +177,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/party/hero"): POST_SIGNED_IN.ok(403),  # a hub person has no hero there; here: not signed in
     ("POST", "/api/party/gate"): POST_SIGNED_IN.ok(403),  # gates are taken on your own computer; here: not signed in
     ("POST", "/api/party/job"): POST_SIGNED_IN.ok(403),  # job goals are kept on your own computer; here: not signed in
+    ("POST", "/api/party/interview"): POST_SIGNED_IN.ok(403),  # interviews are taken on your own computer
     ("POST", "/api/party/cleared"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     ("POST", "/api/party/pick"): POST_SIGNED_IN.ok(400).but(here=403),  # no such lesson
     ("POST", "/api/party/buy"): POST_SIGNED_IN.ok(400).but(here=403),  # no such item
@@ -320,6 +322,7 @@ BODY = {
     "/api/party/hero": {"name": "", "look": {}},
     "/api/party/gate": {"module": "M-python", "artifacts": [], "text": ""},
     "/api/party/job": {"action": "activate", "id": None},
+    "/api/party/interview": {"action": "start"},
     "/api/party/cleared": {"id": 999999, "cleared": True},
     "/api/party/pick": {"id": 999999, "choice": 0},
     "/api/party/buy": {"id": "c:nothing"},

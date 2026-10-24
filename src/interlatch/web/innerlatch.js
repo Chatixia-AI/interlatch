@@ -894,7 +894,7 @@ route(/^\/innerlatch\/gate\/([\w-]+)$/, async (params, module) => {
 
 // ------------------------------------------------------------------ #/innerlatch/job: the job goal (jobs.py). A pasted job
 // description mapped to the roadmap; the active one is a castle whose towers light with the ranks you show at gates.
-function castleArt(towers, scale = 3) { // one tower per requirement (a must-have stands taller), lit once its rank is shown
+function castleArt(towers, scale = 3, crowned = false) { // one tower per requirement (a must-have stands taller), lit once its rank is shown; crowned: its interview beaten
   const n = Math.max(1, towers.length), TW = 12, GAP = 3, H = 44, W = n * (TW + GAP) + GAP + 8;
   const c = h("canvas", { class: "jb-castle-art", width: W * scale, height: H * scale, role: "img",
     "aria-label": t("{a} of {b} towers lit", { a: towers.filter((x) => x.lit).length, b: towers.length }) });
@@ -913,6 +913,10 @@ function castleArt(towers, scale = 3) { // one tower per requirement (a must-hav
     px(x + 4, top + 6, 4, 5, tw.lit ? "#ffd66b" : "#3a3550"); // a window, lit or not
     if (tw.lit) { px(x + 5, top - 9, 1, 7, rim); px(x + 6, top - 9, 4, 3, "#e0663f"); } // a flag
   });
+  if (crowned) { // a gold crown over the gate
+    const cx = Math.floor(W / 2) - 4;
+    px(cx, 22, 9, 3, "#f6c445"); px(cx, 19, 1, 3, "#f6c445"); px(cx + 4, 18, 1, 4, "#f6c445"); px(cx + 8, 19, 1, 3, "#f6c445");
+  }
   return c;
 }
 function jobTower(tw) {
@@ -974,6 +978,68 @@ function jobHandEditor(J, job, draw, cancel) { // the requirements picked by han
     h("div", { class: "gt-actions" }, h("button", { class: "btn small", type: "button", onclick: () => { if (rows.children.length < J.limits.requirements) row(); } }, t("Add a requirement")),
       save, h("button", { class: "btn", type: "button", onclick: cancel }, t("Cancel"))));
 }
+// ---- the final boss: the job's interview (interview.py), on the job's page
+const GRADE_LABEL = { strong: t("Strong"), fair: t("Fair"), weak: t("Weak") };
+function interviewSitting(qs, answers, grades) { // each question, your answer, the interviewer's grade and a better one
+  return h("ol", { class: "iv-qs" }, qs.map((q, i) => {
+    const g = grades?.[i];
+    return h("li", { class: "iv-q" }, h("p", { class: "iv-question" }, q),
+      g ? [h("div", { class: "iv-grade-row" }, h("span", { class: `iv-grade g-${g.grade}` }, GRADE_LABEL[g.grade] || g.grade), h("span", null, g.feedback)),
+        h("details", null, h("summary", null, t("Your answer, and how to answer it better")),
+          answers?.[i] ? h("p", null, answers[i]) : null,
+          g.look_for?.length ? h("div", { class: "muted small" }, t("A strong answer covers: {list}", { list: g.look_for.join(LANG === "ja" ? "、" : "; ") })) : null,
+          g.better ? h("p", { class: "iv-better" }, h("span", { class: "px-label" }, t("A stronger answer")), g.better) : null)] : null);
+  }));
+}
+function interviewCard(I, redraw) {
+  const state = I.beaten ? h("span", { class: "iv-state beaten" }, "♛ ", t("Beaten"))
+    : I.awake ? h("span", { class: "iv-state awake" }, t("Awake")) : h("span", { class: "iv-state" }, t("Practice"));
+  const intro = I.beaten ? t("You beat this job's interview. Sit it again any day to keep in practice.")
+    : I.awake ? t("Every must-have tower is lit: the interviewer is awake. {n} strong answers and none weak beat it.", { n: I.limits.beat_strong })
+      : t("Practice until every must-have tower is lit ({a}/{b}); then the interview counts.", { a: I.must_lit, b: I.must });
+  const body = [];
+  if (I.pending) {
+    const boxes = I.pending.questions.map((q) => h("textarea", { class: "gt-text", rows: 4, maxlength: String(I.limits.answer_max),
+      placeholder: t("Answer as you would in the interview."), "aria-label": q.question }));
+    const go_ = h("button", { class: "btn primary", type: "submit" }, t("Give your answers"));
+    const busy = h("p", { class: "muted small", hidden: true }, t("The interviewer is reading your answers…"));
+    body.push(h("form", { class: "iv-form", onsubmit: async (e) => {
+      e.preventDefault();
+      if (boxes.some((b) => b.value.trim().length < I.limits.answer_min)) { toast(t("Answer every question in a few sentences.")); return; }
+      go_.disabled = true; busy.hidden = false;
+      const r = await lbPost("/api/party/interview", { action: "answer", answers: boxes.map((b) => b.value) });
+      busy.hidden = true; go_.disabled = false;
+      if (!r) return;
+      toast(r.result.beaten ? t("You beat the interview!") : t("{n} of {of} answers strong.", { n: r.result.strong, of: r.result.grades.length }));
+      redraw(r.interview);
+    } },
+      h("ol", { class: "iv-qs" }, I.pending.questions.map((q, i) => h("li", { class: "iv-q" },
+        h("p", { class: "iv-question" }, q.question, h("small", { class: "muted" }, ` · ${q.name} · ${t("Rank {n}", { n: q.rank })}`)), boxes[i]))),
+      h("div", { class: "gt-actions" }, go_), busy));
+  } else if (I.resting) body.push(h("p", { class: "gt-state" }, t("You sat it today. The interviewer is back tomorrow with new questions.")));
+  else {
+    const start = h("button", { class: "btn primary", type: "button", onclick: async () => {
+      start.disabled = true; busy.hidden = false;
+      const r = await lbPost("/api/party/interview", { action: "start" });
+      busy.hidden = true; start.disabled = false;
+      if (r) redraw(r.interview);
+    } }, I.sittings ? t("Sit it again") : t("Start the interview"));
+    const busy = h("p", { class: "muted small", hidden: true }, t("The interviewer is writing your questions from the job and your own past work…"));
+    body.push(h("div", { class: "gt-actions" }, start), busy);
+  }
+  if (I.last && !I.pending) body.push(h("div", { class: "iv-last" },
+    h("span", { class: "px-label" }, t("Last sitting · {date}", { date: fmtDateY(partyDay(I.last.on)) })),
+    interviewSitting(I.last.questions, I.last.answers, I.last.grades)));
+  return h("section", { class: "iv-card" },
+    h("div", { class: "iv-head" }, h("div", null, h("span", { class: "px-label" }, t("Final boss")), h("h3", null, t("The interview"))), state),
+    h("p", { class: "muted" }, intro), body);
+}
+function interviewSlot() { // the job page's interview, fetched once the page shows
+  const slot = h("div", { class: "iv-slot" });
+  const redraw = (I) => slot.replaceChildren(I?.job ? interviewCard(I, redraw) : "");
+  api("/api/party/interview").then(redraw, (e) => slot.replaceChildren(h("p", { class: "muted small" }, e.message)));
+  return slot;
+}
 function jobCard(J, p, draw, mode) {
   const job = J.job;
   const act = async (body, btn, done) => {
@@ -993,13 +1059,14 @@ function jobCard(J, p, draw, mode) {
     if (r) { partyRefresh(r); toast(t("Your path now follows {track}.", { track: track.name })); render(); }
   } }, t("Follow this track")) : null;
   const head = h("div", { class: "jb-head" },
-    h("div", null, h("span", { class: "px-label" }, t("Job goal")), h("h2", null, job.title || t("A job")),
+    h("div", null, h("span", { class: "px-label" }, t("Job goal")), h("h2", null, job.title || t("A job"),
+      job.crowned ? h("span", { class: "jb-crown", title: t("You beat this job's interview") }, " ♛") : null),
       job.company ? h("div", { class: "muted" }, job.company) : null), tools);
   if (mode === "hand") return h("div", { class: "gt" }, h("section", { class: "card jb-card px-frame" }, head), jobHandEditor(J, job, draw, () => draw(J)));
   const body = !job.towers.length
     ? h("p", { class: "gt-state" }, job.unmapped ? t("Not mapped yet: {reason}. Map it again, or pick its requirements by hand.", { reason: job.unmapped })
       : t("No requirements yet: map it again, or pick them by hand."))
-    : [h("div", { class: "jb-castle" }, h("div", { class: "jb-castle-stage px-stage" }, castleArt(job.towers)),
+    : [h("div", { class: "jb-castle" }, h("div", { class: "jb-castle-stage px-stage" }, castleArt(job.towers, 3, job.crowned)),
         h("div", { class: "jb-score" },
           h("div", null, h("b", { class: "jb-big" }, `${job.must_lit}/${job.must}`), h("span", null, t("must-haves lit"))),
           h("div", null, h("b", { class: "jb-big" }, fmtNum(job.to_go)), h("span", null, t("ranks still to go"))),
@@ -1008,6 +1075,7 @@ function jobCard(J, p, draw, mode) {
       job.next?.length ? h("div", { class: "hc-gates jb-next" }, h("span", { class: "px-label" }, t("Gates to take next")),
         job.next.map((g) => h("a", { class: "hc-gate-chip", href: `#/innerlatch/gate/${g.module}` }, h("span", null, g.name), h("b", null, t("Rank {n}", { n: g.rank }))))) : null,
       h("ol", { class: "jb-towers" }, job.towers.map(jobTower)),
+      interviewSlot(),
       job.outside?.length ? h("div", { class: "jb-outside" }, h("span", { class: "px-label" }, t("Outside the game")),
         h("ul", null, job.outside.map((o) => h("li", { title: o.quote }, o.text)))) : null,
       h("p", { class: "muted small" }, job.by === "hand" ? t("Requirements picked by hand.") : t("Mapped by your analysis model. A tower lights when your rank in its module, shown at its gate, reaches what the job asks."))];

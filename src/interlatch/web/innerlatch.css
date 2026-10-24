@@ -287,6 +287,30 @@
 .jb-hand-row label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 @container (max-width: 700px) { .jb-castle { grid-template-columns: minmax(0, 1fr); }
   .jb-tower { grid-template-columns: 16px minmax(0, 1fr) 60px 56px; } .jb-must { display: none; } }
+/* the interview, the job's final boss (interview.py) */
+.iv-card { display: grid; gap: 8px; padding: 12px 14px; background: var(--surface-2); box-shadow: 0 0 0 2px var(--border-strong); }
+.iv-card > p { margin: 0; max-width: 85ch; font-size: 13.5px; }
+.iv-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.iv-head h3 { font-size: 16px; }
+.iv-state { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; color: var(--muted);
+  box-shadow: 0 0 0 2px var(--border-strong); }
+.iv-state.awake { color: var(--warning); box-shadow: 0 0 0 2px var(--warning); }
+.iv-state.beaten { color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.iv-form { display: grid; gap: 10px; }
+.iv-qs { margin: 0; padding-left: 20px; display: grid; gap: 12px; }
+.iv-q { display: grid; gap: 4px; font-size: 13.5px; }
+.iv-question { margin: 0; font-weight: 600; }
+.iv-question small { font-weight: 400; }
+.iv-grade-row { display: flex; gap: 8px; align-items: baseline; }
+.iv-grade { font: 700 10.5px var(--mono); text-transform: uppercase; padding: 2px 6px; white-space: nowrap; }
+.iv-grade.g-strong { color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+.iv-grade.g-fair { color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
+.iv-grade.g-weak { color: var(--danger, #d9534f); box-shadow: 0 0 0 1px currentColor; }
+.iv-q details summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.iv-q details p { margin: 4px 0 0; white-space: pre-wrap; color: var(--ink-2); }
+.iv-better { margin: 0; display: grid; gap: 2px; }
+.iv-last { display: grid; gap: 8px; margin-top: 4px; }
+.jb-crown { color: var(--gold); }
 /* making the hero */
 .hero-maker { display: grid; gap: 12px; padding: 16px 18px; margin-bottom: 14px; }
 .hm-head h2 { font-size: 19px; }

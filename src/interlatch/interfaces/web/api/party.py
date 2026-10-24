@@ -281,6 +281,45 @@ def action_party_job(ctx: Context, viewer: dict | None, body: dict, *, here: boo
     return jb.view(ctx.conn, cat, _here_id(ctx)), 200
 
 
+# ------------------------------------------------------------------ the interview (knowledge/interview.py): the final
+# boss, questions from the active job and the person's own past work; only at their own computer
+def interview(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
+    """GET /api/party/interview: the active job's interview: awake or practice, today's questions, the last sitting."""
+    from ....knowledge import interview as iv
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(iv.NOT_HERE)}, 403
+    return iv.view(ctx.conn, pt.load_catalog(), _here_id(ctx)), 200
+
+
+def action_party_interview(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/interview {"action": "start"} writes today's questions; {"action": "answer", "answers": [...]}
+    grades them. Answers what it did and the interview as it is now."""
+    from ....knowledge import interview as iv
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(iv.NOT_HERE)}, 403
+    cat, here_id, act = pt.load_catalog(), _here_id(ctx), body.get("action")
+    try:
+        if act == "start":
+            got = iv.start(ctx.conn, ctx.cfg, cat, here_id, here=True)
+        elif act == "answer":
+            got = iv.answer(ctx.conn, ctx.cfg, cat, here_id, body.get("answers"), here=True)
+        else:
+            return {"error": tr("unknown action")}, 400
+    except iv.InterviewError as exc:
+        return {"error": tr(exc.template, **exc.kw)}, 400
+    except Exception as exc:  # the model's call failed: nothing was kept
+        return {"error": tr(iv.NO_MODEL, reason=str(exc)[:200])}, 502
+    return {"result": got, "interview": iv.view(ctx.conn, cat, here_id)}, 200
+
+
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
 def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
     """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""
