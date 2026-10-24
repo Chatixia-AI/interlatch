@@ -751,8 +751,13 @@ function heroCard(p, edit) {
       xpBar(hx.xp, hx.level_xp, hx.next_xp, hx.level),
       h("div", { class: "hc-stats" }, stat(t("Lessons understood"), hx.understood), stat(t("Owned"), hx.owned),
         stat(t("Ranks"), hx.ranks || 0)),
-      h("a", { class: "hc-path", href: "#/innerlatch/quests" }, h("span", { class: "px-label" }, t("Path")),
-        h("b", null, path ? path.name : t("No path yet: choose one")))),
+      h("div", { class: "hc-links" },
+        h("a", { class: "hc-path", href: "#/innerlatch/quests" }, h("span", { class: "px-label" }, t("Path")),
+          h("b", null, path ? path.name : t("No path yet: choose one"))),
+        h("a", { class: "hc-path", href: "#/innerlatch/job" }, h("span", { class: "px-label" }, t("Job goal")),
+          hx.job ? h("b", null, hx.job.title || t("A job"), h("small", { class: "muted" }, " · ", hx.job.mapped
+            ? t("{a}/{b} must-haves", { a: hx.job.must_lit, b: hx.job.must }) : t("not mapped yet")))
+            : h("b", null, t("Add a job you want"))))),
     mods.length ? h("div", { class: "hc-mods" },
       h("span", { class: "px-label" }, t("Your path's modules")),
       h("ul", null, mods.map((m) => heroModule(m, hx.ready_at || 5))),
@@ -885,6 +890,153 @@ route(/^\/innerlatch\/gate\/([\w-]+)$/, async (params, module) => {
   draw(g);
   return partyShell(t("Gate"), t("A module's rank rises only here: show it with your own words and your own work. The analysis model judges it against the module's check."), box,
     back ? h("p", null, h("a", { class: "btn small", href: back }, t("Back to the field"))) : null);
+});
+
+// ------------------------------------------------------------------ #/innerlatch/job: the job goal (jobs.py). A pasted job
+// description mapped to the roadmap; the active one is a castle whose towers light with the ranks you show at gates.
+function castleArt(towers, scale = 3) { // one tower per requirement (a must-have stands taller), lit once its rank is shown
+  const n = Math.max(1, towers.length), TW = 12, GAP = 3, H = 44, W = n * (TW + GAP) + GAP + 8;
+  const c = h("canvas", { class: "jb-castle-art", width: W * scale, height: H * scale, role: "img",
+    "aria-label": t("{a} of {b} towers lit", { a: towers.filter((x) => x.lit).length, b: towers.length }) });
+  const g = c.getContext("2d");
+  if (!g) return c;
+  const px = (x, y, w, hh, col) => { g.fillStyle = col; g.fillRect(x * scale, y * scale, w * scale, hh * scale); };
+  const stone = "#a7a2b6", dark = "#7d7891", rim = "#4e4963";
+  px(0, 30, W, 14, dark); px(0, 30, W, 2, stone); // the wall
+  for (let x = 0; x < W; x += 4) px(x, 28, 2, 2, stone);
+  px(Math.floor(W / 2) - 3, 36, 6, 8, rim); // its gate
+  towers.forEach((tw, i) => {
+    const x = 4 + GAP + i * (TW + GAP), top = tw.must ? 6 : 12;
+    px(x, top, TW, 44 - top, tw.lit ? stone : dark);
+    px(x, top, 1, 44 - top, rim); px(x + TW - 1, top, 1, 44 - top, rim);
+    for (let k = 0; k < TW; k += 3) px(x + k, top - 2, 2, 2, tw.lit ? stone : dark); // crenels
+    px(x + 4, top + 6, 4, 5, tw.lit ? "#ffd66b" : "#3a3550"); // a window, lit or not
+    if (tw.lit) { px(x + 5, top - 9, 1, 7, rim); px(x + 6, top - 9, 4, 3, "#e0663f"); } // a flag
+  });
+  return c;
+}
+function jobTower(tw) {
+  const tip = [tw.name, tw.quote ? `“${tw.quote}”` : null].filter(Boolean).join("\n");
+  return h("li", { class: `jb-tower${tw.lit ? " lit" : ""}`, title: tip }, pxIcon(tw.attr, 1),
+    h("span", { class: "jb-t-name" }, tw.name, tw.quote ? h("small", { class: "muted" }, tw.quote) : null),
+    h("span", { class: `jb-must${tw.must ? " on" : ""}` }, tw.must ? t("Must-have") : t("Nice to have")),
+    h("span", { class: "jb-need" }, t("Rank {r}/{t}", { r: tw.have, t: tw.rank })),
+    tw.lit ? h("span", { class: "jb-done" }, "✓") : tw.gate ? h("a", { class: "hc-gate", href: `#/innerlatch/gate/${tw.module}` }, "⚔ ", t("Gate"))
+      : h("span", { class: "hc-ready", role: "img", "aria-label": t("{a} of {b} lessons understood toward its gate", { a: fmtNum(tw.ready), b: 5 }) },
+        Array.from({ length: 5 }, (_, i) => h("i", { class: i < Math.min(tw.ready, 5) ? "on" : "" }))));
+}
+function jobAddForm(J, draw, { cancel = null } = {}) {
+  const title = h("input", { class: "jb-input", type: "text", maxlength: "120", placeholder: t("Role (optional: read from the description)"), "aria-label": t("Role") });
+  const company = h("input", { class: "jb-input", type: "text", maxlength: "120", placeholder: t("Company (optional)"), "aria-label": t("Company") });
+  const text = h("textarea", { class: "gt-text", rows: 10, maxlength: String(J.limits.text_max), placeholder: t("Paste the whole job description here."), "aria-label": t("Job description") });
+  const count = h("span", { class: "muted small" });
+  const go_ = h("button", { class: "btn primary", type: "submit" }, t("Map it to the roadmap"));
+  const busy = h("p", { class: "muted small", hidden: true }, t("Reading the job description and mapping it to the roadmap…"));
+  const sync = () => { const n = text.value.trim().length; count.textContent = t("{n} of at least {min} characters", { n: fmtNum(n), min: fmtNum(J.limits.text_min) }); go_.disabled = n < J.limits.text_min; };
+  text.addEventListener("input", sync);
+  sync();
+  return h("form", { class: "card jb-add px-frame", onsubmit: async (e) => {
+    e.preventDefault();
+    go_.disabled = true; busy.hidden = false;
+    const r = await lbPost("/api/party/job", { action: "add", title: title.value, company: company.value, text: text.value });
+    busy.hidden = true; sync();
+    if (!r) return;
+    partyCache = null; mapCache = null;
+    toast(r.job?.unmapped ? t("Kept, but not mapped: {reason}", { reason: r.job.unmapped }) : t("Mapped: {n} requirements.", { n: r.job?.towers?.length || 0 }));
+    draw(r);
+  } },
+    h("h2", null, t("Add a job you want")),
+    h("p", { class: "muted" }, t("Paste a real job description. Your analysis model maps it once to roadmap modules and the rank each needs; it stays on this computer.")),
+    h("div", { class: "jb-row" }, title, company), text,
+    h("div", { class: "gt-actions" }, go_, count, cancel ? h("button", { class: "btn", type: "button", onclick: cancel }, t("Cancel")) : null), busy);
+}
+function jobHandEditor(J, job, draw, cancel) { // the requirements picked by hand: a module, the rank it needs, must-have or not
+  const rows = h("div", { class: "jb-hand" });
+  const row = (r = { module: "", rank: 2, must: true }) => {
+    const mod = h("select", { "aria-label": t("Module") }, h("option", { value: "" }, t("Choose a module…")),
+      J.modules.map((m) => h("option", { value: m.id, selected: m.id === r.module }, m.name)));
+    const rank = h("select", { "aria-label": t("Rank it needs") }, [1, 2, 3, 4].map((n) => h("option", { value: String(n), selected: n === r.rank }, t("Rank {n}", { n }))));
+    const must = h("input", { type: "checkbox", checked: r.must });
+    const line = h("div", { class: "jb-hand-row" }, mod, rank, h("label", null, must, t("Must-have")),
+      h("button", { class: "btn small", type: "button", "aria-label": t("Remove"), onclick: () => line.remove() }, "×"));
+    line.read = () => ({ module: mod.value, rank: Number(rank.value), must: must.checked });
+    rows.append(line);
+  };
+  (job.towers.length ? job.towers : [undefined]).forEach((tw) => row(tw && { module: tw.module, rank: tw.rank, must: tw.must }));
+  const save = h("button", { class: "btn primary", type: "button", onclick: async () => {
+    const reqs = [...rows.children].map((x) => x.read()).filter((x) => x.module);
+    save.disabled = true;
+    const r = await lbPost("/api/party/job", { action: "requirements", id: job.id, requirements: reqs });
+    save.disabled = false;
+    if (r) { partyCache = null; mapCache = null; draw(r); }
+  } }, t("Save"));
+  return h("section", { class: "card jb-editor" }, h("h3", null, t("Requirements, picked by hand")), rows,
+    h("div", { class: "gt-actions" }, h("button", { class: "btn small", type: "button", onclick: () => { if (rows.children.length < J.limits.requirements) row(); } }, t("Add a requirement")),
+      save, h("button", { class: "btn", type: "button", onclick: cancel }, t("Cancel"))));
+}
+function jobCard(J, p, draw, mode) {
+  const job = J.job;
+  const act = async (body, btn, done) => {
+    if (btn) btn.disabled = true;
+    const r = await lbPost("/api/party/job", { id: job.id, ...body });
+    if (btn) btn.disabled = false;
+    if (r) { partyCache = null; mapCache = null; if (done) done(r); draw(r); }
+  };
+  const remap = h("button", { class: "btn small", type: "button", onclick: () => act({ action: "remap" }, remap, () => toast(t("Mapped again."))) }, t("Map again"));
+  const tools = h("div", { class: "jb-tools" }, remap,
+    h("button", { class: "btn small", type: "button", onclick: () => draw(J, "hand") }, t("Pick by hand")),
+    h("button", { class: "btn small", type: "button", onclick: () => { if (confirm(t("Remove this job goal? Its description is deleted from this computer."))) act({ action: "remove" }); } }, t("Remove")));
+  const track = job.track, onPath = track && p.goal?.id === track.id;
+  const follow = track && !onPath ? h("button", { class: "btn small", type: "button", onclick: async (e) => {
+    e.currentTarget.disabled = true;
+    const r = await lbPost("/api/party/goal", { track: track.id });
+    if (r) { partyRefresh(r); toast(t("Your path now follows {track}.", { track: track.name })); render(); }
+  } }, t("Follow this track")) : null;
+  const head = h("div", { class: "jb-head" },
+    h("div", null, h("span", { class: "px-label" }, t("Job goal")), h("h2", null, job.title || t("A job")),
+      job.company ? h("div", { class: "muted" }, job.company) : null), tools);
+  if (mode === "hand") return h("div", { class: "gt" }, h("section", { class: "card jb-card px-frame" }, head), jobHandEditor(J, job, draw, () => draw(J)));
+  const body = !job.towers.length
+    ? h("p", { class: "gt-state" }, job.unmapped ? t("Not mapped yet: {reason}. Map it again, or pick its requirements by hand.", { reason: job.unmapped })
+      : t("No requirements yet: map it again, or pick them by hand."))
+    : [h("div", { class: "jb-castle" }, h("div", { class: "jb-castle-stage px-stage" }, castleArt(job.towers)),
+        h("div", { class: "jb-score" },
+          h("div", null, h("b", { class: "jb-big" }, `${job.must_lit}/${job.must}`), h("span", null, t("must-haves lit"))),
+          h("div", null, h("b", { class: "jb-big" }, fmtNum(job.to_go)), h("span", null, t("ranks still to go"))),
+          track ? h("div", { class: "jb-track" }, h("span", { class: "px-label" }, t("Fits best")),
+            h("b", null, track.name), h("span", { class: "muted small" }, onPath ? t("Your path already") : t("covers {a} of {b} requirements", { a: track.covers, b: track.of })), follow) : null)),
+      job.next?.length ? h("div", { class: "hc-gates jb-next" }, h("span", { class: "px-label" }, t("Gates to take next")),
+        job.next.map((g) => h("a", { class: "hc-gate-chip", href: `#/innerlatch/gate/${g.module}` }, h("span", null, g.name), h("b", null, t("Rank {n}", { n: g.rank }))))) : null,
+      h("ol", { class: "jb-towers" }, job.towers.map(jobTower)),
+      job.outside?.length ? h("div", { class: "jb-outside" }, h("span", { class: "px-label" }, t("Outside the game")),
+        h("ul", null, job.outside.map((o) => h("li", { title: o.quote }, o.text)))) : null,
+      h("p", { class: "muted small" }, job.by === "hand" ? t("Requirements picked by hand.") : t("Mapped by your analysis model. A tower lights when your rank in its module, shown at its gate, reaches what the job asks."))];
+  return h("section", { class: "card jb-card px-frame" }, head, body,
+    h("details", { class: "jb-text" }, h("summary", null, t("The job description")), h("pre", null, job.text)));
+}
+route(/^\/innerlatch\/job$/, async () => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  let J;
+  try { J = await api("/api/party/jobs"); } catch (e) {
+    if (e.handled) throw e;
+    return partyShell(t("Job goal"), null, h("section", { class: "card empty" }, e.message));
+  }
+  const box = h("div", { class: "jb" });
+  const draw = (JJ, mode = null) => {
+    const tabs = JJ.jobs.length ? h("div", { class: "pd-tabs jb-tabs", role: "tablist" },
+      JJ.jobs.map((j) => h("button", { class: `pd-tab${j.id === JJ.active && mode !== "add" ? " on" : ""}`, type: "button", role: "tab",
+        "aria-selected": String(j.id === JJ.active && mode !== "add"), onclick: async () => {
+          if (j.id === JJ.active && mode !== "add") return;
+          const r = await lbPost("/api/party/job", { action: "activate", id: j.id });
+          if (r) { partyCache = null; mapCache = null; draw(r); }
+        } }, h("span", null, [j.title || t("A job"), j.company].filter(Boolean).join(" · ")))),
+      JJ.jobs.length < JJ.limits.jobs ? h("button", { class: `pd-tab pd-new${mode === "add" ? " on" : ""}`, type: "button", onclick: () => draw(JJ, "add") }, t("+ Add a job")) : null) : null;
+    box.replaceChildren(...[tabs, !JJ.job || mode === "add" ? jobAddForm(JJ, draw, { cancel: JJ.job ? () => draw(JJ) : null }) : jobCard(JJ, p, draw, mode)].filter(Boolean));
+  };
+  draw(J);
+  return partyShell(t("Job goal"), t("The job at the end of your path. Its towers light only with ranks you show at gates; your hero's level doesn't count."), box);
 });
 
 // ------------------------------------------------------------------ #/innerlatch: the leader and the characters
@@ -1468,8 +1620,9 @@ async function partySidebar(box) {
       sbRow(t("Party"), "#/innerlatch", "party", null, ["/innerlatch"]),
       Object.assign(sbRow(t("Quests"), "#/innerlatch/quests", "todo", review || null, ["/innerlatch/quests"]),
         review ? { title: tn(review, "Quests: {n} main-quest milestone with evidence to review", "Quests: {n} main-quest milestones with evidence to review") } : {}),
+      on && p.hero ? sbRow(t("Job goal"), "#/innerlatch/job", "hiring", null, ["/innerlatch/job"]) : null,
       sbRow(t("Journey"), "#/innerlatch/journey", "history", null, ["/innerlatch/journey"]),
-      h("div", { class: "sb-group" }, t("Characters")),
+      h("div", { class: "sb-group" }, p?.hero ? t("Companions") : t("Characters")),
       on ? p.agents.map(agentRow) : h("div", { class: "sb-empty" }, t("Sign in to meet your party."))));
 }
 
@@ -1572,6 +1725,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
     h("div", { class: "head-actions" }, goldChip(m.gold),
       h("a", { class: "btn small primary", href: `#/innerlatch/adventure/field/${lastField(m) || partyRegion(m)}` }, icon("map"), t("Explore")),
       h("a", { class: "btn small", href: "#/innerlatch/adventure/bag" }, icon("artifacts"), t("Bag")),
+      m.studying ? h("a", { class: "btn small", href: "#/innerlatch/job" }, icon("hiring"), t("Job goal")) : null,
       segControl([["map", t("Map")], ["list", t("List")]], list ? "list" : "map",
       (v) => go(v === "list" ? "#/innerlatch/adventure?view=list" : "#/innerlatch/adventure?view=map"))));
   if (list) return h("div", { class: "party-page adv-page" }, head, advList(m, params));
@@ -1873,7 +2027,7 @@ function partyRegion(m) {
 function fieldLabels() { // the field engine's words (field.js LABELS), in the page's language
   return { "field": t("{region}: a field to explore. Click or tap where to walk, or use the arrow keys or WASD. Walk into a monster to battle it, or into the town's gate to shop."),
     "zoneLeft": t("{n} to battle here"), "zoneClear": t("All cleared here"), "zoneFog": t("Unexplored: no lessons here yet"),
-    "zoneYou": t("You understood {n}/{of}"), "zoneGoal": t("Main quest"), "zoneGate": t("Rank {n} gate open"),
+    "zoneYou": t("You understood {n}/{of}"), "zoneGoal": t("Main quest"), "zoneGate": t("Rank {n} gate open"), "zoneJob": t("Job goal"),
     "level": t("Lv {n}"), "hint": t("Click to walk · arrow keys or WASD"), "empty": t("No lessons in this region yet: nothing to battle here.") };
 }
 route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
@@ -2243,6 +2397,7 @@ function realmCrumbs(path) {
   const home = ["Innerlatch", "#/innerlatch"], party = [t("Party"), "#/innerlatch"];
   if (path === "/innerlatch/quests") return [home, party, [t("Quests")]];
   if (path === "/innerlatch/journey") return [home, party, [t("Journey")]];
+  if (path === "/innerlatch/job") return [home, party, [t("Job goal")]];
   if (path === "/innerlatch/adventure") return [home, [t("Adventure")]];
   if (path === "/innerlatch/leaderboard") return [home, [t("Leaderboard")]];
   if (path === "/innerlatch/arena") return [home, [t("Arena")]];

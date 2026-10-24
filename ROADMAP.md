@@ -62,8 +62,9 @@ carefully.
   ([design](docs/design/learning.md)).
 - **You as the hero, toward a real job.** In Innerlatch's Adventure, the lessons you answer right in study
   battles count toward your readiness in each roadmap module, your hero levels up from them, and at a module's gate
-  your own words and work, judged by the analysis model, raise your rank there. Still to come: a job description you
-  paste as the goal, mapped to the modules and ranks it asks for
+  your own words and work, judged by the analysis model, raise your rank there; a job description you paste is the
+  goal, mapped to the modules and ranks it asks for. Still to come: interview questions written from that job and
+  your own past work, as its final boss
   ([design](docs/design/innerlatch.md#2-the-hero)).
 - **Teammates' lessons, by person and side by side.** They show on project pages and in **All knowledge**, marked
   with the computers they came from. Still to come: the person's name instead of the computer's, teammates' lessons

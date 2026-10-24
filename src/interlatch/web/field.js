@@ -46,6 +46,7 @@
        zoneYou     how many of the zone's lessons the person understood, of what makes it ready    {n} {of}
        zoneGoal    a zone of the main quest's track
        zoneGate    under a zone's name while its gate is open    {n}
+       zoneJob     a zone the active job goal asks for (data.job.modules; jobs.py)
        level       a party member's level    {n}
        hint        how to move, in the corner
        empty       over the field when the region has no lessons at all */
@@ -57,6 +58,7 @@
     zoneYou: "You understood {n}/{of}",
     zoneGoal: "Main quest",
     zoneGate: "Rank {n} gate open",
+    zoneJob: "Job goal",
     level: "Lv {n}",
     hint: "Click to walk · arrow keys or WASD",
     empty: "No lessons in this region yet: nothing to battle here.",
@@ -294,6 +296,7 @@
       if (z !== undefined) byZone[z].push(l);
     }
     const goal = new Set((data && data.goal && Array.isArray(data.goal.modules)) ? data.goal.modules : []);
+    const job = new Set((data && data.job && Array.isArray(data.job.modules)) ? data.job.modules : []);
     const ready = (data && data.readiness) || {};
     const known = new Set((Array.isArray(data && data.understood) ? data.understood : []).map(String));
     const back = new Set((Array.isArray(data && data.back) ? data.back : []).map(String));
@@ -301,7 +304,7 @@
     const studyable = (l) => !l.friction && !today.has(String(l.id))
       && (data && data.studying ? !known.has(String(l.id)) || back.has(String(l.id)) : !cleared.has(String(l.id)));
     const zones = mods.map((m, i) => ({ index: i, id: m.id, name: m.name || m.id, lessons: byZone[i].length,
-      open: byZone[i].filter(studyable).length, goal: goal.has(m.id), you: Number(ready[m.id]) || 0,
+      open: byZone[i].filter(studyable).length, goal: goal.has(m.id), job: job.has(m.id), you: Number(ready[m.id]) || 0,
       gate: Math.max(0, Math.round(Number(((data && data.gates) || {})[m.id]) || 0)),
       site: { x: sites[i].x, y: sites[i].y }, sign: sites[i].sign }));
     const monsters = [];
@@ -318,7 +321,7 @@
       // agents' friction never
       const rank = (l) => (back.has(String(l.id)) ? 2 : 0) + (l.study ? 1 : 0);
       const want = byZone[z.index].filter(studyable).sort((a, b) => rank(b) - rank(a) || b.id - a.id)
-        .slice(0, PER_ZONE[z.goal ? 1 : 0]);
+        .slice(0, PER_ZONE[z.goal || z.job ? 1 : 0]);
       const taken = [];
       for (const l of want) {
         const start = strHash("home" + l.id) % Math.max(1, homes.length);
@@ -750,9 +753,9 @@
       zoneShown = z;
       const zone = F.zones[z];
       if (!zone) { zoneName.textContent = F.town.name; zoneSub.textContent = F.region.name; return; }
-      zoneName.textContent = (zone.goal ? "★ " : "") + zone.name;
+      zoneName.textContent = (zone.job ? "♜ " : zone.goal ? "★ " : "") + zone.name;
       const of = Number((opts.data || {}).ready_at) || 5;
-      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : [zone.gate ? lab("zoneGate", { n: zone.gate }) : null, zone.goal ? lab("zoneGoal") : null,
+      zoneSub.textContent = !zone.lessons ? lab("zoneFog") : [zone.gate ? lab("zoneGate", { n: zone.gate }) : null, zone.job ? lab("zoneJob") : null, zone.goal ? lab("zoneGoal") : null,
         zone.open ? lab("zoneLeft", { n: zone.open }) : lab("zoneClear"), lab("zoneYou", { n: Math.min(zone.you, of), of })].filter(Boolean).join(" · ");
       hudZone.classList.toggle("fd-goal", !!zone.goal);
     }
@@ -801,10 +804,10 @@
       for (const z of F.zones) {
         const sx = z.sign.x * T + T / 2, sy = z.sign.y * T - 10;
         if (!seen(sx, sy, 80)) continue;
-        const txt = (z.gate ? "⚔ " : z.goal ? "★ " : "") + z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
+        const txt = (z.gate ? "⚔ " : z.job ? "♜ " : z.goal ? "★ " : "") + z.name, w = ctx.measureText(txt).width + 12 * dpr, h = 17 * dpr, bx = X(sx) - w / 2, by = Y(sy) - h;
         ctx.fillStyle = "rgba(42, 30, 18, 0.78)";
         ctx.fillRect(Math.round(bx), Math.round(by), Math.round(w), Math.round(h));
-        ctx.fillStyle = z.gate || z.goal ? "#ffd27a" : z.open ? "#ffe2a0" : "#d9e6d0";
+        ctx.fillStyle = z.gate || z.job || z.goal ? "#ffd27a" : z.open ? "#ffe2a0" : "#d9e6d0";
         ctx.fillText(txt, X(sx), Y(sy) - 3 * dpr);
       }
       if (themeDark()) { ctx.fillStyle = "rgba(14, 22, 56, 0.22)"; ctx.fillRect(0, 0, canvas.width, canvas.height); }

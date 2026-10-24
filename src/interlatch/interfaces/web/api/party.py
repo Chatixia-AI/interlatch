@@ -233,6 +233,54 @@ def action_party_gate(ctx: Context, viewer: dict | None, body: dict, *, here: bo
     return {**got, "gate": gates.view(ctx.conn, cat, here_id, module)}, 200
 
 
+# ------------------------------------------------------------------ the job goal (knowledge/jobs.py): a pasted job
+# description mapped to the roadmap, the castle at the end of the path; only at the person's own computer
+def jobs(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
+    """GET /api/party/jobs: the kept jobs and the active one with its castle."""
+    from ....knowledge import jobs as jb
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(jb.NOT_HERE)}, 403
+    return jb.view(ctx.conn, pt.load_catalog(), _here_id(ctx)), 200
+
+
+def action_party_job(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/job {"action": "add" | "remap" | "requirements" | "edit" | "activate" | "remove", ...}: change the
+    job goals. Answers them as GET /api/party/jobs does."""
+    from ....knowledge import jobs as jb
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(jb.NOT_HERE)}, 403
+    cat, act, job_id = pt.load_catalog(), body.get("action"), body.get("id")
+    try:
+        if act == "add":
+            jb.add(ctx.conn, ctx.cfg, cat, viewer, title=body.get("title"), company=body.get("company"), text=body.get("text"))
+        elif act == "remap":
+            jb.remap(ctx.conn, ctx.cfg, cat, viewer, job_id)
+        elif act == "requirements":
+            jb.set_requirements(ctx.conn, cat, viewer, job_id, body.get("requirements"))
+        elif act == "edit":
+            jb.edit(ctx.conn, viewer, job_id, title=body.get("title"), company=body.get("company"))
+        elif act == "activate":
+            jb.activate(ctx.conn, viewer, job_id)
+        elif act == "remove":
+            jb.remove(ctx.conn, viewer, job_id)
+        else:
+            return {"error": tr("unknown action")}, 400
+    except jb.JobError as exc:
+        return {"error": tr(exc.template, **exc.kw)}, 400
+    except Exception as exc:  # the model's call failed (a new mapping): nothing changed
+        return {"error": tr(jb.NO_MODEL, reason=str(exc)[:200])}, 502
+    pt.clear_cache()  # the field's lead zones follow the active job
+    return jb.view(ctx.conn, cat, _here_id(ctx)), 200
+
+
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
 def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
     """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""

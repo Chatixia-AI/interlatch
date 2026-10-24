@@ -149,13 +149,26 @@ def save(conn: sqlite3.Connection, viewer: dict | None, name, look) -> dict:
 
 
 # ------------------------------------------------------------------ the hero as the Party shows it
+def _job(cat, state: dict, gate: dict, ready: dict) -> dict | None:
+    """The active job goal in brief, for the hero card: its title, the must-haves lit and the towers lit (jobs.castle)."""
+    from . import jobs
+
+    job = next((j for j in state["jobs"] if j["id"] == state["active"]), None)
+    if job is None:
+        return None
+    c = jobs.castle(cat, job, {m: g["rank"] for m, g in gate.items()}, ready,
+                    {m: g["next"] for m, g in gate.items() if g["open"]})
+    return {"id": job["id"], "title": job.get("title") or "", "company": job.get("company") or "", "mapped": bool(job.get("mapping")),
+            **{k: c[k] for k in ("must_lit", "must", "lit", "to_go")}, "towers": len(c["towers"])}
+
+
 def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict, *, catalog=None,
          today: date | None = None) -> dict | None:
     """The `hero` block of GET /api/party: None for a person on a hub; {"made": False, looks, suggest} before the hero
     is made; else the sheet, the level, the path with each module's readiness, rank and gate (gates.py) against its
     target, and every gate open now (`gates`, the path's first). `data`: the party's compute() payload (its goal is the
     path, its agents' classes the suggestions)."""
-    from . import gates, party, study
+    from . import gates, jobs, party, study
 
     if viewer is not None:
         return None
@@ -191,6 +204,7 @@ def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict
             "level": lv, "xp": xp, "level_xp": threshold(lv), "next_xp": threshold(lv + 1),
             "understood": len(study.understood(log_)), "owned": sum(1 for x in sched.values() if x["owned"]),
             "ready_at": study.READY_AT, "ranks": sum(g["rank"] for g in gate.values()),
+            "job": _job(cat, jobs.load(conn), gate, ready),
             "gates": [{"module": mid, "name": party._t(cat.module[mid], "name"), "attr": cat.module[mid].get("attr"),
                        "rank": gate[mid]["next"]} for mid in open_now],
             "path": {"id": path_id, "name": goal["name"], "generalist": path_id == GENERALIST, "modules": modules}
