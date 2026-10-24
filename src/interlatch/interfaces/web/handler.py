@@ -69,6 +69,10 @@ def sent_cookies(values: list[str]) -> dict[str, list[str]]:
 PROXY_HEADERS = ("X-Forwarded-For", "Tailscale-User-Login", "X-Forwarded-Proto", "X-Real-IP", "Forwarded")
 HUB_PUSH = ("/api/hub/file", "/api/hub/sessions", "/api/hub/analyses", "/api/hub/done", "/api/hub/hello",
             "/api/hub/withdraw")
+# the bodies a few of those take, in bytes: a pasted job description (jobs.TEXT_MAX characters), a gate's answer, an
+# interview's three; UTF-8 and JSON escaping can take a character to 6 bytes. Every other one: 4096.
+PARTY_BODY = {"/api/party/job": 128 * 1024, "/api/party/gate": 32 * 1024, "/api/party/interview": 64 * 1024}
+TOO_LARGE = "that's more than it can take: make it shorter"
 # POSTs any person signed in to a hub may make, not only admins: their own Party quest log, goal, cleared encounters,
 # bag and decks (routes.PARTY decides)
 PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/hero", "/api/party/gate", "/api/party/job", "/api/party/interview", "/api/party/cleared", "/api/party/pick", "/api/party/buy",
@@ -659,7 +663,14 @@ def make_handler(app: App, port: int):
             as on GET."""
             from ...sharing import access, people
 
-            body = self._small_body()
+            limit = PARTY_BODY.get(p, 4096)
+            try:
+                too_big = p in PARTY_BODY and int(self.headers.get("Content-Length") or 0) > limit
+            except ValueError:
+                too_big = False
+            if too_big:  # text a person pasted or wrote: said as it is, not as "bad json"; nothing is read
+                return self._json({"error": tr(TOO_LARGE)}, 413)
+            body = self._small_body(limit)
             if body is None:
                 return self._json({"error": tr("bad json")}, 400)
             try:

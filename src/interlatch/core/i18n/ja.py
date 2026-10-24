@@ -217,6 +217,7 @@ JA: dict[str, str] = {
     "forbidden": "許可されていません",
     "not found": "見つかりません",
     "bad json": "JSON が正しくありません",
+    "that's more than it can take: make it shorter": "大きすぎて受け取れません。短くしてください",
     "empty upload": "アップロードが空です",
     "upload cut off": "アップロードが途中で切れました",
     "unknown connector": "そのソースはありません",
