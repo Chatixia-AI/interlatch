@@ -1167,7 +1167,7 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood, those
     back for another look and those owned, and how many are understood per module (study.py; empty for a person on a
     hub: their record stays on their computer)."""
-    from . import bag, hero, study
+    from . import bag, hero, jobs, study
 
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
@@ -1210,6 +1210,8 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         # each module whose gate can be tried now, and the rank it gives (gates.py; the person's own computer only)
         "gates": _open_gates(conn, cat, study.readiness(counted, cat, studied), today or utcnow().date())
         if viewer is None else {},
+        # the active job goal's modules: they lead the field with the path's (jobs.py; this computer only)
+        "job": {"modules": jobs.modules_of(conn)} if viewer is None else {"modules": []},
         "studying": viewer is None,  # study battles (and their record) only at the person's own computer
     }
 

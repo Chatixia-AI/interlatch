@@ -75,6 +75,20 @@ or **not yet** with what is missing. A pass raises your rank in the module, give
 opens the next rank's gate. A gate not passed opens again tomorrow. Ranks never fall. Gates are taken on your own
 computer, and your answers stay there ([design](design/innerlatch.md)).
 
+### Job goal
+
+**Job goal** (in the Party's sidebar, on your hero's card and on the world map) is the job at the end of your path.
+Paste a real job description, with the role and company if you like: your analysis model maps it once to the roadmap
+modules it asks for, the rank each needs and whether it's a must-have, each with the line it came from. What the
+roadmap doesn't cover (years of experience, a language, a degree, a location) is listed under *Outside the game*. If
+the mapping fails, or you disagree with it, **Map again** or **Pick by hand**.
+
+The job is a **castle**, one tower per requirement (a must-have stands taller). A tower lights when your rank in its
+module, shown at its gate, reaches what the job asks: your hero's level never counts. The page shows the must-haves lit,
+the ranks still to go, the gates you could take next, and the track that fits the job best, with **Follow this track**
+to make it your path. The job's modules hold more monsters on the field, marked ♜. Keep up to 20 jobs, one active at a
+time. The description stays on this computer and goes only to your analysis model.
+
 Your agents are your **companions**, listed under the hero. Their levels show what their lessons cover; they never
 move yours, and yours never moves theirs. Your hero, your answers and your path are kept on this computer: signed in to
 a hub, there is no hero, and the Arena stays companions only.

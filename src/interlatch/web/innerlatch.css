@@ -244,6 +244,49 @@
 .gt-missing li::marker { content: "→  "; color: var(--warning); }
 @container (max-width: 640px) { .gate-card { grid-template-columns: minmax(0, 1fr); } .gt-stage { min-height: 140px; }
   .gt-asks > div { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+.hc-links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.hc-links b small { font-weight: 500; }
+/* the job goal (jobs.py): its castle and towers */
+.jb { display: grid; gap: 12px; max-width: 1080px; }
+.jb-tabs { margin-bottom: 0; }
+.jb-add, .jb-card, .jb-editor { display: grid; gap: 12px; padding: 16px 18px; }
+.jb-add h2 { font-size: 18px; }
+.jb-add p { margin: 0; max-width: 80ch; }
+.jb-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-input { flex: 1 1 220px; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.jb-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.jb-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.jb-head h2 { font-size: 20px; }
+.jb-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-castle { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 16px; align-items: center; }
+.jb-castle-stage { display: grid; place-items: end center; padding: 14px 18px 8px; min-height: 150px; overflow-x: auto; }
+.jb-castle-art { max-width: 100%; height: auto; image-rendering: pixelated; }
+.jb-score { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-start; }
+.jb-score > div { display: grid; gap: 2px; }
+.jb-big { font: 700 26px var(--mono); font-variant-numeric: tabular-nums; }
+.jb-score span { font-size: 12.5px; color: var(--muted); }
+.jb-track { max-width: 280px; }
+.jb-track .btn { justify-self: start; margin-top: 4px; }
+.jb-next { grid-column: auto; border-top: 0; padding: 8px 10px; }
+.jb-towers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.jb-tower { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto 70px 64px; align-items: center; gap: 10px; padding: 4px 6px; font-size: 13px; }
+.jb-tower:nth-child(odd) { background: var(--surface-2); }
+.jb-t-name { min-width: 0; display: grid; }
+.jb-t-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.jb-must { font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; }
+.jb-must.on { color: var(--gold); }
+.jb-need { font: 600 11.5px var(--mono); text-align: right; white-space: nowrap; }
+.jb-done { color: var(--good); font-weight: 700; text-align: right; }
+.jb-tower.lit .jb-t-name { font-weight: 600; }
+.jb-outside ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.jb-text summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.jb-text pre { max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 10px; white-space: pre-wrap; font: 12.5px/1.5 var(--mono); background: var(--surface-2); }
+.jb-hand { display: grid; gap: 6px; }
+.jb-hand-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jb-hand-row select { min-width: 0; max-width: 100%; padding: 4px 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.jb-hand-row label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+@container (max-width: 700px) { .jb-castle { grid-template-columns: minmax(0, 1fr); }
+  .jb-tower { grid-template-columns: 16px minmax(0, 1fr) 60px 56px; } .jb-must { display: none; } }
 /* making the hero */
 .hero-maker { display: grid; gap: 12px; padding: 16px 18px; margin-bottom: 14px; }
 .hm-head h2 { font-size: 19px; }

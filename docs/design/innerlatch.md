@@ -2,8 +2,8 @@
 
 [← Roadmap](../../ROADMAP.md) · 日本語: [ja/innerlatch.md](ja/innerlatch.md) · Related: [lessons people learn from](learning.md)
 
-Status: study battles built in 0.27.3 (2026-10-18); the hero (section 2) and gate bosses (section 7) built in October
-2026. The job goal (section 8) is planned, next in the order of section 10. The user guide is [Adventure](../party.md#adventure).
+Status: study battles built in 0.27.3 (2026-10-18); the hero (section 2), gate bosses (section 7) and the job goal
+(section 8) built in October 2026. The interview boss (section 10) is still to come. The user guide is [Adventure](../party.md#adventure).
 
 Innerlatch is the game behind the door at the bottom of the dashboard's rail. **You are the hero:** a character you
 make, on a career path you choose, who beats the lessons of your own past work and levels up toward a real job. Your
@@ -230,10 +230,9 @@ Built:
   `GET /api/party`; `POST /api/party/hero`. `Sprites.heroKey(look)` draws the hero like a companion.
 - `src/interlatch/knowledge/gates.py`: which gates are open, what each rank asks, the work to link, the attempt and
   the model's verdict. `GET`/`POST /api/party/gate`; the map's `gates` puts them on the field.
-
-Planned:
-
-- `knowledge/jobs.py`: the job goals, the model's mapping, the match. `GET`/`POST /api/party/jobs`.
+- `src/interlatch/knowledge/jobs.py`: the kept job descriptions, the model's mapping (checked: modules that exist,
+  quotes the text holds, one requirement a module, at most twelve) or the person's own, the castle and the track it
+  suggests. `GET /api/party/jobs`, `POST /api/party/job`; the map's `job` leads the field with its modules.
 
 ## 7. Gate bosses
 
@@ -253,7 +252,7 @@ The rank meter: what you can do in a module, moved only by real work.
 - **What passing does.** The module's rank rises, on this computer, apart from your companions' levels. The hero gains
   XP, and the hero card shows each module's rank against your path's target. Ranks never fall with time away.
 
-## 8. Next: the job goal
+## 8. The job goal
 
 The goal at the end of the path: a real job you want.
 
@@ -264,7 +263,8 @@ The goal at the end of the path: a real job you want.
   that exist, quoted lines that are in the text, at most twelve. What the roadmap doesn't cover (years of experience, a
   language, a degree, a visa) is listed as outside the game, not dropped. With no analysis model, you pick the
   requirements from the module list yourself.
-- **The castle.** The active job is a castle at the edge of the world map, one tower per requirement. A tower lights
+- **The castle.** The active job is a castle on a page of its own (*Job goal*, reached from the world map, the hero
+  card and the Party's sidebar: the world map's layout had no room for it), one tower per requirement. A tower lights
   when your rank reaches what it needs. The match is the must-haves lit out of all must-haves, with the ranks still to
   go; readiness shows apart from it, as gates you could take next.
 - **Steering the path.** The job suggests the track whose targets fit its requirements best; switching is your call.
