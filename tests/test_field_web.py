@@ -145,3 +145,16 @@ assert.deepEqual(route[0], [F.spawn.x, F.spawn.y]);
 assert.deepEqual(route[route.length - 1], [F.gate.x, F.gate.y]);
 for (let i = 1; i < route.length; i++) assert.ok(Math.max(Math.abs(route[i][0] - route[i - 1][0]), Math.abs(route[i][1] - route[i - 1][1])) === 1);
 ''')
+
+
+def test_a_zone_with_an_open_gate_says_which_rank_it_gives():
+    check('''
+const d = data();
+assert.deepEqual(F_.layout(d, 'craft').zones.map((z) => z.gate), [0, 0, 0, 0, 0, 0]);  // no gates in the payload
+d.gates = {'M-c1': 2, 'M-d0': 1, 'M-nope': 3};
+const F = F_.layout(d, 'craft');
+assert.deepEqual(F.zones.map((z) => z.gate), [0, 2, 0, 0, 0, 0]);  // only this region's modules
+assert.ok(F.zones[1].sign && Number.isInteger(F.zones[1].sign.x));  // the gate stands where the sign is
+d.gates = {'M-c1': 'x', 'M-c2': -1};
+assert.deepEqual(F_.layout(d, 'craft').zones.map((z) => z.gate), [0, 0, 0, 0, 0, 0]);
+''')

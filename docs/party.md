@@ -55,8 +55,25 @@ Your hero starts at level 1 with nothing granted for past work. It earns XP only
 later day, and 20 more when the lesson becomes yours. Answers you gave before the hero existed count too. A wrong answer
 or time away takes nothing away. The hero card shows your level, the lessons you understood and owned, and each of your
 path's modules with how many of its lessons you understood toward its gate (five open it) and your rank there against
-the path's target. Ranks rise only at a module's gate, with your own work; gates come in a later release
-([design](design/innerlatch.md)).
+the path's target. Ranks rise only at a module's gate, with your own work (see [Gates](#gates)). On the field your
+hero leads the party.
+
+### Gates
+
+Five lessons understood in a module open its **gate**: its sign on the field becomes a stone arch marked ⚔, and the hero
+card lists it under **Gates open**. Walk up to the arch, or click the card's link, to face it. A gate asks for the next
+rank's evidence on the career roadmap's scale, against the module's practice task and pass check:
+
+- **Rank 1:** explain the concept and where it stops working, in your own words.
+- **Rank 2:** link one of your own pull requests, commits or documents that Interlatch found in your sessions, and say
+  how it meets the check: what you decided, reviewed or verified.
+- **Rank 3:** the same, plus what came of it: tests that now pass, a measured result, an incident closed.
+- **Rank 4:** several decisions of yours that others adopted, from at least two projects.
+
+The analysis model reads your answer and your work's titles and session summaries (not its code) and says **passed**,
+or **not yet** with what is missing. A pass raises your rank in the module, gives your hero 50 XP times the rank, and
+opens the next rank's gate. A gate not passed opens again tomorrow. Ranks never fall. Gates are taken on your own
+computer, and your answers stay there ([design](design/innerlatch.md)).
 
 Your agents are your **companions**, listed under the hero. Their levels show what their lessons cover; they never
 move yours, and yours never moves theirs. Your hero, your answers and your path are kept on this computer: signed in to

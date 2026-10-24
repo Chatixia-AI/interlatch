@@ -61,11 +61,9 @@ carefully.
   sessions, not by asking, and every per-person measure stays on your computer
   ([design](docs/design/learning.md)).
 - **You as the hero, toward a real job.** In Innerlatch's Adventure, the lessons you answer right in study
-  battles already count toward your readiness in each roadmap module, kept on your computer. Still to come, one step
-  at a time: a character you make, on a career path you choose (or the Generalist path), levelling up from what you
-  answer, with your agents as companions; gate bosses, where you link one of your own pull requests or commits and say
-  how it meets the module's check, and the analysis model's verdict raises your rank in that module; and a job
-  description you paste as the goal, mapped to the modules and ranks it asks for
+  battles count toward your readiness in each roadmap module, your hero levels up from them, and at a module's gate
+  your own words and work, judged by the analysis model, raise your rank there. Still to come: a job description you
+  paste as the goal, mapped to the modules and ranks it asks for
   ([design](docs/design/innerlatch.md#2-the-hero)).
 - **Teammates' lessons, by person and side by side.** They show on project pages and in **All knowledge**, marked
   with the computers they came from. Still to come: the person's name instead of the computer's, teammates' lessons

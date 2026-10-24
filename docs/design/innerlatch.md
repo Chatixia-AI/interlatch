@@ -2,8 +2,8 @@
 
 [← Roadmap](../../ROADMAP.md) · 日本語: [ja/innerlatch.md](ja/innerlatch.md) · Related: [lessons people learn from](learning.md)
 
-Status: study battles built in 0.27.3 (2026-10-18). The hero (section 2), gate bosses (section 7) and the job goal
-(section 8) are planned, in the order of section 10. The user guide is [Adventure](../party.md#adventure).
+Status: study battles built in 0.27.3 (2026-10-18); the hero (section 2) and gate bosses (section 7) built in October
+2026. The job goal (section 8) is planned, next in the order of section 10. The user guide is [Adventure](../party.md#adventure).
 
 Innerlatch is the game behind the door at the bottom of the dashboard's rail. **You are the hero:** a character you
 make, on a career path you choose, who beats the lessons of your own past work and levels up toward a real job. Your
@@ -225,16 +225,17 @@ Built:
 - `src/interlatch/web/battle.js`: the battle; a study battle's rules are pure and tested in Node.
 - `GET /api/party/ask` sends the scene, the question and the answers' texts, never which is right;
   `POST /api/party/pick` checks the first pick on the server.
+- `src/interlatch/knowledge/hero.py`: the hero's sheet (name and look; the path is the Party's goal, a track or
+  `generalist`), the Generalist path, XP and level from the study record and the gates. The `hero` block of
+  `GET /api/party`; `POST /api/party/hero`. `Sprites.heroKey(look)` draws the hero like a companion.
+- `src/interlatch/knowledge/gates.py`: which gates are open, what each rank asks, the work to link, the attempt and
+  the model's verdict. `GET`/`POST /api/party/gate`; the map's `gates` puts them on the field.
 
 Planned:
 
-- `knowledge/hero.py`: the hero's sheet (name, look, path), the Generalist path, XP and level from the study record
-  and the gates. `GET`/`POST /api/party/hero`. The path replaces today's `party.goal` track (kept as the starting
-  path when one is set).
-- `knowledge/gates.py`: which gates are open, the attempt and the model's verdict. `POST /api/party/gate`.
 - `knowledge/jobs.py`: the job goals, the model's mapping, the match. `GET`/`POST /api/party/jobs`.
 
-## 7. Next: gate bosses
+## 7. Gate bosses
 
 The rank meter: what you can do in a module, moved only by real work.
 
@@ -252,7 +253,7 @@ The rank meter: what you can do in a module, moved only by real work.
 - **What passing does.** The module's rank rises, on this computer, apart from your companions' levels. The hero gains
   XP, and the hero card shows each module's rank against your path's target. Ranks never fall with time away.
 
-## 8. Then: the job goal
+## 8. Next: the job goal
 
 The goal at the end of the path: a real job you want.
 

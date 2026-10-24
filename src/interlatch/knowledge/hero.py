@@ -50,6 +50,13 @@ def threshold(level: int) -> int:
     return LEVEL_STEP * (level - 1) ** 2
 
 
+def total_xp(conn: sqlite3.Connection, log_: list[dict]) -> int:
+    """The hero's XP: from the study record (xp_of) and from the gates passed (gates.xp_of)."""
+    from . import gates
+
+    return xp_of(log_) + gates.xp_of(gates.attempts_of(conn))
+
+
 def xp_of(log_: list[dict]) -> int:
     """The XP a study record earns (study.studied_of, oldest first): each lesson's first right answer, each right
     answer on a later day, and the day it became owned. One answer a day counts per lesson (the day's last, as
@@ -145,9 +152,10 @@ def save(conn: sqlite3.Connection, viewer: dict | None, name, look) -> dict:
 def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict, *, catalog=None,
          today: date | None = None) -> dict | None:
     """The `hero` block of GET /api/party: None for a person on a hub; {"made": False, looks, suggest} before the hero
-    is made; else the sheet, the level, the path with each module's readiness (and rank, 0 until gates exist) against
-    its target. `data`: the party's compute() payload (its goal is the path, its agents' classes the suggestions)."""
-    from . import party, study
+    is made; else the sheet, the level, the path with each module's readiness, rank and gate (gates.py) against its
+    target, and every gate open now (`gates`, the path's first). `data`: the party's compute() payload (its goal is the
+    path, its agents' classes the suggestions)."""
+    from . import gates, party, study
 
     if viewer is not None:
         return None
@@ -166,16 +174,25 @@ def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict
     log_ = study.studied_of(conn, sc.key)
     sched = study.schedule(log_, today or utcnow().date())
     ready = study.readiness(counted, cat, log_)
-    xp = xp_of(log_)
+    tried = gates.attempts_of(conn)
+    xp = xp_of(log_) + gates.xp_of(tried)
     lv = level_of(xp)
     goal = data.get("goal")
     path_id = goal["id"] if goal and goal.get("chosen") else None
+    day = today or utcnow().date()
+    gate = {m["id"]: gates.state(m["id"], ready.get(m["id"], 0), tried, day) for m in cat.modules}
+    gate_of = lambda mid: {k: gate[mid][k] for k in ("next", "open", "resting")}  # noqa: E731
     modules = [{**m, "name": party._t(cat.module[m["id"]], "name"), "attr": cat.module[m["id"]].get("attr"),
-                "ready": ready.get(m["id"], 0), "rank": 0} for m in path_modules(cat, path_id)]
+                "ready": ready.get(m["id"], 0), "rank": gate[m["id"]]["rank"], "gate": gate_of(m["id"])}
+               for m in path_modules(cat, path_id)]
+    on_path = {m["id"] for m in modules}
+    open_now = sorted((mid for mid, g in gate.items() if g["open"]), key=lambda mid: (mid not in on_path, cat.module_index[mid]))
     return {"made": True, **sheet, "looks": LOOK, "name_max": NAME_MAX, "suggest": suggest,
             "level": lv, "xp": xp, "level_xp": threshold(lv), "next_xp": threshold(lv + 1),
             "understood": len(study.understood(log_)), "owned": sum(1 for x in sched.values() if x["owned"]),
-            "ready_at": study.READY_AT,
+            "ready_at": study.READY_AT, "ranks": sum(g["rank"] for g in gate.values()),
+            "gates": [{"module": mid, "name": party._t(cat.module[mid], "name"), "attr": cat.module[mid].get("attr"),
+                       "rank": gate[mid]["next"]} for mid in open_now],
             "path": {"id": path_id, "name": goal["name"], "generalist": path_id == GENERALIST, "modules": modules}
             if path_id else None,
             "generalist": {"id": GENERALIST, "name": tr("Generalist"), "modules": len(generalist(cat))}}

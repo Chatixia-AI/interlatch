@@ -41,7 +41,7 @@ def test_the_map_has_every_region_and_module_and_every_counted_lesson_oldest_fir
     last = _lesson(conn, new, "deploy it", agent="codex", project="/Users/test/Projects/other-app")
     data = party.adventure_map(conn, here)
     assert set(data) == {"regions", "lessons", "cleared", "bosses", "newest", "agents", "gold", "towns", "goal", "understood",
-                         "back", "owned", "readiness", "ready_at", "studying"}
+                         "back", "owned", "readiness", "ready_at", "studying", "gates"}
     assert [r["id"] for r in data["regions"]] == list(ATTRS)
     craft = data["regions"][0]
     assert {k: craft[k] for k in ("name", "about")} == {"name": "Craft", "about": "about craft"}
