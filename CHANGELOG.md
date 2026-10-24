@@ -3,6 +3,23 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.0 (2026-10-24)
+
+- **You are the hero in Innerlatch:** the Party now starts with a character you make (a name and a pixel look) on a
+  career path you choose: a roadmap track, or the Generalist path of the modules most tracks share. Your hero levels
+  up only from the lessons you answer right in study battles (past answers count too), and shows your readiness in each
+  of your path's modules. Your coding agents become your companions, their levels unchanged
+  ([You, the hero](docs/party.md#you-the-hero)).
+- **Gate bosses in Innerlatch:** five lessons understood in a module open its gate, a stone arch on the field and a
+  link on your hero's card. Rank 1 asks for an explanation in your own words; ranks 2 to 4 for your own pull requests,
+  commits or documents and what they show. The analysis model judges it against the module's check: a pass raises your
+  rank there and your hero's XP, a "not yet" says what's missing and the gate opens again tomorrow. Your hero now leads
+  the party on the field ([Gates](docs/party.md#gates)).
+- **A job goal in Innerlatch:** paste a real job description and your analysis model maps it to the roadmap modules
+  and ranks it asks for, each with the line it came from; what the roadmap doesn't cover is listed apart. The job is a
+  castle whose towers light only with the ranks you show at gates, with the track that fits it best and the gates to
+  take next; its modules lead the field ([Job goal](docs/party.md#job-goal)).
+
 ## 0.28.8 (2026-10-22)
 
 - **A sign-in page that looks like Interlatch:** opening a hub's sign-in or invite link now shows the dashboard's own
