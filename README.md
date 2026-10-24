@@ -19,6 +19,7 @@ claude.ai and ChatGPT chats, recorded on your own machine, and every lesson in t
   <a href="https://interlatch.com/docs/"><img src="https://github.com/Chatixia-AI/interlatch/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs"></a>
   <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit" alt="pre-commit"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="https://m8ven.ai/mcp/chatixia-ai-agents-chronicle-8w5jax?s=readme"><img src="https://m8ven.ai/badge/mcp/chatixia-ai-agents-chronicle-8w5jax?v=d3bab6f30bbe1b090e8df6b20c71bec9" alt="M8ven Score"></a>
 </p>
 
 <p align="center"><a href="#quick-start">Quick start</a> · <a href="docs/README.md">Docs</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="ROADMAP.md">Roadmap</a> · <a href="README.ja.md">日本語</a></p>
