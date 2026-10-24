@@ -60,6 +60,13 @@ from the [demo data](docs/development.md#demo-data):
   vocabulary drawn as a mindmap, and a weekly review you can take in at a glance. ⌘K jumps anywhere.
 - **A map of your systems.** Every project as a system with its parts (UI, API, database, CI, where it is deployed)
   and the links between projects, drawn from your manifests and what sessions did, each with the evidence behind it.
+- **A mindmap for each project group.** Put related projects in a group and press **Analyze**: the analyzer checks
+  the links your glossary lists between the group's terms, keeps the real ones and names each ("uses as broker",
+  "runs on"). It never adds one ([Project groups](docs/dashboard.md#project-groups)).
+- **A career path, if you want a game.** Turn on game mode and you are the hero of an RPG made from your own sessions:
+  choose a path among 65 roadmap tracks, level up by answering questions on your past lessons, earn ranks at gates with
+  your own work, and paste a job description to see which of its requirements you meet. Off until you turn it on
+  ([Innerlatch](docs/party.md#you-the-hero)).
 - **What your agents made, in one place.** The documents, pages, diagrams, decks, pull requests and commits from every
   session, each linked to the session that made it and marked when the file has changed or is gone.
 - **On your phone and your other computers.** Open the dashboard on your phone through Tailscale, and keep every
@@ -118,6 +125,8 @@ or Codex, whichever you choose. [Sources](docs/sources.md) has the details for e
 | --- | --- | --- |
 | ![Home: active time, sessions, tokens and cost over 30 days, with a daily chart and outcomes](docs/images/home.png) | ![The Map: the glossary as a mindmap, opened to a term with its definition, uses and sources](docs/images/map.png) | ![The ⌘K palette searching sessions, knowledge and glossary terms](docs/images/palette.png) |
 | **Home.** Active time, sessions, tokens and estimated cost, day by day. | **Map.** Your glossary as a mindmap; each term opens into the knowledge and sessions behind it. | **⌘K.** One search over sessions, knowledge, projects, terms and commands. |
+| ![A project group's Connections: Celery in the middle, its links to Redis, Dunning and visibility_timeout named by the analyzer](docs/images/group-connections.png) | ![Innerlatch's hero card: level, the Backend engineer path, ranks in each of its modules and an open gate](docs/images/hero.png) | ![A job goal as a castle: one tower per requirement, lit where your rank meets it](docs/images/job-goal.png) |
+| **Group mindmap.** A project group's terms and the links between them, each checked and named by the analyzer. | **Career path.** In game mode, you are the hero: your level, your path and your rank in each of its modules. | **Job goal.** A pasted job description as a castle; a tower lights when your rank at a gate meets what it asks. |
 
 Screenshots use made-up [demo data](docs/development.md#demo-data).
 
