@@ -256,12 +256,17 @@ def attempt(conn: sqlite3.Connection, cfg: Config, cat, here_id: str, module, ar
 
 # ------------------------------------------------------------------ for the dashboard
 def readiness(conn: sqlite3.Connection, cat, here_id: str) -> dict[str, int]:
-    """Lessons understood per module on this computer (study.readiness over the person's counted lessons)."""
-    from . import party, study
+    """Lessons understood per module on this computer (study.readiness over the person's counted lessons), with the
+    job monsters understood there (jobprep.py)."""
+    from . import jobprep, party, study
 
     sc = party._scope_of(conn, here_id, None)
     counted = [k for k in party.lessons_in(conn, cat, sc) if k.modules]
-    return study.readiness(counted, cat, study.studied_of(conn, sc.key))
+    return _plus(study.readiness(counted, cat, study.studied_of(conn, sc.key)), jobprep.readiness(conn))
+
+
+def _plus(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
+    return {k: a.get(k, 0) + b.get(k, 0) for k in {*a, *b}}
 
 
 def view(conn: sqlite3.Connection, cat, here_id: str, module: str, *, today: date | None = None) -> dict | None:

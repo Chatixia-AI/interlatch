@@ -60,12 +60,6 @@ carefully.
   getting every lesson. Whether it works is measured by recall and by whether the same gotcha comes back in your
   sessions, not by asking, and every per-person measure stays on your computer
   ([design](docs/design/learning.md)).
-- **You as the hero, toward a real job.** In Innerlatch's Adventure, the lessons you answer right in study
-  battles count toward your readiness in each roadmap module, your hero levels up from them, and at a module's gate
-  your own words and work, judged by the analysis model, raise your rank there; a job description you paste is the
-  goal, mapped to the modules and ranks it asks for. Still to come: interview questions written from that job and
-  your own past work, as its final boss
-  ([design](docs/design/innerlatch.md#2-the-hero)).
 - **Teammates' lessons, by person and side by side.** They show on project pages and in **All knowledge**, marked
   with the computers they came from. Still to come: the person's name instead of the computer's, teammates' lessons
   in the weekly review, and a lesson two people stated shown as both their cases

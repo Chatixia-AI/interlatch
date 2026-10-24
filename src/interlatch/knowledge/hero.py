@@ -52,9 +52,9 @@ def threshold(level: int) -> int:
 
 def total_xp(conn: sqlite3.Connection, log_: list[dict]) -> int:
     """The hero's XP: from the study record (xp_of) and from the gates passed (gates.xp_of)."""
-    from . import gates
+    from . import gates, jobprep
 
-    return xp_of(log_) + gates.xp_of(gates.attempts_of(conn))
+    return xp_of(log_) + xp_of(jobprep.log_of(conn)) + gates.xp_of(gates.attempts_of(conn))
 
 
 def xp_of(log_: list[dict]) -> int:
@@ -168,7 +168,7 @@ def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict
     is made; else the sheet, the level, the path with each module's readiness, rank and gate (gates.py) against its
     target, and every gate open now (`gates`, the path's first). `data`: the party's compute() payload (its goal is the
     path, its agents' classes the suggestions)."""
-    from . import gates, jobs, party, study
+    from . import gates, jobprep, jobs, party, study
 
     if viewer is not None:
         return None
@@ -186,9 +186,9 @@ def view(conn: sqlite3.Connection, here_id: str, viewer: dict | None, data: dict
     counted = [k for k in party.lessons_in(conn, cat, sc) if k.modules]
     log_ = study.studied_of(conn, sc.key)
     sched = study.schedule(log_, today or utcnow().date())
-    ready = study.readiness(counted, cat, log_)
+    ready = gates._plus(study.readiness(counted, cat, log_), jobprep.readiness(conn))  # job monsters count too
     tried = gates.attempts_of(conn)
-    xp = xp_of(log_) + gates.xp_of(tried)
+    xp = xp_of(log_) + xp_of(jobprep.log_of(conn)) + gates.xp_of(tried)
     lv = level_of(xp)
     goal = data.get("goal")
     path_id = goal["id"] if goal and goal.get("chosen") else None

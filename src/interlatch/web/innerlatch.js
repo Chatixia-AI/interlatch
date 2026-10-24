@@ -894,7 +894,7 @@ route(/^\/innerlatch\/gate\/([\w-]+)$/, async (params, module) => {
 
 // ------------------------------------------------------------------ #/innerlatch/job: the job goal (jobs.py). A pasted job
 // description mapped to the roadmap; the active one is a castle whose towers light with the ranks you show at gates.
-function castleArt(towers, scale = 3) { // one tower per requirement (a must-have stands taller), lit once its rank is shown
+function castleArt(towers, scale = 3, crowned = false) { // one tower per requirement (a must-have stands taller), lit once its rank is shown; crowned: its interview beaten
   const n = Math.max(1, towers.length), TW = 12, GAP = 3, H = 44, W = n * (TW + GAP) + GAP + 8;
   const c = h("canvas", { class: "jb-castle-art", width: W * scale, height: H * scale, role: "img",
     "aria-label": t("{a} of {b} towers lit", { a: towers.filter((x) => x.lit).length, b: towers.length }) });
@@ -913,6 +913,10 @@ function castleArt(towers, scale = 3) { // one tower per requirement (a must-hav
     px(x + 4, top + 6, 4, 5, tw.lit ? "#ffd66b" : "#3a3550"); // a window, lit or not
     if (tw.lit) { px(x + 5, top - 9, 1, 7, rim); px(x + 6, top - 9, 4, 3, "#e0663f"); } // a flag
   });
+  if (crowned) { // a gold crown over the gate
+    const cx = Math.floor(W / 2) - 4;
+    px(cx, 22, 9, 3, "#f6c445"); px(cx, 19, 1, 3, "#f6c445"); px(cx + 4, 18, 1, 4, "#f6c445"); px(cx + 8, 19, 1, 3, "#f6c445");
+  }
   return c;
 }
 function jobTower(tw) {
@@ -974,6 +978,68 @@ function jobHandEditor(J, job, draw, cancel) { // the requirements picked by han
     h("div", { class: "gt-actions" }, h("button", { class: "btn small", type: "button", onclick: () => { if (rows.children.length < J.limits.requirements) row(); } }, t("Add a requirement")),
       save, h("button", { class: "btn", type: "button", onclick: cancel }, t("Cancel"))));
 }
+// ---- the final boss: the job's interview (interview.py), on the job's page
+const GRADE_LABEL = { strong: t("Strong"), fair: t("Fair"), weak: t("Weak") };
+function interviewSitting(qs, answers, grades) { // each question, your answer, the interviewer's grade and a better one
+  return h("ol", { class: "iv-qs" }, qs.map((q, i) => {
+    const g = grades?.[i];
+    return h("li", { class: "iv-q" }, h("p", { class: "iv-question" }, q),
+      g ? [h("div", { class: "iv-grade-row" }, h("span", { class: `iv-grade g-${g.grade}` }, GRADE_LABEL[g.grade] || g.grade), h("span", null, g.feedback)),
+        h("details", null, h("summary", null, t("Your answer, and how to answer it better")),
+          answers?.[i] ? h("p", null, answers[i]) : null,
+          g.look_for?.length ? h("div", { class: "muted small" }, t("A strong answer covers: {list}", { list: g.look_for.join(LANG === "ja" ? "、" : "; ") })) : null,
+          g.better ? h("p", { class: "iv-better" }, h("span", { class: "px-label" }, t("A stronger answer")), g.better) : null)] : null);
+  }));
+}
+function interviewCard(I, redraw) {
+  const state = I.beaten ? h("span", { class: "iv-state beaten" }, "♛ ", t("Beaten"))
+    : I.awake ? h("span", { class: "iv-state awake" }, t("Awake")) : h("span", { class: "iv-state" }, t("Practice"));
+  const intro = I.beaten ? t("You beat this job's interview. Sit it again any day to keep in practice.")
+    : I.awake ? t("Every must-have tower is lit: the interviewer is awake. {n} strong answers and none weak beat it.", { n: I.limits.beat_strong })
+      : t("Practice until every must-have tower is lit ({a}/{b}); then the interview counts.", { a: I.must_lit, b: I.must });
+  const body = [];
+  if (I.pending) {
+    const boxes = I.pending.questions.map((q) => h("textarea", { class: "gt-text", rows: 4, maxlength: String(I.limits.answer_max),
+      placeholder: t("Answer as you would in the interview."), "aria-label": q.question }));
+    const go_ = h("button", { class: "btn primary", type: "submit" }, t("Give your answers"));
+    const busy = h("p", { class: "muted small", hidden: true }, t("The interviewer is reading your answers…"));
+    body.push(h("form", { class: "iv-form", onsubmit: async (e) => {
+      e.preventDefault();
+      if (boxes.some((b) => b.value.trim().length < I.limits.answer_min)) { toast(t("Answer every question in a few sentences.")); return; }
+      go_.disabled = true; busy.hidden = false;
+      const r = await lbPost("/api/party/interview", { action: "answer", answers: boxes.map((b) => b.value) });
+      busy.hidden = true; go_.disabled = false;
+      if (!r) return;
+      toast(r.result.beaten ? t("You beat the interview!") : t("{n} of {of} answers strong.", { n: r.result.strong, of: r.result.grades.length }));
+      redraw(r.interview);
+    } },
+      h("ol", { class: "iv-qs" }, I.pending.questions.map((q, i) => h("li", { class: "iv-q" },
+        h("p", { class: "iv-question" }, q.question, h("small", { class: "muted" }, ` · ${q.name} · ${t("Rank {n}", { n: q.rank })}`)), boxes[i]))),
+      h("div", { class: "gt-actions" }, go_), busy));
+  } else if (I.resting) body.push(h("p", { class: "gt-state" }, t("You sat it today. The interviewer is back tomorrow with new questions.")));
+  else {
+    const start = h("button", { class: "btn primary", type: "button", onclick: async () => {
+      start.disabled = true; busy.hidden = false;
+      const r = await lbPost("/api/party/interview", { action: "start" });
+      busy.hidden = true; start.disabled = false;
+      if (r) redraw(r.interview);
+    } }, I.sittings ? t("Sit it again") : t("Start the interview"));
+    const busy = h("p", { class: "muted small", hidden: true }, t("The interviewer is writing your questions from the job and your own past work…"));
+    body.push(h("div", { class: "gt-actions" }, start), busy);
+  }
+  if (I.last && !I.pending) body.push(h("div", { class: "iv-last" },
+    h("span", { class: "px-label" }, t("Last sitting · {date}", { date: fmtDateY(partyDay(I.last.on)) })),
+    interviewSitting(I.last.questions, I.last.answers, I.last.grades)));
+  return h("section", { class: "iv-card" },
+    h("div", { class: "iv-head" }, h("div", null, h("span", { class: "px-label" }, t("Final boss")), h("h3", null, t("The interview"))), state),
+    h("p", { class: "muted" }, intro), body);
+}
+function interviewSlot() { // the job page's interview, fetched once the page shows
+  const slot = h("div", { class: "iv-slot" });
+  const redraw = (I) => slot.replaceChildren(I?.job ? interviewCard(I, redraw) : "");
+  api("/api/party/interview").then(redraw, (e) => slot.replaceChildren(h("p", { class: "muted small" }, e.message)));
+  return slot;
+}
 function jobCard(J, p, draw, mode) {
   const job = J.job;
   const act = async (body, btn, done) => {
@@ -993,21 +1059,27 @@ function jobCard(J, p, draw, mode) {
     if (r) { partyRefresh(r); toast(t("Your path now follows {track}.", { track: track.name })); render(); }
   } }, t("Follow this track")) : null;
   const head = h("div", { class: "jb-head" },
-    h("div", null, h("span", { class: "px-label" }, t("Job goal")), h("h2", null, job.title || t("A job")),
+    h("div", null, h("span", { class: "px-label" }, t("Job goal")), h("h2", null, job.title || t("A job"),
+      job.crowned ? h("span", { class: "jb-crown", title: t("You beat this job's interview") }, " ♛") : null),
       job.company ? h("div", { class: "muted" }, job.company) : null), tools);
   if (mode === "hand") return h("div", { class: "gt" }, h("section", { class: "card jb-card px-frame" }, head), jobHandEditor(J, job, draw, () => draw(J)));
   const body = !job.towers.length
     ? h("p", { class: "gt-state" }, job.unmapped ? t("Not mapped yet: {reason}. Map it again, or pick its requirements by hand.", { reason: job.unmapped })
       : t("No requirements yet: map it again, or pick them by hand."))
-    : [h("div", { class: "jb-castle" }, h("div", { class: "jb-castle-stage px-stage" }, castleArt(job.towers)),
+    : [h("div", { class: "jb-castle" }, h("div", { class: "jb-castle-stage px-stage" }, castleArt(job.towers, 3, job.crowned)),
         h("div", { class: "jb-score" },
           h("div", null, h("b", { class: "jb-big" }, `${job.must_lit}/${job.must}`), h("span", null, t("must-haves lit"))),
           h("div", null, h("b", { class: "jb-big" }, fmtNum(job.to_go)), h("span", null, t("ranks still to go"))),
           track ? h("div", { class: "jb-track" }, h("span", { class: "px-label" }, t("Fits best")),
             h("b", null, track.name), h("span", { class: "muted small" }, onPath ? t("Your path already") : t("covers {a} of {b} requirements", { a: track.covers, b: track.of })), follow) : null)),
+      job.monsters ? h("p", { class: "jb-monsters" }, h("span", { "aria-hidden": "true" }, "♜ "),
+        job.monsters.out ? t("{n} job monsters roam the field for this job: right answers count toward their towers' gates.", { n: fmtNum(job.monsters.out) })
+          : t("Its monsters are being summoned."),
+        jobNext(job) ? [" ", h("a", { href: `#/innerlatch/adventure/field/${jobNext(job).attr}` }, t("Hunt for {module}", { module: jobNext(job).name }))] : null) : null,
       job.next?.length ? h("div", { class: "hc-gates jb-next" }, h("span", { class: "px-label" }, t("Gates to take next")),
         job.next.map((g) => h("a", { class: "hc-gate-chip", href: `#/innerlatch/gate/${g.module}` }, h("span", null, g.name), h("b", null, t("Rank {n}", { n: g.rank }))))) : null,
       h("ol", { class: "jb-towers" }, job.towers.map(jobTower)),
+      interviewSlot(),
       job.outside?.length ? h("div", { class: "jb-outside" }, h("span", { class: "px-label" }, t("Outside the game")),
         h("ul", null, job.outside.map((o) => h("li", { title: o.quote }, o.text)))) : null,
       h("p", { class: "muted small" }, job.by === "hand" ? t("Requirements picked by hand.") : t("Mapped by your analysis model. A tower lights when your rank in its module, shown at its gate, reaches what the job asks."))];
@@ -1024,6 +1096,17 @@ route(/^\/innerlatch\/job$/, async () => {
     return partyShell(t("Job goal"), null, h("section", { class: "card empty" }, e.message));
   }
   const box = h("div", { class: "jb" });
+  const summon = h("p", { class: "jb-summon muted small", hidden: true });
+  const summoned = new Set(); // once a visit for each job: one the model can't write for stays without, not looping
+  const forgeAll = (JJ) => { // while a requirement has no monsters of its own yet: write them, saying which
+    if (!JJ.job?.monsters?.pending || summoned.has(JJ.job.id)) return;
+    summoned.add(JJ.job.id);
+    summon.hidden = false;
+    summon.textContent = t("Summoning job monsters for {n} requirements…", { n: JJ.job.monsters.pending });
+    prepForge((r) => { summon.textContent = r.left ? t("{module}: {n} monsters out. Summoning the rest ({left} to go)…", { module: J.modules.find((x) => x.id === r.module)?.name || r.module, n: r.made, left: r.left })
+      : t("{module}: {n} monsters out. Every requirement has its monsters on the field.", { module: J.modules.find((x) => x.id === r.module)?.name || r.module, n: r.made }); })
+      .then(() => api("/api/party/jobs").then((n) => { J = n; draw(n); }).catch(() => {}));
+  };
   const draw = (JJ, mode = null) => {
     const tabs = JJ.jobs.length ? h("div", { class: "pd-tabs jb-tabs", role: "tablist" },
       JJ.jobs.map((j) => h("button", { class: `pd-tab${j.id === JJ.active && mode !== "add" ? " on" : ""}`, type: "button", role: "tab",
@@ -1033,7 +1116,9 @@ route(/^\/innerlatch\/job$/, async () => {
           if (r) { partyCache = null; mapCache = null; draw(r); }
         } }, h("span", null, [j.title || t("A job"), j.company].filter(Boolean).join(" · ")))),
       JJ.jobs.length < JJ.limits.jobs ? h("button", { class: `pd-tab pd-new${mode === "add" ? " on" : ""}`, type: "button", onclick: () => draw(JJ, "add") }, t("+ Add a job")) : null) : null;
-    box.replaceChildren(...[tabs, !JJ.job || mode === "add" ? jobAddForm(JJ, draw, { cancel: JJ.job ? () => draw(JJ) : null }) : jobCard(JJ, p, draw, mode)].filter(Boolean));
+    box.replaceChildren(...[tabs, summon, !JJ.job || mode === "add" ? jobAddForm(JJ, draw, { cancel: JJ.job ? () => draw(JJ) : null }) : jobCard(JJ, p, draw, mode)].filter(Boolean));
+    if (JJ.job?.monsters?.pending && !prepForging) forgeAll(JJ);
+    else if (!prepForging) summon.hidden = true;
   };
   draw(J);
   return partyShell(t("Job goal"), t("The job at the end of your path. Its towers light only with ranks you show at gates; your hero's level doesn't count."), box);
@@ -1750,6 +1835,8 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
           } else if (item.type === "region") showTip(where, item.region.name, item.region.about || null);
           else if (item.type === "party") showTip(where, t("Your party"), t("Where the newest lesson was learned"));
           else if (item.type === "town") showTip(where, item.town?.name || item.region.name, item.region.name, t("A shop: gear for this region's skills, and supplies"));
+          else if (item.type === "job") showTip(where, `♜ ${item.tower.name}`, item.job.title, item.tower.lit ? t("Lit: rank {n} shown", { n: item.tower.have })
+            : t("Needs rank {n} (you have {h}) · {r}/5 toward its gate · click to hunt there", { n: item.tower.rank, h: item.tower.have, r: Math.min(item.tower.ready, 5) }));
           else hideTip();
         },
         onPick: (item) => {
@@ -1759,6 +1846,7 @@ route(/^\/innerlatch\/adventure$/, async (params) => {
             else go(`#/innerlatch/adventure/battle/${item.lesson.id}`);
           } else if (item?.type === "boss") go(`#/innerlatch/adventure/boss/${item.boss.n}`);
           else if (item?.type === "town") go(`#/innerlatch/adventure/town/${item.region.id}`);
+          else if (item?.type === "job") go(item.tower.gate && !item.tower.lit ? `#/innerlatch/gate/${item.tower.module}` : `#/innerlatch/adventure/field/${item.tower.attr}`);
         } });
     } catch (e) { host.replaceChildren(h("div", { class: "card empty" }, t("Could not load: {error}", { error: e.message }))); return; }
     if (params.lesson) world.focusLesson?.(Number(params.lesson));
@@ -1868,6 +1956,67 @@ function advBattleLabels() { // the battle engine's words (battle.js LABELS); th
     "studyPartly": t("Partly there: it comes back tomorrow so you can try again."), "studyNot": t("Not yet: it comes back tomorrow."),
     "studyNone": t("You didn't answer this one: it stays open for you."), "principleTitle": t("The principle") };
 }
+// ---- the active job's monsters (jobprep.py): the strip over a field, making them, and their battles
+function jobNext(job) { // the tower to work on next: an unlit must-have first, the closest to its gate first
+  const open = (job?.towers || []).filter((x) => !x.lit);
+  return open.sort((a, b) => (b.must - a.must) || (b.ready - a.ready))[0] || null;
+}
+function jobStrip(m, attr) {
+  const pr = m.prep, job = pr?.job;
+  if (!job) return null;
+  const next = jobNext(job), lit = job.towers.filter((x) => x.lit).length;
+  const here = (pr.lessons || []).filter((l) => (m.regions || []).find((r) => r.id === attr)?.modules.some((x) => x.id === l.modules[0])).length;
+  return h("div", { class: "jb-strip" }, h("span", { class: "jb-strip-icon", "aria-hidden": "true" }, "♜"),
+    h("a", { href: "#/innerlatch/job" }, h("b", null, job.title)),
+    h("span", { class: "muted" }, t("{a} of {b} towers lit", { a: lit, b: job.towers.length })),
+    next ? h("span", null, t("Next: {module}", { module: next.name }), " ",
+      h("span", { class: "muted" }, next.gate ? t("its gate is open") : t("{n}/5 toward its gate", { n: Math.min(next.ready, 5) })),
+      next.attr !== attr ? [" · ", h("a", { href: `#/innerlatch/adventure/field/${next.attr}` }, t("Go there"))]
+        : next.gate ? [" · ", h("a", { href: `#/innerlatch/gate/${next.module}?field=${attr}` }, t("Face it"))] : null) : null,
+    here ? h("span", { class: "muted" }, tn(here, "{n} job monster in this region", "{n} job monsters in this region")) : null,
+    pr.pending ? h("a", { href: "#/innerlatch/job", class: "muted" }, t("More are being summoned on the job's page")) : null);
+}
+let prepForging = null;
+async function prepForge(onStep) { // write the job's monsters, one requirement a call, until none is left
+  if (prepForging) return prepForging;
+  prepForging = (async () => {
+    for (let i = 0; i < 16; i++) {
+      const r = await lbPost("/api/party/prep", { action: "forge" });
+      if (!r || !r.module) break;
+      mapCache = null;
+      onStep?.(r);
+      if (!r.left) break;
+    }
+  })().finally(() => { prepForging = null; });
+  return prepForging;
+}
+route(/^\/innerlatch\/adventure\/prep\/([\w:%.-]+)$/, async (params, raw) => {
+  const token = renderSeq;
+  const p = await partyGet();
+  if (!p.signed_in) return partyGate(p, token);
+  const id = decodeURIComponent(raw);
+  let got;
+  try { got = await api("/api/party/prep", { id }); } catch (e) {
+    if (e.handled || e.status !== 404) throw e;
+    return partyShell(t("Adventure"), null, h("section", { class: "card empty" }, t("This job monster isn't here any more."), " ",
+      h("a", { href: "#/innerlatch/job" }, t("Job goal"))));
+  }
+  const field = /^\w+$/.test(params.field || "") ? params.field : null;
+  const back = field ? `#/innerlatch/adventure/field/${field}` : "#/innerlatch/job";
+  markFought(id); // off the field until tomorrow, as a lesson is
+  const study = Promise.resolve({ scene: got.ask.scene, question: got.ask.question, options: got.ask.options });
+  const onAnswer = async (choice) => {
+    const r = await post("/api/party/prep", { action: "pick", id, choice });
+    if (!r || r.error) throw new Error(r?.error || t("no verdict came back"));
+    if (mapCache) mapCache.readiness = r.readiness;
+    if (r.hero?.gained > 0) toast(r.hero.level > r.hero.was_level ? t("+{n} XP: your hero reached level {level}!", { n: r.hero.gained, level: r.hero.level })
+      : t("+{n} XP for your hero", { n: r.hero.gained }));
+    return r;
+  };
+  return advBattlePage(async (cb) => ({ encounter: got.encounter, ...cb, onWin: async () => null, study, onAnswer,
+    backLabel: field ? t("Back to the field") : t("Back to the job") }), back,
+  [["Innerlatch", "#/innerlatch"], [t("Adventure"), "#/innerlatch/adventure"], [t("Job monster · {module}", { module: got.encounter.lesson.title })]], token);
+});
 async function advBattlePage(build, back, crumbs, token) {
   setCrumbs(crumbs, token);
   const host = h("div", { class: "adv-battle" });
@@ -1880,7 +2029,11 @@ async function advBattlePage(build, back, crumbs, token) {
   const start = (enc) => {
     try { fight?.destroy?.(); } catch (e) { /* gone */ }
     host.replaceChildren();
-    fight = Battle.mount(host, { ...enc, attempt, labels: { ...advBattleLabels(), ...(enc.backLabel ? { backToMap: enc.backLabel } : {}) }, reducedMotion: stillMotion(),
+    const hx = heroOnField(partyCache?.hero); // your hero stands in front in a lesson's battle; the companions behind
+    const e2 = hx && enc.encounter?.lesson ? { ...enc.encounter, party: [{ ...hx, hero: true, attr_levels: {}, skills: {}, gear: {} }, ...(enc.encounter.party || [])] } : enc.encounter;
+    fight = Battle.mount(host, { ...enc, encounter: e2, attempt, labels: { ...advBattleLabels(), ...(enc.backLabel ? { backToMap: enc.backLabel } : {}),
+      ...(enc.encounter?.lesson?.prep ? { introStudy: t("A wild {monster} appears! It's one of your job goal's monsters: {job}.", { job: enc.encounter.lesson.project || "" }) } : {}) },
+      reducedMotion: stillMotion(),
       formatDate: (at) => fmtDateY(partyDay(at)) });
   };
   const cb = {
@@ -2052,23 +2205,28 @@ route(/^\/innerlatch\/adventure\/field\/(\w+)$/, async (params, attr) => {
       h("a", { class: "btn small", href: `#/innerlatch/adventure/town/${attr}` }, icon("home"), townName(m, attr)),
       h("a", { class: "btn small", href: "#/innerlatch/adventure?view=map" }, icon("map"), t("World map"))));
   const host = h("div", { class: "fd-host" });
-  const page = h("div", { class: "party-page adv-page field" }, head, host,
+  const page = h("div", { class: "party-page adv-page field" }, head, jobStrip(m, attr), host,
     h("p", { class: "muted small adv-note" }, m.studying
       ? t("Your answers count only toward your own readiness, kept on this computer; your agents' levels come from their lessons.")
       : t("Battles don't change levels: an agent's XP comes from its lessons. A win marks the encounter cleared.")));
   whenShown(host, () => {
     let field;
     try {
-      field = Field.mountField(host, { data: { ...m, today: foughtToday() }, region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
+      const pr = m.prep || {}; // the active job's own monsters (jobprep.py) join the lessons
+      field = Field.mountField(host, { data: { ...m, lessons: [...(m.lessons || []), ...(pr.lessons || [])],
+        understood: [...(m.understood || []), ...(pr.understood || [])], back: [...(m.back || []), ...(pr.back || [])], today: foughtToday() },
+        region: attr, labels: fieldLabels(), reducedMotion: stillMotion(), start: fieldSpot(attr),
         hero: heroOnField(p.hero),
         onMove: (at) => keepFieldSpot(attr, at),
-        onEncounter: (lesson) => { hideTip(); go(`#/innerlatch/adventure/battle/${lesson.id}?field=${attr}`); },
+        onEncounter: (lesson) => { hideTip(); go(lesson.prep ? `#/innerlatch/adventure/prep/${encodeURIComponent(lesson.id)}?field=${attr}`
+          : `#/innerlatch/adventure/battle/${lesson.id}?field=${attr}`); },
         onTown: () => { hideTip(); go(`#/innerlatch/adventure/town/${attr}?field=1`); },
         onGate: (zone) => { hideTip(); go(`#/innerlatch/gate/${zone.id}?field=${attr}`); },
         onHover: (item, at) => {
           if (!item) { hideTip(); return; }
           const where = { clientX: at?.x ?? 0, clientY: at?.y ?? 0 }, l = item.lesson;
-          if (item.type === "monster") { // its kind and module, never its title: that can give the answer away
+          if (item.type === "monster" && l.prep) showTip(where, t("Job monster · {module}", { module: l.title }), t("For {job}", { job: l.project }), t("Walk into it to battle"));
+          else if (item.type === "monster") { // its kind and module, never its title: that can give the answer away
             const mod = region.modules.find((x) => x.id === l.modules?.[0]);
             showTip(where, [ADV_KIND_NAME[l.kind] || kindLabel(l.kind), mod?.name].filter(Boolean).join(" · "),
               [l.project, agentName(l.agent), l.at ? fmtDateY(partyDay(l.at)) : null].filter(Boolean).join(" · "),

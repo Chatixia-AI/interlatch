@@ -1167,7 +1167,7 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     town per region (bag.py), and the person's own study: the goal track and its modules, the lessons understood, those
     back for another look and those owned, and how many are understood per module (study.py; empty for a person on a
     hub: their record stays on their computer)."""
-    from . import bag, hero, jobs, study
+    from . import bag, gates, hero, jobprep, jobs, study
 
     cat = catalog or load_catalog()
     sc = _scope_of(conn, here_id, viewer)
@@ -1177,6 +1177,9 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
     studied = study.studied_of(conn, sc.key)
     sched = study.schedule(studied, today or utcnow().date())
     goal = data.get("goal")
+    ready = study.readiness(counted, cat, studied)
+    if viewer is None:  # job monsters understood count toward the gates as lessons do
+        ready = gates._plus(ready, jobprep.readiness(conn))
     there: dict[int, list[int]] = {}  # module index: [lessons, xp] of the lessons that stand in it
     for k in counted:
         got = there.setdefault(k.modules[0], [0, 0])
@@ -1205,11 +1208,12 @@ def adventure_map(conn: sqlite3.Connection, here_id: str, viewer: dict | None = 
         "understood": study.understood(studied),
         "back": [i for i, x in sched.items() if not x["resting"]],  # understood, and come back for another look
         "owned": [i for i, x in sched.items() if x["owned"]],
-        "readiness": study.readiness(counted, cat, studied),
+        "readiness": ready,
         "ready_at": study.READY_AT,
         # each module whose gate can be tried now, and the rank it gives (gates.py; the person's own computer only)
-        "gates": _open_gates(conn, cat, study.readiness(counted, cat, studied), today or utcnow().date())
-        if viewer is None else {},
+        "gates": _open_gates(conn, cat, ready, today or utcnow().date()) if viewer is None else {},
+        # the active job's own monsters, and the person's record of them (jobprep.py; this computer only)
+        "prep": jobprep.monsters(conn, cat, here_id, today=today) if viewer is None else None,
         # the active job goal's modules: they lead the field with the path's (jobs.py; this computer only)
         "job": {"modules": jobs.modules_of(conn)} if viewer is None else {"modules": []},
         "studying": viewer is None,  # study battles (and their record) only at the person's own computer

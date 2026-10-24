@@ -290,6 +290,11 @@
       return out.length ? out : [{ agent: "claude", level: 1, tier: "novice" }];
     }
     const lesson = enc.lesson || {}, who = lesson.agent || (all[0] && all[0].agent) || "claude";
+    const you = all.find((m) => m.hero); // the person's hero (party[i].hero): in front, the lesson's agent beside them
+    if (you) {
+      const rest = all.filter((m) => !m.hero), finder = rest.find((m) => m.agent === who);
+      return [you, ...[finder, ...rest.filter((m) => m !== finder && num(m.level) > 0).sort(byLevel)].filter(Boolean).slice(0, 2)];
+    }
     const lead = all.find((m) => m.agent === who) || { agent: who, level: 1, tier: "novice" };
     const allies = all.filter((m) => m.agent !== lead.agent && num(m.level) > 0).sort(byLevel).slice(0, 2);
     return [lead, ...allies];
@@ -1607,7 +1612,7 @@
       const hr = st.heroes[i], key = `h|${i}|${frame}|${variant}`;
       if (art.has(key)) return art.get(key);
       let src = null;
-      if (S && typeof S.draw === "function" && (!S.AGENTS || S.AGENTS.includes(hr.agent))) {
+      if (S && typeof S.draw === "function" && (!S.AGENTS || S.AGENTS.includes(hr.agent) || String(hr.agent).startsWith("hero-"))) {
         src = blank(1, 1);
         try { S.draw(src, { agent: hr.agent, tier: hr.tier, frame, scale: P }); } catch { src = null; }
       }
