@@ -320,6 +320,55 @@ def action_party_interview(ctx: Context, viewer: dict | None, body: dict, *, her
     return {"result": got, "interview": iv.view(ctx.conn, cat, here_id)}, 200
 
 
+# ------------------------------------------------------------------ job monsters (knowledge/jobprep.py): the enemies the
+# active job brings to the field; only at the person's own computer
+def prep(ctx: Context, viewer: dict | None, q: dict) -> tuple[dict, int]:
+    """GET /api/party/prep?id=<p:…>: one job monster's encounter and its question (never which answer is right)."""
+    from ....knowledge import jobprep
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(jobprep.NOT_HERE)}, 403
+    try:
+        return {"encounter": jobprep.encounter(ctx.conn, pt.load_catalog(), _here_id(ctx), q.get("id") or ""),
+                "ask": jobprep.ask(ctx.conn, q.get("id") or "")}, 200
+    except (jobprep.PrepError, KeyError):
+        return {"error": tr("not found")}, 404
+
+
+def action_party_prep(ctx: Context, viewer: dict | None, body: dict, *, here: bool) -> tuple[dict, int]:
+    """POST /api/party/prep {"action": "forge"} writes the next requirement's monsters (one requirement a call: the
+    page calls again while `left`); {"action": "pick", "id", "choice"} answers one."""
+    from ....knowledge import hero, jobprep, study
+    from ....knowledge import party as pt
+
+    if who(ctx, viewer) is None:
+        return _refused()
+    if viewer is not None:
+        return {"error": tr(jobprep.NOT_HERE)}, 403
+    act = body.get("action")
+    try:
+        if act == "forge":
+            got = jobprep.forge(ctx.conn, ctx.cfg, pt.load_catalog(), _here_id(ctx), here=True)
+            pt.clear_cache()
+            return got, 200
+        if act == "pick":
+            was = hero.total_xp(ctx.conn, study.studied_of(ctx.conn, "here"))
+            got = jobprep.pick(ctx.conn, body.get("id"), body.get("choice"), here=True)
+            out = {**got, "readiness": pt.adventure_map(ctx.conn, _here_id(ctx), viewer)["readiness"]}
+            if hero.load(ctx.conn) is not None:
+                now = hero.total_xp(ctx.conn, study.studied_of(ctx.conn, "here"))
+                out["hero"] = {"xp": now, "gained": now - was, "level": hero.level_of(now), "was_level": hero.level_of(was)}
+            return out, 200
+        return {"error": tr("unknown action")}, 400
+    except jobprep.PrepError as exc:
+        return {"error": tr(exc.template, **exc.kw)}, 400
+    except Exception as exc:  # the model's call failed: nothing was kept
+        return {"error": tr(jobprep.NO_MODEL, reason=str(exc)[:200])}, 502
+
+
 # ------------------------------------------------------------------ the Town & gear (knowledge/bag.py)
 def bag(ctx: Context, viewer: dict | None) -> tuple[dict, int]:
     """GET /api/party/bag: the viewer's gold, items, what each agent wears and the battle stats it adds."""

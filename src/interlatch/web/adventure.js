@@ -16,7 +16,9 @@
        opts.reducedMotion  no idle animation, no camera easing
        opts.onHover(item, at)  item = {type: "party", agents} | {type: "town", ...} | {type: "region", region, module, fog}
                            | null; at = {x, y} in client pixels
-       opts.onPick(item)   click, tap or Enter on the party or a town
+       opts.onPick(item)   click, tap or Enter on the party, a town or a job tower ({type: "job", tower, job})
+       opts.data.prep.job  the active job goal (jobprep.py): each tower a ♜ flag on its module's territory, lit
+                           once its rank is shown; hover and pick report {type: "job", tower, job}
        opts.height         css pixels (otherwise the map fills its host, 320 at least)
        opts.seed           the layout's seed (1)
        opts.onReady()      the land is fully painted (a soft preview shows until then); again after a theme change
@@ -1341,6 +1343,31 @@
         hits.push({ key, x: T.feet.x, y: T.feet.y, box: [T.x, T.y, T.w, T.h], item: () => townItem(r) });
       }
     }
+    // ---- the active job's towers: a flag on each requirement's territory (gold once lit; a must-have flies red)
+    const jobIn = data.prep && data.prep.job && Array.isArray(data.prep.job.towers) ? data.prep.job : null;
+    function drawJob(t) {
+      if (!jobIn) return;
+      for (const tw of jobIn.towers) {
+        const terr = L.territories.find((x) => x.id === tw.module);
+        if (!terr) continue;
+        const c = terr.hole ? { x: terr.hole.x + terr.hole.w - 6, y: terr.hole.y + 8 } : terr.center;
+        const key = "job:" + tw.module, lift = hover === key || focus === key ? 1 : 0;
+        const wave = reduced ? 0 : Math.round(Math.sin(t * 3 + terr.index) * 0.6);
+        const cloth = tw.lit ? "#f6c445" : tw.must ? "#d9532f" : "#6f7891";
+        const k = Math.max(1, 2.2 / S); // zoomed out, the flag keeps its size on screen
+        const q = (v) => Math.round(v * k);
+        rect(c.x - q(5), c.y, q(11), q(3), theme.shadow);
+        if (lift) ring(c.x, c.y, q(12), theme.cta, q(5));
+        const top = c.y - q(30) - lift, w = wave * k;
+        rect(c.x - q(1), top, q(2), q(30), "#4e4963"); // the pole
+        rect(c.x + q(1), top + w, q(13), q(8), "#4e4963"); // the flag, edged
+        rect(c.x + q(1), top + q(1) + w, q(12), q(6), cloth);
+        rect(c.x + q(1), top + q(7) + w, q(9), q(2), cloth);
+        if (tw.lit) rect(c.x - q(2), top - q(3), q(4), q(3), "#fff1b0");
+        text(`♜ ${tw.rank}`, X(c.x + q(7)), Y(top + q(4) + w), { size: 9 * Math.min(k, 1.4), weight: 800, color: tw.lit ? "#5a3a06" : "#ffffff" }); // screen pixels
+        hits.push({ key, x: c.x, y: c.y, box: [c.x - q(6), c.y - q(34), q(22), q(36)], item: () => ({ type: "job", tower: tw, job: { id: jobIn.id, title: jobIn.title } }) });
+      }
+    }
     function propImg(type, bio) {
       const key = `p|${type}|${bio.hue}`;
       if (!art.has(key)) { const d = decoVariant(type, bio, 0); art.set(key, paintArt(d.rows, d.pal, d.flat).cv); }
@@ -1473,6 +1500,7 @@
       // the party's ring goes under everything that stands
       drawGroundMarks(t);
       drawTowns(t);
+      drawJob(t);
       // no creatures on the map: only the party stands on it
       drawParty(t, frame);
       drawLabels();

@@ -267,6 +267,13 @@ The goal at the end of the path: a real job you want.
   card and the Party's sidebar: the world map's layout had no room for it), one tower per requirement. A tower lights
   when your rank reaches what it needs. The match is the must-haves lit out of all must-haves, with the ranks still to
   go; readiness shows apart from it, as gates you could take next.
+- **Job monsters.** A job brings its own enemies, so every requirement has some from the day it's added, one with
+  none of your own lessons included. Per requirement the model writes practice battles (study battles' shape) from the
+  posting's line, the module's study topics and your lessons there; how many follows the gap: 2, plus 2 a rank still
+  to go, plus 2 for a must-have, 2 fewer where you have 10 or more lessons of your own, between 3 and 10. They roam the
+  module's zone marked ♜, come back on the same spacing, and each one understood counts toward the module's gate as a
+  lesson does; ranks still need your own work there. A lit tower's monsters leave. On the world map each requirement is
+  a ♜ flag on its territory that takes you there. `src/interlatch/knowledge/jobprep.py`, `GET`/`POST /api/party/prep`.
 - **Steering the path.** The job suggests the track whose targets fit its requirements best; switching is your call.
   The job's modules lead the field (section 4).
 - **Several jobs.** Keep as many as you like; one is active at a time.

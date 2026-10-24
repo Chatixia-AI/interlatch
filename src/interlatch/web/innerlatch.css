@@ -287,6 +287,12 @@
 .jb-hand-row label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 @container (max-width: 700px) { .jb-castle { grid-template-columns: minmax(0, 1fr); }
   .jb-tower { grid-template-columns: 16px minmax(0, 1fr) 60px 56px; } .jb-must { display: none; } }
+/* the active job over a field, and its monsters (jobprep.py) */
+.jb-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 10px; padding: 7px 12px; font-size: 13px;
+  background: color-mix(in srgb, var(--gold) 10%, var(--surface)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 45%, transparent); }
+.jb-strip-icon { color: var(--gold); font-weight: 700; }
+.jb-monsters { margin: 0; font-size: 13.5px; }
+.jb-summon { margin: 0; }
 /* the interview, the job's final boss (interview.py) */
 .iv-card { display: grid; gap: 8px; padding: 12px 14px; background: var(--surface-2); box-shadow: 0 0 0 2px var(--border-strong); }
 .iv-card > p { margin: 0; max-width: 85ch; font-size: 13.5px; }

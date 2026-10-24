@@ -382,6 +382,8 @@ JA: dict[str, str] = {
     "set a mapped job goal first": "先に、対応づけた仕事の目標を設定してください",
     "you sat this interview today: it opens again tomorrow": "今日この面接を受けました。明日また受けられます",
     "start the interview first": "先に面接を始めてください",
+    "job monsters are fought on your own computer": "仕事のモンスターと戦うのはあなた自身のコンピューターです",
+    "no such job monster": "その仕事のモンスターはいません",
     "answer every question in a few sentences: at least {n} characters each": "どの問いにも数文で答えてください（それぞれ {n} 文字以上）",
     "keep each answer under {n} characters": "答えはそれぞれ {n} 文字以内にしてください",
     "paste the whole job description: at least {n} characters": "求人の説明を全部貼りつけてください（{n} 文字以上）",

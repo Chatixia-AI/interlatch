@@ -75,7 +75,7 @@ PARTY_BODY = {"/api/party/job": 128 * 1024, "/api/party/gate": 32 * 1024, "/api/
 TOO_LARGE = "that's more than it can take: make it shorter"
 # POSTs any person signed in to a hub may make, not only admins: their own Party quest log, goal, cleared encounters,
 # bag and decks (routes.PARTY decides)
-PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/hero", "/api/party/gate", "/api/party/job", "/api/party/interview", "/api/party/cleared", "/api/party/pick", "/api/party/buy",
+PARTY_OWN = ("/api/party/quest", "/api/party/goal", "/api/party/hero", "/api/party/gate", "/api/party/job", "/api/party/interview", "/api/party/prep", "/api/party/cleared", "/api/party/pick", "/api/party/buy",
              "/api/party/sell", "/api/party/equip", "/api/party/use", "/api/party/deck")
 
 log = logging.getLogger("interlatch.server")

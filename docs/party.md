@@ -86,8 +86,20 @@ the mapping fails, or you disagree with it, **Map again** or **Pick by hand**.
 The job is a **castle**, one tower per requirement (a must-have stands taller). A tower lights when your rank in its
 module, shown at its gate, reaches what the job asks: your hero's level never counts. The page shows the must-haves lit,
 the ranks still to go, the gates you could take next, and the track that fits the job best, with **Follow this track**
-to make it your path. The job's modules hold more monsters on the field, marked ♜. Keep up to 20 jobs, one active at a
+to make it your path. The job's zones hold more monsters on the field, marked ♜. Keep up to 20 jobs, one active at a
 time. The description stays on this computer and goes only to your analysis model.
+
+### Job monsters
+
+A job brings its own enemies. When it's added, the model writes practice battles for each requirement, from the
+posting's line, the module's study topics and your own lessons there: more where the gap is bigger (2, plus 2 for each
+rank still to go, plus 2 for a must-have, 2 fewer where you already have plenty of lessons; 3 to 10). The Job goal page
+summons them one requirement at a time. They roam their zones on the field with a gold ♜ over them and fight like study
+battles, and each one you get right counts toward that module's gate, like your own lessons: a requirement you have no
+lessons for still has a way to its gate. Once its tower is lit, its monsters leave. On the world map each requirement is
+a ♜ flag on its territory (red for a must-have, gold once lit); click it to go hunting there, or to its gate when it's
+open. On the field, a strip names the job, the next tower to work on and how close its gate is. Your hero leads the
+party in every battle, with the lesson's agent beside you.
 
 ### The interview
 
