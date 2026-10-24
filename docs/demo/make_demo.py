@@ -4,9 +4,11 @@
     INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 
 It writes synthetic Claude Code transcripts for a fictional developer (five projects, about six weeks), then runs the
-real pipeline over them: sync, analysis, knowledge bases, glossary and weekly reviews. The only stand-in is `claude`:
-a small script that answers each analysis with the hand-written summary and knowledge below, so the demo costs
-nothing and never calls a model. Dates are relative to today, so "Today" in the dashboard is always populated.
+real pipeline over them: sync, analysis, knowledge bases, glossary and weekly reviews. Then a project group with its
+Mindmap analyzed, and game mode on with a hero in Innerlatch: a path, lessons studied, gates passed and a job goal.
+The only stand-in is `claude`: a small script that answers each analysis with the hand-written summary and knowledge
+below, so the demo costs nothing and never calls a model. Dates are relative to today, so "Today" in the dashboard is
+always populated.
 """
 
 from __future__ import annotations
@@ -68,6 +70,10 @@ RICH = [
                 T("Edit", {"file_path": "docs/webhooks.md", "old_string": "", "new_string": "stripe listen"}, "The file was updated",
                   patch=["+## Testing locally", "+", "+    stripe listen --forward-to localhost:8000/webhooks/stripe", "+    stripe trigger invoice.paid"]),
                 ("say", "Added a *Testing locally* section with the Stripe CLI commands."),
+            ]),
+            ("open a PR", [
+                T("Bash", {"command": 'gh pr create --title "Stop double charges when Stripe retries invoice.paid" --fill'},
+                  "https://github.com/acme/billing-api/pull/214"),
             ]),
         ],
         "analysis": {
@@ -283,6 +289,9 @@ FILLERS = [
     ("recommender", 40, "11:10", "Set up the recommender repo", "Set up a new Python project for the recommender with FastAPI and pgvector.",
      ["pyproject.toml", "app/main.py"], "uv run pytest -q", "completed", ["setup", "fastapi", "pgvector"],
      [("fact", "Recommender runs on FastAPI with psycopg 3", "app/main.py serves /similar/{item_id}; pgvector's Python adapter is registered on each psycopg connection.")]),
+    ("billing-api", 13, "10:40", "One active subscription per customer", "Two checkout tabs gave a customer two active subscriptions. Stop that in the database.",
+     ["migrations/versions/2026_one_active_subscription.py"], "uv run pytest tests/test_subscriptions.py -q", "completed", ["postgres", "sql"],
+     [("decision", "A partial unique index allows one active subscription", "`CREATE UNIQUE INDEX ON subscriptions (customer_id) WHERE status = 'active'` in Postgres: the second insert fails with a unique constraint violation inside its transaction, and the API answers 409.")]),
 ]
 
 # Glossary: the terms a pass over each project's knowledge "finds"; `match` words decide which knowledge items cite a term.
@@ -330,6 +339,60 @@ TERMS = [
 ]
 
 WEEKS_REVIEWED = 3
+
+# A project group, analyzed: the stand-in keeps the glossary links named here, with this relation (read from the
+# first term), and drops the rest, as the analyzer drops terms that were only discussed together.
+GROUP = ("Shop", ["billing-api", "storefront", "infra", "recommender"])
+RELATIONS = {
+    ("Terraform", "DynamoDB lock table"): "locks state in", ("Celery", "Dunning"): "runs", ("Celery", "Redis"): "uses as broker",
+    ("visibility_timeout", "Celery"): "redelivers tasks of", ("ALB", "ECS Fargate"): "routes to", ("pgvector", "Embedding"): "stores",
+    ("Stripe CLI", "Stripe"): "forwards webhooks of", ("Proration", "Stripe"): "billed through", ("PgBouncer", "Postgres"): "pools connections to",
+    ("pgvector", "Postgres"): "extension of", ("Playwright", "Web-first assertion"): "retries with", ("Idempotency key", "Stripe"): "dedupes retries of",
+    ("Webhook signature", "Stripe"): "signed by", ("asyncpg", "PgBouncer"): "connects through", ("CloudFront", "Next.js"): "caches assets of",
+    ("Zod", "Next.js"): "validates forms in", ("Feature flag", "Next.js"): "evaluated in", ("Datadog", "ECS Fargate"): "sidecar on",
+    ("GitHub Actions", "OIDC"): "deploys with", ("HNSW", "pgvector"): "index type in", ("processed_events", "Idempotency key"): "stores",
+    ("React Server Components", "Next.js"): "part of", ("Hydration mismatch", "React Server Components"): "error in",
+}
+
+# Innerlatch (game mode): a hero on the Backend engineer path, the demo's strongest class. It has studied the lessons
+# in STUDIED (by title: understood on these days ago, newest last), passed the SQL gate twice, and set a job goal.
+HERO = {"name": "Alex", "look": {"body": 1, "skin": 2, "hair": 3, "hair_color": 1, "outfit": 4, "accessory": 2}, "path": "backend"}
+STUDIED = {  # the five SQL lessons open its gate
+    "Stripe webhook signatures need the raw request body": [11, 10], "Idempotency in Postgres, not Redis": [10, 9],
+    "PgBouncer transaction mode breaks prepared statements": [9, 8], "A partial unique index allows one active subscription": [8],
+    "pgvector similarity search needs an HNSW index": [8], "The index operator class must match the distance operator": [7],
+    "Stripe retries webhooks: dedupe on event.id": [5], "Forward Stripe webhooks to the local API": [4],
+    "Fail Playwright tests on console errors": [3],
+}
+MISSED = ["Use Playwright web-first assertions, not textContent"]  # answered wrong: back on the field
+GATES = [  # (module, days ago, explanation); rank 2 links the webhook PR
+    ("M-sql", 6, "A query plan shows how Postgres reads the tables: an N+1 shows up as one plan run per row, so the "
+                 "fix is one query with a join or selectinload. Indexes help reads and slow writes, and a unique index is "
+                 "the only check that holds under concurrent inserts."),
+    ("M-sql", 2, "The PR records each Stripe event id in processed_events, in the same transaction as the invoice "
+                 "update. A retried webhook hits the primary key and returns 200 without charging. I wrote the replay "
+                 "test that sends the same event twice and checked it fails without the table."),
+]
+JOB = {
+    "title": "Backend Engineer, Payments", "company": "Northwind Commerce",
+    "text": "Backend Engineer, Payments\nNorthwind Commerce is looking for a backend engineer to own our payments and "
+            "subscription services.\n\nWhat you'll do\n- Design and run REST APIs in Python that other teams build on.\n"
+            "- Model data in Postgres and write the SQL behind billing and reporting.\n- Build reliable systems: "
+            "retries, idempotent jobs and queues that recover cleanly.\n- Keep quality high with automated tests and "
+            "code review.\n\nNice to have\n- Experience with OAuth and service-to-service authentication.\n- "
+            "Infrastructure as code with Terraform.\n\nRequirements\n3+ years building production backend services. "
+            "Fluent English.",
+    "mapping": {"title": "Backend Engineer, Payments", "requirements": [
+        {"module": "M-sql", "rank": 2, "must": True, "quote": "Model data in Postgres and write the SQL behind billing and reporting."},
+        {"module": "M-g-webapi", "rank": 2, "must": True, "quote": "Design and run REST APIs in Python that other teams build on."},
+        {"module": "M-python", "rank": 2, "must": True, "quote": "REST APIs in Python"},
+        {"module": "M-systems", "rank": 2, "must": True, "quote": "retries, idempotent jobs and queues that recover cleanly"},
+        {"module": "M-g-quality", "rank": 2, "must": True, "quote": "Keep quality high with automated tests and code review."},
+        {"module": "M-g-identity", "rank": 1, "must": False, "quote": "Experience with OAuth and service-to-service authentication."},
+        {"module": "M-g-iac", "rank": 1, "must": False, "quote": "Infrastructure as code with Terraform."}],
+        "outside": [{"text": "3+ years of backend work", "quote": "3+ years building production backend services."},
+                    {"text": "Fluent English", "quote": "Fluent English."}]},
+}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -428,6 +491,21 @@ def items():
 
 if "into themes" in system:
     data = {"themes": []}
+elif "links between terms" in system:  # a group's Mindmap: keep the links RELATIONS names
+    terms = {t["id"]: t["term"] for t in map(json.loads, re.search(r"<terms>\n(.*?)\n</terms>", prompt, re.S).group(1).splitlines())}
+    links = []
+    for x in map(json.loads, re.search(r"<links>\n(.*?)\n</links>", prompt, re.S).group(1).splitlines()):
+        a, b = x["a"], x["b"]
+        label = SCENARIO["relations"].get(terms[a] + "|" + terms[b])
+        if label is None and terms[b] + "|" + terms[a] in SCENARIO["relations"]:
+            a, b, label = b, a, SCENARIO["relations"][terms[b] + "|" + terms[a]]
+        links.append({"id": x["id"], "keep": label is not None, "from": a, "label": label or ""})
+    data = {"links": links}
+elif "map a job description" in system:
+    data = SCENARIO["job"]["mapping"]
+elif "examiner at one gate" in system:
+    data = {"verdict": "passed", "met": ["Explains why it works and where it stops working"], "missing": [],
+            "feedback": "Clear and in your own words. Next, show what came of the work."}
 elif "glossary" in system:
     terms = []
     for term, cat, definition, match, related in SCENARIO["terms"]:
@@ -506,14 +584,15 @@ def main() -> None:
             "highlights": [knowledge[0][1]], "open_threads": [], "knowledge": knowledge}})
 
     scenario = out / "scenario.json"
-    scenario.write_text(json.dumps({"sessions": sessions, "terms": TERMS, "projects": PROJECTS}))
+    scenario.write_text(json.dumps({"sessions": sessions, "terms": TERMS, "projects": PROJECTS, "job": JOB,
+                                    "relations": {f"{a}|{b}": label for (a, b), label in RELATIONS.items()}}))
     fake = bindir / "claude"
     fake.write_text(FAKE_CLAUDE.replace("{python}", sys.executable).replace("{scenario!r}", repr(str(scenario))))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
     (home / "config.toml").write_text(
         f'[sources]\nclaude_dirs = ["{claude_dir}"]\ncodex_dirs = []\ncopilot_dirs = []\nbob_dirs = []\n\n'
         f'[analysis]\nauto = true\nclaude_bin = "{fake}"\nidle_minutes = 0\nmax_per_run = 100\nconcurrency = 4\n\n'
-        f'[synthesis]\nmin_new_items = 1\n')
+        f'[synthesis]\nmin_new_items = 1\n\n[game]\nenabled = true\n')
 
     # both names: INTERLATCH_HOME wins over CHRONICLE_HOME, so a home set in your shell under either can't leak in
     env = {**os.environ, "INTERLATCH_HOME": str(home), "CHRONICLE_HOME": str(home), "COPILOT_HOME": str(out / "none"),
@@ -529,8 +608,47 @@ def main() -> None:
     for w in range(1, WEEKS_REVIEWED + 1):
         week = (now - timedelta(weeks=w)).strftime("%G-W%V")
         chronicle("review", week)
+    subprocess.run([sys.executable, __file__, "--group-and-hero", str(home)], env=env, check=True)
     print(f"\nDemo ready. Open it with:\n  INTERLATCH_HOME={home} uv run python -m interlatch ui --port 8898 --open")
 
 
+def group_and_hero(home: Path) -> None:
+    """The Shop group with its Mindmap analyzed, and Innerlatch's hero: a fake Google sign-in kept off the
+    leaderboard, the path, the lessons studied, the SQL gate passed and the job goal. Run in the demo's environment;
+    the stand-in `claude` answers the analysis, the gates and the job mapping."""
+    from interlatch.core.config import load_config
+    from interlatch.core.machine import local_machine_id
+    from interlatch.core.util import utcnow
+    from interlatch.knowledge import gates, group_graph, hero, jobs, party, study
+    from interlatch.projects import groups
+    from interlatch.sharing import leaderboard
+    from interlatch.storage.kv import kv_set
+    from interlatch.storage.sqlite import connect
+
+    cfg = load_config(home)
+    conn = connect(cfg.db_path)
+    paths = [f"{ROOT}/{p}" for p in GROUP[1]]
+    group_graph.analyze(cfg, conn, groups.save(conn, None, GROUP[0], [], paths), paths)
+
+    leaderboard.write_state(cfg, {"uid": "demo", "refresh_token": "demo", "name": HERO["name"], "board": False})
+    hero.save(conn, None, HERO["name"], HERO["look"])
+    party.set_goal(conn, None, HERO["path"])
+    today, here, cat = utcnow().date(), local_machine_id(cfg), party.load_catalog()
+    ids = {r["title"]: r["id"] for r in conn.execute("SELECT id, title FROM knowledge")}
+    day = lambda n: (today - timedelta(days=n)).isoformat()  # noqa: E731
+    log = [{"id": ids[t], "on": day(n), "verdict": "got_it"} for t, ago in STUDIED.items() for n in ago]
+    log += [{"id": ids[t], "on": day(3), "verdict": "not_yet"} for t in MISSED]
+    kv_set(conn, study.STUDY_KEY + party.scope_key(None), json.dumps(sorted(log, key=lambda x: x["on"])))
+    conn.commit()
+    prs = [w["id"] for w in gates.candidates(conn, here) if w["kind"] == "pr"]
+    for rank, (module, ago, text) in enumerate(GATES, 1):
+        gates.attempt(conn, cfg, cat, here, module, prs[:gates.RANK_ASKS[rank]["artifacts"]], text,
+                      ready=gates.readiness(conn, cat, here).get(module, 0), here=True, today=today - timedelta(days=ago))
+    jobs.add(conn, cfg, cat, None, title=JOB["title"], company=JOB["company"], text=JOB["text"])
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["--group-and-hero"]:
+        group_and_hero(Path(sys.argv[2]))
+    else:
+        main()

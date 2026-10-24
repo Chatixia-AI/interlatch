@@ -204,8 +204,10 @@ web files once at startup, so restart it after editing `app.css` or `app.js`.
 
 `docs/demo/make_demo.py` builds an Interlatch home from made-up sessions: a fictional developer with five projects
 and about six weeks of work. It writes synthetic Claude Code transcripts and runs the real pipeline over them
-(sync, analysis, knowledge bases, glossary, weekly reviews). A stand-in `claude` answers each analysis with
-hand-written summaries and knowledge, so it costs nothing and needs no login. The screenshots in `docs/images/`
+(sync, analysis, knowledge bases, glossary, weekly reviews), then makes a project group, *Shop*, with its Mindmap
+analyzed, and turns on game mode with a hero in Innerlatch (a path, lessons studied, a gate passed, a job goal). A
+stand-in `claude` answers each analysis with hand-written summaries and knowledge, so it costs nothing and needs no
+login. The screenshots in `docs/images/`
 come from it.
 
 ```bash
