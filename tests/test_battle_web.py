@@ -553,3 +553,17 @@ for (let i = 0; i < 120; i++) {
   for (const t of Object.values(R.summary(s))) assert.ok(!/\\{\\w+\\}|NaN|undefined/.test(t), 'unfilled: ' + t);
 }
 ''')
+
+
+def test_the_persons_hero_leads_with_the_lessons_agent_beside_them():
+    check('''
+const e = lesson(3);
+e.lesson.agent = 'bob';
+e.party = [{agent: 'hero-123450', short: 'Ada', level: 2, hero: true, attr_levels: {}, skills: {}},
+  ...AGENTS.map((agent, i) => ({agent, short: agent, level: [29, 14, 6, 2, 0, 9][i], attr_levels: {}, skills: {}}))];
+assert.deepEqual(R.pickParty(e).map((m) => m.agent), ['hero-123450', 'bob', 'claude']);
+e.lesson.agent = null;  // a job monster: no agent found it
+assert.deepEqual(R.pickParty(e).map((m) => m.agent), ['hero-123450', 'claude', 'codex']);
+assert.equal(R.setup(e, 0).heroes[0].lead, true);
+assert.equal(R.pickParty(boss(1, 2)).some((m) => m.hero), false);  // a boss fight is the companions' own
+''')

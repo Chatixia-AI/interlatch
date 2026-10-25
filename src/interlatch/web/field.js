@@ -24,7 +24,8 @@
        opts.start          {x, y}: where the party stands, in world pixels (back from a battle); the spawn otherwise
        opts.hero           {agent: Sprites.heroKey(look), short, level, tier}: the person's hero, who leads the party
                            (its companions follow); none: the agents alone
-       opts.onEncounter(lesson)   the party walked into a monster (once; the page opens its battle)
+       opts.onEncounter(lesson)   the party walked into a monster (once; the page opens its battle); a job's own
+                                  monster (data.lessons with `prep`, its id a string) wears ♜
        opts.onTown(region)        the party walked into the town's gate
        opts.onGate(zone)          the party walked into a zone's open gate (data.gates: {module id: rank}; gates.py)
        opts.onMove({x, y})        where the party stands now (now and then, for the page to keep)
@@ -73,6 +74,7 @@
   const ZONE_TILES = 240;       // tiles of field a zone
   const EDGE = 3;               // the forest band round the field, in tiles
   const PER_ZONE = [2, 4];      // monsters out in a zone at once (a main quest zone: more), its best uncleared lessons
+  const PER_JOB = 5;            // in a zone the active job asks for: its own monsters with the lessons
   const CLEAR_R = 4;            // the clearing round a zone's sign, in tiles
   const TOWN_R = 5;             // the plaza round the town
   const TOWN_K = 3;             // the town's art, world pixels a pixel
@@ -319,9 +321,11 @@
       }
       // those back for another look first, then the lessons worth studying (study material), the newest first; the
       // agents' friction never
-      const rank = (l) => (back.has(String(l.id)) ? 2 : 0) + (l.study ? 1 : 0);
-      const want = byZone[z.index].filter(studyable).sort((a, b) => rank(b) - rank(a) || b.id - a.id)
-        .slice(0, PER_ZONE[z.goal || z.job ? 1 : 0]);
+      // (and the job's own monsters, data.lessons with `prep`: jobprep.py, right after those coming back)
+      const rank = (l) => (back.has(String(l.id)) ? 3 : 0) + (l.prep ? 2 : 0) + (l.study ? 1 : 0);
+      const newer = (a, b) => (typeof a.id === "number" && typeof b.id === "number" ? b.id - a.id : String(a.id).localeCompare(String(b.id)));
+      const want = byZone[z.index].filter(studyable).sort((a, b) => rank(b) - rank(a) || newer(a, b))
+        .slice(0, z.job ? PER_JOB : PER_ZONE[z.goal ? 1 : 0]);
       const taken = [];
       for (const l of want) {
         const start = strHash("home" + l.id) % Math.max(1, homes.length);
@@ -329,7 +333,8 @@
           const h = homes[(start + k * 7) % homes.length];
           if (taken.every((t) => Math.hypot(t.x - h.x, t.y - h.y) >= 2.5)) {
             taken.push(h);
-            monsters.push({ id: l.id, zone: z.index, x: h.x, y: h.y, back: back.has(String(l.id)) });
+            monsters.push({ id: l.id, hid: typeof l.id === "number" ? l.id : strHash(l.id), zone: z.index, x: h.x, y: h.y,
+              back: back.has(String(l.id)), prep: !!l.prep });
             break;
           }
         }
@@ -728,10 +733,10 @@
         else {
           if (m.wait > 0) { m.wait -= dt; continue; }
           if (Math.hypot(m.tx - m.px, m.ty - m.py) < 1) { // a new spot near home
-            const a = hash2(Math.floor(t * 10), m.id, 33) * 6.28, r = hash2(m.id, Math.floor(t * 10), 34) * LEASH * T;
+            const a = hash2(Math.floor(t * 10), m.hid, 33) * 6.28, r = hash2(m.hid, Math.floor(t * 10), 34) * LEASH * T;
             const nx = home.x + Math.cos(a) * r, ny = home.y + Math.sin(a) * r * 0.7;
             if (walkablePx(nx, ny)) { m.tx = nx; m.ty = ny; }
-            m.wait = 0.8 + hash2(m.id, Math.floor(t), 35) * 2.2;
+            m.wait = 0.8 + hash2(m.hid, Math.floor(t), 35) * 2.2;
             continue;
           }
           goal = { x: m.tx, y: m.ty };
@@ -846,6 +851,13 @@
         ctx.stroke();
       }
       put(cv, m.px, m.py + 3 + bob, 1, m.face > 0); // the Cast's monsters face left
+      if (m.prep && !m.back && !m.alert) { // the job's own: its banner over it
+        ctx.font = `700 ${Math.round(9 * S)}px "IBM Plex Mono", ui-monospace, monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.lineWidth = Math.max(2, S); ctx.strokeStyle = "rgba(10, 20, 40, 0.8)";
+        ctx.strokeText("♜", X(m.px), Y(m.py - cv.height - 1));
+        ctx.fillStyle = "#ffd27a"; ctx.fillText("♜", X(m.px), Y(m.py - cv.height - 1));
+      }
       if (m.back && !m.alert) {
         ctx.font = `700 ${Math.round(9 * S)}px "IBM Plex Mono", ui-monospace, monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "bottom";

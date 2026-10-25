@@ -150,3 +150,16 @@ def test_a_hub_person_has_no_job_goal(team, catalog, monkeypatch):  # noqa: F811
     status, r = _http(url, "/api/party/job", {"action": "add", "text": JD}, _as(s["Bob"]))
     assert status == 403 and "own computer" in r["error"]
     assert kv_get(conn, jobs.JOBS_KEY) is None
+
+
+def test_a_long_job_description_gets_through_and_too_long_says_so(hubweb, catalog, monkeypatch):  # noqa: F811
+    url, cfg = hubweb["url"], hubweb["cfg"]
+    _joined(cfg, board=False)
+    monkeypatch.setattr(factory, "make_runner", lambda cfg: FakeModel(MAPPING))
+    long = JD + " " + "日本語の説明と “quotes” — " * 700  # well past the 4 KB other Party POSTs take, under TEXT_MAX
+    assert jobs.TEXT_MIN < len(long) < jobs.TEXT_MAX and len(json.dumps({"text": long}).encode()) > 4096
+    status, r = _http(url, "/api/party/job", {"action": "add", "text": long})
+    assert status == 200 and r["job"]["text"] == long.strip()
+    status, r = _http(url, "/api/party/job", {"action": "add", "text": "x" * 200_000})
+    assert status == 413 and "make it shorter" in r["error"]
+    assert _http(url, "/api/party/quest", {"id": "x" * 5000, "done": True}) == (400, {"error": "bad json"})  # the others keep 4 KB

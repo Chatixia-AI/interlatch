@@ -264,18 +264,26 @@ def remove(conn: sqlite3.Connection, viewer: dict | None, job_id) -> None:
         if state["active"] == job_id:
             state["active"] = state["jobs"][-1]["id"] if state["jobs"] else None
         _save(conn, state)
+        from . import interview, jobprep
+
+        interview.forget(conn, job_id)  # its interviews and monsters go with it
+        jobprep.forget(conn, job_id)
 
 
 # ------------------------------------------------------------------ the castle
 def suggest_track(cat, requirements: list[dict]) -> dict | None:
-    """The track whose modules fit the requirements best: each requirement in it counts (a must-have twice, and once
-    more when the track marks the module critical); fewer modules break a tie. None when no track has any."""
+    """The track whose modules fit the requirements best. Each requirement in it counts: a must-have 3, a nice-to-have
+    1, half as much again when the track's own target for the module reaches the rank the job needs, and 1 more when the
+    track marks it critical; divided by the square root of the track's size, so a broad track doesn't win by breadth
+    alone. Fewer modules break a tie. None when no track has any."""
     from .party import _t
 
     best, key = None, None
     for t in cat.tracks:
-        mods, crit = set(t.get("modules") or []), set(t.get("critical") or [])
-        score = sum((2 if r["must"] else 1) + (1 if r["module"] in crit else 0) for r in requirements if r["module"] in mods)
+        mods, crit, targets = set(t.get("modules") or []), set(t.get("critical") or []), t.get("targets") or {}
+        score = sum((3 if r["must"] else 1) * (1.5 if (targets.get(r["module"]) or 0) >= r["rank"] else 1)
+                    + (1 if r["module"] in crit else 0) for r in requirements if r["module"] in mods)
+        score = score / max(1, len(mods)) ** 0.5
         k = (score, -len(mods))
         if score and (key is None or k > key):
             best, key = t, k
@@ -336,9 +344,27 @@ def view(conn: sqlite3.Connection, cat, here_id: str, *, today=None) -> dict:
     active = next((j for j in st["jobs"] if j["id"] == st["active"]), None)
     return {"jobs": [summary(j) for j in reversed(st["jobs"])], "active": st["active"],
             "job": {**summary(active), "text": active["text"], "by": (active.get("mapping") or {}).get("by"),
+                    "crowned": _crowned(conn, active["id"]), "monsters": _monsters(conn, active, ranks),
                     "unmapped": active.get("unmapped"), **castle(cat, active, ranks, ready, open_now)} if active else None,
             "limits": {"text_min": TEXT_MIN, "text_max": TEXT_MAX, "jobs": JOBS_MAX, "requirements": REQUIREMENTS_MAX},
             "modules": [{"id": m["id"], "name": _name(m), "attr": m.get("attr")} for m in cat.modules]}
+
+
+def _monsters(conn: sqlite3.Connection, job: dict, ranks: dict[str, int]) -> dict:
+    """The job's own monsters (jobprep.py): how many are out (on towers not lit yet), and how many of those towers have
+    none yet."""
+    from . import jobprep
+
+    sets = jobprep.sets_of(conn, job["id"])
+    unlit = [r["module"] for r in (job.get("mapping") or {}).get("requirements") or [] if ranks.get(r["module"], 0) < r["rank"]]
+    return {"out": sum(len(sets.get(m) or []) for m in unlit), "pending": sum(1 for m in unlit if m not in sets)}
+
+
+def _crowned(conn: sqlite3.Connection, job_id: str) -> bool:
+    """The job's interview, its final boss, was beaten (interview.py)."""
+    from . import interview
+
+    return interview.beaten(interview.record(conn, job_id))
 
 
 def _name(m: dict) -> str:
