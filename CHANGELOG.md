@@ -3,6 +3,17 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.1 (2026-10-25)
+
+- **The interview, your job goal's final boss:** three questions a day, written from the job description and from
+  your own past lessons, graded strong, fair or weak with what a strong answer covers and a better one from your own
+  work. It's practice until every must-have tower is lit; then two strong answers and none weak beat it and crown
+  the castle ([The interview](docs/party.md#the-interview)).
+- **A job goal brings its own monsters:** practice battles written for each of its requirements, more where your gap
+  is bigger, roam their zones marked ♜ and count toward each module's gate like your own lessons, so even a skill with
+  no past lessons has a way in. The world map flags each requirement, the field shows the next tower to work on, and
+  your hero now leads the party in battle ([Job monsters](docs/party.md#job-monsters)).
+
 ## 0.29.0 (2026-10-24)
 
 - **You are the hero in Innerlatch:** the Party now starts with a character you make (a name and a pixel look) on a
