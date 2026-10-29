@@ -62,9 +62,6 @@ idle_minutes = 20
 min_prompts = 1
 # Max session analyses per worker run (the background job runs every 15 minutes).
 max_per_run = 6
-# Pause automatic analysis while your Claude plan's 5-hour or 7-day limit is at or above this percent (backend
-# "claude", needs `interlatch install --statusline`). 0 = never pause for it.
-plan_limit_pct = 0
 # Parallel analysis processes.
 concurrency = 2
 # Also analyze sessions recorded before Interlatch was installed (newest first, within max_per_run).
@@ -278,7 +275,6 @@ class AnalysisConfig:
     idle_minutes: int = 20
     min_prompts: int = 1
     max_per_run: int = 6
-    plan_limit_pct: int = 0  # pause automatic runs at this % of a Claude plan limit; 0 = off
     concurrency: int = 2
     backfill: bool = True
     chunk_chars: int = 150_000

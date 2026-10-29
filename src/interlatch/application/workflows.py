@@ -9,7 +9,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import timedelta
 
-from ..analysis.queue import PAUSE_KEY, pending_sessions, plan_over_limit
+from ..analysis.queue import PAUSE_KEY, pending_sessions
 from ..analysis.runners.base import LLMError, Runner, UsageLimitError
 from ..analysis.runners.factory import make_runner
 from ..analysis.worker import WorkReport, analyze_many
@@ -92,12 +92,7 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
     conn.commit()
     runner = make_runner(cfg)
     paused = kv_get(conn, PAUSE_KEY)
-    # at the plan limit the user set (analysis.plan_limit_pct): runs on their own wait; sessions asked for still run
-    capped = None if session_ids or force else plan_over_limit(conn, cfg)
-    if capped:
-        report.note = (f"Claude plan's {capped['window']} limit at {capped['used_pct']:.0f}% "
-                       f"(analysis.plan_limit_pct = {cfg.analysis.plan_limit_pct}); analysis skipped")
-    if analyze and not capped and (cfg.analysis.auto or session_ids or force):
+    if analyze and (cfg.analysis.auto or session_ids or force):
         if paused and paused > to_iso(utcnow()) and not session_ids:
             report.paused_until = paused
         elif not runner.available():
@@ -107,9 +102,9 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
             analyze_many(cfg, ids, runner, report, model=model, progress=progress)
     auto = cfg.synthesis.auto or force
     # the projects and groups whose weekly re-analysis is due: someone turned each on, so they run without [synthesis] auto
-    due = (_weekly_due(cfg, conn) if synthesize and not session_ids and not capped and runner.available()
-           and not report.paused_until and not (paused and paused > to_iso(utcnow())) else [])
-    if synthesize and not capped and (auto or due) and runner.available() and not report.paused_until:
+    due = (_weekly_due(cfg, conn) if synthesize and not session_ids and runner.available() and not report.paused_until
+           and not (paused and paused > to_iso(utcnow())) else [])
+    if synthesize and (auto or due) and runner.available() and not report.paused_until:
         _synthesize(cfg, conn, runner, report, force=force, auto=auto, also=_weekly_projects(cfg, conn, due),
                     progress=progress)
         _glossaries(cfg, conn, runner, report, progress=progress)

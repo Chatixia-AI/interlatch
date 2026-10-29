@@ -9196,7 +9196,6 @@ async function pollStatus() {
       : st.last_sync ? t("Synced {ago}", { ago: ago(st.last_sync) }) : t("Not synced yet");
     $("#status-version").textContent = st.version ? `Interlatch ${st.version}` : "";
     showHubProblem(st.hub_problem);
-    showUsage(st);
     showUpdate(st.update, st.version);
     pollUnseen();
     pollNews();
@@ -9265,7 +9264,6 @@ function toggleActivity(force) {
   const open = force ?? box.hidden;
   box.hidden = !open;
   $("#status-pill").setAttribute("aria-expanded", String(open));
-  if (open && !$("#usage-panel").hidden) toggleUsage(false);
   if (open) { if (lastStatus) drawActivity(lastStatus); pollStatus(); }
 }
 function drawActivity(st) {
@@ -9321,86 +9319,6 @@ function showHubProblem(pb) {
   chip.replaceChildren(h("span", { class: "dot" }), pb.profile ? t("Not sending to {hub}", { hub: pb.profile }) : t("Not sending to the hub"));
   chip.dataset.page = `#/hub?name=${encodeURIComponent(pb.profile || "personal")}`;
   chip.title = `${hubProblemTitle(pb)} · ${t("since {time}", { time: fmtDT(pb.since) })}`;
-}
-// Analysis usage on every page: a chip in the status bar (the Claude plan's windows, what analysis spent today) that
-// opens a panel with the detail and the limits analysis runs under (analysis_usage, action_limits)
-// named as Claude Code's own Account & usage panel names them
-const PLAN_SHORT = { five_hour: t("Session"), seven_day: t("Weekly"), spend_limit: t("spend") };
-const PLAN_NAME = { five_hour: t("Session (5hr)"), seven_day: t("Weekly (7 day)"), spend_limit: t("Spend limit") };
-const PLAN_CAPS = [0, 50, 60, 70, 80, 90, 95];
-function showUsage(st) {
-  const chip = $("#status-usage"), u = st.usage;
-  chip.hidden = !u || st.limited;
-  if (chip.hidden) return;
-  const cap = u.plan_applies ? u.limits.plan_limit_pct : 0;
-  const wins = Object.entries(u.plan?.limits || {}).map(([k, v]) => `${PLAN_SHORT[k] || k} ${Math.round(v.used_pct)}%`);
-  chip.className = u.over ? "warn" : "";
-  if (!wins.length) wins.push(u.collector ? t("plan usage: waiting for Claude Code") : t("plan usage: not set up"));
-  chip.replaceChildren(h("span", { class: "dot" }), [...wins, cap && u.plan?.limits && Object.keys(u.plan.limits).length ? t("pauses at {pct}%", { pct: cap }) : null,
-    t("{cost} today", { cost: fmtCost(u.spent.today) })].filter(Boolean).join(" · "));
-  chip.title = u.block || t("Analysis usage and limits: click to see and change them");
-}
-function toggleUsage(force) {
-  const box = $("#usage-panel");
-  const open = force ?? box.hidden;
-  box.hidden = !open;
-  $("#status-usage").setAttribute("aria-expanded", String(open));
-  if (open) { toggleActivity(false); if (lastStatus?.usage) drawUsage(lastStatus.usage); }
-}
-// drawn when it opens and after a save, not on every poll, so a value being typed stays
-function drawUsage(u) {
-  const box = $("#usage-panel"), admin = canAdmin(), lim = u.limits;
-  const cap = u.plan_applies ? lim.plan_limit_pct : 0;
-  const win = ([k, v]) => h("div", { class: "us-win" },
-    h("div", { class: "us-top" }, h("b", null, PLAN_NAME[k] || k), h("span", null, `${Math.round(v.used_pct)}%`)),
-    h("div", { class: `us-bar${cap && v.used_pct >= cap ? " over" : ""}`, role: "meter", "aria-label": PLAN_NAME[k] || k,
-      "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(v.used_pct)) },
-      h("i", { style: { width: `${Math.min(100, Math.max(1, v.used_pct))}%` } }),
-      cap ? h("u", { style: { left: `${cap}%` }, title: t("Analysis pauses at {pct}%", { pct: cap }) }) : null),
-    h("div", { class: "muted us-note", title: fmtDT(v.resets_at) }, t("{pct}% left · resets {when}",
-      { pct: Math.max(0, 100 - Math.round(v.used_pct)), when: untilText(v.resets_at) })));
-  const wins = Object.entries(u.plan?.limits || {});
-  const plan = wins.length ? [...wins.map(win), h("div", { class: "muted us-note" }, [t("as of {ago}", { ago: ago(u.plan.as_of) }),
-      !u.plan_applies ? t("Analysis isn't using Claude Code now, so these don't limit it") : null].filter(Boolean).join(" · "))]
-    : h("div", { class: "muted us-note" }, u.collector
-      ? t("Recorded from Claude Code's status line: the numbers come with your next Claude Code session in a terminal and the sync after it (Pro and Max plans).")
-      : tx("Not set up: run {command} so Claude Code's status line records them (Pro and Max plans). Until then the pause at plan limit can't act.",
-        { command: h("code", null, "interlatch install --statusline") }));
-  const fact = (v, label) => h("div", { class: "fact" }, h("b", null, fmtCost(v)), h("span", null, label));
-  const num = (name, label, attrs, hint) => h("label", null, h("span", null, label),
-    h("input", { class: "input", type: "number", name, value: lim[name], disabled: !admin, required: true, ...attrs }), hint ? h("small", { class: "muted" }, hint) : null);
-  const caps = PLAN_CAPS.includes(lim.plan_limit_pct) ? PLAN_CAPS : [...PLAN_CAPS, lim.plan_limit_pct].sort((a, b) => a - b);
-  const form = h("form", { class: "us-form", onsubmit: async (e) => {
-    e.preventDefault();
-    const f = e.currentTarget, btn = f.querySelector("button[type=submit]");
-    btn.disabled = true;
-    const r = await post("/api/analysis/limits", { max_per_run: +f.max_per_run.value, max_budget_usd: +f.max_budget_usd.value,
-      plan_limit_pct: +f.plan_limit_pct.value }).catch((err) => ({ error: err.message }));
-    btn.disabled = false;
-    if (r.error) { toast(r.error, 6000); return; }
-    toast(t("Analysis limits saved."));
-    lastStatus = { ...lastStatus, usage: r };
-    drawUsage(r);
-    pollStatus(); // the chip and the queue's reason follow the new limits
-  } },
-    num("max_per_run", t("Sessions per run"), { min: 1, max: 100, step: 1 }, t("every 15 minutes")),
-    num("max_budget_usd", t("Budget per call (USD)"), { min: 0.1, max: 100, step: 0.1 }, t("API-equivalent; Claude Code and Bob")),
-    h("label", null, h("span", null, t("Pause at plan limit")),
-      h("select", { class: "input", name: "plan_limit_pct", disabled: !admin },
-        caps.map((c) => h("option", { value: c, selected: c === lim.plan_limit_pct }, c ? `${c}%` : t("Never")))),
-      h("small", { class: "muted" }, t("Session or weekly, while Claude Code analyzes"))),
-    h("div", { class: "us-save" }, h("button", { class: "btn small primary", type: "submit", disabled: !admin }, t("Save"))));
-  box.replaceChildren(...[
-    h("div", { class: "act-head" }, h("b", null, t("Analysis usage")),
-      h("button", { class: "un-close", type: "button", "aria-label": t("Close"), onclick: () => toggleUsage(false) }, "×")),
-    u.block ? h("div", { class: "warn-line" }, icon("pause"), " ", LANG === "en" ? `${u.block[0].toUpperCase()}${u.block.slice(1)}.` : `${u.block}。`) : null,
-    h("div", { class: "subhead" }, t("Claude plan")), h("div", { class: "us-wins" }, plan),
-    h("div", { class: "subhead" }, t("Spent on analysis")),
-    h("div", { class: "us-facts", title: t("API-equivalent: what the tokens would cost at list prices") },
-      fact(u.spent.today, t("today")), fact(u.spent.month, t("this month")), fact(u.spent.total, t("all time"))),
-    h("div", { class: "subhead" }, t("Limits")), form,
-    admin ? null : h("div", { class: "muted us-note" }, t("Only an admin can change these.")),
-  ].filter(Boolean));
 }
 // an update on offer: a chip in the status bar, a dot on Settings, and once per update a notification card
 function showUpdate(u, version) {
@@ -9580,12 +9498,6 @@ document.addEventListener("mousedown", (e) => { if (!$("#activity").hidden && !e
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#activity").hidden) toggleActivity(false); });
 $("#status-update").addEventListener("click", () => go("#/status?focus=updates"));
 $("#status-hub-problem").addEventListener("click", (e) => go(e.currentTarget.dataset.page || "#/devices"));
-$("#status-usage").addEventListener("click", () => toggleUsage());
-$("#status-usage").setAttribute("aria-haspopup", "dialog");
-$("#status-usage").setAttribute("aria-expanded", "false");
-$("#usage-panel").setAttribute("aria-label", t("Analysis usage"));
-document.addEventListener("mousedown", (e) => { if (!$("#usage-panel").hidden && !e.target.closest("#usage-panel, #status-usage")) toggleUsage(false); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#usage-panel").hidden) toggleUsage(false); });
 $("#status-queue").addEventListener("click", openQueueDialog);
 $("#status-queue").setAttribute("aria-haspopup", "dialog");
 $("#status-queue").setAttribute("aria-expanded", "false");

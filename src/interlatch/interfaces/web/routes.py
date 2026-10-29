@@ -478,7 +478,6 @@ POST: list[Route] = [
     Route("/api/analysis/backend", ANYONE,
           lambda h, ctx, m, b: h._json(api.settings.action_backend(ctx, str(b.get("backend") or "")))),
     Route("/api/analysis/agent", ANYONE, lambda h, ctx, m, b: h._json(api.settings.action_agent(ctx, _body(b)))),
-    Route("/api/analysis/limits", ANYONE, lambda h, ctx, m, b: h._json(api.status.action_limits(ctx, _body(b)))),
     # an API key, and where transcripts are sent
     Route("/api/analysis/provider", OWNER, lambda h, ctx, m, b: h._json(api.settings.action_provider(ctx, _body(b)))),
     Route("/api/analysis/provider/test", OWNER, lambda h, ctx, m, b: h._json(
