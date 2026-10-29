@@ -133,11 +133,36 @@ The other tabs hold the rest: **Working here** (the knowledge base, its [archite
 and the glossary), **Knowledge**, **Sessions**, **Artifacts** and **Usage** (the totals and the most edited files).
 The tab you pick stays in the address, so a link or a reload opens it again.
 
-The git rows and the roadmap file are read only in a browser on the computer the folder is on. On a hub with people,
-the cards are **Needs attention** and **Where the team left off**, and each session shows whose it is. Pull requests come
-from the transcripts computers send (`share = "everything"`), or from the links a session lists when a computer shares
-knowledge; commits only from transcripts. Someone limited to some projects sees the sessions, not their pull requests,
-as on a session's page.
+The git rows and the roadmap file are read only in a browser on the computer the folder is on.
+
+### On a team hub
+
+On a hub with people, a project's page is written for a teammate rather than for "you, coming back", and the team's
+knowledge leads. It is still read from what computers shared, with nothing written by a model:
+
+- **Overview:** the knowledge base's three headline points, with how many lessons arrived since it was last written
+  (or, when the hub has no analysis engine, why there is none). **Since your last visit:** the sessions, new lessons
+  and pull requests since you last opened the page, the lessons a newer one replaced (outdated or contradicted, and
+  whether it was yours) and the ones someone else found again. Pages you open within half an hour are one visit, so a
+  reload doesn't empty it. Beside it, **Needs attention** and **Only one person has worked on** (topics from one
+  person's sessions only: worth asking them, or pairing on it). Below, **Who's working on it**: each person's sessions
+  over the last eight weeks as dots, sized by active time and coloured by outcome, with a table view.
+- **Start here:** the gotchas and fixes, decisions and commands the team learned, the most trusted first, and who to
+  ask. Someone with no sessions in the project opens the page here.
+- **Knowledge base:** each entry names whose sessions taught it ("learned by"), with a badge when more than one person
+  found it. **Hit by more than one person** puts the sessions in which different people found the same lesson side by
+  side.
+- **Lessons:** every lesson with who it was learned from, narrowed to a person or a kind, or the lessons a newer one
+  replaced.
+- **People:** who has worked on what, as topics from their sessions here.
+- **Activity:** **Where the team left off**, **Week by week** and the sessions. **Usage** (tokens, cost, most edited
+  files) is for admins only.
+
+People are credited, never counted: the page shows no lessons, sessions or time per person. Pull requests come from
+the transcripts computers send (`share = "everything"`), or from the links a session lists when a computer shares
+knowledge; commits only from transcripts. Someone limited to some projects sees their projects only, and the sessions,
+not their pull requests, as on a session's page. The Systems map isn't offered on a hub that takes knowledge only (it
+reads the commands sessions ran, which stay on members' computers), nor to someone limited to projects.
 
 ## Project groups
 

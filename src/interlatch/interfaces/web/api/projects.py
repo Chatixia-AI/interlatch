@@ -11,7 +11,7 @@ from ....core.i18n import tr
 from ....core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
 from ....core.util import loads, to_iso, utcnow
 from .artifacts import _artifact_summary
-from .common import knowledge_item, label_who, session_rows
+from .common import knowledge_item, label_who, session_rows, who_labels
 
 pass
 import subprocess
@@ -171,10 +171,12 @@ def action_project_groups(ctx: Context, verb: str, body: dict) -> tuple[dict, in
         return {"error": str(exc), "on_hub": exc.can_leave}, 409
 
 
-def project(ctx: Context, path: str, here: bool = False, limited: bool = False) -> dict | None:
+def project(ctx: Context, path: str, here: bool = False, limited: bool = False, viewer: dict | None = None) -> dict | None:
     """One project's page. here: the request comes from this computer, so its folder's git state and roadmap file
     are read too.
-    limited: someone limited to some projects, who isn't shown the pull requests a session lists (as on its page)."""
+    limited: someone limited to some projects, who isn't shown the pull requests a session lists (as on its page).
+    viewer: who is looking, on a hub with people (None at the hub itself); there the page also gets the team's side
+    (projects.team), and this visit is recorded for their next "since your last visit"."""
     c = ctx.conn
     if path == GLOBAL:
         kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (GLOBAL,)).fetchone()
@@ -208,6 +210,7 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
     recent = label_who(ctx, progress.recent(c, path))  # on a hub with people, whose session each one is
     repo = progress.repo_state(path) if here else None  # the folder, and a roadmap in it, only on this computer
     return {
+        "team": _team_side(ctx, path, kb, viewer, limited),
         "project_path": path,
         "shared": path in declared_projects(c),
         "hub": hub_project_of(ctx.cfg, [path], c).get(path),
@@ -235,6 +238,22 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False) 
             "FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE s.project_path = ? AND (f.edits + f.writes) > 0 "
             "GROUP BY f.path ORDER BY edits DESC LIMIT 25", (path,))],
     }
+
+
+def _team_side(ctx: Context, path: str, kb, viewer: dict | None, limited: bool) -> dict | None:
+    """The team's side of a project's page on a hub with people (projects.team), None anywhere else."""
+    from ....projects.team import team_view, visit
+    from .team import hub_info
+
+    hub = hub_info(ctx)
+    if not hub or not hub["team"]:
+        return None
+    whos = who_labels(ctx)
+    key = f"p:{viewer['id']}" if viewer else whos[None][1]
+    since = visit(ctx.conn, key, path)
+    ctx.conn.commit()
+    return {**team_view(ctx.conn, path, whos, key, kb=dict(kb) if kb else None, since=since, prs=not limited),
+            "engine": ctx.cfg.analysis.backend != "none", "knowledge_only": hub["knowledge_only"]}
 
 
 def _labelled(ctx: Context, timeline: dict) -> dict:

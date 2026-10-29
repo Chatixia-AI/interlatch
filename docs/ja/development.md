@@ -201,6 +201,12 @@ uv run python docs/demo/make_demo.py /tmp/interlatch-demo
 INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 ```
 
+`--hub` を付けると、そのあとデモのコンピューターが人のいるチームのハブになります。管理者の Ada がハブで作業し、Yuma
+（*billing-api* と *storefront* だけを見られます）と Ueno が自分のコンピューターから送ります。3 つのプロジェクトのセッションを
+3 人で分けるので、プロジェクトのページに[チームの側](dashboard.md#チームのハブでは)が表示されます。各人のサインイン用のリンクを
+表示します。その人としてハブを見るには、別のデバイスかプロキシ経由で開いてください（ハブのコンピューター上のブラウザーは常に
+管理者です）。
+
 README の GIF とツアー動画もこのデータから作ります。そのダッシュボードを動かしたまま `docs/demo/record_demo.py` を実行すると、
 ヘッドレスの Chromium が決まった順にダッシュボードを巡ります（`ffmpeg` が PATH に必要です）。ツアー全体は git が無視する
 `docs/images/demo.mp4` に、その数秒は大きなファイルを止めるフックが許す 600 KB 以内で `docs/images/demo.gif` に書き出されます。
