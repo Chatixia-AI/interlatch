@@ -2802,7 +2802,7 @@ const KB_TONES = [[/prefer|convention|claude|好み|規約|慣習/i, "preference
   [/pattern|command|reusable|run|test|deploy|パターン|コマンド|実行|テスト|デプロイ|再利用/i, "command", "good"], [/decision|rationale|決定|判断|理由/i, "decision", "accent"],
   [/learn|学び|気づき/i, "learning", "accent"], [/problem|recurring|open|friction|問題|課題|未解決|繰り返|つまずき/i, "todo", "warning"],
   [/architecture|fact|overview|構成|アーキテクチャ|事実|概要/i, "fact", "accent"]];
-function kbView(p, isGlobal, { overview = true } = {}) { // overview: false when the page already shows it
+function kbView(p, isGlobal, { overview = true, team = null } = {}) { // overview: false when the page already shows it; team: p.team on a team hub
   const box = h("div", { class: "kb" });
   if (!p.kb) {
     box.append(h("section", { class: "card empty" }, isGlobal ? t("No playbook yet. It is built automatically once enough cross-project knowledge is analyzed, or synthesize it now.")
@@ -2841,7 +2841,8 @@ function kbView(p, isGlobal, { overview = true } = {}) { // overview: false when
   const trust = (it) => it.stage === "established" || it.stage === "canonical"
     ? [stageTag(it.stage, it.sessions || 0, tn(it.sessions || 1, "backed by {n} session", "backed by {n} sessions")), " "] : null;
   const render = (it) => [h("span", null, it.title ? [h("b", null, it.title), " ", trust(it)] : trust(it),
-    h("span", { html: mdInline(escapeHtml(it.text || "")) })), sourceLinks(it)];
+    h("span", { html: mdInline(escapeHtml(it.text || "")) })), sourceLinks(it),
+    team ? h("div", { class: "kb-by" }, learnedBy(peopleOf(team, it.sources))) : null]; // on a team hub: whose sessions taught it
   const draw = () => {
     const q = filter.value.trim().toLowerCase();
     const shown = sections.map((sec) => ({ ...sec, items: q ? sec.items.filter((it) => `${it.title || ""} ${plain(it.text)}`.toLowerCase().includes(q)) : sec.items }))
@@ -3267,6 +3268,191 @@ route(/^\/reanalysis$/, async () => {
       r.choices.groups.length || r.choices.projects.length ? h("div", { class: "rean-add" }, pick.el, add) : null)));
 });
 
+// A project's page on a team hub (projects/team.py): the team's knowledge first and whose sessions taught it, what
+// changed since this person last looked, who has worked on what, and where to start for someone new to the project.
+// People are credited as the ones a lesson was learned from and never counted: no lessons, sessions or time per person.
+const TEAM_TABS = [["overview", t("Overview")], ["start", t("Start here")], ["kb", t("Knowledge base")], ["lessons", t("Lessons")],
+  ["people", t("People")], ["activity", t("Activity")], ["usage", t("Usage")]];
+const TEAM_TAB_OF = { working: "kb", knowledge: "lessons", sessions: "activity" }; // a personal page's tab, from an old link
+function learnedBy(list, { label = true } = {}) { // whose sessions taught a lesson, first finder first
+  if (!list || !list.length) return null;
+  const names = h("span", { class: "who-list" }, list.slice(0, 3).map((x) => whoTag(x.who, x.key)),
+    list.length > 3 ? h("span", { class: "muted" }, `+${list.length - 3}`) : null);
+  return h("span", { class: "learned-by" }, label ? tx("learned by {names}", { names }) : names,
+    list.length > 1 ? h("span", { class: "badge good", title: t("Found separately in more than one person's sessions") }, icon("completed"),
+      tn(list.length, "{n} person", "{n} people")) : null);
+}
+function peopleOf(tm, ids) { // everyone a knowledge base entry's sources were learned from, each once
+  const out = new Map();
+  for (const id of ids || []) for (const x of tm.learned_by[id] || []) if (!out.has(x.key)) out.set(x.key, x);
+  return [...out.values()];
+}
+function teamKbCard(p, showTab) {
+  const tm = p.team;
+  if (!p.kb) {
+    const why = tm.engine ? t("No knowledge base yet. The hub writes one once a few lessons have arrived.")
+      : canAdmin() ? tx("No knowledge base: this hub has no analysis engine to write one. Choose one in {settings}.", { settings: h("a", { href: "#/team/settings" }, t("Hub settings")) })
+        : t("No knowledge base: this hub has no analysis engine to write one yet. An admin can choose one in Hub settings.");
+    return h("section", { class: "card team-kb" }, cardHead(t("Knowledge base"), { iconName: "knowledge" }), h("p", { class: "muted" }, why),
+      tm.kb_behind ? h("p", null, tn(tm.kb_behind, "{n} lesson is waiting for it.", "{n} lessons are waiting for it.")) : null);
+  }
+  const data = JSON.parse(p.kb.kb_json || "{}");
+  return h("section", { class: "card rv-hero kb-hero team-kb" },
+    h("div", { class: "rv-kicker" }, icon("knowledge"), t("Knowledge base"), h("span", null, t("updated {ago}", { ago: ago(p.kb.updated_at) })),
+      tm.kb_behind ? h("span", { class: "kb-behind", title: t("Lessons that arrived after the knowledge base was last written. The next synthesis reads them.") },
+        tn(tm.kb_behind, "{n} new lesson since", "{n} new lessons since")) : null),
+    data.tldr && data.tldr.length ? h("ul", { class: "rv-tldr" }, data.tldr.map((x) => h("li", { class: "gloss", html: mdInline(escapeHtml(x)) })))
+      : data.overview ? h("p", { class: "kb-lead" }, plainText(data.overview)) : null,
+    h("button", { class: "link-btn link-arrow", type: "button", onclick: () => showTab("kb") }, t("Open the knowledge base"), icon("arrow")));
+}
+function movedRow(x) { // a lesson a newer one replaced, and why
+  return h("li", null, icon("again"), h("div", null,
+    h("div", null, h("s", { class: "muted" }, x.title), x.by ? [" → ", h("b", null, x.by.title)] : null),
+    h("div", { class: "ny-sub" }, [x.reason === "contradicted" ? t("contradicted") : t("outdated"), x.mine ? t("it was yours") : null,
+      x.at ? fmtDate(x.at) : null].filter(Boolean).join(" · "), " ", learnedBy(x.by ? x.by.learned_by : x.learned_by, { label: false }))));
+}
+function sinceCard(tm, showTab) {
+  const s = tm.since;
+  if (!s) {
+    return h("section", { class: "card since" }, cardHead(t("Since your last visit"), { iconName: "sparkles" }),
+      h("p", { class: "muted" }, t("Your first visit to this project. Next time, what changed in between shows here.")),
+      tm.viewer.new ? h("button", { class: "link-btn link-arrow", type: "button", onclick: () => showTab("start") }, t("New to this project? Start here"), icon("arrow")) : null);
+  }
+  const lesson = (x) => h("li", null, kindChip(x.kind), h("span", { class: "since-title" }, x.title), learnedBy(x.learned_by, { label: false }));
+  const again = (x) => h("li", null, icon("completed"), h("span", { class: "since-title" }, x.by ? x.by.title : x.title), learnedBy(x.learned_by, { label: false }));
+  const empty = !s.sessions && !s.lessons.length && !s.replaced.length && !s.confirmed.length;
+  return h("section", { class: "card since" }, cardHead(t("Since your last visit"), { iconName: "sparkles", hint: ago(s.at) }),
+    empty ? h("p", { class: "muted" }, t("Nothing new since then.")) : [
+      h("div", { class: "hero-facts" }, fact(tn(s.sessions, "session", "sessions"), fmtNum(s.sessions)),
+        fact(tn(s.lessons_total, "new lesson", "new lessons"), fmtNum(s.lessons_total)),
+        s.prs != null ? fact(tn(s.prs, "pull request", "pull requests"), fmtNum(s.prs)) : null),
+      s.people.length ? h("p", { class: "muted small" }, t("Sessions from {names}", { names: s.people.join(", ") })) : null,
+      s.lessons.length ? [h("div", { class: "subhead" }, t("New lessons")), capped(s.lessons, lesson, 5, "since-list")] : null,
+      s.replaced.length ? [h("div", { class: "subhead" }, t("Replaced by a newer lesson")), capped(s.replaced, movedRow, 4, "since-list")] : null,
+      s.confirmed.length ? [h("div", { class: "subhead" }, t("Found again by someone else")), capped(s.confirmed, again, 4, "since-list")] : null]);
+}
+function soloCard(tm) { // topics only one person has worked on: who to ask, and where the team is thin
+  if (!tm.solo.length) return null;
+  return h("section", { class: "card solo" }, cardHead(t("Only one person has worked on"), { iconName: "organization", hint: t("worth asking them, or pairing on it") }),
+    h("ul", { class: "solo-list" }, tm.solo.map((x) => h("li", null, h("span", { class: "tag" }, x.topic), whoTag(x.who, x.key)))));
+}
+function teamPeopleCard(tm) {
+  const person = (x) => h("div", { class: "person-row" },
+    h("div", { class: "person-head" }, whoTag(x.who, x.key), x.last ? h("span", { class: "muted small" }, t("last session {ago}", { ago: ago(x.last) })) : null),
+    x.topics.length ? h("div", { class: "ktags" }, x.topics.map((tp) => h("span", { class: "tag" }, tp))) : h("div", { class: "muted small" }, t("No topics recorded yet")));
+  return h("section", { class: "card team-people" }, cardHead(t("Who has worked on what"), { iconName: "organization", hint: t("topics from their sessions here") }),
+    tm.people.length ? h("div", { class: "person-grid" }, tm.people.map(person)) : h("p", { class: "muted" }, t("No one has worked on it yet.")));
+}
+function startHerePane(tm) { // for someone new to the project: what the team learned the hard way, most trusted first
+  const item = (x) => h("li", { class: "start-item" },
+    h("div", null, h("b", null, x.title), " ", stageTag(x.stage, x.confirmations, null, { quiet: true })),
+    x.body ? mdEl(x.body, "kbody clamp") : null, learnedBy(x.learned_by));
+  const list = (title, ic, xs, none) => h("section", { class: "card start-card" }, cardHead(title, { iconName: ic }),
+    xs.length ? h("ul", { class: "start-list" }, xs.map(item)) : h("p", { class: "muted" }, none));
+  const ask = tm.people.filter((x) => x.topics.length).slice(0, 6);
+  return h("div", { class: "grid" },
+    h("p", { class: "lo-foot" }, t("New to this project? What the team learned the hard way, the most trusted first. Each one names whose sessions it came from: they are the ones to ask.")),
+    h("div", { class: "grid cols-2" },
+      list(t("Gotchas and fixes"), "gotcha", tm.start.gotchas, t("No gotchas recorded yet.")),
+      list(t("Decisions and why"), "decision", tm.start.decisions, t("No decisions recorded yet.")),
+      list(t("Commands to run"), "command", tm.start.commands, t("No commands recorded yet.")),
+      h("section", { class: "card start-card" }, cardHead(t("Who to ask"), { iconName: "organization" }),
+        ask.length ? h("ul", { class: "start-list" }, ask.map((x) => h("li", null, whoTag(x.who, x.key),
+          h("div", { class: "ktags" }, x.topics.slice(0, 4).map((tp) => h("span", { class: "tag" }, tp))))))
+          : h("p", { class: "muted" }, t("No one has worked on it yet.")))));
+}
+function casesCard(tm) { // the same lesson found separately in different people's sessions, side by side
+  if (!tm.cases.length) return null;
+  const side = (x) => h("div", { class: "case-side" }, whoTag(x.who, x.key),
+    h("a", { href: `#/session/${x.session.id}` }, x.session.title || t("(untitled session)")),
+    h("div", { class: "muted small" }, [fmtDate(x.session.started_at), OUTCOME[x.session.outcome]?.[1]].filter(Boolean).join(" · ")),
+    x.session.outcome_note ? h("p", { class: "lo-note" }, x.session.outcome_note) : null);
+  const one = (c) => h("div", { class: "case" },
+    h("div", { class: "case-head" }, kindChip(c.kind), h("b", null, c.title), stageTag(c.stage, 0, null, { quiet: true })),
+    h("div", { class: "case-sides" }, c.people.slice(0, 3).map(side)));
+  return h("section", { class: "card cases" }, cardHead(t("Hit by more than one person"), { iconName: "pattern", hint: t("the same lesson, found separately: what do the cases have in common?") }),
+    h("div", { class: "case-list" }, tm.cases.map(one)));
+}
+function lanesCard(lanes) { // each person's sessions over the last weeks: size is active time, colour the outcome
+  if (!lanes.people.length) return null;
+  const from = new Date(lanes.from).getTime(), to = Date.now();
+  const name = (lane) => lane.who || t("Others");
+  const draw = (el, width) => {
+    const rowH = 30, labelW = Math.min(130, Math.round(width * 0.28)), m = { t: 6, r: 12, b: 22 };
+    const iw = Math.max(40, width - labelW - m.r), height = m.t + lanes.people.length * rowH + m.b;
+    const x = (ts) => labelW + ((new Date(ts).getTime() - from) / (to - from)) * iw;
+    const svg = s("svg", { width, height, viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": t("Sessions per person, the last {n} weeks", { n: lanes.weeks }) });
+    for (let w = 0; w <= lanes.weeks; w++) {
+      const ts = from + w * 7 * 86400000, gx = Math.round(x(ts)) + 0.5;
+      svg.append(s("line", { class: "gridline", x1: gx, x2: gx, y1: m.t, y2: height - m.b }));
+      if (w % 2 === 0 && w < lanes.weeks) svg.append(s("text", { class: "chart-label", x: gx + 3, y: height - 6 }, fmtDate(new Date(ts).toISOString())));
+    }
+    lanes.people.forEach((lane, i) => {
+      const cy = m.t + i * rowH + rowH / 2;
+      const label = name(lane);
+      svg.append(s("text", { class: "chart-label lane-name", x: 0, y: cy + 4 }, label.length > 16 ? `${label.slice(0, 15)}…` : label));
+      svg.append(s("line", { class: "lane-line", x1: labelW, x2: labelW + iw, y1: cy + 0.5, y2: cy + 0.5 }));
+      for (const x0 of lane.sessions) {
+        const o = OUTCOME[x0.outcome];
+        const dot = s("circle", { class: `lane-dot s-${o ? o[0] || "neutral" : "none"}`, cx: x(x0.at), cy, r: Math.min(10, 3 + Math.sqrt((x0.active_s || 0) / 3600) * 3.5) });
+        hoverable(dot, () => [x0.title || t("(untitled session)"), `${label} · ${fmtDT(x0.at)}`,
+          [o ? o[1] : null, x0.active_s ? t("{dur} active", { dur: fmtDur(x0.active_s) }) : null].filter(Boolean).join(" · ") || null]);
+        dot.addEventListener("click", () => go(`#/session/${x0.id}`));
+        svg.append(dot);
+      }
+    });
+    el.append(legendKey(Object.values(OUTCOME).filter(([cls]) => cls).map(([cls, label]) => [`s-${cls}`, label])), svg);
+  };
+  return chartCard(t("Who's working on it"), t("each session as a dot, the last {n} weeks · size is active time, colour the outcome", { n: lanes.weeks }), draw,
+    () => ({ columns: [t("Person"), t("Started"), t("Session"), t("Outcome")], num: [false, false, false, false],
+      rows: lanes.people.flatMap((lane) => lane.sessions.map((x0) => [name(lane), fmtDT(x0.at), x0.title || "", OUTCOME[x0.outcome]?.[1] || ""])) }),
+    [], "calendar");
+}
+function teamLessonsPane(p, tm) { // every lesson, narrowed to a person's or a kind, or the ones a newer lesson replaced
+  const kinds = [...new Set(p.knowledge.map((k) => k.kind))];
+  const state = { who: "", kind: "", replaced: false };
+  const box = h("div");
+  const card = (k) => {
+    const el = knowledgeCard(k, { compact: true });
+    const by = learnedBy(tm.learned_by[k.id]);
+    if (by) el.querySelector(".kfoot-meta")?.prepend(by);
+    return el;
+  };
+  const draw = () => {
+    if (state.replaced) {
+      box.replaceChildren(tm.replaced.length ? h("section", { class: "card" }, h("ul", { class: "since-list" }, tm.replaced.map(movedRow)))
+        : h("div", { class: "card empty" }, t("No lesson has been replaced yet.")));
+      return;
+    }
+    const shown = p.knowledge.filter((k) => (!state.kind || k.kind === state.kind) && (!state.who || (tm.learned_by[k.id] || []).some((x) => x.key === state.who)));
+    box.replaceChildren(shown.length ? h("div", { class: "kgrid" }, shown.map(card)) : h("div", { class: "card empty" }, t("No lessons match")));
+  };
+  const sel = (label, opts, key) => h("select", { "aria-label": label, onchange: (e) => { state[key] = e.target.value; draw(); } },
+    opts.map(([v, l]) => h("option", { value: v }, l)));
+  const bar = h("div", { class: "lesson-filters" },
+    sel(t("Person"), [["", t("Everyone")], ...tm.people.map((x) => [x.key, x.who])], "who"),
+    sel(t("Kind"), [["", t("Any kind")], ...kinds.map((k) => [k, kindLabel(k)])], "kind"),
+    h("label", { class: "check" }, h("input", { type: "checkbox", onchange: (e) => { state.replaced = e.target.checked; draw(); } }), t("Show replaced lessons")));
+  draw();
+  return h("div", { class: "grid" }, bar, box);
+}
+function teamPanes(p, { glossary, sessions, usage }, showTab) {
+  const tm = p.team;
+  const side = [needsYouCard(p), soloCard(tm)].filter(Boolean);
+  const since = sinceCard(tm, showTab);
+  return {
+    overview: h("div", { class: "grid" }, teamKbCard(p, showTab),
+      side.length ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, since, h("div", { class: "grid", style: { alignContent: "start" } }, side)) : since,
+      lanesCard(tm.lanes)),
+    start: startHerePane(tm),
+    kb: h("div", { class: "grid" }, casesCard(tm), kbView(p, false, { team: tm }), glossary),
+    lessons: teamLessonsPane(p, tm),
+    people: h("div", { class: "grid" }, teamPeopleCard(tm), soloCard(tm)),
+    activity: h("div", { class: "grid" }, leftOffCard(p.recent), timelineCard(p.timeline), sessions),
+    usage: canAdmin() ? usage : null,
+  };
+}
+
 route(/^\/project$/, async (params) => {
   const path = params.path || "";
   const token = renderSeq;
@@ -3312,33 +3498,42 @@ route(/^\/project$/, async (params) => {
       h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)])))] : null;
   const leftOff = leftOffCard(p.recent), side = [repoCard(p.repo, path), planCard(p)].filter(Boolean);
   const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
-  const panes = {
+  const sessionsPane = h("div", null, sessions, st.sessions > p.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
+    shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null);
+  const usagePane = h("div", { class: "grid" }, tiles, p.files && p.files.length ? filesCard : null);
+  const team = p.team; // a team hub: the team's knowledge and who it came from lead (teamPanes)
+  const panes = team ? teamPanes(p, { glossary, sessions: sessionsPane, usage: usagePane }, (k) => showTab(k)) : {
     overview: h("div", { class: "grid" }, needsYouCard(p),
       leftOff && sideCol ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, leftOff, sideCol) : leftOff || sideCol, timelineCard(p.timeline)),
     working: h("div", null, kbView(p, false, { overview: !lead }), glossary),
     knowledge: p.knowledge.length ? h("div", { class: "kgrid" }, p.knowledge.map((k) => knowledgeCard(k, { compact: true }))) : null,
-    sessions: h("div", null, sessions, st.sessions > p.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
-      shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null),
+    sessions: sessionsPane,
     artifacts: p.artifacts?.total ? artifactsCard(p.artifacts.recent, { project: false,
       hint: ART_KINDS.filter(([k]) => p.artifacts.counts[k]).map(([k, plural]) => `${plural} ${fmtNum(p.artifacts.counts[k])}`).join(" · "),
       all: `#/artifacts?project=${encodeURIComponent(path)}` }) : null,
-    usage: h("div", { class: "grid" }, tiles, p.files && p.files.length ? filesCard : null),
+    usage: usagePane,
   };
-  const counts = { knowledge: p.knowledge.length, sessions: st.sessions, artifacts: p.artifacts?.total };
-  const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Project view") }, PROJECT_TABS.filter(([k]) => panes[k]).map(([k, label]) =>
+  const counts = team ? { lessons: p.knowledge.length } : { knowledge: p.knowledge.length, sessions: st.sessions, artifacts: p.artifacts?.total };
+  const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Project view") }, (team ? TEAM_TABS : PROJECT_TABS).filter(([k]) => panes[k]).map(([k, label]) =>
     h("button", { type: "button", "data-tab": k, onclick: () => showTab(k) }, label, counts[k] ? h("span", { class: "seg-tag" }, fmtNum(counts[k])) : null)));
   const showTab = (name, record = true) => {
     for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
     tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
     if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
   };
-  showTab(panes[params.tab] ? params.tab : "overview", false);
+  const asked = panes[params.tab] ? params.tab : team && panes[TEAM_TAB_OF[params.tab]] ? TEAM_TAB_OF[params.tab] : null;
+  showTab(asked || (team?.viewer.new ? "start" : "overview"), false); // someone new to a team project starts at Start here
+  // on a team hub, the work rather than the spend: no tokens or cost in the head (Usage keeps them, for admins), and no
+  // System map where it would be empty (it reads the commands sessions ran, which members' computers keep) or refused
+  const teamUsage = team ? h("div", { class: "proj-usage" }, usage.firstChild, usage.children[1], usage.children[2]) : null;
+  const systems = team && (limited() || team.knowledge_only) ? null
+    : h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map"));
   return h("div", null,
     h("div", { class: "page-head" }, titled("folder", h("div", { class: "muted", style: { fontSize: "12.5px" } }, h("a", { href: "#/projects" }, t("Projects")), " / "),
       h("h1", null, p.label, p.shared ? [" ", sharedBadge()] : null, p.hub ? [" ", hubBadge(p)] : null), h("div", { class: "sub mono", style: { fontSize: "12px" } }, path, ` · ${fmtDateY(st.first)} – ${fmtDateY(st.last)}`),
-      usage),
-      h("div", { class: "head-actions" }, h("a", { class: "btn", href: `#/systems?system=${encodeURIComponent(path)}` }, icon("systems"), t("System map")), reanalyzeSwitch("project", path, p.reanalyze), synth)),
-    lead,
+      teamUsage || usage),
+      h("div", { class: "head-actions" }, systems, reanalyzeSwitch("project", path, p.reanalyze), synth)),
+    team ? null : lead,
     h("div", { class: "s-tabbar proj-tabbar" }, tabBar),
     Object.values(panes).filter(Boolean));
 });
@@ -8430,7 +8625,7 @@ async function projectsSidebar(box) {
     const q = sbState.projectQ.toLowerCase();
     const match = (p) => !q || p.label.toLowerCase().includes(q) || (p.project_path || "").toLowerCase().includes(q);
     const top = [sbRow(t("All projects"), "#/projects", "overview", projects.length, ["/projects"]),
-      sbRow(t("Systems map"), "#/systems", "systems", null, ["/systems"])];
+      limited() ? null : sbRow(t("Systems map"), "#/systems", "systems", null, ["/systems"])].filter(Boolean); // not theirs to open
     const fold = (key, label, n, open, { lead = null, title = null, cls = "", badge = null } = {}) => h("button", { type: "button", class: `sb-group sb-fold-head${cls}`,
       "aria-expanded": String(open), title, onclick: () => { foldGroup(key, open); draw(); } },
       icon("right", "sb-caret"), lead, h("span", null, label), badge, h("em", null, fmtNum(n)));

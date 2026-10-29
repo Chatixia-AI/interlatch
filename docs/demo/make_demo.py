@@ -3,6 +3,9 @@
     uv run python docs/demo/make_demo.py /tmp/interlatch-demo
     INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 
+With --hub, the demo computer is then a team hub with people: Ada at the hub, Yuma and Ueno sending from their own
+computers, each with some of the sessions, so a project's page shows the team's side (whose sessions taught what).
+
 It writes synthetic Claude Code transcripts for a fictional developer (five projects, about six weeks), then runs the
 real pipeline over them: sync, analysis, knowledge bases, glossary and weekly reviews. Then a project group with its
 Mindmap analyzed, and game mode on with a hero in Innerlatch: a path, lessons studied, gates passed and a job goal.
@@ -554,7 +557,8 @@ print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "re
 
 
 def main() -> None:
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/interlatch-demo").resolve()
+    paths = [a for a in sys.argv[1:] if not a.startswith("--")]
+    out = Path(paths[0] if paths else "/tmp/interlatch-demo").resolve()
     if out.exists():
         shutil.rmtree(out)
     claude_dir, home, bindir = out / "claude", out / "home", out / "bin"
@@ -609,6 +613,8 @@ def main() -> None:
         week = (now - timedelta(weeks=w)).strftime("%G-W%V")
         chronicle("review", week)
     subprocess.run([sys.executable, __file__, "--group-and-hero", str(home)], env=env, check=True)
+    if "--hub" in sys.argv:
+        subprocess.run([sys.executable, __file__, "--team-hub", str(home)], env=env, check=True)
     print(f"\nDemo ready. Open it with:\n  INTERLATCH_HOME={home} uv run python -m interlatch ui --port 8898 --open")
 
 
@@ -647,8 +653,72 @@ def group_and_hero(home: Path) -> None:
     jobs.add(conn, cfg, cat, None, title=JOB["title"], company=JOB["company"], text=JOB["text"])
 
 
+TEAM = (("Yuma", "yuma@example.com", ["billing-api", "storefront"]), ("Ueno", "ueno@example.com", None))
+SHARED = ("billing-api", "storefront", "infra")  # the projects whose sessions the team splits
+
+
+def team_hub(home: Path) -> None:
+    """The demo computer as a team hub with people (--hub): Ada, an admin, works at the hub; Yuma (limited to two
+    projects) and Ueno send from their own computers. The sessions of SHARED are split between the three, a lesson of
+    each project is stated again in a teammate's session, and one is replaced by a newer one, so a project's page has
+    whose-sessions-taught-what, side-by-side cases and "since your last visit" to show. Prints a sign-in link each."""
+    from interlatch.core.config import load_config, set_config_value
+    from interlatch.core.machine import local_machine_id
+    from interlatch.core.util import to_iso, utcnow
+    from interlatch.projects.team import VISIT_KV
+    from interlatch.sharing import people
+    from interlatch.sharing.identity import new_token
+    from interlatch.storage.kv import kv_set
+    from interlatch.storage.sqlite import connect
+
+    cfg = load_config(home)
+    new_token(cfg)
+    set_config_value(cfg, "hub", "name", '"Acme team"')
+    conn = connect(cfg.db_path)
+    here = local_machine_id(cfg)
+    ada = people.add(conn, "Ada Lovelace", "ada@example.com", "admin")
+    conn.execute("UPDATE machines SET person_id = ? WHERE id = ?", (ada["id"], here))
+    links, machines = {"Ada Lovelace": people.invite(conn, ada["id"])}, [here]
+    for i, (name, email, projects) in enumerate(TEAM):
+        person = people.add(conn, name, email, "member", by=ada, projects=[f"{ROOT}/{p}" for p in projects] if projects else None)
+        mid = str(uuid.UUID(int=0xD3E0 + i, version=4))
+        conn.execute("INSERT INTO machines(id, name, role, first_seen, last_seen) VALUES (?, ?, 'spoke', ?, ?)",
+                     (mid, f"{name.lower()}-laptop", to_iso(utcnow()), to_iso(utcnow())))
+        people.join_computer(conn, people.invite(conn, person["id"], machine=mid), mid, f"{name.lower()}-laptop")
+        links[name] = people.invite(conn, person["id"])
+        machines.append(mid)
+    rng = random.Random(11)
+    for project in SHARED:
+        sids = [r[0] for r in conn.execute("SELECT id FROM sessions WHERE project_path = ? ORDER BY started_at", (f"{ROOT}/{project}",))]
+        owner = {sid: machines[(i + rng.randrange(2)) % len(machines)] for i, sid in enumerate(sids)}
+        for sid, mid in owner.items():
+            conn.execute("UPDATE sessions SET machine_id = ? WHERE id = ?", (mid, sid))
+        lesson = conn.execute("SELECT id, session_id, confirmed_json FROM knowledge WHERE project_path = ? AND status = 'active' "
+                              "AND kind IN ('gotcha', 'fix') ORDER BY id LIMIT 1", (f"{ROOT}/{project}",)).fetchone()
+        other = next((sid for sid in sids if lesson and owner.get(sid) != owner.get(lesson["session_id"])), None)
+        if other:  # a teammate hit the same thing in a session of their own
+            confirmed = json.loads(lesson["confirmed_json"] or "[]") or [lesson["session_id"]]
+            conn.execute("UPDATE knowledge SET confirmed_json = ?, stage = 'established' WHERE id = ?",
+                         (json.dumps([*confirmed, other]), lesson["id"]))
+    newest, older = conn.execute("SELECT id FROM knowledge WHERE project_path = ? AND status = 'active' ORDER BY id DESC LIMIT 2",
+                                 (f"{ROOT}/billing-api",)).fetchall()
+    conn.execute("UPDATE knowledge SET status = 'superseded', superseded_by = ?, superseded_reason = 'outdated', superseded_at = ? "
+                 "WHERE id = ?", (newest[0], to_iso(utcnow() - timedelta(hours=20)), older[0]))
+    kid = conn.execute("SELECT MAX(id) FROM knowledge").fetchone()[0]
+    for (pid,) in conn.execute("SELECT id FROM people").fetchall():  # each last looked two days ago, before the newest lessons
+        for project in PROJECTS:
+            kv_set(conn, f"{VISIT_KV}p:{pid}:{ROOT}/{project}",
+                   json.dumps({"seen": to_iso(utcnow() - timedelta(days=2)), "kid": kid - 4, "prev": None, "prev_kid": None}))
+    conn.commit()
+    print("\nTeam hub ready. Sign in as (open on the hub's address):")
+    for name, code in links.items():
+        print(f"  {name}: /signin?code={code}")
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--group-and-hero"]:
         group_and_hero(Path(sys.argv[2]))
+    elif sys.argv[1:2] == ["--team-hub"]:
+        team_hub(Path(sys.argv[2]))
     else:
         main()

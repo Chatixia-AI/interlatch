@@ -215,6 +215,12 @@ uv run python docs/demo/make_demo.py /tmp/interlatch-demo
 INTERLATCH_HOME=/tmp/interlatch-demo/home uv run python -m interlatch ui --port 8898 --open
 ```
 
+With `--hub`, the demo computer then becomes a team hub with people: Ada, an admin, works at the hub, and Yuma (who
+sees only *billing-api* and *storefront*) and Ueno send from their own computers. Their sessions of three projects
+are split between them, so a project's page shows [the team's side](dashboard.md#on-a-team-hub). It prints a sign-in
+link for each person; open one from another device, or through a proxy, to see the hub as that person (a browser at
+the hub itself is always its admin).
+
 The README's GIF and tour video come from it too. With that dashboard running, `docs/demo/record_demo.py` drives
 headless Chromium through a scripted tour (it needs `ffmpeg` on PATH). It writes the whole tour to
 `docs/images/demo.mp4`, which git ignores, and a few seconds of it, under the 600 KB the large-file hook allows, to

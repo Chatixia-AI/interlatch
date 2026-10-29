@@ -2714,3 +2714,31 @@ label.hub-pick { gap: 6px; }
 .cx-rel:hover, .cx-rel:focus-visible { background: var(--surface-2); }
 .cx-rel-label { color: var(--muted); font-size: 12px; min-width: 0; flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mm-tchip.proj .icon { width: 13px; height: 13px; }
+
+/* a project's page on a team hub (teamPanes): whose sessions taught each lesson, what changed, who worked on what */
+.learned-by { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--muted); }
+.learned-by .badge { font-size: 11px; }
+.kb-by { margin-top: 4px; }
+.kfoot-meta .learned-by { margin-right: 6px; }
+.team-kb .kb-behind { color: var(--warning-ink); }
+.since-list, .solo-list, .start-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; }
+.since-list li { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.since-list li > .icon { width: 14px; height: 14px; color: var(--muted); margin-top: 3px; flex: none; }
+.since-title, .since-list li > div { flex: 1 1 200px; min-width: 0; }
+.solo-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.start-item .kbody { margin: 4px 0; font-size: 13px; }
+.person-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.person-row { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.person-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.case-list { display: grid; gap: 16px; }
+.case-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.case-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.case-side { display: grid; gap: 4px; align-content: start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; }
+.case-side .lo-note { margin: 2px 0 0; }
+.lane-line { stroke: var(--grid); }
+.lane-dot { fill: var(--s, var(--muted)); fill-opacity: 0.8; stroke: var(--surface-2); stroke-width: 1; cursor: pointer; }
+.lane-dot.hover, .lane-dot:focus-visible { fill-opacity: 1; stroke: var(--ink); outline: none; }
+.lane-name { fill: var(--ink-2); }
+.mini-legend .sw[class*="s-"] { background: var(--s); }
+.lesson-filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.lesson-filters .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
