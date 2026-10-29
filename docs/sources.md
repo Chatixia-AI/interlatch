@@ -80,15 +80,16 @@ into the database, which it does on its first start. OpenCode has no session-end
 by the 15-minute sync. Connecting registers the MCP server in `~/.config/opencode/opencode.json` (OpenCode merges it
 with `opencode.jsonc`, which is never rewritten).
 
-**Chats on claude.ai and ChatGPT** are not stored on your Mac, so they come in from a data export: on claude.ai,
+**Chats on claude.ai and ChatGPT** are not stored on your Mac. The browser extension saves them as you use the sites
+([below](#saving-chats-as-you-use-the-sites)); older chats come in from a data export: on claude.ai,
 **Settings › Privacy › Export data**; on ChatGPT, **Settings › Data controls › Export data**. The email's link
-downloads a `.zip`. Import it with **Import export…** on the Sources page (card *Chat exports*), or
+downloads a `.zip`. Import it with **Import export…** on the Sources page (card *Web chats*), or
 `interlatch import <zip>` (the unpacked folder or `conversations.json` work too); which service it came from is
 recognized from its contents. Each chat becomes a session (agent `claude-ai` or `chatgpt`, `source =
 claude-ai-export` or `chatgpt-export`) with its prompts, replies, thinking, tool calls (claude.ai artifacts,
 ChatGPT's Python, browsing and image steps, with their output) and notes of attached files and images. claude.ai
 chats in a project are grouped under `claude.ai/<project>`, the rest under `claude.ai`; ChatGPT chats under
-`chatgpt.com`. A ChatGPT chat is read along the branch ChatGPT shows, so edited prompts and regenerated answers you
+`chatgpt.com` (or `chatgpt.com/<project>`, when the browser extension saved it). A ChatGPT chat is read along the branch ChatGPT shows, so edited prompts and regenerated answers you
 moved away from are left out. Import a newer export any time: new and changed chats are added, unchanged ones
 skipped. Only the chats are read and archived (`conversations.json`, and claude.ai's `projects.json` for project
 names); the account files (`users.json`, `user.json`) and ChatGPT's `chat.html` are never opened, and a zip uploaded
@@ -99,11 +100,44 @@ choose **Analyze now**, or import with `--analyze` to queue them all. The export
 no cost. Claude Code on the web sessions are not in the claude.ai export; `claude --teleport <id>` brings one onto your
 Mac as an ordinary Claude Code transcript. Codex Cloud tasks are a separate source (above).
 
+### Saving chats as you use the sites
+
+The browser extension saves claude.ai and ChatGPT chats as you use the sites, so new chats need no new export. It
+works in Chrome, Edge, Brave and other Chromium browsers. It isn't in the Chrome Web Store: you load it from a folder
+the dashboard keeps for it.
+
+**Settings › Browser extension** in the dashboard walks you through it, for Chrome, Edge or Brave, and shows what the
+extension has sent so far. In short:
+
+1. Open `chrome://extensions` (Edge: `edge://extensions`) and turn on **Developer mode**.
+2. Choose **Load unpacked** and pick `~/.interlatch/browser-extension` (the page has the path to copy).
+3. Open claude.ai or chatgpt.com.
+
+While a tab of either site is open, the extension asks the site which chats changed since it last looked: when the
+tab loads, every 5 minutes, and a few seconds after you leave a chat (for another chat, tab or app; at most once a
+minute). It reads each changed chat the way the site's own page does, with your sign-in, and
+sends it to the dashboard on this computer. The first sync goes back 30 days (change it in the extension's popup);
+older chats come in from an export. A sync reads at most 40 chats and the next follows two minutes later, so a first
+sync of a few hundred chats takes a while; when a site asks it to slow down, it waits ten minutes. Temporary chats
+are left out. Chats in a ChatGPT project are grouped under `chatgpt.com/<project>`.
+
+A saved chat is the same session an export updates, stored and archived the same way (its latest copy in
+`archive/<claude-ai|chatgpt>/captured/<id>/`). Like imported chats, saved chats are **not analyzed automatically**:
+screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
+
+The extension's toolbar button shows whether it reaches the dashboard, each site's last sync and any error, with
+**Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
+sync goes. It reads only claude.ai and chatgpt.com and sends only to `http://127.0.0.1`. The dashboard takes chats
+only from this computer, with a header no web page can send. The extension uses the sites' internal endpoints, not a
+published API: when a site changes them, the toolbar button shows the error until an Interlatch update catches up.
+After an Interlatch update the dashboard refreshes the folder, and Chrome loads the new version when it restarts (or
+with the reload button on `chrome://extensions`).
+
 ### Screening imported chats
 
 Most of a chat history is lookups, rewrites and everyday questions that analysis would turn into nothing. Screening
 sorts the chats into **worth analyzing**, **maybe** and **not worth it**, with a topic and a one-line reason each,
-so the analysis goes where it pays. Choose **Screen N chats** on the export's card (Sources › Chat exports), or run
+so the analysis goes where it pays. Choose **Screen N chats** on the export's card (Sources › Web chats), or run
 `interlatch screen` (`--sample 200` tries it on a random 200 first, `--dry-run` only counts).
 
 - It reads only each chat's opening: title, date, the first and last prompt and the start of the first reply,

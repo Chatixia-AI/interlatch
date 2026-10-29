@@ -1,0 +1,42 @@
+:root {
+  --bg: #ffffff; --fg: #1d2129; --muted: #626a78; --line: #e3e6eb; --card: #f6f7f9;
+  --accent: #3b5bdb; --accent-fg: #ffffff; --good: #2b8a3e; --bad: #c92a2a;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181d; --fg: #e6e8ec; --muted: #9aa1ad; --line: #2c3038; --card: #1f2229;
+    --accent: #748ffc; --accent-fg: #0d1020; --good: #69db7c; --bad: #ff8787;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16181d; --fg: #e6e8ec; --muted: #9aa1ad; --line: #2c3038; --card: #1f2229;
+  --accent: #748ffc; --accent-fg: #0d1020; --good: #69db7c; --bad: #ff8787;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; width: 320px; background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+header b { flex: 1; }
+.pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--card); color: var(--muted); }
+.pill.good { color: var(--good); }
+.pill.bad { color: var(--bad); }
+main { padding: 10px 12px 12px; display: grid; gap: 8px; }
+.site { background: var(--card); border-radius: 8px; padding: 8px 10px; }
+.site h2 { margin: 0; font-size: 13px; }
+.site .line { margin: 2px 0 0; color: var(--muted); }
+.site .line.bad { color: var(--bad); }
+.hint { margin: 0; color: var(--muted); font-size: 12px; }
+.hint.bad { color: var(--bad); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.icon { padding: 0 6px; line-height: 20px; }
+button:disabled { opacity: .6; cursor: default; }
+.check { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+details { border-top: 1px solid var(--line); padding-top: 6px; }
+summary { cursor: pointer; color: var(--muted); }
+details label { display: block; margin-top: 6px; color: var(--muted); }
+details input[type=number] { width: 70px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+details button { margin-top: 8px; }

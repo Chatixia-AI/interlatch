@@ -21,6 +21,7 @@ a = Analysis(
     # the package metadata carries the version (interlatch.__version__ reads it); the Party reads its roadmap catalog,
     # and the job-market numbers it shows until Firebase answers
     datas=[(str(ROOT / "src" / "interlatch" / "web"), "interlatch/web"),
+           (str(ROOT / "src" / "interlatch" / "browser_extension"), "interlatch/browser_extension"),
            (str(ROOT / "src" / "interlatch" / "knowledge" / "roadmap.json"), "interlatch/knowledge"),
            (str(ROOT / "src" / "interlatch" / "knowledge" / "market.json"), "interlatch/knowledge")]
           + copy_metadata("interlatch"),

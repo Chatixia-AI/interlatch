@@ -229,6 +229,7 @@ def best_title(row: dict) -> str:
 ANALYSIS_REASONS = ("too little content", "too few prompts", "excluded project", "session continued during analysis",
                     "session continued after analysis", "history only (transcript deleted before Interlatch)")
 NOT_ANALYZED_CHAT = "imported {label} chat: not analyzed automatically (Analyze now, or import with --analyze)"
+NOT_ANALYZED_CAPTURED = "captured {label} chat: not analyzed automatically (Analyze now, or screen chats on Sources)"
 RENAMED_REASONS = {  # what ingest stored before Chronicle became Interlatch, shown as it reads now
     "history only (transcript deleted before Chronicle)": "history only (transcript deleted before Interlatch)"}
 
@@ -241,4 +242,7 @@ def analysis_reason_text(reason: str | None) -> str | None:
     m = re.fullmatch(r"imported (.+) chat: not analyzed automatically \(Analyze now, or import with --analyze\)", reason)
     if m:
         return tr(NOT_ANALYZED_CHAT, label=m.group(1))
+    m = re.fullmatch(r"captured (.+) chat: not analyzed automatically \(Analyze now, or screen chats on Sources\)", reason)
+    if m:
+        return tr(NOT_ANALYZED_CAPTURED, label=m.group(1))
     return tr(reason) if reason in ANALYSIS_REASONS else reason

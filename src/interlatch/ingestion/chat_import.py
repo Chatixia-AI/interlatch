@@ -8,6 +8,9 @@ chats that changed and adds new ones.
 Imported chats are not analyzed automatically (years of chats would use up the Claude plan's limits in one go):
 screen them (screen.py) to queue the ones worth it, analyze one with **Analyze now**, or import with `--analyze` to
 queue them all.
+
+The browser extension sends the same chats one at a time as you use the sites (`capture`, POST /api/capture); they
+are stored the same way, as the same sessions an export updates.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from pathlib import Path
 from ..sources import chatgpt as chatgpt_export
 from ..sources.claude import export as claude_export
 from ..core.util import utcnow_iso
-from ..core.sessions import NOT_ANALYZED_CHAT
+from ..core.sessions import NOT_ANALYZED_CAPTURED, NOT_ANALYZED_CHAT
 from ..sources.chats import CHATGPT, CLAUDE_AI, FORMATS, Format
 
 log = logging.getLogger("interlatch.chat_import")
@@ -183,12 +186,11 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
     """Import (or re-import) an export. `name` is the file's name when `path` is an upload's temporary copy."""
     from ..storage.kv import kv_set
     from .deletion import forgotten_ids
-    from .persistence import is_unchanged, store_parsed
     from ..core.util import file_lock
 
     name = name or Path(path).name
     export = read_export(Path(path), name)
-    fmt, mod = export.format, export.format.module
+    fmt = export.format
     projects = claude_export.project_names(export.files.get("projects.json")) if fmt is CLAUDE_AI else {}
     digest = hashlib.sha1(b"".join(export.files[k] for k in sorted(export.files))).hexdigest()[:12]
     dst = cfg.archive_dir / fmt.key / digest
@@ -208,32 +210,91 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
         for i, conv in enumerate(export.conversations):
             if progress and i % 50 == 0:
                 progress(f"importing {fmt.label} chats… {i:,}/{len(export.conversations):,}")
-            sid, sig = mod.conversation_id(conv), mod.conversation_signature(conv)
-            if not sid:
-                counts["empty"] += 1
-                continue
-            if sid in skip or is_unchanged(conn, sid, sig, False):
-                counts["unchanged"] += 1
-                continue
-            ps = mod.parse_conversation(conv, projects)
-            if ps is None:
-                counts["empty"] += 1
-                continue
-            if cfg.is_excluded(ps.project_path):
-                counts["excluded"] += 1
-                continue
-            queued = conn.execute("SELECT 1 FROM sessions WHERE id = ? AND analysis_status = 'pending'", (sid,)).fetchone()
-            result = store_parsed(conn, cfg, ps, claude_dir=dst, project_dir=None, transcript_path=archive,
-                                  archive_path=archive, files_sig=sig, agent=fmt.agent, source=fmt.source)
-            if not analyze and not queued:  # a chat already queued for analysis (screen --queue) stays queued
-                conn.execute("UPDATE sessions SET analysis_status = 'skipped', analysis_reason = ? "
-                             "WHERE id = ? AND analysis_status = 'pending'", (not_analyzed_reason(fmt), sid))
-            counts["new" if result == "new" else "updated"] += 1
-            conn.commit()
+            counts[_store_one(cfg, conn, fmt, conv, projects, skip=skip, dst=dst, archive=archive, analyze=analyze,
+                              reason=not_analyzed_reason(fmt))] += 1
         kv_set(conn, fmt.last_import_key, json.dumps({"at": utcnow_iso(), "file": name, **counts}))
         conn.commit()
     log.info("%s import from %s: %s", fmt.label, name, counts)
     return counts
+
+
+def _store_one(cfg, conn, fmt: Format, conv: dict, projects: dict, *, skip: set[str], dst: Path, archive: Path,
+               analyze: bool, reason: str, keep=None) -> str:
+    """Store one chat of an export or a capture: new, updated, unchanged, empty or excluded. `keep` writes the chat's
+    archive copy, called only when the chat is stored."""
+    from .persistence import is_unchanged, store_parsed
+
+    mod = fmt.module
+    sid, sig = mod.conversation_id(conv), mod.conversation_signature(conv)
+    if not sid:
+        return "empty"
+    if sid in skip or is_unchanged(conn, sid, sig, False):
+        return "unchanged"
+    ps = mod.parse_conversation(conv, projects)
+    if ps is None:
+        return "empty"
+    if cfg.is_excluded(ps.project_path):
+        return "excluded"
+    if keep:
+        keep()
+    queued = conn.execute("SELECT 1 FROM sessions WHERE id = ? AND analysis_status = 'pending'", (sid,)).fetchone()
+    result = store_parsed(conn, cfg, ps, claude_dir=dst, project_dir=None, transcript_path=archive,
+                          archive_path=archive, files_sig=sig, agent=fmt.agent, source=fmt.source)
+    if not analyze and not queued:  # a chat already queued for analysis (screen --queue) stays queued
+        conn.execute("UPDATE sessions SET analysis_status = 'skipped', analysis_reason = ? "
+                     "WHERE id = ? AND analysis_status = 'pending'", (reason, sid))
+    conn.commit()
+    return "new" if result == "new" else "updated"
+
+
+class CaptureBusy(ExportError):
+    """An import or sync holds the archive: the extension sends the chat again later."""
+
+
+CAPTURE_WAIT = 20  # seconds a capture waits for a running sync before the extension is told to try later
+_CHAT_ID_RE = re.compile(r"[0-9A-Za-z_-]{1,100}")  # a chat's id names its archive folder
+
+
+def capture(cfg, conn, key: str, conv, *, analyze: bool = False) -> dict:
+    """One chat the browser extension (browser_extension/) read from claude.ai or chatgpt.com, in the JSON a data
+    export holds, stored as an import stores it: not analyzed automatically, unchanged chats left alone. Its latest
+    copy is kept as archive/<format>/captured/<id>/conversations.json.gz, where reparse_archived finds it."""
+    from ..storage.kv import kv_get, kv_set
+    from .deletion import forgotten_ids
+    from ..core.util import file_lock
+
+    fmt = next((f for f in FORMATS if f.key == key), None)
+    if fmt is None or not isinstance(conv, dict):
+        raise ExportError("not a claude.ai or ChatGPT chat")
+    if not (chatgpt_export.is_chatgpt([conv]) if fmt is CHATGPT else claude_export.is_claude([conv])):
+        raise ExportError(f"not a {fmt.label} chat")
+    sid = fmt.module.conversation_id(conv)
+    if not isinstance(sid, str) or not _CHAT_ID_RE.fullmatch(sid):
+        raise ExportError("bad chat id")
+    dst = cfg.archive_dir / fmt.key / "captured" / sid
+    archive = dst / "conversations.json.gz"
+
+    def keep():
+        dst.mkdir(parents=True, exist_ok=True)
+        tmp = dst / "conversations.tmp"
+        with gzip.open(tmp, "wb") as f:
+            f.write(json.dumps([conv], ensure_ascii=False).encode())
+        tmp.replace(archive)
+
+    with file_lock(cfg.locks_dir / "ingest.lock", timeout=CAPTURE_WAIT) as got:
+        if not got:
+            raise CaptureBusy("a sync is running; the extension sends the chat again later")
+        result = _store_one(cfg, conn, fmt, conv, {}, skip=forgotten_ids(conn), dst=dst, archive=archive,
+                            analyze=analyze, reason=NOT_ANALYZED_CAPTURED.format(label=fmt.label), keep=keep)
+        try:
+            last = json.loads(kv_get(conn, fmt.last_capture_key) or "null") or {}
+        except ValueError:
+            last = {}
+        stored = int(last.get("captured") or 0) + (result in ("new", "updated"))
+        kv_set(conn, fmt.last_capture_key, json.dumps({"at": utcnow_iso(), "captured": stored}))
+        conn.commit()
+    log.info("%s chat %s captured: %s", fmt.label, sid, result)
+    return {"id": sid, "result": result}
 
 
 def reparse_archived(cfg, conn, skip: set[str] = frozenset()) -> int:
@@ -289,17 +350,22 @@ def summary(counts: dict) -> str:
 
 
 def import_status(conn) -> dict:
-    """Per format: chats imported and analyzed, how screening sorted them, and the last import."""
+    """Per format: chats imported and analyzed, how screening sorted them, the last import, and the browser
+    extension's last capture."""
     from ..storage.kv import kv_get
     from ..analysis.screen import screen_status
+
+    def stored(key):
+        try:
+            return json.loads(kv_get(conn, key) or "null")
+        except ValueError:
+            return None
 
     out = {}
     for fmt in FORMATS:
         r = conn.execute("SELECT COUNT(*), SUM(analysis_status = 'done') FROM sessions WHERE source = ?", (fmt.source,)).fetchone()
-        try:
-            last = json.loads(kv_get(conn, fmt.last_import_key) or "null")
-        except ValueError:
-            last = None
+        last = stored(fmt.last_import_key)
         out[fmt.key] = {"label": fmt.label, "agent": fmt.agent, "sessions": r[0] or 0, "analyzed": r[1] or 0, "last_import": last,
+                        "last_capture": stored(fmt.last_capture_key),
                         "screen": screen_status(conn, fmt.source)}
     return out

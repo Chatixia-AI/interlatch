@@ -79,7 +79,9 @@ def parse_conversation(conv: dict, projects: dict | None = None) -> ParsedSessio
     if not any((m.get("author") or {}).get("role") == "user" and any(_text(m.get("content") or {})) for m in msgs):
         return None  # an empty chat
     ps = ParsedSession(id=conversation_id(conv))
-    ps.project_path = "chatgpt.com"
+    project = conv.get("project") if isinstance(conv.get("project"), dict) else {}  # the browser extension's: exports have none
+    name = safe_text(project.get("name") or "").strip()
+    ps.project_path = f"chatgpt.com/{name}" if name else "chatgpt.com"
     ps.entrypoint = "chatgpt"
     ps.custom_title = safe_text(conv.get("title") or "") or None
     b = SessionBuilder(ps)
