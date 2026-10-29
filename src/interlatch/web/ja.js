@@ -2910,6 +2910,10 @@ window.INTERLATCH_JA = {
   "What's filled in": "記入される内容",
   "Only what this install is, never your sessions, projects, folders or addresses. You can change it on GitHub before you post.": "このインストールが何かだけで、セッション、プロジェクト、フォルダー、アドレスは含みません。投稿する前に GitHub で書き換えられます。",
   // a project's page on a team hub
+  "Glossary & map": "用語集とマップ",
+  "Glossary view": "用語集の表示",
+  "Filter {n} terms…": "{n} 件の用語を絞り込み…",
+  "Filter terms": "用語を絞り込む",
   "Start here": "はじめに",
   "learned by {names}": "{names} から学んだ教訓",
   "Found separately in more than one person's sessions": "複数の人のセッションでそれぞれ見つかった教訓",

@@ -3271,8 +3271,8 @@ route(/^\/reanalysis$/, async () => {
 // A project's page on a team hub (projects/team.py): the team's knowledge first and whose sessions taught it, what
 // changed since this person last looked, who has worked on what, and where to start for someone new to the project.
 // People are credited as the ones a lesson was learned from and never counted: no lessons, sessions or time per person.
-const TEAM_TABS = [["overview", t("Overview")], ["start", t("Start here")], ["kb", t("Knowledge base")], ["lessons", t("Lessons")],
-  ["people", t("People")], ["activity", t("Activity")], ["usage", t("Usage")]];
+const TEAM_TABS = [["overview", t("Overview")], ["start", t("Start here")], ["kb", t("Knowledge base")], ["terms", t("Glossary & map")],
+  ["lessons", t("Lessons")], ["people", t("People")], ["activity", t("Activity")], ["usage", t("Usage")]];
 const TEAM_TAB_OF = { working: "kb", knowledge: "lessons", sessions: "activity" }; // a personal page's tab, from an old link
 function learnedBy(list, { label = true } = {}) { // whose sessions taught a lesson, first finder first
   if (!list || !list.length) return null;
@@ -3436,7 +3436,46 @@ function teamLessonsPane(p, tm) { // every lesson, narrowed to a person's or a k
   draw();
   return h("div", { class: "grid" }, bar, box);
 }
-function teamPanes(p, { glossary, sessions, usage }, showTab) {
+// The project's glossary on a team hub, as a list or as a mindmap (category, then theme). Someone limited to projects
+// sees the terms their projects use, with what their projects say of them (sharing.access); the full glossary, the Map
+// and search stay with those who see every project, so links there are left out for them.
+const TERM_VIEWS = [["list", t("Glossary")], ["map", t("Mindmap")]];
+function teamTermsPane(p, params) {
+  const tm = p.team, path = p.project_path;
+  const views = TERM_VIEWS.filter(([k]) => k === "list" || tm.map);
+  let current = params.view === "map" && tm.map ? "map" : "list";
+  const filter = h("input", { class: "input", type: "search", placeholder: t("Filter {n} terms…", { n: fmtNum(p.glossary.length) }), "aria-label": t("Filter terms") });
+  const dl = h("dl", { class: "kv", style: { marginTop: 0 } });
+  const fill = () => {
+    const q = filter.value.trim().toLowerCase();
+    const shown = p.glossary.filter((g) => !q || `${g.term} ${g.definition || ""}`.toLowerCase().includes(q));
+    dl.replaceChildren(...shown.flatMap((g) => [
+      h("dt", null, limited() ? g.term : h("a", { href: `#/glossary?term=${encodeURIComponent(g.term)}` }, g.term), " ", h("span", { class: "muted small" }, catLabel(g.category))),
+      h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)]));
+    if (!shown.length) dl.append(h("p", { class: "muted" }, t("No terms match.")));
+  };
+  filter.addEventListener("input", fill);
+  fill();
+  const list = h("section", { class: "card" }, cardHead(t("Glossary ({n})", { n: p.glossary.length }), { iconName: "glossary",
+    tools: p.glossary.length > 12 ? filter : null }), dl);
+  const slot = h("div", { class: "grid" }), actions = h("div", { class: "head-actions gmap-actions" });
+  const seg = h("div", { class: "seg", role: "group", "aria-label": t("Glossary view") }, views.map(([k, name]) =>
+    h("button", { type: "button", "data-view": k, onclick: () => { current = k; draw({ path, tab: "terms", view: k === "list" ? "" : k }); } }, name)));
+  function draw(next) {
+    if (next) setParams(next);
+    seg.querySelectorAll("button").forEach((b) => { const on = b.dataset.view === current; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+    actions.replaceChildren();
+    if (current === "list") { slot.replaceChildren(list); return; }
+    const v = mindmapView(tm.map, { params: next || params, keep: { path, tab: "terms", view: "map" }, root: p.label, title: p.label,
+      scope: `project:${path}`, levels: ["category", "theme"], refresh: (q) => draw(q) });
+    actions.append(...[v.actions].flat());
+    slot.replaceChildren(v.body);
+  }
+  const pane = h("div", { class: "grid gmap" }, views.length > 1 ? h("div", { class: "gmap-bar" }, seg, actions) : null, slot);
+  pane.open = () => requestAnimationFrame(() => draw()); // drawn once the tab shows: the mindmap measures its canvas
+  return pane;
+}
+function teamPanes(p, { sessions, usage }, showTab, params) {
   const tm = p.team;
   const side = [needsYouCard(p), soloCard(tm)].filter(Boolean);
   const since = sinceCard(tm, showTab);
@@ -3445,7 +3484,8 @@ function teamPanes(p, { glossary, sessions, usage }, showTab) {
       side.length ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, since, h("div", { class: "grid", style: { alignContent: "start" } }, side)) : since,
       lanesCard(tm.lanes)),
     start: startHerePane(tm),
-    kb: h("div", { class: "grid" }, casesCard(tm), kbView(p, false, { team: tm }), glossary),
+    kb: h("div", { class: "grid" }, casesCard(tm), kbView(p, false, { team: tm })),
+    terms: p.glossary.length ? teamTermsPane(p, params) : null,
     lessons: teamLessonsPane(p, tm),
     people: h("div", { class: "grid" }, teamPeopleCard(tm), soloCard(tm)),
     activity: h("div", { class: "grid" }, leftOffCard(p.recent), timelineCard(p.timeline), sessions),
@@ -3502,7 +3542,7 @@ route(/^\/project$/, async (params) => {
     shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null);
   const usagePane = h("div", { class: "grid" }, tiles, p.files && p.files.length ? filesCard : null);
   const team = p.team; // a team hub: the team's knowledge and who it came from lead (teamPanes)
-  const panes = team ? teamPanes(p, { glossary, sessions: sessionsPane, usage: usagePane }, (k) => showTab(k)) : {
+  const panes = team ? teamPanes(p, { sessions: sessionsPane, usage: usagePane }, (k) => showTab(k), params) : {
     overview: h("div", { class: "grid" }, needsYouCard(p),
       leftOff && sideCol ? h("div", { class: "grid cols-main", style: { alignItems: "start" } }, leftOff, sideCol) : leftOff || sideCol, timelineCard(p.timeline)),
     working: h("div", null, kbView(p, false, { overview: !lead }), glossary),
@@ -3513,13 +3553,14 @@ route(/^\/project$/, async (params) => {
       all: `#/artifacts?project=${encodeURIComponent(path)}` }) : null,
     usage: usagePane,
   };
-  const counts = team ? { lessons: p.knowledge.length } : { knowledge: p.knowledge.length, sessions: st.sessions, artifacts: p.artifacts?.total };
+  const counts = team ? { lessons: p.knowledge.length, terms: p.glossary.length } : { knowledge: p.knowledge.length, sessions: st.sessions, artifacts: p.artifacts?.total };
   const tabBar = h("div", { class: "seg proj-tabs", role: "group", "aria-label": t("Project view") }, (team ? TEAM_TABS : PROJECT_TABS).filter(([k]) => panes[k]).map(([k, label]) =>
     h("button", { type: "button", "data-tab": k, onclick: () => showTab(k) }, label, counts[k] ? h("span", { class: "seg-tag" }, fmtNum(counts[k])) : null)));
   const showTab = (name, record = true) => {
     for (const [k, el] of Object.entries(panes)) if (el) el.hidden = k !== name;
     tabBar.querySelectorAll("button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
-    if (record) setParams({ ...params, tab: name === "overview" ? "" : name });
+    if (record) setParams({ ...params, tab: name === "overview" ? "" : name, view: "" });
+    if (typeof panes[name]?.open === "function") panes[name].open(); // a pane that draws once shown (teamTermsPane)
   };
   const asked = panes[params.tab] ? params.tab : team && panes[TEAM_TAB_OF[params.tab]] ? TEAM_TAB_OF[params.tab] : null;
   showTab(asked || (team?.viewer.new ? "start" : "overview"), false); // someone new to a team project starts at Start here
@@ -4728,7 +4769,7 @@ function mindmapView(data, opts) {
           ks.length > 8 ? h("a", { class: "mm-more", href: `#/knowledge?q=${encodeURIComponent(tm.term)}` }, t("{n} more in Knowledge →", { n: ks.length - 8 })) : null] : null,
         tm.sessions.length ? [h("h4", null, t("Mentioned most in")), h("ul", { class: "mm-klist" }, tm.sessions.map((x) => h("li", null,
           h("span", { class: "mm-date" }, fmtDate(x.started_at)), h("a", { href: `#/session/${x.id}` }, x.title || x.id.slice(0, 8)))))] : null,
-        h("div", { class: "mm-links-row" },
+        limited() ? null : h("div", { class: "mm-links-row" }, // the glossary and search span every project: not theirs to open
           h("a", { class: "btn small", href: `#/glossary?term=${encodeURIComponent(tm.term)}` }, t("Glossary entry")),
           tm.n_sessions ? h("a", { class: "btn small", href: `#/search?q=${encodeURIComponent(tm.term)}` }, t("All mentions")) : null),
       ];
@@ -4758,7 +4799,7 @@ function mindmapView(data, opts) {
             th.description ? h("span", { class: "mm-theme-desc" }, th.description) : null);
         }))] : null,
         h("h4", null, t("Most discussed")), chipsOf(n.terms),
-        h("div", { class: "mm-links-row" }, h("a", { class: "btn small", href: `#/glossary?category=${encodeURIComponent(n.cat)}` }, t("Show as a list"))),
+        limited() ? null : h("div", { class: "mm-links-row" }, h("a", { class: "btn small", href: `#/glossary?category=${encodeURIComponent(n.cat)}` }, t("Show as a list"))),
       ];
     } else if (n.kind === "theme") {
       const th = n.value !== null ? themeOf(n.cat, n.label) : null;
