@@ -156,6 +156,9 @@ JA: dict[str, str] = {
         "準備完了：バックグラウンドの処理が次の実行（15 分ごと）で分析します",
     "ready to re-analyze: the session continued after it was analyzed": "再分析の準備完了：分析のあとにセッションが続きました",
     "analysis is paused until {when} (usage limit); it resumes by itself": "使用量の上限のため、分析は {when} まで一時停止しています。自動で再開します",
+    "your Claude plan's {window} limit is at {pct}%, at or above the {cap}% you set; it resumes after {when}":
+        "Claude プランの{window}の上限が {pct}% で、設定した {cap}% 以上です。{when} 以降に再開します",
+    "session (5hr)": "セッション（5 時間）", "weekly (7 day)": "週間（7 日）", "spend": "利用額",
     "automatic analysis is off (analysis.auto); analyze it from its page or with `interlatch analyze`":
         "自動分析がオフです（analysis.auto）。セッションのページか `interlatch analyze` で分析してください",
     "analysis is off (record only): pick an analyzer in Status › Analysis to analyze sessions":
