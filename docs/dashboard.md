@@ -152,6 +152,11 @@ knowledge leads. It is still read from what computers shared, with nothing writt
 - **Knowledge base:** each entry names whose sessions taught it ("learned by"), with a badge when more than one person
   found it. **Hit by more than one person** puts the sessions in which different people found the same lesson side by
   side.
+- **Glossary & map:** the project's terms as a list or as a mindmap (category, then theme), for everyone who sees the
+  project. Someone limited to some projects gets the terms their projects use, each with what their projects say of
+  it: a term's definition shows when one of their projects wrote it, and otherwise their project's own note on it.
+  What a term gathers across projects (aliases, related terms, how often it was mentioned, the sessions it came up in
+  most, a theme's description) isn't shown to them.
 - **Lessons:** every lesson with who it was learned from, narrowed to a person or a kind, or the lessons a newer one
   replaced.
 - **People:** who has worked on what, as topics from their sessions here.

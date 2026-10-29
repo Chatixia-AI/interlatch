@@ -177,3 +177,72 @@ def test_a_computer_that_is_no_team_hub_gets_no_team_side(synced):
         assert code == 200 and p["team"] is None
     finally:
         httpd.shutdown()
+
+
+def _glossary(conn):
+    """Three terms: one only PROJECTS uses (with cross-project fields to leak), one it shares with ELSEWHERE whose
+    definition ELSEWHERE wrote, one only ELSEWHERE uses; and the themes they fall under."""
+    rows = [
+        (901, "Deploy role", "platform", "DEF-OURS", PROJECTS, '["ALIAS-CANARY"]', '["RELATED-CANARY"]', 7,
+         json.dumps([ELSE_SID]), "Shipping"),
+        (902, "Vault", "service", "DEF-ELSE-CANARY", ELSEWHERE, None, None, 3, None, None),
+        (903, "ELSE-TERM-CANARY", "platform", "only there", ELSEWHERE, None, None, 1, None, "HIDDEN-THEME-CANARY"),
+    ]
+    for r in rows:
+        conn.execute("INSERT INTO glossary(id, term, norm, category, definition, definition_source, aliases_json, "
+                     "related_json, n_sessions, top_sessions_json, theme) VALUES (?, ?, lower(?), ?, ?, ?, ?, ?, ?, ?, ?)",
+                     (r[0], r[1], r[1], *r[2:]))
+    for term, path, context in ((901, PROJECTS, "how we deploy"), (902, PROJECTS, "CTX-OURS"),
+                                (902, ELSEWHERE, "CTX-ELSE-CANARY"), (903, ELSEWHERE, "there")):
+        conn.execute("INSERT INTO glossary_usage(term_id, project_path, context) VALUES (?, ?, ?)", (term, path, context))
+    conn.execute("INSERT INTO glossary_themes(category, name, description, n_terms) VALUES "
+                 "('platform', 'Shipping', 'THEME-DESC-CANARY', 9), ('platform', 'HIDDEN-THEME-CANARY', 'x', 1)")
+    conn.commit()
+
+
+def test_someone_limited_sees_their_projects_glossary_only(limited):  # noqa: F811
+    _team(limited)
+    _glossary(limited["conn"])
+    code, p = _project(limited, headers=_as(limited["bob_session"]))
+    assert code == 200
+    terms = {g["term"]: g for g in p["glossary"]}
+    assert set(terms) == {"Deploy role", "Vault"}
+    assert terms["Deploy role"]["definition"] == "DEF-OURS"
+    # another project wrote Vault's definition: Bob gets his project's own note in its place
+    assert terms["Vault"]["definition"] == "CTX-OURS" and terms["Vault"]["context"] == ""
+    # the mindmap: the same terms, nothing that spans projects, themes counted over his terms only
+    m = p["team"]["map"]
+    assert {t["term"] for t in m["terms"]} == {"Deploy role", "Vault"}
+    deploy = next(t for t in m["terms"] if t["term"] == "Deploy role")
+    assert deploy["aliases"] == [] and deploy["related"] == [] and deploy["sessions"] == [] and deploy["n_sessions"] == 0
+    assert m["themes"] == {"platform": [{"name": "Shipping", "description": None, "n_terms": 1}]}
+    assert "CANARY" not in json.dumps({"glossary": p["glossary"], "map": m})
+
+
+def test_an_admin_keeps_the_whole_glossary(limited):  # noqa: F811
+    _team(limited)
+    _glossary(limited["conn"])
+    p = _project(limited)[1]
+    terms = {g["term"]: g for g in p["glossary"]}
+    assert terms["Vault"]["definition"] == "DEF-ELSE-CANARY" and terms["Vault"]["context"] == "CTX-OURS"
+    deploy = next(t for t in p["team"]["map"]["terms"] if t["term"] == "Deploy role")
+    assert deploy["aliases"] == ["ALIAS-CANARY"]
+
+
+def test_the_glossary_views_hold_only_their_projects(limited):  # noqa: F811
+    """The data layer itself, whatever an endpoint asks: another project's usage notes and terms aren't there."""
+    from interlatch.sharing import access
+    from interlatch.storage.sqlite import connect
+
+    _team(limited)
+    _glossary(limited["conn"])
+    conn = connect(limited["cfg"].db_path)
+    try:
+        access.limit(conn, [PROJECTS])
+        assert {r[0] for r in conn.execute("SELECT project_path FROM glossary_usage")} == {PROJECTS}
+        assert {r[0] for r in conn.execute("SELECT term FROM glossary")} == {"Deploy role", "Vault"}
+        assert {r[0] for r in conn.execute("SELECT name FROM glossary_themes")} == {"Shipping"}
+        dump = json.dumps([list(r) for t in access.GLOSSARY for r in conn.execute(f"SELECT * FROM {t}")])
+        assert "CANARY" not in dump
+    finally:
+        conn.close()

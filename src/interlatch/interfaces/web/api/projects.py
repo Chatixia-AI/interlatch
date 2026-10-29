@@ -198,7 +198,6 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False, 
         (path,)).fetchone()
     if not stats or not stats["sessions"]:
         return None
-    from ....knowledge.glossary import glossary_entries
     from ...exports.diagrams import for_kb
     kb = c.execute("SELECT * FROM project_kb WHERE project_path = ?", (path,)).fetchone()
     labels = project_labels(c)
@@ -230,9 +229,7 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False, 
         "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
             "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
             "WHERE k.project_path = ? AND k.status = 'active' ORDER BY k.pinned DESC, k.id DESC LIMIT 300", (path,))],
-        "glossary": [{"term": g["term"], "category": g["category"], "definition": g["definition"],
-                      "context": next((u["context"] for u in g["usage"] if u["project_path"] == path), "")}
-                     for g in glossary_entries(c, project=path)],
+        "glossary": _glossary(c, path),
         "files": [dict(r) for r in c.execute(
             "SELECT f.path, COUNT(*) sessions, SUM(f.edits + f.writes) edits, SUM(f.lines_added) added, SUM(f.lines_removed) removed "
             "FROM session_files f JOIN sessions s ON s.id = f.session_id WHERE s.project_path = ? AND (f.edits + f.writes) > 0 "
@@ -252,8 +249,25 @@ def _team_side(ctx: Context, path: str, kb, viewer: dict | None, limited: bool) 
     key = f"p:{viewer['id']}" if viewer else whos[None][1]
     since = visit(ctx.conn, key, path)
     ctx.conn.commit()
+    from ....knowledge.glossary import map_data
+
+    terms = map_data(ctx.conn, [path])  # the project's glossary as a mindmap, through the same views
     return {**team_view(ctx.conn, path, whos, key, kb=dict(kb) if kb else None, since=since, prs=not limited),
-            "engine": ctx.cfg.analysis.backend != "none", "knowledge_only": hub["knowledge_only"]}
+            "engine": ctx.cfg.analysis.backend != "none", "knowledge_only": hub["knowledge_only"],
+            "map": terms if terms["terms"] else None}
+
+
+def _glossary(c, path: str) -> list[dict]:
+    """The terms a project uses, each with what this project says of it. A definition another project wrote reads as
+    NULL to someone limited to projects (sharing.access), who gets this project's own usage note in its place."""
+    from ....knowledge.glossary import glossary_entries
+
+    out = []
+    for g in glossary_entries(c, project=path):
+        context = next((u["context"] for u in g["usage"] if u["project_path"] == path), "") or ""
+        out.append({"term": g["term"], "category": g["category"], "definition": g["definition"] or context,
+                    "context": context if g["definition"] else ""})
+    return out
 
 
 def _labelled(ctx: Context, timeline: dict) -> dict:
