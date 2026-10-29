@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.3 (2026-10-29)
+
+- **Analysis usage on every page:** the status bar shows your Claude plan's session (5hr) and weekly (7 day) usage, as
+  Claude Code names them, and what analysis spent today. Click it to see what's left and when each resets, this month's
+  and all-time spend, and to set the analysis limits: sessions per run, the budget per call, and a new cap that pauses
+  automatic analysis at a percent of your plan limit ([Configuration](docs/configuration.md)).
+
 ## 0.29.2 (2026-10-29)
 
 - **A project's page on a team hub:** the team's knowledge leads. Each knowledge base entry and lesson names whose
