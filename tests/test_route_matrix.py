@@ -216,6 +216,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/update"): POST_ADMIN,
     ("POST", "/api/analysis/backend"): POST_ADMIN,
     ("POST", "/api/analysis/agent"): POST_ADMIN,
+    ("POST", "/api/analysis/limits"): POST_ADMIN,
     ("POST", "/api/analysis/provider"): POST_ADMIN,
     ("POST", "/api/analysis/provider/test"): POST_ADMIN,
     ("POST", "/api/analysis/provider/models"): POST_ADMIN,

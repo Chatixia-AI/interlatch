@@ -35,6 +35,7 @@ the file. Changes apply on the next sync or worker run. `INTERLATCH_HOME` reloca
 | `idle_minutes` | `20` | a session must have ended or been idle this long before it is analyzed |
 | `min_prompts` | `1` | sessions with fewer human prompts are skipped |
 | `max_per_run` / `concurrency` | `6` / `2` | analyses per 15-minute run, and parallel analysis processes |
+| `plan_limit_pct` | `0` | pause automatic analysis while your Claude plan's session (5hr) or weekly (7 day) limit is at or above this percent (Claude Code as the analyzer, with the status-line collector); `0` never pauses. Set it, and the limits above, from the usage chip in the dashboard's status bar |
 | `backfill` | `true` | also analyze sessions recorded before install (newest first) |
 | `chunk_chars` | `150000` | characters of condensed transcript per call; longer sessions are map-reduced |
 | `timeout_seconds` | `900` | wall-clock limit per call |
