@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.5 (2026-10-29)
+
+- **Analysis usage chip removed:** the status bar's usage chip and its panel from 0.29.3 are gone, with the pause at a
+  plan limit (`analysis.plan_limit_pct`, now ignored). Sessions per run and the budget per call stay settable in
+  config.toml.
+
 ## 0.29.4 (2026-10-29)
 
 - **claude.ai and ChatGPT chats, saved as you use the sites:** a browser extension for Chrome, Edge and Brave sends
