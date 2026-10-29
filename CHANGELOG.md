@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.4 (2026-10-29)
+
+- **claude.ai and ChatGPT chats, saved as you use the sites:** a browser extension for Chrome, Edge and Brave sends
+  your chats to the dashboard while a claude.ai or chatgpt.com tab is open, so new chats need no new export. Chats in
+  ChatGPT projects keep their project's name. **Settings › Browser extension** walks you through installing it
+  ([Saving chats as you use the sites](docs/sources.md#saving-chats-as-you-use-the-sites)).
+
 ## 0.29.3 (2026-10-29)
 
 - **Analysis usage on every page:** the status bar shows your Claude plan's session (5hr) and weekly (7 day) usage, as
