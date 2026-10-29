@@ -178,57 +178,7 @@ def status_small(ctx: Context, limited: bool = False) -> dict:
         "hub_url": ctx.cfg.hub_url or None,  # set on a computer that sends its sessions to a hub
         "hub_urls": [c.hub_url for c in sending],  # and the other hubs it sends to (docs/profiles.md)
         "hub_problem": _hub_problem(sending),  # its pushes don't get through: the status bar warns
-        "usage": analysis_usage(ctx),  # the status bar's usage chip and the limits it sets
     }
-
-
-def analysis_usage(ctx: Context) -> dict:
-    """What analysis has used (API-equivalent USD today, this month, all time; the Claude plan's windows from the status
-    line) and the limits set for it (analysis.max_per_run, max_budget_usd, plan_limit_pct)."""
-    from ....analysis.queue import plan_over_limit, queue_block
-    from ....runtime.install import statusline_installed
-    from ....runtime.statusline import plan_usage
-
-    a = ctx.cfg.analysis
-    day = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
-    today, month = to_iso(day), to_iso(day.replace(day=1))
-    row = ctx.conn.execute(
-        "SELECT COALESCE(SUM(CASE WHEN started_at >= ? THEN cost_usd END), 0), "
-        "COALESCE(SUM(CASE WHEN started_at >= ? THEN cost_usd END), 0), COALESCE(SUM(cost_usd), 0), "
-        "SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END) FROM analyses", (today, month, today)).fetchone()
-    over = plan_over_limit(ctx.conn, ctx.cfg)
-    return {"spent": {"today": row[0], "month": row[1], "total": row[2]}, "calls_today": row[3] or 0,
-            "plan": plan_usage(ctx.conn), "plan_applies": a.backend == "claude", "over": over,
-            "collector": statusline_installed(ctx.cfg),  # without it no plan readings ever arrive
-            "block": queue_block(ctx.conn, ctx.cfg) if over else None,  # why the queue stopped, in the queue's words
-            "limits": {"max_per_run": a.max_per_run, "max_budget_usd": a.max_budget_usd, "plan_limit_pct": a.plan_limit_pct}}
-
-
-# what the status bar's usage panel may set, with the bounds a value must be in
-LIMITS = {"max_per_run": (int, 1, 100), "max_budget_usd": (float, 0.1, 100.0), "plan_limit_pct": (int, 0, 100)}
-
-
-def action_limits(ctx: Context, body: dict) -> dict:
-    """Save the analysis limits (LIMITS) the status bar's usage panel sets; returns the usage with them."""
-    from ....core.config import load_config, set_config_value
-
-    refused = []
-    for key, (kind, lo, hi) in LIMITS.items():
-        if key not in body:
-            continue
-        try:
-            v = kind(body[key])
-        except (TypeError, ValueError):
-            v = None
-        if v is None or isinstance(body[key], bool) or not lo <= v <= hi:
-            refused.append(key)
-            continue
-        set_config_value(ctx.cfg, "analysis", key, f"{v:.2f}" if kind is float else str(v))
-    ctx.cfg = load_config(ctx.cfg.home)
-    out = analysis_usage(ctx)
-    if refused:
-        out["error"] = tr("not saved: {keys}", keys=", ".join(refused))
-    return out
 
 
 def _sending_to(ctx: Context) -> list:

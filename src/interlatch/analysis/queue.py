@@ -95,34 +95,10 @@ def queue_block(conn, cfg: Config, runner: Runner | None = None) -> str | None:
         return tr("analysis is off (record only): pick an analyzer in Status › Analysis to analyze sessions")
     if not cfg.analysis.auto:
         return tr("automatic analysis is off (analysis.auto); analyze it from its page or with `interlatch analyze`")
-    over = plan_over_limit(conn, cfg)
-    if over:
-        return tr("your Claude plan's {window} limit is at {pct}%, at or above the {cap}% you set; it resumes after {when}",
-                  window=tr(WINDOW_LABEL.get(over["window"], over["window"])), pct=round(over["used_pct"]),
-                  cap=cfg.analysis.plan_limit_pct, when=local_str(over["resets_at"], "%m-%d %H:%M"))
     runner = runner or make_runner(cfg)
     if not runner.available():
         return tr("{reason}, so nothing can be analyzed", reason=runner.unavailable_reason())
     return None
-
-
-WINDOW_LABEL = {"five_hour": "session (5hr)", "seven_day": "weekly (7 day)", "spend_limit": "spend"}  # Claude Code's names
-
-
-def plan_over_limit(conn, cfg: Config) -> dict | None:
-    """The Claude plan window (statusline.py) at or above analysis.plan_limit_pct, while Claude Code analyzes: its
-    name, used_pct and resets_at. None when the cap is off, another analyzer runs, or no window is that full."""
-    cap = cfg.analysis.plan_limit_pct
-    if not cap or cap <= 0 or cfg.analysis.backend != "claude":
-        return None
-    from ..runtime.statusline import plan_usage
-
-    windows = (plan_usage(conn) or {}).get("limits") or {}
-    over = [(name, w) for name, w in windows.items() if name in WINDOW_LABEL and (w.get("used_pct") or 0) >= cap]
-    if not over:
-        return None
-    name, w = max(over, key=lambda x: x[1]["resets_at"])  # the one that frees up last
-    return {"window": name, "used_pct": w["used_pct"], "resets_at": w["resets_at"]}
 
 
 def count_pending(conn, cfg: Config) -> dict:
