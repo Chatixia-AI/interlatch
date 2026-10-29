@@ -2770,3 +2770,15 @@ label.hub-pick { gap: 6px; }
 .mini-legend .sw[class*="s-"] { background: var(--s); }
 .lesson-filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .lesson-filters .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+
+/* the browser extension's install guide (Settings › Browser extension) */
+.ext-steps { margin: 4px 0 0; padding-left: 22px; display: grid; gap: 12px; }
+.ext-steps li > b { display: block; margin-bottom: 2px; }
+.ext-step { line-height: 1.7; }
+.ext-step code { word-break: break-all; }
+.ext-step .muted { font-size: 12.5px; }
+.ext-help { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 4px 0 12px; }
+.ext-help dt { font-family: var(--mono, monospace); font-size: 12.5px; }
+.ext-help dd { margin: 0; color: var(--muted); }
+.ext-privacy { font-size: 12.5px; }
+@media (max-width: 640px) { .ext-help { grid-template-columns: 1fr; gap: 2px; } .ext-help dd { margin-bottom: 8px; } }

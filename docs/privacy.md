@@ -24,6 +24,8 @@ levels, and the team you field (which agents, in what order), with your board na
 titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving
 the board) deletes your sheet ([The arena](party.md#the-arena)).
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
+The browser extension, if you load it, reads chats only on claude.ai and chatgpt.com, with your own sign-in, and sends
+them only to the dashboard on this computer ([Sources](sources.md#saving-chats-as-you-use-the-sites)).
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is
 remembered for a week. Without `gh` nothing is sent ([Suggestions](suggestions.md#privacy)).

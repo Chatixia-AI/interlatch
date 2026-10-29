@@ -1004,6 +1004,7 @@ function navKey(path) {
   if (path.startsWith("/reviews")) return "reviews";
   if (path.startsWith("/sources")) return "sources";
   if (path.startsWith("/mcp")) return "mcp";
+  if (path.startsWith("/extension")) return "extension";
   if (path.startsWith("/glossary")) return "glossary";
   if (path.startsWith("/map")) return "map";
   if (path.startsWith("/systems")) return "systems";
@@ -5975,7 +5976,7 @@ route(/^\/sources$/, async (params) => {
   // ---- chat exports
   const HOW = { "claude-ai": "claude.ai › Settings › Privacy › Export data", chatgpt: "ChatGPT › Settings › Data controls › Export data" };
   const formatRow = (f) => {
-    const last = lastOf(f), sc = f.screen || {};
+    const last = lastOf(f), sc = f.screen || {}, cap = f.last_capture;
     const screened = (sc.analyze || 0) + (sc.maybe || 0) + (sc.skip || 0);
     const verdict = (v, n, label) => h("a", { href: `#/sessions?agent=${f.agent}&screen=${v}`, title: t("Show these chats") }, tx("{n} {label}", { n: h("b", null, fmtNum(n)), label }));
     const screenBtn = h("button", { class: `btn small${sc.to_queue ? "" : " primary"}`, type: "button", onclick: async () => {
@@ -5994,13 +5995,15 @@ route(/^\/sources$/, async (params) => {
     } }, t("Queue {n} worth analyzing", { n: fmtNum(sc.to_queue) }));
     const summary = [
       agentIcon(f.agent),
-      h("span", { class: "src-title" }, h("b", null, f.label), h("small", null, t("from a data export"))),
+      h("span", { class: "src-title" }, h("b", null, f.label), h("small", null, cap ? t("browser extension and data export") : t("from a data export"))),
       h("span", { class: "src-sum" }, f.sessions ? [stat(f.sessions, t("chats")), screened ? stat(sc.analyze, t("worth analyzing")) : null,
-        h("span", null, tx("imported {when}", { when: h("b", null, last ? ago(last.at) : t("never")) }))] : h("span", null, t("nothing imported yet"))),
-      f.sessions ? badge("good", t("Imported")) : badge("", t("Not imported"))];
+        cap ? h("span", null, tx("saved {when}", { when: h("b", null, ago(cap.at)) }))
+          : h("span", null, tx("imported {when}", { when: h("b", null, last ? ago(last.at) : t("never")) }))] : h("span", null, t("nothing imported yet"))),
+      cap ? badge("good", t("Saving")) : f.sessions ? badge("good", t("Imported")) : badge("", t("Not imported"))];
     const body = [
       h("div", { class: "src-stats" }, stat(f.sessions, t("chats")), stat(f.analyzed, t("analyzed")),
         sc.queued ? stat(sc.queued, t("queued")) : null,
+        cap ? h("span", { class: "muted" }, t("browser extension: {n} saved, last {when}", { n: fmtNum(cap.captured || 0), when: ago(cap.at) })) : null,
         last ? h("span", { class: "muted" }, t("last: {file}, {new} new, {updated} updated", { file: last.file, new: fmtNum(last.new), updated: fmtNum(last.updated) })) : null),
       screened ? h("div", { class: "src-stats screen-stats" }, h("span", { class: "muted" }, t("Screened:")),
         verdict("analyze", sc.analyze, t("worth analyzing")), verdict("maybe", sc.maybe, t("maybe")), verdict("skip", sc.skip, t("not worth it")),
@@ -6013,14 +6016,26 @@ route(/^\/sources$/, async (params) => {
     return srcRow(`chat:${f.key}`, summary, body, { open: !!(sc.unscreened || sc.to_queue) });
   };
 
+  // ---- the browser extension: saves the chats from the sites as you use them (browser_extension/)
+  const lastSent = formats.map((f) => f.last_capture?.at).filter(Boolean).sort().pop();
+  const extRow = srcRow("chat:extension", [
+    h("span", { "aria-hidden": "true" }),
+    h("span", { class: "src-title" }, h("b", null, t("Browser extension")), h("small", null, t("Chrome, Edge or Brave"))),
+    h("span", { class: "src-sum" }, h("span", null, lastSent ? tx("last sent {when}", { when: h("b", null, ago(lastSent)) })
+      : t("saves chats as you use claude.ai and chatgpt.com"))),
+    lastSent ? badge("good", t("Connected")) : badge("", t("Not set up"))], [
+    h("div", { class: "src-foot" }, h("span", { class: "muted" }, extPrivacy()),
+      h("div", { class: "src-actions" }, h("a", { class: `btn small${lastSent ? "" : " primary"}`, href: "#/extension" }, t("Install guide")))),
+  ]);
+
   const section = listSection;
   return h("div", { class: "narrow-page wide" },
     h("div", { class: "page-head" }, titled("tink", h("h1", null, t("Sources")),
       h("div", { class: "sub" }, tx("The coding agents Interlatch records. Connecting starts archiving and analyzing their sessions and gives the agent Interlatch's MCP tools. To give other tools the MCP server, see {link}.",
         { link: h("a", { href: "#/mcp" }, "MCP") })))),
     section(t("Coding agents"), t("{a} of {b} connected · click a row for its checks", { a: connected, b: sources.length }), null, sources.map(agentRow)),
-    section(t("Chat exports"), t("Chats on claude.ai and chatgpt.com are not stored on your Mac, so they come in from a data export."),
-      h("div", { class: "src-actions" }, importBtn, picker), formats.map(formatRow)),
+    section(t("Web chats"), t("Chats on claude.ai and chatgpt.com are not stored on this computer: the browser extension saves them as you use the sites, and a data export brings in older ones."),
+      h("div", { class: "src-actions" }, importBtn, picker), [extRow, ...formats.map(formatRow)]),
   );
 });
 
@@ -6044,6 +6059,69 @@ async function copyText(text, btn) {
   if (!ok) { toast(t("Could not copy here: select the text and copy it yourself."), 6000); return; }
   const was = btn.textContent; btn.textContent = t("Copied"); setTimeout(() => (btn.textContent = was), 1500);
 }
+// =====================================================================================
+// Browser extension: how to install it (browser_extension/), and what it has sent
+// =====================================================================================
+const extPrivacy = () => t("It reads your chats with your own sign-in, only on claude.ai and chatgpt.com, and sends them only to this dashboard; temporary chats are left out.");
+const EXT_BROWSERS = [["chrome", "Chrome", "chrome://extensions"], ["edge", "Edge", "edge://extensions"], ["brave", "Brave", "brave://extensions"]];
+let extBrowser = "chrome";
+route(/^\/extension$/, async () => {
+  const imports = await api("/api/imports");
+  const formats = Object.entries(imports).map(([key, f]) => ({ key, ...f }));
+  const dir = formats.find((f) => f.extension_dir)?.extension_dir;
+  const port = location.port || (location.protocol === "https:" ? "443" : "80");
+  const mac = /Mac/.test(navigator.platform);
+  const statusRows = formats.map((f) => {
+    const cap = f.last_capture;
+    return h("div", { class: "src-row flat" }, h("div", { class: "src-line" },
+      h("span", { class: "chev", "aria-hidden": "true" }), agentIcon(f.agent),
+      h("span", { class: "src-title" }, h("b", null, f.label),
+        h("small", null, cap ? tn(cap.captured || 0, "{n} chat saved by the extension", "{n} chats saved by the extension", { n: fmtNum(cap.captured || 0) })
+          : t("nothing from the extension yet"))),
+      h("span", { class: "src-sum" }, cap ? h("span", null, tx("last sent {when}", { when: h("b", null, ago(cap.at)) })) : null),
+      cap ? stateBadge("good", t("Connected")) : stateBadge("", t("Not set up"))));
+  });
+  // the extensions page's address differs by browser, and a browser won't open it from a link
+  const urlCode = h("code"), urlCopy = h("button", { class: "btn small", type: "button", onclick: () => copyText(urlCode.textContent, urlCopy) }, t("Copy"));
+  const edgeNote = h("span");
+  const tabs = h("div", { class: "seg", role: "tablist" });
+  const showBrowser = (key) => {
+    extBrowser = key;
+    urlCode.textContent = EXT_BROWSERS.find((b) => b[0] === key)[2];
+    edgeNote.textContent = key === "edge" ? t("In Edge, the switch is in the left column.") : t("The switch is at the top right of the page.");
+    tabs.querySelectorAll("button").forEach((b) => { const on = b.dataset.key === key; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  };
+  tabs.append(...EXT_BROWSERS.map(([key, label]) => h("button", { type: "button", role: "tab", "data-key": key, onclick: () => showBrowser(key) }, label)));
+  showBrowser(extBrowser);
+  const dirCopy = h("button", { class: "btn small", type: "button", onclick: () => copyText(dir, dirCopy) }, t("Copy"));
+  const step = (title, ...body) => h("li", null, h("b", null, title), h("div", { class: "ext-step" }, ...body));
+  const site = (href, label) => h("a", { href, target: "_blank", rel: "noopener" }, label);
+  const steps = dir ? h("ol", { class: "ext-steps" },
+    step(t("Open the extensions page"), tx("Paste {address} into the address bar.", { address: urlCode }), " ", urlCopy),
+    step(t("Turn on Developer mode"), edgeNote),
+    step(t("Load the folder"), tx("Click Load unpacked and choose {folder}", { folder: h("code", null, dir) }), " ", dirCopy,
+      h("div", { class: "muted" }, mac ? t("In the folder window, press ⌘⇧G, paste the path and press Return.") : t("In the folder window, paste the path into the address bar at the top."))),
+    step(t("Pin it and check the connection"), t("Pin Interlatch from the puzzle-piece menu and click it: it should say dashboard on :{port}.", { port }),
+      port !== "11524" ? h("div", { class: "muted" }, t("This dashboard isn't on the usual port: open Settings in the extension and set the port to {port}.", { port })) : null),
+    step(t("Open claude.ai or chatgpt.com"), tx("Open {claude} or {chatgpt}. Within seconds the extension shows Syncing…: chats from the last 30 days come in first, then new and changed ones every 5 minutes and soon after you leave a chat.",
+      { claude: site("https://claude.ai", "claude.ai"), chatgpt: site("https://chatgpt.com", "chatgpt.com") })))
+    : h("div", { class: "src-note" }, t("Install it on the computer Interlatch runs on: this page there shows the folder to load."));
+  const help = [ // the extension's own words (its popup is in English)
+    ["Not synced yet", t("Reload the claude.ai or chatgpt.com tab: a tab opened before the extension was loaded doesn't have it.")],
+    ["no dashboard on :…", t("Interlatch isn't running, or runs on another port: set the port in the extension's Settings.")],
+    ["update Interlatch", t("This dashboard is older than the extension: update Interlatch.")],
+    [t("After an Interlatch update"), t("Click the reload button on the extension's card on the extensions page, then reload the sites' tabs.")],
+  ];
+  return h("div", { class: "narrow-page wide" },
+    h("div", { class: "page-head" }, titled("globe", h("h1", null, t("Browser extension")),
+      h("div", { class: "sub" }, t("Saves your claude.ai and ChatGPT chats as you use the sites, so new chats need no data export. For Chrome, Edge, Brave and other Chromium browsers.")))),
+    listSection(t("What it has sent"), null, null, statusRows),
+    h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("Install it")), tabs), steps),
+    h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("If something is off"))),
+      h("dl", { class: "ext-help" }, help.flatMap(([q, a]) => [h("dt", null, q), h("dd", null, a)])),
+      h("div", { class: "muted ext-privacy" }, extPrivacy())),
+  );
+});
 let mcpTab = "json";
 route(/^\/mcp$/, async () => {
   const [info, sources, clients] = await Promise.all([api("/api/mcp"), api("/api/connectors"), api("/api/mcp-clients")]);
@@ -8484,9 +8562,9 @@ const SECTIONS = [
   { key: "settings", label: t("Settings"), href: "#/status" },
 ];
 const SECTION_OF = { overview: "home", activity: "home", teamhome: "teamhome", sessions: "sessions", knowledge: "knowledge", learn: "knowledge", artifacts: "artifacts", glossary: "knowledge", map: "knowledge", reviews: "knowledge",
-  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", devices: "settings", hubs: "settings", appearance: "settings", feedback: "settings", storage: "settings", reanalysis: "settings",
+  projects: "projects", systems: "projects", suggestions: "suggestions", friction: "suggestions", status: "settings", sources: "settings", mcp: "settings", extension: "settings", devices: "settings", hubs: "settings", appearance: "settings", feedback: "settings", storage: "settings", reanalysis: "settings",
   team: "team", teamprojects: "team", teamcomputers: "team", teamstore: "team", teamsettings: "team" };
-const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", devices: t("Devices"), hubs: t("Hubs"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance"), feedback: t("Feedback") };
+const PAGE_LABEL = { activity: t("Activity"), team: t("People"), get teamprojects() { return teamProjectsLabel(); }, teamcomputers: t("Computers"), teamstore: t("Team store"), teamsettings: t("Hub settings"), friction: t("What goes wrong"), glossary: t("Glossary"), map: t("Map"), systems: t("Systems"), reviews: t("Weekly reviews"), status: t("Status"), sources: t("Sources"), mcp: "MCP", extension: t("Browser extension"), devices: t("Devices"), hubs: t("Hubs"), storage: t("Storage"), reanalysis: t("Re-analysis"), appearance: t("Appearance"), feedback: t("Feedback") };
 let shellSection = null, lastPath = null, lastHash = null, sbSeq = 0;
 let sbSection = null; // the section the sidebar shows: the page's, or while it peeks, the one under the pointer
 let shellRealm = false, realmReturn = "#/"; // in Innerlatch; the page its door leads back to
@@ -8725,6 +8803,7 @@ function settingsSidebar(box) {
       sbRow(t("Status"), "#/status", "status", null, ["/status"]),
       own ? sbRow(t("Sources"), "#/sources", "sources", null, ["/sources"]) : null,
       own ? sbRow("MCP", "#/mcp", "mcp", null, ["/mcp"]) : null,
+      own ? sbRow(t("Browser extension"), "#/extension", "domain", null, ["/extension"]) : null,
       own ? sbRow(t("Devices"), "#/devices", "devices", null, ["/devices"]) : null,
       own && !limited() ? sbRow(t("Hubs"), "#/hubs", "organization", null, ["/hubs"]) : null,
       canAdmin() ? sbRow(t("Storage"), "#/storage", "data", null, ["/storage"]) : null, // a password: admins only
@@ -8884,7 +8963,7 @@ function paletteCommands() {
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
       : gameOn() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
-    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"), nav(t("Feedback"), "#/feedback", "feedback", t("report a problem, suggest an idea")),
+    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Browser extension"), "#/extension", "domain", t("save claude.ai and ChatGPT chats")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"), nav(t("Feedback"), "#/feedback", "feedback", t("report a problem, suggest an idea")),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },
@@ -9008,7 +9087,7 @@ const LIMITED_SECTIONS = new Set(["home", "teamhome", "sessions", "knowledge", "
 // devices) is left out.
 function dedicated() { return !!ME?.hub?.dedicated && !!ME?.hub?.team; }
 const DEDICATED_HIDDEN = new Set(["home", "artifacts", "suggestions"]);
-const DEDICATED_HIDDEN_HREFS = new Set(["#/", "#/artifacts", "#/suggestions", "#/friction", "#/sources", "#/mcp", "#/devices", "#/hubs"]);
+const DEDICATED_HIDDEN_HREFS = new Set(["#/", "#/artifacts", "#/suggestions", "#/friction", "#/sources", "#/mcp", "#/extension", "#/devices", "#/hubs"]);
 function teamProjectsLabel() { return dedicated() ? t("Projects") : t("Shared projects"); }
 async function loadMe() {
   try { ME = await api("/api/me"); } catch (e) { ME = null; return; } // an older server, or the sign-in screen is up

@@ -60,14 +60,16 @@ def _result_text(block: dict) -> str:
     return content if isinstance(content, str) else ""
 
 
-def thread(msgs: list[dict]) -> list[dict]:
+def thread(msgs: list[dict], leaf: str | None = None) -> list[dict]:
     """The branch claude.ai shows. Editing a prompt or retrying an answer forks the chat (messages point to their
-    parent), and the export has every branch: keep the chain that ends at the newest message."""
+    parent), and the export has every branch: keep the chain that ends at `leaf` (current_leaf_message_uuid, which
+    the browser extension's copy names), else at the newest message."""
     by_id = {m.get("uuid"): m for m in msgs}
     children = Counter(m.get("parent_message_uuid") for m in msgs if m.get("parent_message_uuid") in by_id)
     if not children or max(children.values()) < 2:
         return msgs  # no forks (or no parent links, as in older exports)
-    node, chain, seen = max(msgs, key=lambda m: m.get("created_at") or ""), [], set()
+    node = by_id.get(leaf) or max(msgs, key=lambda m: m.get("created_at") or "")
+    chain, seen = [], set()
     while node is not None and node.get("uuid") not in seen:
         seen.add(node.get("uuid"))
         chain.append(node)
@@ -76,7 +78,7 @@ def thread(msgs: list[dict]) -> list[dict]:
 
 
 def parse_conversation(conv: dict, projects: dict[str, str]) -> ParsedSession | None:
-    msgs = thread([m for m in conv.get("chat_messages") or [] if isinstance(m, dict)])
+    msgs = thread([m for m in conv.get("chat_messages") or [] if isinstance(m, dict)], conv.get("current_leaf_message_uuid"))
     if not any(m.get("sender") == "human" for m in msgs):
         return None  # an empty chat
     ps = ParsedSession(id=conv["uuid"])

@@ -42,7 +42,7 @@ repos:
   - repo: local
     hooks:
       - id: node-check
-        name: node --check (dashboard and VS Code extension JavaScript parses)
+        name: node --check (dashboard, VS Code and browser extension JavaScript parses)
         language: system
         entry: node --check
-        files: ^(src/interlatch/web|vscode-extension)/.*\.js$
+        files: ^(src/interlatch/web|src/interlatch/browser_extension|vscode-extension)/.*\.js$

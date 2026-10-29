@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Interlatch</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header>
+  <img src="icon-32.png" alt="" width="20" height="20">
+  <b>Interlatch</b>
+  <span id="dash" class="pill">…</span>
+  <button id="theme" class="icon" type="button" title="Light or dark" aria-label="Light or dark">◐</button>
+</header>
+<main>
+  <section class="site" data-site="claude-ai"><h2>claude.ai</h2><p class="line">…</p></section>
+  <section class="site" data-site="chatgpt"><h2>ChatGPT</h2><p class="line">…</p></section>
+  <p class="hint">Chats are read while a claude.ai or chatgpt.com tab is open: every 5 minutes, and soon after you leave a chat. Older chats come in from a data export (Sources in the dashboard).</p>
+  <p id="note" class="hint bad" hidden>No claude.ai or chatgpt.com tab answered. Reload one: a tab opened before the extension was loaded doesn't have it yet.</p>
+  <div class="row">
+    <button id="sync" class="primary" type="button">Sync now</button>
+    <label class="check"><input id="paused" type="checkbox"> Paused</label>
+  </div>
+  <details>
+    <summary>Settings</summary>
+    <label>Dashboard port <input id="port" type="number" min="1" max="65535" placeholder="11524"></label>
+    <label>First sync goes back <input id="days" type="number" min="1" max="3650" placeholder="30"> days</label>
+    <button id="reset" type="button" title="Forget what was sent: the next sync goes back the days above again">Sync again from the start</button>
+  </details>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

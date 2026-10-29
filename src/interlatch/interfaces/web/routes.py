@@ -298,7 +298,7 @@ GET: list[Route] = [
     Route("/api/update", ANYONE, lambda h, ctx, m, q: h._json(api.settings.update_info(ctx, remote=False))),
     # the GitHub page for a report: the system's details only here or for an admin (api/settings.py)
     Route("/api/feedback", ANYONE, lambda h, ctx, m, q: h._json(api.settings.feedback(ctx, q, full=h._can_admin()))),
-    Route("/api/imports", ANYONE, lambda h, ctx, m, q: h._json(api.sources.imports(ctx))),
+    Route("/api/imports", ANYONE, lambda h, ctx, m, q: h._json(api.sources.imports(ctx, h._from_here()))),
     Route("/api/devices", ANYONE, _devices),
     # this computer's hubs, its folders that wait: only from here (docs/profiles.md)
     Route("/api/hubs", HERE, lambda h, ctx, m, q: h._json(api.hubs.hubs(ctx))),
@@ -501,6 +501,8 @@ POST: list[Route] = [
           lambda h, ctx, m, b: h._json(api.status.action_analyze_queue(ctx, str(b.get("which") or "ready")))),
     Route("/api/sessions/analyze", ANYONE,
           lambda h, ctx, m, b: h._json(api.status.action_analyze_many(ctx, list(b.get("ids") or [])))),
+    # the browser extension, sending a chat from claude.ai or chatgpt.com: it runs in a browser on this computer
+    Route("/api/capture", HERE, lambda h, ctx, m, b: h._json(*api.sources.action_capture(ctx, b))),
     Route("/api/screen", ANYONE, lambda h, ctx, m, b: h._json(
         {"started": api.sources.action_screen(ctx, b.get("source") or None, bool(b.get("redo")))})),
     Route("/api/screen/queue", ANYONE, lambda h, ctx, m, b: h._json(

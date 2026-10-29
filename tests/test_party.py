@@ -719,12 +719,12 @@ def test_the_mac_app_bundles_every_data_file_the_package_reads():
     root = Path(party.__file__).resolve().parents[3]
     spec = (root / "packaging" / "macos" / "Interlatch.spec").read_text()
     pkg = root / "src" / "interlatch"
-    data = [p for p in pkg.rglob("*") if p.is_file() and p.suffix not in (".py", ".pyc") and "__pycache__" not in p.parts
-            and pkg / "web" not in p.parents]
+    data = [p for p in pkg.rglob("*") if p.is_file() and p.suffix not in (".py", ".pyc") and "__pycache__" not in p.parts]
     assert data, "expected roadmap.json at least"
-    for p in data:
-        parts = '" / "'.join(p.relative_to(root).parts)
-        assert f'"{parts}"' in spec, f"{p.relative_to(root)} isn't in packaging/macos/Interlatch.spec's datas"
+    listed = lambda x: '"' + '" / "'.join(x.relative_to(root).parts) + '"' in spec
+    for p in data:  # the file itself, or a folder of the package holding it (web/, browser_extension/)
+        assert listed(p) or any(listed(d) for d in p.parents if pkg in d.parents), \
+            f"{p.relative_to(root)} isn't in packaging/macos/Interlatch.spec's datas"
 
 
 def test_a_person_limited_to_projects_sees_the_party_of_those_projects(team, catalog):  # noqa: F811

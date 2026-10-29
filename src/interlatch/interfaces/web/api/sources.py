@@ -68,10 +68,31 @@ def action_connector(ctx: Context, name: str, action: str) -> dict:
     return {"actions": actions, "sync_started": started}
 
 
-def imports(ctx: Context) -> dict:
+def imports(ctx: Context, here: bool = False) -> dict:
+    """Per chat format, its imports and captures; from this computer itself also the browser extension's folder."""
     from ....ingestion.chat_import import import_status
+    from ....runtime import browser_extension
 
-    return import_status(ctx.conn)
+    out = import_status(ctx.conn)
+    if here:
+        ext = browser_extension.folder(ctx.cfg)
+        for f in out.values():
+            f["extension_dir"] = str(ext) if ext else None
+    return out
+
+
+def action_capture(ctx: Context, body: dict) -> tuple[dict, int]:
+    """A chat the browser extension sends (chat_import.capture); a running sync asks it to send again later."""
+    from ....ingestion.chat_import import CaptureBusy, ExportError, capture
+
+    if not isinstance(body, dict):
+        return {"error": "bad json"}, 400
+    try:
+        return capture(ctx.cfg, ctx.conn, str(body.get("format") or ""), body.get("conversation")), 200
+    except CaptureBusy as exc:
+        return {"error": str(exc), "retry": True}, 409
+    except ExportError as exc:
+        return {"error": str(exc)}, 400
 
 
 def action_import(ctx: Context, upload: Path, name: str | None = None) -> bool:

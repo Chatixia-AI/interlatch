@@ -255,3 +255,132 @@ def test_projects_zip_is_explained(tmp_path):
         z.writestr("projects/0001.json", json.dumps({"uuid": "0001", "name": "Chatixia"}))
     with pytest.raises(ExportError, match="projects, not chats"):
         read_export(path, "projects-000.zip")
+
+
+# ------------------------------------------------------------------ the browser extension (capture)
+def _status(conn, sid):
+    return conn.execute("SELECT analysis_status, analysis_reason, project_path, source FROM sessions WHERE id = ?", (sid,)).fetchone()
+
+
+def test_capture_stores_a_chat_once_and_again_when_it_changes(env):
+    from interlatch.ingestion.chat_import import capture
+
+    cfg = env["cfg"]
+    conn = db_connect(cfg.db_path)
+    chat = copy.deepcopy(CONVERSATIONS[0])
+    chat["project"] = {"uuid": PROJECT, "name": "Backend"}  # the extension copies it from the site's list
+    assert capture(cfg, conn, "claude-ai", chat) == {"id": CHAT, "result": "new"}
+    status, reason, project, source = _status(conn, CHAT)
+    assert (status, project, source) == ("skipped", "claude.ai/Backend", "claude-ai-export")
+    assert reason.startswith("captured claude.ai chat: not analyzed automatically")
+    archived = cfg.archive_dir / "claude-ai" / "captured" / CHAT / "conversations.json.gz"
+    assert json.loads(gzip.decompress(archived.read_bytes()))[0]["uuid"] == CHAT
+
+    assert capture(cfg, conn, "claude-ai", chat)["result"] == "unchanged"
+    chat["chat_messages"].append({"uuid": "m5", "sender": "human", "created_at": "2026-05-01T09:06:00Z", "text": "Thanks"})
+    chat["updated_at"] = "2026-05-01T09:06:00.000000Z"
+    assert capture(cfg, conn, "claude-ai", chat)["result"] == "updated"
+    assert len(json.loads(gzip.decompress(archived.read_bytes()))[0]["chat_messages"]) == 5  # the latest copy
+    status = import_status(conn)["claude-ai"]
+    assert status["sessions"] == 1 and status["last_capture"]["captured"] == 2
+
+
+def test_capture_and_export_are_the_same_session(env):
+    from interlatch.ingestion.chat_import import capture
+
+    cfg = env["cfg"]
+    conn = db_connect(cfg.db_path)
+    capture(cfg, conn, "claude-ai", copy.deepcopy(CONVERSATIONS[0]))
+    counts = import_export(cfg, conn, write_export(env["tmp"] / "export.zip"))
+    assert counts["unchanged"] == 1 and counts["new"] == 1  # the captured chat; the other one (the third is empty)
+    assert conn.execute("SELECT COUNT(*) FROM sessions WHERE source = 'claude-ai-export'").fetchone()[0] == 2
+
+
+def test_capture_refuses_what_is_not_a_chat(env):
+    from interlatch.ingestion.chat_import import capture
+
+    cfg = env["cfg"]
+    conn = db_connect(cfg.db_path)
+    for key, conv in (("claude-ai", {**CONVERSATIONS[0], "uuid": "../../escape"}), ("claude-ai", GPT),
+                      ("chatgpt", CONVERSATIONS[0]), ("gemini", CONVERSATIONS[0]), ("claude-ai", ["not", "a", "chat"])):
+        with pytest.raises(ExportError):
+            capture(cfg, conn, key, conv)
+    assert not (cfg.archive_dir / "claude-ai").exists() and not (cfg.archive_dir / "escape").exists()
+
+
+def test_capture_waits_for_a_sync_then_asks_to_retry(env, monkeypatch):
+    from interlatch.core.util import file_lock
+    from interlatch.ingestion import chat_import
+
+    cfg = env["cfg"]
+    monkeypatch.setattr(chat_import, "CAPTURE_WAIT", 0.2)
+    with file_lock(cfg.locks_dir / "ingest.lock", timeout=1) as got:
+        assert got
+        with pytest.raises(chat_import.CaptureBusy):
+            chat_import.capture(cfg, db_connect(cfg.db_path), "claude-ai", copy.deepcopy(CONVERSATIONS[0]))
+
+
+def test_capture_chatgpt_chat_in_a_project(env):
+    from interlatch.ingestion.chat_import import capture
+
+    cfg = env["cfg"]
+    conn = db_connect(cfg.db_path)
+    chat = {**copy.deepcopy(GPT), "project": {"id": "g-p-1", "name": "Plots"}}
+    assert capture(cfg, conn, "chatgpt", chat)["result"] == "new"
+    assert _status(conn, "gpt-1")[2:] == ("chatgpt.com/Plots", "chatgpt-export")
+
+
+def test_reparse_finds_captured_chats(env):
+    from interlatch.ingestion.chat_import import capture, reparse_archived
+
+    cfg = env["cfg"]
+    conn = db_connect(cfg.db_path)
+    capture(cfg, conn, "claude-ai", copy.deepcopy(CONVERSATIONS[0]))
+    conn.execute("UPDATE sessions SET files_sig = 'old|v1' WHERE id = ?", (CHAT,))  # stored by an older parser
+    conn.commit()
+    assert reparse_archived(cfg, conn) == 1
+    assert conn.execute("SELECT files_sig FROM sessions WHERE id = ?", (CHAT,)).fetchone()[0].endswith("|v3")
+
+
+def test_claude_follows_the_leaf_the_site_shows():
+    msg = lambda uid, parent, sender, text, t: {"uuid": uid, "parent_message_uuid": parent, "sender": sender, "text": text,
+                                                 "created_at": f"2026-06-01T10:0{t}:00Z", "content": [{"type": "text", "text": text}]}
+    conv = {"uuid": "fork", "name": "Forked", "created_at": "2026-06-01T10:00:00Z", "updated_at": "2026-06-01T10:05:00Z",
+            "current_leaf_message_uuid": "a2",  # went back to the older answer
+            "chat_messages": [msg("h1", None, "human", "Name a colour", 0), msg("a2", "h1", "assistant", "Blue", 1),
+                              msg("a3", "h1", "assistant", "Green", 2)]}
+    texts = [e.text for e in parse_conversation(conv, {}).events]
+    assert "Blue" in texts and "Green" not in texts
+
+
+def test_capture_from_the_browser_extension(env):
+    from interlatch.interfaces.web.app import App
+    from interlatch.interfaces.web.handler import make_handler
+
+    app = App(env["cfg"])
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), None)
+    port = httpd.server_address[1]
+    httpd.RequestHandlerClass = make_handler(app, port)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    def post(body, **headers):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/capture", data=json.dumps(body).encode(), method="POST",
+                                     headers={"Content-Type": "application/json", **headers})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    try:
+        chat = {"format": "claude-ai", "conversation": CONVERSATIONS[0]}
+        # a web page can't send the header; the extension's service worker does, from this computer
+        assert post(chat, Origin="chrome-extension://abc")[0] == 403
+        assert post(chat, **{"X-Interlatch": "1", "Origin": "chrome-extension://abc"}) == (200, {"id": CHAT, "result": "new"})
+        assert post({"format": "claude-ai", "conversation": {}}, **{"X-Interlatch": "1"})[0] == 400
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/imports", timeout=10) as r:
+            status = json.loads(r.read())["claude-ai"]
+        assert status["last_capture"]["captured"] == 1
+        assert Path(status["extension_dir"], "manifest.json").is_file()  # copied to a folder that stays put
+    finally:
+        httpd.shutdown()

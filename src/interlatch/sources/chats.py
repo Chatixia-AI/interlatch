@@ -27,6 +27,10 @@ class Format:
     def last_import_key(self) -> str:
         return f"{self.key}:last-import"
 
+    @property
+    def last_capture_key(self) -> str:
+        return f"{self.key}:last-capture"  # the browser extension's last chat sent
+
 
 CLAUDE_AI = Format("claude-ai", "claude.ai", claude_export)
 CHATGPT = Format("chatgpt", "ChatGPT", chatgpt_export)

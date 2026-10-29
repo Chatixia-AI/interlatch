@@ -141,6 +141,8 @@ JA: dict[str, str] = {
     "history only (transcript deleted before Interlatch)": "履歴のみ（Interlatch を入れる前にトランスクリプトが削除された）",
     "imported {label} chat: not analyzed automatically (Analyze now, or import with --analyze)":
         "取り込んだ {label} のチャット：自動では分析しません（今すぐ分析するか、--analyze を付けて取り込みます）",
+    "captured {label} chat: not analyzed automatically (Analyze now, or screen chats on Sources)":
+        "ブラウザ拡張で保存した {label} のチャット：自動では分析しません（今すぐ分析するか、ソースでチャットを選別します）",
     "analysis failed {n}; it will not be retried automatically ({reason})": "分析に {n} 回失敗したため、自動では再試行しません（{reason}）",
     "analysis failed for good; it will not be retried automatically ({reason})":
         "再試行しても解決しない失敗のため、自動では再試行しません（{reason}）",

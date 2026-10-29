@@ -189,6 +189,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/party/deck"): POST_SIGNED_IN.ok(400).but(here=403),  # no such deck
     # POST: admins (the hub computer, or an admin person)
     ("POST", "/api/import"): POST_ADMIN,
+    ("POST", "/api/capture"): POST_HERE.ok(400),  # an empty body is no chat
     ("POST", "/api/sync"): POST_ADMIN,
     ("POST", "/api/team-store/test"): POST_ADMIN,
     ("POST", "/api/team-store/save"): POST_ADMIN,
