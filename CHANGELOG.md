@@ -3,6 +3,19 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.2 (2026-10-29)
+
+- **A project's page on a team hub:** the team's knowledge leads. Each knowledge base entry and lesson names whose
+  sessions taught it, lessons two people found separately sit side by side, **Since your last visit** lists new and
+  replaced lessons, **Start here** greets someone new to the project, **People** shows who has worked on what (never
+  a count per person), and **Who's working on it** draws each person's sessions over eight weeks. Tokens and cost
+  move to an admin-only Usage tab, and the Systems map is no longer offered where it would be empty or refused
+  ([On a team hub](docs/dashboard.md#on-a-team-hub)).
+- **A project's glossary and mindmap on a team hub:** a project's page there has a **Glossary & map** tab: its terms
+  as a list or a mindmap. Teammates limited to some projects now see it too, with the terms their projects use and
+  what their projects say of them, never what another project wrote
+  ([On a team hub](docs/dashboard.md#on-a-team-hub)).
+
 ## 0.29.1 (2026-10-25)
 
 - **The interview, your job goal's final boss:** three questions a day, written from the job description and from
