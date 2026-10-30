@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.7 (2026-10-30)
+
+- **Fixed: the dashboard could hang on a chat with a long tool output:** a ChatGPT chat whose Python run printed a
+  long text without spaces (a base64 image, say) took hours to save, and the dashboard answered nothing meanwhile. It
+  now takes a fraction of a second. Linking chats to projects is faster too, and the browser extension gives up on a
+  dashboard that doesn't answer within a minute and tries again later.
+
 ## 0.29.6 (2026-10-30)
 
 - **Which project a web chat is about:** a claude.ai or ChatGPT chat's session page suggests the coding project it most
