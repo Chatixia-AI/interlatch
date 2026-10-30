@@ -3,6 +3,12 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.6 (2026-10-30)
+
+- **Which project a web chat is about:** a claude.ai or ChatGPT chat's session page suggests the coding project it most
+  likely belongs to (by rules, screening or its analysis), with **Confirm** or **Change**. A project's page lists the
+  chats you confirmed, with their knowledge ([Which project a chat is about](docs/sources.md#which-project-a-chat-is-about)).
+
 ## 0.29.5 (2026-10-29)
 
 - **Analysis usage chip removed:** the status bar's usage chip and its panel from 0.29.3 are gone, with the pause at a
