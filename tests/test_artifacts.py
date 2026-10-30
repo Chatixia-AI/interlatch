@@ -367,3 +367,18 @@ def test_quick_look_draws_a_first_page(tmp_path):
     assert png and png.startswith(b"\x89PNG")
     assert artifacts.quicklook_thumbnail(str(pdf), tmp_path / "thumbs", size=200) == png  # kept until the file changes
     assert artifacts.quicklook_thumbnail(str(tmp_path / "missing.pdf"), tmp_path / "thumbs") is None
+
+
+def test_office_paths_are_whole_words_found_in_linear_time():
+    from interlatch.core.artifact_records import office_paths
+
+    text = ("saved to /tmp/out/deck.pptx and 'report final.PDF' then (notes.docx) and budget.xlsx.bak,"
+            " x.pdf/y.pdf, a.pdfx, .pdf alone, see `~/q3.ods`")
+    assert office_paths(text) == ["/tmp/out/deck.pptx", "final.PDF", "notes.docx", "x.pdf/y.pdf", "~/q3.ods"]
+    # a long run without spaces (a base64 blob in a chat's tool output) took minutes: time growing with its square
+    import time
+
+    blob = "iVBORw0KGgo" + "A" * 2_000_000
+    started = time.monotonic()
+    assert office_paths(f"{blob} /tmp/a.pdf {blob}.pdf") == ["/tmp/a.pdf", blob[-1024:] + ".pdf"]  # at most 1024 back
+    assert time.monotonic() - started < 1
