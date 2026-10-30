@@ -84,7 +84,7 @@ jobs:
         with:
           fetch-depth: 0  # the version comes from the tags
           persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           enable-cache: false  # a release never restores a cache another run could have written
       - run: uv run --locked pytest -q
@@ -126,7 +126,7 @@ jobs:
           ref: v${{ needs.plan.outputs.version }}
           fetch-depth: 0  # the version comes from the tag
           persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           enable-cache: false  # a release never restores a cache another run could have written
       - run: uv build
@@ -139,7 +139,7 @@ jobs:
             echo "::error::The build is not version $VERSION"
             exit 1
           fi
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
 
   image:
     needs: [plan, pypi]
@@ -172,7 +172,7 @@ jobs:
           exit 1
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -250,7 +250,7 @@ jobs:
           ref: ${{ needs.plan.outputs.version != '' && format('v{0}', needs.plan.outputs.version) || github.sha }}
           fetch-depth: 0  # the version comes from the tags
           persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           enable-cache: false  # a release never restores a cache another run could have written
 
