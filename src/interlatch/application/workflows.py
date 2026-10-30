@@ -90,6 +90,7 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
     # a crashed worker can leave sessions marked running
     conn.execute("UPDATE sessions SET analysis_status = 'pending' WHERE analysis_status = 'running'")
     conn.commit()
+    _link_chats(conn)
     runner = make_runner(cfg)
     paused = kv_get(conn, PAUSE_KEY)
     if analyze and (cfg.analysis.auto or session_ids or force):
@@ -120,6 +121,17 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
             log.exception("markdown export failed")
     if not session_ids:  # a background or `interlatch work` run, not one asked for specific sessions
         _suggestions(cfg, conn, report)
+
+
+def _link_chats(conn) -> None:
+    """Web chats not checked since they changed: which coding project each most likely belongs to, by rules."""
+    from ..projects.chat_links import link_pending
+
+    try:
+        link_pending(conn)
+    except Exception:  # a suggestion must never block analysis
+        conn.rollback()
+        log.exception("linking chats to projects failed")
 
 
 def _suggestions(cfg: Config, conn, report: WorkReport) -> None:

@@ -224,6 +224,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/analysis/run"): POST_ADMIN,
     ("POST", "/api/sessions/analyze"): POST_ADMIN,
     ("POST", "/api/sessions/{id}/analyze"): POST_ADMIN,
+    ("POST", "/api/sessions/{id}/link"): POST_ADMIN.ok(400),  # the test session is no web chat
     ("POST", "/api/screen"): POST_ADMIN,
     ("POST", "/api/screen/queue"): POST_ADMIN,
     ("POST", "/api/connectors/{id}/connect"): POST_ADMIN,

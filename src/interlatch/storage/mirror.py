@@ -56,7 +56,7 @@ CHILDREN = ("api_calls", "session_files", "subagents", "artifacts")
 TRANSCRIPT = ("events", "tool_calls")  # with include = "everything" only
 # Interlatch's bookkeeping: never copied
 INTERNAL = {"sessions": {"claude_dir", "transcript_path", "archive_path", "source_present", "files_sig", "parser_version",
-                         "analysis_attempts", "analysis_not_before", "screen_sig"},
+                         "analysis_attempts", "analysis_not_before", "screen_sig", "link_sig"},
             "machines": {"key_hash", "person_id"},
             "analyses": {"result_json"}}
 # What quotes your prompts: with include = "everything" only

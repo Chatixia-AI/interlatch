@@ -159,6 +159,12 @@ if "imported chat history" in system:  # screening (screen.py): the verdict foll
     data = {"chats": [{"n": int(n), "verdict": "analyze" if "deploy" in t.lower() else "maybe" if "maybe" in t.lower() else "skip",
                        "topic": t.lower()[:20], "reason": f"because: {t}"} for n, t in found if "unanswered" not in t]
             + [{"n": 999, "verdict": "analyze", "topic": "x", "reason": "out of range"}, {"n": 1, "verdict": "bogus"}]}
+    pick = __import__("re").search(r"<projects_to_pick_from>\n(.*?)\n</projects_to_pick_from>", prompt, __import__("re").S)
+    if pick:  # each chat's project (chat_links.py): the first listed for a deploy chat, none for the rest
+        first = pick.group(1).splitlines()[0]
+        for c in data["chats"]:
+            if c.get("topic"):
+                c.update(project=first if "deploy" in c["topic"] else "none", project_confidence="medium")
 elif "links between terms" in system:  # keeps link 0 read from its b side, drops 1, keeps 2 (a repeat, an unknown id and a stray `from` are ignored)
     links = [json.loads(x) for x in __import__("re").findall(r'^(\{"id": \d+, "a": \d+, "b": \d+\})$', prompt, __import__("re").M)]
     data = {"links": [{"id": 0, "keep": True, "from": links[0]["b"], "label": "stores data in"},
@@ -229,6 +235,9 @@ else:
         "friction": ["read a missing file", {"kind": "tool_error", "note": "Read failed"}],
         "sentiment": "positive",
     }
+chat_pick = __import__("re").search(r"The developer's projects \(for `project`\): (.*)", prompt)
+if chat_pick and "title" in data:  # a web chat's analysis names its project (chat_links.py): the first listed
+    data["project"] = os.environ.get("FAKE_CHAT_PROJECT") or chat_pick.group(1).split(", ")[0]
 if os.environ.get("FAKE_BASIS") and data.get("knowledge"):  # the first item's basis (analysis.session, interlatch_guidance)
     data["knowledge"][0]["basis"] = os.environ["FAKE_BASIS"]
 text = json.dumps(data)

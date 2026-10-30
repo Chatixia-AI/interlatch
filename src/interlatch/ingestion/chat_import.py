@@ -214,6 +214,7 @@ def import_export(cfg, conn, path: Path, *, analyze: bool = False, progress=None
                               reason=not_analyzed_reason(fmt))] += 1
         kv_set(conn, fmt.last_import_key, json.dumps({"at": utcnow_iso(), "file": name, **counts}))
         conn.commit()
+        _link(conn)
     log.info("%s import from %s: %s", fmt.label, name, counts)
     return counts
 
@@ -245,6 +246,17 @@ def _store_one(cfg, conn, fmt: Format, conv: dict, projects: dict, *, skip: set[
                      "WHERE id = ? AND analysis_status = 'pending'", (reason, sid))
     conn.commit()
     return "new" if result == "new" else "updated"
+
+
+def _link(conn, ids: list[str] | None = None) -> None:
+    """Which coding project the stored chats most likely belong to, by rules (chat_links.py): never fails an import."""
+    from ..projects.chat_links import link_pending
+
+    try:
+        link_pending(conn, ids)
+    except Exception:
+        conn.rollback()
+        log.exception("linking chats to projects failed")
 
 
 class CaptureBusy(ExportError):
@@ -293,6 +305,8 @@ def capture(cfg, conn, key: str, conv, *, analyze: bool = False) -> dict:
         stored = int(last.get("captured") or 0) + (result in ("new", "updated"))
         kv_set(conn, fmt.last_capture_key, json.dumps({"at": utcnow_iso(), "captured": stored}))
         conn.commit()
+        if result in ("new", "updated"):
+            _link(conn, [sid])
     log.info("%s chat %s captured: %s", fmt.label, sid, result)
     return {"id": sid, "result": result}
 

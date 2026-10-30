@@ -86,6 +86,22 @@ def sessions(ctx: Context, q: dict, limited: bool = False) -> dict:
     return {"total": total, "items": items}
 
 
+def action_link(ctx: Context, sid: str, body: dict) -> tuple[dict, int]:
+    """You say which project a web chat belongs to (`project`: its path), or none (`project`: "")."""
+    from ....projects.chat_links import decide
+
+    real = resolve_session_id(ctx.conn, sid)
+    if not real:
+        return {"error": "not found"}, 404
+    project = body.get("project") if isinstance(body, dict) else None
+    if project is not None and not isinstance(project, str):
+        return {"error": "bad project"}, 400
+    try:
+        return decide(ctx.conn, real, project or None), 200
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
+
+
 def session_summary(ctx: Context, sid: str) -> dict | None:
     """A session as someone limited to projects sees it (access.py): its summary and project lessons."""
     from ....sharing.access import session_page
@@ -126,6 +142,10 @@ def session(ctx: Context, sid: str) -> dict | None:
         "SELECT kind, started_at, finished_at, model, status, error, input_chars, chunks, cost_usd, duration_ms "
         "FROM analyses WHERE target = ? ORDER BY id DESC LIMIT 10", (real,))]
     s["outputs"] = _artifacts(ctx, session_id=real)[0]
+    from ....projects.chat_links import link_of
+    from ....projects.systems import CHAT_SOURCES
+
+    s["link"] = link_of(ctx.conn, real) if row and row["source"] in CHAT_SOURCES else None  # a web chat's project
     s["agents"] = [{"agent_id": "", "label": tr("Main thread")}] + [
         {"agent_id": a["agent_id"], "label": f"{a.get('agent_type') or 'agent'}: {a.get('description') or a['agent_id']}"}
         for a in s["subagents"]]

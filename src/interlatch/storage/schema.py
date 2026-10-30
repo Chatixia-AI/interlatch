@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 21  # 21: knowledge.sources_json, the files a lesson was learned from (freshness.py)
+SCHEMA_VERSION = 22  # 22: sessions.link_*, the project a web chat most likely belongs to (chat_links.py)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -100,8 +100,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     screen_reason TEXT,
     screen_by TEXT,                                 -- 'rules', or the model that screened it
     screen_sig TEXT,                                -- files_sig when screened: a chat a newer export changed is screened again
-    screened_at TEXT
+    screened_at TEXT,
+    -- a web chat's coding project, most likely (chat_links.py)
+    link_project TEXT,                              -- the project path; NULL with a suggestion: none likely
+    link_state TEXT,                                -- suggested | confirmed | none (you said: no project)
+    link_confidence TEXT,                           -- high | medium | low, for a suggestion
+    link_by TEXT,                                   -- rules | screen | analysis | you
+    link_reason TEXT,                               -- rules: site:<site>:<name> or mentions:<a>|<b>
+    link_sig TEXT,                                  -- files_sig when the rules last checked it
+    linked_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_sessions_link ON sessions(link_project);
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_path);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(analysis_status);

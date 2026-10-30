@@ -2029,6 +2029,45 @@ function sessionRow(x, scale = null, pick = null) {
 // =====================================================================================
 // Session detail
 // =====================================================================================
+// a web chat's coding project (chat_links.py): the suggestion and why, to confirm or change; yours is kept
+const LINK_BY = { rules: () => t("by rule"), screen: () => t("from screening"), analysis: () => t("from analysis") };
+const LINK_CONF = { high: () => t("high"), medium: () => t("medium"), low: () => t("low") };
+function linkWhy(reason) {
+  if (!reason) return null;
+  const [kind, ...rest] = reason.split(":");
+  if (kind === "site") return t("its {site} project is called {name}", { site: rest[0], name: rest.slice(1).join(":") });
+  if (kind === "mentions") return t("mentions {terms}", { terms: rest.join(":").split("|").join(t(", ")) });
+  return null;
+}
+function chatLinkLine(sx) {
+  if (!sx.link) return null;
+  const box = h("div", { class: "link-line" });
+  const save = async (project) => {
+    const r = await post(`/api/sessions/${sx.id}/link`, { project });
+    if (r.error) { toast(r.error); return; }
+    draw(r);
+  };
+  const draw = (L) => {
+    const proj = L.project ? h("a", { href: `#/project?path=${encodeURIComponent(L.project)}` }, h("b", null, L.name || shortPath(L.project))) : null;
+    const how = [L.confidence ? LINK_CONF[L.confidence]?.() : null, LINK_BY[L.by]?.(), linkWhy(L.reason)].filter(Boolean).join(" · ");
+    const text = L.state === "confirmed" ? tx("{project}, confirmed", { project: proj })
+      : L.state === "none" ? t("none of your projects")
+      : L.state === "suggested" && proj ? tx("likely {project}", { project: proj })
+      : L.state === "suggested" ? t("likely none of your projects")
+      : t("not known yet");
+    const picker = h("select", { class: "link-pick admin-only", "aria-label": t("Change the project"),
+      onchange: () => save(picker.value === "-" ? "" : picker.value) },
+      h("option", { value: "", disabled: true, selected: true }, t("Change…")),
+      L.choices.map((c) => h("option", { value: c.path }, c.label)), h("option", { value: "-" }, t("No project")));
+    const confirm = L.state === "suggested" && L.project
+      ? h("button", { class: "btn small primary admin-only", type: "button", onclick: () => save(L.project) }, t("Confirm")) : null;
+    box.replaceChildren(); // the DOM's own would print tx()'s array, and a link in it as its address
+    append(box, [h("span", { class: "muted" }, t("Project:")), h("span", null, text),
+      how && L.state === "suggested" ? h("span", { class: "muted" }, `(${how})`) : null, confirm, picker]);
+  };
+  draw(sx.link);
+  return box;
+}
 route(/^\/session\/([\w-]+)$/, async (params, id) => {
   const token = renderSeq;
   const sx = await api(`/api/sessions/${id}`);
@@ -2054,7 +2093,8 @@ route(/^\/session\/([\w-]+)$/, async (params, id) => {
         sx.cc_version ? h("span", { class: "muted" }, `${agentName(sx.agent)} ${sx.cc_version}`) : null,
         sx.source_present === 0 && sx.source !== "history" && !sx.limited ? h("span", { class: "badge", title: t("The agent deleted the original; Interlatch's archive keeps it") }, t("original deleted · archived")) : null,
         sx.source === "remote" ? h("span", { class: "badge", title: t("Analyzed on the computer it ran on, which keeps its transcript") }, t("transcript on {machine}", { machine: sx.machine_name || t("another machine") })) : null,
-        sx.source === "codex-import" ? h("span", { class: "badge accent", title: t("Claude Code deleted this transcript; Interlatch recovered it from the copy Codex Desktop imported") }, h("span", { class: "sdot" }), t("recovered via Codex")) : null)),
+        sx.source === "codex-import" ? h("span", { class: "badge accent", title: t("Claude Code deleted this transcript; Interlatch recovered it from the copy Codex Desktop imported") }, h("span", { class: "sdot" }), t("recovered via Codex")) : null),
+      chatLinkLine(sx)),
     h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, outcomeBadge(sx.outcome, sx.analysis_status, sx.source),
       sx.limited ? null : exportMenu(() => [sx.id], { raw: RAW_SOURCES.includes(sx.source) }), analyzing));
   setCrumbs([[t("Sessions"), "#/sessions"], [sx.project_name || "–", `#/project?path=${encodeURIComponent(sx.project_path || "")}`], [sx.title || t("(untitled session)")]], token);
@@ -3539,8 +3579,13 @@ route(/^\/project$/, async (params) => {
       h("dd", null, g.definition, g.context ? h("div", { class: "muted" }, g.context) : null)])))] : null;
   const leftOff = leftOffCard(p.recent), side = [repoCard(p.repo, path), planCard(p)].filter(Boolean);
   const sideCol = side.length ? h("div", { class: "grid", style: { alignContent: "start" } }, side) : null;
+  // web chats you confirmed are about this project (a chat's session page: Project › Confirm)
+  const chats = p.chats?.length ? [h("h2", { class: "pane-sub" }, t("Web chats about this project ({n})", { n: fmtNum(p.chats.length) })),
+    h("section", { class: "card", style: { padding: "4px 6px" } }, h("div", { class: "table-wrap" }, h("table", { class: "data sessions" },
+      h("thead", null, h("tr", null, [t("Started"), t("Session"), t("Project"), t("Agent"), t("Prompts"), t("Tools"), t("Active"), t("Tokens"), t("Est. cost"), t("Outcome")].map((c, i) => h("th", { class: i >= 4 && i <= 8 ? "num" : "" }, c)))),
+      h("tbody", null, p.chats.map((x) => sessionRow(x))))))] : null;
   const sessionsPane = h("div", null, sessions, st.sessions > p.sessions.length ? h("p", { class: "lo-foot" }, tx("The latest {shown} of {n}. {all}", {
-    shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null);
+    shown: fmtNum(p.sessions.length), n: fmtNum(st.sessions), all: h("a", { href: `#/sessions?project=${encodeURIComponent(path)}` }, t("All of them in Sessions")) })) : null, chats);
   const usagePane = h("div", { class: "grid" }, tiles, p.files && p.files.length ? filesCard : null);
   const team = p.team; // a team hub: the team's knowledge and who it came from lead (teamPanes)
   const panes = team ? teamPanes(p, { sessions: sessionsPane, usage: usagePane }, (k) => showTab(k), params) : {

@@ -158,5 +158,22 @@ Sessions list (filter *Screening*), where each chat shows its verdict and reason
 maybes there and **Analyze** the ones you want. `interlatch screen --list analyze|maybe|skip` shows the same on the
 command line. A chat is screened once, and again when a newer export changes it; a queued chat stays queued.
 
+### Which project a chat is about
+
+A web chat stays under `claude.ai` or `chatgpt.com`, but Interlatch suggests which of your coding projects it most
+likely belongs to. The chat's session page shows it under the title, for example *Project: likely billing-api (medium
+· by rule · mentions billing-api)*, with **Confirm** and **Change…** (another project, or *No project*).
+
+- **Rules**, with no model call, when a chat is imported or saved and on every sync: its claude.ai or ChatGPT project
+  has a coding project's name (or its folder's or git repository's), or the chat names one of them, its folder, or
+  terms only that project's glossary uses. Two projects named alike give no suggestion. A chat changed since is
+  checked again.
+- **Screening** picks one of your 25 most recent projects, or none, for the chats the rules left open.
+- **A chat's full analysis** picks too, and corrects what the rules or screening said.
+- **You**: Confirm or Change. Nothing overwrites your answer.
+
+A project's page lists the chats you confirmed under **Sessions › Web chats about this project**, and their knowledge
+with the project's. The knowledge itself stays the chat's, so where it is shared (hubs, profiles) doesn't change.
+
 Claude Desktop, Cursor, Windsurf and Gemini CLI aren't recorded, but they can use the MCP server too. See
 [MCP server](mcp.md).

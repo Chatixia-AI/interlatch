@@ -8,7 +8,8 @@ nothing, and analyzing them all would take the plan's limits for days. Screening
    two-prompt chore on pasted text (translate, summarize, proofread): `skip`.
 2. The screening model (`analysis.screen_model`, Haiku by default) reads the rest, 60 chats a call, and answers
    analyze / maybe / skip with a topic and a one-line reason. It is told what analysis keeps and which projects the
-   developer works on, from their recorded sessions.
+   developer works on, from their recorded sessions, and names the one each chat is about, if any: a suggestion for
+   the chats the rules of chat_links.py left open.
 
 Screening analyzes nothing: `queue()` (`interlatch screen --queue`, **Queue for analysis**) puts the chats worth it in
 the background queue. A chat is screened once, and again when a newer export changes it.
@@ -25,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from ..sources.chats import FORMATS
+from ..projects import chat_links
 from ..core.config import Config
 from .runners.base import LLMError, Runner, UsageLimitError
 from .runners.factory import make_runner
@@ -62,6 +64,24 @@ SCREEN_SCHEMA = {
         },
     }}},
 }
+
+
+def screen_schema(projects: list[str]) -> dict:
+    """SCREEN_SCHEMA, with each chat's project picked from `projects` (or none) when there are any."""
+    if not projects:
+        return SCREEN_SCHEMA
+    item = SCREEN_SCHEMA["properties"]["chats"]["items"]
+    item = {**item, "required": [*item["required"], "project", "project_confidence"],
+            "properties": {**item["properties"],
+                           "project": {"type": "string", "enum": [*projects, chat_links.NONE],
+                                       "description": "The project the chat is about, as listed, or none"},
+                           "project_confidence": {"type": "string", "enum": list(chat_links.CONFIDENCE)}}}
+    return {**SCREEN_SCHEMA, "properties": {"chats": {"type": "array", "items": item}}}
+
+
+PROJECT_PROMPT = """
+
+When the message lists projects to pick from, also say which of them each chat is about: the name exactly as listed, or none. Most chats are about none of them; a chat on a technology a project uses is not about that project unless it works on that project. project_confidence: high when the chat names the project or something only it has, medium when its content clearly fits that one project, low when it is a guess."""
 
 SYSTEM_PROMPT = """\
 You screen a developer's imported chat history (claude.ai or ChatGPT) to decide which chats are worth a full analysis.
@@ -191,12 +211,15 @@ def _card(i: int, r) -> str:
     return "\n".join(lines)
 
 
-def _ask(cfg: Config, runner: Runner, context: str, batch: list) -> tuple[dict[int, dict], object, int]:
+def _ask(cfg: Config, runner: Runner, context: str, batch: list,
+         projects: list[str] = ()) -> tuple[dict[int, dict], object, int]:
     cards = "\n\n".join(_card(i, r) for i, r in enumerate(batch, 1))
-    prompt = (f"<developer>\n{context or 'No recorded projects yet.'}\n</developer>\n\n"
+    pick = f"<projects_to_pick_from>\n{chr(10).join(projects)}\n</projects_to_pick_from>\n\n" if projects else ""
+    prompt = (f"<developer>\n{context or 'No recorded projects yet.'}\n</developer>\n\n{pick}"
               f"<chats count=\"{len(batch)}\">\n{cards}\n</chats>\n\nScreen these {len(batch)} chats.")
     system = written_in(cfg, SYSTEM_PROMPT, WRITE_ENGLISH, "Chats are in any language; write topic and reason in Japanese.")
-    res = runner.run(prompt, SCREEN_SCHEMA, system=system, model=cfg.analysis.screen_model, effort="low")
+    res = runner.run(prompt, screen_schema(list(projects)), system=system + (PROJECT_PROMPT if projects else ""),
+                     model=cfg.analysis.screen_model, effort="low")
     out = {}
     for c in res.data.get("chats") or []:
         if not isinstance(c, dict):
@@ -207,7 +230,9 @@ def _ask(cfg: Config, runner: Runner, context: str, batch: list) -> tuple[dict[i
             continue
         verdict = str(c.get("verdict") or "").strip().lower()
         if 1 <= i <= len(batch) and verdict in VERDICTS:
-            out[i] = {"verdict": verdict, "topic": one_line(c.get("topic"), 60), "reason": one_line(c.get("reason"), 200)}
+            out[i] = {"verdict": verdict, "topic": one_line(c.get("topic"), 60), "reason": one_line(c.get("reason"), 200),
+                      "project": c.get("project") if isinstance(c.get("project"), str) else None,
+                      "project_confidence": c.get("project_confidence")}
     return out, res, len(prompt)
 
 
@@ -241,13 +266,14 @@ def screen_chats(cfg: Config, conn: sqlite3.Connection, *, source: str | None = 
         report.left, report.error = len(rest), runner.unavailable_reason()
         return report
     context = developer_context(conn)
+    choices = chat_links.Linker(conn).choices()  # {label: project path}: each chat's project, picked from these
     batches = [rest[i:i + BATCH] for i in range(0, len(rest), BATCH)]
     if progress:
         progress(f"screening {len(rest):,} chats with {runner.label} ({runner.model_label(cfg.analysis.screen_model)}), "
                  f"{len(batches)} call{'s' if len(batches) > 1 else ''}…")
     pool = ThreadPoolExecutor(max_workers=max(3, cfg.analysis.concurrency))  # small calls: a few at once is fine
     try:
-        futures = {pool.submit(_ask, cfg, runner, context, b): b for b in batches}
+        futures = {pool.submit(_ask, cfg, runner, context, b, list(choices)): b for b in batches}
         for fut in as_completed(futures):
             if fut.cancelled():  # counted in `left` when it was cancelled
                 continue
@@ -271,6 +297,8 @@ def screen_chats(cfg: Config, conn: sqlite3.Connection, *, source: str | None = 
                     report.left += 1
                     continue
                 _store(conn, r, v["verdict"], v["topic"], v["reason"], res.model or cfg.analysis.screen_model)
+                if v["project"]:
+                    chat_links.suggest(conn, r["id"], v["project"], choices, chat_links.BY_SCREEN, v["project_confidence"])
                 report.counts[v["verdict"]] += 1
                 report.screened += 1
             conn.execute("INSERT INTO analyses(kind, target, started_at, finished_at, model, status, input_chars, chunks, "
