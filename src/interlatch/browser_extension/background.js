@@ -7,6 +7,7 @@ send it. */
 "use strict";
 
 const DEFAULT_PORT = 11524;
+const WAIT = 60e3; // a dashboard that hasn't answered by then is stuck: the chat goes again on a later sync
 
 async function dashboard() {
   const { port } = await chrome.storage.local.get("port");
@@ -21,9 +22,11 @@ async function send(format, conversation) {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Interlatch": "1" },
       body: JSON.stringify({ format, conversation }),
+      signal: AbortSignal.timeout(WAIT),
     });
-  } catch {
-    return { ok: false, retry: true, error: `the Interlatch dashboard is not running at ${base}` };
+  } catch (e) {
+    return { ok: false, retry: true, error: e?.name === "TimeoutError"
+      ? `the Interlatch dashboard at ${base} didn't answer within a minute` : `the Interlatch dashboard is not running at ${base}` };
   }
   const body = await res.json().catch(() => ({}));
   if (res.ok) return { ok: true, ...body };
@@ -36,7 +39,7 @@ async function send(format, conversation) {
 async function status() {
   const base = await dashboard();
   try {
-    const res = await fetch(`${base}/api/me`, { headers: { "X-Interlatch": "1" } });
+    const res = await fetch(`${base}/api/me`, { headers: { "X-Interlatch": "1" }, signal: AbortSignal.timeout(5e3) });
     const me = await res.json();
     if (!res.ok) return { base, ok: false, error: me.error || `answered ${res.status}` };
     return { base, ok: me.viewer?.here !== false, error: me.viewer?.here === false ? "not this computer's dashboard" : null };

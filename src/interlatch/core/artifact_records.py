@@ -50,12 +50,15 @@ _SLACK_CANVAS_RE = re.compile(r"https://[\w.-]+\.slack\.com/(?:docs|canvas)/[^\s
 # office files and PDFs a script saves (python-pptx, a converter): the session names the path, and the file was created
 # while the session ran (finish() checks); a file it only read existed before
 _OFFICE_EXT = {".pptx", ".odp", ".docx", ".odt", ".xlsx", ".ods", ".pdf"}
-_OFFICE_PATH_RE = re.compile(r"""([^\s'"`<>|;&(){}\[\]]+\.(?:pptx|odp|docx|odt|xlsx|ods|pdf))(?![\w.])""", re.I)
+_OFFICE_EXT_RE = re.compile(r"\.(?:pptx|odp|docx|odt|xlsx|ods|pdf)(?![\w.])", re.I)
+_PATH_STOP = frozenset("'\"`<>|;&(){}[]")
+_MAX_PATH = 1024  # characters a path runs back from its extension
 _BATCH = 8  # more files of one type saved into one folder than this is data being processed (downloads, a cache), not deliverables
 _HASH_NAME_RE = re.compile(r"^[0-9a-f]{32,}$")
 _NOT_MADE_HERE = tuple(os.path.expanduser(p) for p in ("~/Library/", "/Library/", "/System/", "/Applications/", "/private/var/folders/",
                                                        "/var/folders/"))
-_GENERATED_IMAGE_RE = re.compile(r"(/[^\s\"'`]*/\.codex/generated_images/[^\s\"'`]+\.(?:png|jpe?g|webp))")
+# bounded: an unbounded run before the folder made a long text without spaces take time growing with its square
+_GENERATED_IMAGE_RE = re.compile(r"(/[^\s\"'`]{0,1024}/\.codex/generated_images/[^\s\"'`]{1,512}\.(?:png|jpe?g|webp))")
 _TITLE_ARG_RE = re.compile(r"""--title\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')""")
 
 
@@ -118,6 +121,28 @@ def _link(ps, kind: str, url: str, title: str | None, *, action: str, ts, agent_
                  "tool_use_id": tool_use_id, "meta": dict(meta or {})})
 
 
+def office_paths(text: str) -> list[str]:
+    """The office files and PDFs a text names (`report.pdf`, `/tmp/out/deck.pptx`), each the whole word that ends in
+    the extension. Found from each extension back to the start of its word, so the time grows with the text's length:
+    a regex trying every start took time growing with its square on a long run without spaces (a base64 blob in a
+    chat), and hung the dashboard for hours on one ChatGPT chat."""
+    out: list[str] = []
+    last = -1  # where the previous path ended: a later extension in the same word makes it longer, as a greedy match
+    for m in _OFFICE_EXT_RE.finditer(text):
+        start = i = m.start()
+        floor = max(0, i - _MAX_PATH)
+        while start > floor and not (text[start - 1].isspace() or text[start - 1] in _PATH_STOP):
+            start -= 1
+        if start == i:
+            continue  # nothing before the extension
+        if out and start < last:
+            out[-1] = text[start:m.end()]
+        else:
+            out.append(text[start:m.end()])
+        last = m.end()
+    return out
+
+
 def from_tool(ps, name: str, inp, text: str | None, *, ts=None, agent_id: str = "", tool_use_id: str | None = None,
               command: str | None = None, tur=None) -> None:
     """Artifacts a successful tool call made, read from its input and result: a published page, a PR, a commit, an image.
@@ -152,7 +177,7 @@ def from_tool(ps, name: str, inp, text: str | None, *, ts=None, agent_id: str = 
     cmd = command or ""
     mentions = getattr(ps, "_mentions", None)
     if mentions is not None:
-        for raw in _OFFICE_PATH_RE.findall(f"{cmd}\n{text}"):
+        for raw in office_paths(f"{cmd}\n{text}"):
             mentions.setdefault(raw, (ts, agent_id, tool_use_id))
 
     # pull requests: `gh pr create` in a shell, or a GitHub tool that opens one
@@ -186,7 +211,7 @@ def from_tool(ps, name: str, inp, text: str | None, *, ts=None, agent_id: str = 
     script = inp.get("script") if isinstance(inp.get("script"), str) else ""
     if "imagegen" in base.replace("_", "") or "imagegen(" in script.replace("_", ""):
         prompt = inp.get("prompt") if isinstance(inp.get("prompt"), str) else _script_prompt(script)
-        for path in dict.fromkeys(_GENERATED_IMAGE_RE.findall(text)):
+        for path in dict.fromkeys(_GENERATED_IMAGE_RE.findall(text) if ".codex/generated_images/" in text else ()):
             _record(ps, {"key": f"file:{path}", "kind": "image", "action": "generated",
                          "title": prompt_title(prompt) or os.path.basename(path),
                          "path": path, "url": None, "size": None, "sha256": None,

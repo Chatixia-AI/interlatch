@@ -20,6 +20,7 @@ import json
 import re
 import sqlite3
 from collections import defaultdict
+from functools import lru_cache
 from dataclasses import dataclass, field
 from pathlib import PurePath
 
@@ -43,6 +44,12 @@ def _norm(s: str) -> str:
     return re.sub(r"[^0-9a-z]+", "", (s or "").lower())
 
 
+def _says(low: str, word: str) -> bool:
+    """`low` has `word` as a word of its own; the substring test first, as most words aren't there at all."""
+    return word in low and _word_re(word).search(low) is not None
+
+
+@lru_cache(maxsize=4096)
 def _word_re(term: str) -> re.Pattern:
     return re.compile(r"(?<![\w-])" + re.escape(term.lower()) + r"(?![\w-])")
 
@@ -131,12 +138,12 @@ class Linker:
                 found.append(PurePath(p.path).name)
                 score += 4
             for a in sorted(p.aliases, key=len, reverse=True):
-                if len(a) >= 4 and _norm(a) not in _COMMON and not a.isdigit() and _word_re(a).search(low):
+                if len(a) >= 4 and _norm(a) not in _COMMON and not a.isdigit() and _says(low, a):
                     if not found:
                         found.append(a)
                         score += 3
                     break
-            terms = [t for t in sorted(p.terms) if _word_re(t).search(low)][:3]
+            terms = [t for t in sorted(p.terms) if _says(low, t)][:3]
             found += terms
             score += len(terms)
             if score:
@@ -181,7 +188,7 @@ def link_pending(conn: sqlite3.Connection, ids: list[str] | None = None, *, link
         return 0
     linker = linker or Linker(conn)
     found = 0
-    for r in rows:
+    for n, r in enumerate(rows, 1):
         hit = linker.rule(r["project_path"], _text(conn, r["id"], r["title"])) if linker.projects else None
         if hit:
             conn.execute("UPDATE sessions SET link_project = ?, link_state = 'suggested', link_confidence = ?, "
@@ -191,6 +198,8 @@ def link_pending(conn: sqlite3.Connection, ids: list[str] | None = None, *, link
         else:  # checked: rules have nothing to say, so screening or analysis may
             conn.execute("UPDATE sessions SET link_project = NULL, link_state = NULL, link_confidence = NULL, "
                          "link_by = NULL, link_reason = NULL, link_sig = ? WHERE id = ?", (r["files_sig"], r["id"]))
+        if n % 200 == 0:  # a first pass over thousands of chats: the dashboard may write in between
+            conn.commit()
     conn.commit()
     return found
 

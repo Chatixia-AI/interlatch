@@ -384,3 +384,26 @@ def test_capture_from_the_browser_extension(env):
         assert Path(status["extension_dir"], "manifest.json").is_file()  # copied to a folder that stays put
     finally:
         httpd.shutdown()
+
+
+def test_capture_of_a_chat_with_a_huge_tool_output_is_quick(env):
+    """A ChatGPT chat whose Python run printed a megabyte without a space hung the dashboard for hours (0.29.6)."""
+    import time
+
+    from interlatch.ingestion.chat_import import capture
+
+    blob = "iVBORw0KGgo" + "A" * 1_000_000
+    msg = lambda nid, parent, kids, role, content, t, **kw: (nid, {"id": nid, "parent": parent, "children": kids, "message": {
+        "id": nid, "author": {"role": role, **({"name": "python"} if role == "tool" else {})}, "create_time": t,
+        "content": content, "recipient": kw.get("recipient", "all"), "metadata": {}}})
+    mapping = dict([("root", {"id": "root", "parent": None, "children": ["u1"], "message": None}),
+                    msg("u1", "root", ["c1"], "user", {"content_type": "text", "parts": ["Decode this: " + blob]}, 1.0),
+                    msg("c1", "u1", ["t1"], "assistant", {"content_type": "code", "language": "python", "text": "print(data)"},
+                        2.0, recipient="python"),
+                    msg("t1", "c1", ["a1"], "tool", {"content_type": "execution_output", "text": blob}, 3.0),
+                    msg("a1", "t1", [], "assistant", {"content_type": "text", "parts": ["Here: " + blob]}, 4.0)])
+    conv = {"title": "Blob", "create_time": 1.0, "update_time": 4.0, "conversation_id": "blob-1", "id": "blob-1",
+            "current_node": "a1", "mapping": mapping}
+    started = time.monotonic()
+    assert capture(env["cfg"], db_connect(env["cfg"].db_path), "chatgpt", conv)["result"] == "new"
+    assert time.monotonic() - started < 10
