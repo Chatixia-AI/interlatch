@@ -508,6 +508,7 @@ POST: list[Route] = [
         api.sources.action_screen_queue(ctx, b.get("source") or None, bool(b.get("maybe"))))),
     Route(r"/api/sessions/([\w-]+)/analyze", ANYONE,
           lambda h, ctx, m, b: h._json({"started": api.status.action_analyze(ctx, m.group(1))})),
+    Route(r"/api/sessions/([\w-]+)/link", ANYONE, lambda h, ctx, m, b: h._json(*api.sessions.action_link(ctx, m.group(1), b))),
     Route(r"/api/connectors/([\w-]+)/(connect|disconnect)", ANYONE, _connector),
     Route("/api/group/graph/analyze", ANYONE, _group_graph_analyze),
     Route("/api/reanalyze", ANYONE, _reanalyze),

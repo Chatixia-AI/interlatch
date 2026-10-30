@@ -6,6 +6,7 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 
+from ....projects.chat_links import CONFIRMED_SQL
 from ....analysis.runners.factory import BACKENDS, make_runner
 from ....core.i18n import tr
 from ....core.paths import abs_path_sql, clean_abs_path, is_abs_path, normalize_project_path, path_kind, path_variants
@@ -226,9 +227,12 @@ def project(ctx: Context, path: str, here: bool = False, limited: bool = False, 
         "repo": repo,
         "roadmap": progress.roadmap(path, repo["root"] if repo else None) if here else None,
         "sessions": session_rows(ctx, "project_path = ?", [path], "started_at DESC", 200),
+        # web chats you confirmed are about this project (chat_links.py): listed, and their knowledge with the rest
+        "chats": session_rows(ctx, CONFIRMED_SQL, [path], "started_at DESC", 100),
         "knowledge": [knowledge_item(ctx, dict(r)) for r in c.execute(
             "SELECT k.*, s.title session_title FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
-            "WHERE k.project_path = ? AND k.status = 'active' ORDER BY k.pinned DESC, k.id DESC LIMIT 300", (path,))],
+            f"WHERE (k.project_path = ? OR k.session_id IN (SELECT id FROM sessions WHERE {CONFIRMED_SQL})) "
+            "AND k.status = 'active' ORDER BY k.pinned DESC, k.id DESC LIMIT 300", (path, path))],
         "glossary": _glossary(c, path),
         "files": [dict(r) for r in c.execute(
             "SELECT f.path, COUNT(*) sessions, SUM(f.edits + f.writes) edits, SUM(f.lines_added) added, SUM(f.lines_removed) removed "

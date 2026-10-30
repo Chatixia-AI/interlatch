@@ -2754,3 +2754,9 @@ label.hub-pick { gap: 6px; }
 .ext-help dd { margin: 0; color: var(--muted); }
 .ext-privacy { font-size: 12.5px; }
 @media (max-width: 640px) { .ext-help { grid-template-columns: 1fr; gap: 2px; } .ext-help dd { margin-bottom: 8px; } }
+
+/* a web chat's coding project on its session page (chatLinkLine) */
+.link-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 8px; font-size: 13px; }
+.link-line .btn { margin-left: 4px; }
+.link-pick { font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; max-width: 220px; }
+.pane-sub { margin: 22px 0 10px; font-size: 15px; }

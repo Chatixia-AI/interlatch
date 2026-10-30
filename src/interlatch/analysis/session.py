@@ -8,6 +8,8 @@ import sqlite3
 from datetime import timedelta
 
 from ..knowledge import freshness, ladder
+from ..projects import chat_links
+from ..projects.systems import CHAT_SOURCES
 from ..sharing import news
 from ..knowledge.cases import LESSON_KINDS, VISUAL_SCHEMA, lesson_of
 from ..core.config import Config
@@ -242,6 +244,17 @@ def _guidance(guidance: str) -> str:
     return f"<interlatch_guidance>\n{guidance}\n</interlatch_guidance>\n\n" if guidance else ""
 
 
+def with_project(schema: dict, projects: list[str]) -> dict:
+    """A web chat's analysis also names which of the developer's projects it works on (chat_links.py)."""
+    from ..projects.chat_links import NONE
+
+    return {**schema, "required": [*schema["required"], "project"],
+            "properties": {**schema["properties"], "project": {
+                "type": "string", "enum": [*projects, NONE],
+                "description": "Which of the developer's projects (listed in session_metadata) this chat works on, "
+                               "exactly as listed; none when it is about none of them, as most chats are"}}}
+
+
 def _session_prompt(header: str, digest: str, guidance: str = "") -> str:
     return (
         f"<session_metadata>\n{header}\n</session_metadata>\n\n"
@@ -402,6 +415,13 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
     conn.commit()
     header, digest = build_digest(conn, session_id, runner.chunk_chars)
     guidance = session_guidance(conn, session_id)
+    choices = {}  # a web chat: the projects it may belong to, {label: path} (chat_links.py)
+    if s["source"] in CHAT_SOURCES:
+        choices = chat_links.Linker(conn).choices()
+        if choices:
+            header += "\nThe developer's projects (for `project`): " + ", ".join(choices)
+    full = with_project(ANALYSIS_SCHEMA, list(choices)) if choices else ANALYSIS_SCHEMA
+    merge = with_project(REDUCE_SCHEMA, list(choices)) if choices else REDUCE_SCHEMA
     if len(digest.text) < 200 and s["n_prompts"] <= 1:
         conn.execute("UPDATE sessions SET analysis_status='skipped', analysis_reason='too little content' WHERE id=?", (session_id,))
         conn.commit()
@@ -410,7 +430,7 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
     system = system_prompt(cfg)
     try:
         if len(digest.chunks) == 1:
-            res = runner.run(_session_prompt(header, digest.chunks[0], guidance), ANALYSIS_SCHEMA, system=system, model=model)
+            res = runner.run(_session_prompt(header, digest.chunks[0], guidance), full, system=system, model=model)
             total_cost += res.cost_usd
             data = normalize_analysis(res.data)
         else:
@@ -426,7 +446,7 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
                 notes.append({**part.data, "knowledge": shown})
             res = runner.run(
                 _reduce_prompt(header, notes, digest.chunks[0][:6000], digest.chunks[-1][-6000:]),
-                REDUCE_SCHEMA, system=system, model=model,
+                merge, system=system, model=model,
             )
             total_cost += res.cost_usd
             data = {**normalize_analysis(res.data), "knowledge": _kept(items, res.data.get("knowledge_ids"))}
@@ -451,6 +471,8 @@ def analyze_session(conn: sqlite3.Connection, cfg: Config, session_id: str, runn
         for item in data["knowledge"]:
             item["basis"] = "observed"
     store_analysis(conn, cfg, session_id, data, res.model, s["n_prompts"])
+    if choices and isinstance(res.data.get("project"), str):
+        chat_links.suggest(conn, session_id, res.data["project"], choices, chat_links.BY_ANALYSIS, "high")
     _log_run(conn, "session", session_id, res, status="done", input_chars=digest.chars,
              chunks=len(digest.chunks), started=started, result=data)
     conn.commit()
