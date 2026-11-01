@@ -28,6 +28,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   const DEFAULT_DAYS = 30;
   const DAY = 86400e3;
 
+  const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const time = (v) => { // an ISO date, or seconds (ChatGPT) or milliseconds since 1970
     const n = typeof v === "number" ? v : v !== "" && v != null && !isNaN(Number(v)) ? Number(v) : NaN;
@@ -37,7 +38,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   async function getJSON(path, headers) {
     const res = await fetch(path, { credentials: "include", headers });
     if (!res.ok) {
-      throw Object.assign(new Error(`${location.hostname}${path.split("?")[0]} answered ${res.status}`), { status: res.status });
+      throw Object.assign(new Error(t("errSite", `${location.hostname}${path.split("?")[0]}`, res.status)), { status: res.status });
     }
     return res.json();
   }
@@ -75,7 +76,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
     async headers() {
       if (!this.token) {
         const session = await getJSON("/api/auth/session");
-        if (!session.accessToken) throw new Error("not signed in to ChatGPT");
+        if (!session.accessToken) throw new Error(t("errNotSignedIn"));
         this.token = session.accessToken;
       }
       const device = document.cookie.match(/(?:^|; )oai-did=([^;]+)/)?.[1];
@@ -155,9 +156,9 @@ These are the sites' internal endpoints, not a published API: if a site changes 
           try {
             r = await chrome.runtime.sendMessage({ type: "capture", format: SITE, conversation: conv });
           } catch {
-            r = { retry: true, error: "the extension was reloaded: reload this tab" };
+            r = { retry: true, error: t("errReloaded") };
           }
-          if (!r?.ok && r?.retry !== false) { error = r?.error || "could not reach the dashboard"; break; }
+          if (!r?.ok && r?.retry !== false) { error = r?.error || t("errNoReach"); break; }
           state.seen[it.id] = it.updated; // sent, or refused for good (not sent again until it changes)
           if (r.ok && (r.result === "new" || r.result === "updated")) state.progress = ++sent;
           if (!r.ok) state.refused = { at: Date.now(), error: r.error };

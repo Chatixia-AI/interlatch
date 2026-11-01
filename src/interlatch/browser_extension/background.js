@@ -8,6 +8,7 @@ send it. */
 
 const DEFAULT_PORT = 11524;
 const WAIT = 60e3; // a dashboard that hasn't answered by then is stuck: the chat goes again on a later sync
+const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
 
 async function dashboard() {
   const { port } = await chrome.storage.local.get("port");
@@ -26,14 +27,14 @@ async function send(format, conversation) {
     });
   } catch (e) {
     return { ok: false, retry: true, error: e?.name === "TimeoutError"
-      ? `the Interlatch dashboard at ${base} didn't answer within a minute` : `the Interlatch dashboard is not running at ${base}` };
+      ? t("errTimeout", base) : t("errNotRunning", base) };
   }
   const body = await res.json().catch(() => ({}));
   if (res.ok) return { ok: true, ...body };
   // only 400 is about the chat itself (not one the dashboard can read), so it isn't sent again until it changes; the
   // rest is the dashboard's: 409 a sync holds the archive, 404 a version without /api/capture, 403 not this computer's
-  if (res.status === 404) return { ok: false, retry: true, error: "update Interlatch: this dashboard can't take chats yet" };
-  return { ok: false, retry: res.status !== 400, error: body.error || `the dashboard answered ${res.status}` };
+  if (res.status === 404) return { ok: false, retry: true, error: t("errUpdate") };
+  return { ok: false, retry: res.status !== 400, error: body.error || t("errAnswered", res.status) };
 }
 
 async function status() {
@@ -41,10 +42,10 @@ async function status() {
   try {
     const res = await fetch(`${base}/api/me`, { headers: { "X-Interlatch": "1" }, signal: AbortSignal.timeout(5e3) });
     const me = await res.json();
-    if (!res.ok) return { base, ok: false, error: me.error || `answered ${res.status}` };
-    return { base, ok: me.viewer?.here !== false, error: me.viewer?.here === false ? "not this computer's dashboard" : null };
+    if (!res.ok) return { base, ok: false, error: me.error || t("errAnswered", res.status) };
+    return { base, ok: me.viewer?.here !== false, error: me.viewer?.here === false ? t("errNotHere") : null };
   } catch {
-    return { base, ok: false, error: "not running" };
+    return { base, ok: false, down: true }; // nothing answers there: not installed, stopped, or on another port
   }
 }
 

@@ -1,0 +1,176 @@
+{
+  "name": {
+    "message": "Interlatch: Web チャットを保存"
+  },
+  "description": {
+    "message": "claude.ai と ChatGPT のチャットを、サイトを使うたびにこのコンピューターの Interlatch ダッシュボードへ送ります。"
+  },
+  "installUrl": {
+    "message": "https://interlatch.com/docs/ja/install/"
+  },
+  "helpUrl": {
+    "message": "https://interlatch.com/docs/ja/sources/#ブラウザ拡張でチャットを保存する"
+  },
+  "checking": {
+    "message": "確認中…"
+  },
+  "stSaving": {
+    "message": "チャットを保存しています"
+  },
+  "stSavingDetail": {
+    "message": "送り先はこのコンピューターの Interlatch だけです。"
+  },
+  "stWaiting": {
+    "message": "接続しました"
+  },
+  "stWaitingDetail": {
+    "message": "claude.ai か chatgpt.com を開くと保存が始まります。"
+  },
+  "stPaused": {
+    "message": "一時停止中"
+  },
+  "stPausedDetail": {
+    "message": "解除するまで、チャットを読むことも送ることもしません。"
+  },
+  "stTrouble": {
+    "message": "保存できていないチャットがあります"
+  },
+  "stTroubleDetail": {
+    "message": "理由は下のサイトの欄に表示されています。"
+  },
+  "stStopped": {
+    "message": "Interlatch が動いていません"
+  },
+  "stStoppedDetail": {
+    "message": "このコマンドで起動してから、もう一度開いてください。"
+  },
+  "stInstall": {
+    "message": "Interlatch をインストール"
+  },
+  "stInstallDetail": {
+    "message": "この拡張はチャットを、お使いのコンピューターのアプリ Interlatch に保存します。動かすには Interlatch が必要です。"
+  },
+  "stInstallCta": {
+    "message": "インストール方法"
+  },
+  "stInstalled": {
+    "message": "インストール済みの場合は起動します："
+  },
+  "stProblem": {
+    "message": "Interlatch から応答がありません"
+  },
+  "portHint": {
+    "message": "別のポートで動かしている場合は設定で指定します。"
+  },
+  "copy": {
+    "message": "コピー"
+  },
+  "copied": {
+    "message": "コピーしました"
+  },
+  "dashboard": {
+    "message": "ダッシュボード"
+  },
+  "sites": {
+    "message": "サイト"
+  },
+  "howItWorks": {
+    "message": "チャットを読むのは claude.ai か chatgpt.com のタブが開いている間です（5 分ごと、そしてチャットを離れた少し後）。それより前のチャットはデータエクスポートから取り込みます（ダッシュボードのソース）。クリックすると説明を開きます。"
+  },
+  "siteNotYet": {
+    "message": "まだ同期していません。タブを開くか再読み込みしてください"
+  },
+  "siteSyncing": {
+    "message": "同期中… $1 件保存しました"
+  },
+  "siteStopped": {
+    "message": "同期が止まりました（$1）：$2"
+  },
+  "siteCatching": {
+    "message": "追いついています：$1 件保存しました"
+  },
+  "siteSlowed": {
+    "message": "追いついています：$1 件保存しました。サイトから速度を落とすよう求められたため、数分後に続けます"
+  },
+  "siteSynced": {
+    "message": "同期：$1 · $2"
+  },
+  "chatsOne": {
+    "message": "1 件"
+  },
+  "chatsMany": {
+    "message": "$1 件"
+  },
+  "lastSaved": {
+    "message": "最後の保存：$1"
+  },
+  "agoNow": {
+    "message": "たった今"
+  },
+  "agoMin": {
+    "message": "$1 分前"
+  },
+  "agoHour": {
+    "message": "$1 時間前"
+  },
+  "agoDay": {
+    "message": "$1 日前"
+  },
+  "noTab": {
+    "message": "claude.ai か chatgpt.com のタブから応答がありません。タブを再読み込みしてください。拡張を読み込む前に開いたタブでは動きません。"
+  },
+  "syncNow": {
+    "message": "今すぐ同期"
+  },
+  "pausedLabel": {
+    "message": "一時停止"
+  },
+  "settings": {
+    "message": "設定"
+  },
+  "portLabel": {
+    "message": "ダッシュボードのポート"
+  },
+  "daysLabel": {
+    "message": "最初の同期でさかのぼる日数"
+  },
+  "reset": {
+    "message": "最初から同期し直す"
+  },
+  "resetTitle": {
+    "message": "送信済みの記録を消し、次の同期で上の日数分さかのぼります"
+  },
+  "theme": {
+    "message": "ライトまたはダーク"
+  },
+  "errNotRunning": {
+    "message": "$1 で Interlatch ダッシュボードが動いていません"
+  },
+  "errTimeout": {
+    "message": "$1 の Interlatch ダッシュボードが 1 分以内に応答しませんでした"
+  },
+  "errUpdate": {
+    "message": "Interlatch を更新してください。このダッシュボードはまだチャットを受け取れません"
+  },
+  "errAnswered": {
+    "message": "ダッシュボードの応答：$1"
+  },
+  "errNotHere": {
+    "message": "このコンピューターのダッシュボードではありません"
+  },
+  "errReloaded": {
+    "message": "拡張が再読み込みされました。このタブを再読み込みしてください"
+  },
+  "errNoReach": {
+    "message": "ダッシュボードに接続できませんでした"
+  },
+  "errNotSignedIn": {
+    "message": "ChatGPT にサインインしていません"
+  },
+  "errSite": {
+    "message": "$1 の応答：$2"
+  },
+  "siteNotYetOff": {
+    "message": "まだ同期していません"
+  }
+}
