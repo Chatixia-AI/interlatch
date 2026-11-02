@@ -225,6 +225,9 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const here = () => chrome.storage.local.set({ [`alive:${SITE}`]: Date.now() }); // the popup knows a tab answers
   here();
+  const lit = () => chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); // the toolbar icon in colour on this tab
+  lit();
+  window.addEventListener("pageshow", (e) => { if (e.persisted) lit(); }); // back from the browser's page cache: this script doesn't run again
   setTimeout(() => sync(true), 3000);
   setInterval(sync, EVERY);
   // the chat you were in, without waiting for the next 5 minutes: when you leave it for another chat (the sites

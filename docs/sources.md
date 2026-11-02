@@ -126,7 +126,7 @@ A saved chat is the same session an export updates, stored and archived the same
 screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
 
 A small message at the bottom right of the page says when chats were saved (not on the 5-minute timer, so a long chat
-isn't interrupted) and stays when saving fails. The toolbar icon shows a green **✓** while saving works and a red **!** when it fails. Turn the
+isn't interrupted) and stays when saving fails. The toolbar icon is in colour on a claude.ai or chatgpt.com tab and grey elsewhere, with a green **✓** while saving works and a red **!** when it fails. Turn the
 messages off in the extension's Settings.
 
 The extension's toolbar button says in one line whether it is saving your chats and, if not, what to do (install or

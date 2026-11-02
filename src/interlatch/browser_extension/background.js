@@ -72,6 +72,10 @@ chrome.runtime.onStartup.addListener(badge);
 chrome.runtime.onInstalled.addListener(badge);
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg?.type === "site" && sender.tab) { // the icon is grey, and in colour on a tab capture.js runs in; a navigation resets it
+    chrome.action.setIcon({ tabId: sender.tab.id, path: { 16: "icon-16.png", 32: "icon-32.png" } }).catch(() => {}); // the tab has gone
+    return false;
+  }
   if (msg?.type === "capture" && sender.tab) {
     send(msg.format, msg.conversation).then(reply);
     return true;
