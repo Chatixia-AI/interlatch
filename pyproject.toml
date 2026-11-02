@@ -5,7 +5,7 @@ description = "Shared memory for your coding agents: records every session (Clau
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Adrian Tam" }]
+authors = [{ name = "Adrian Tam", email = "chatixia.dev@gmail.com" }]
 keywords = ["claude-code", "codex", "github-copilot", "coding-agents", "mcp", "knowledge-base", "transcripts", "llm"]
 classifiers = [
     "Development Status :: 4 - Beta",

@@ -9,8 +9,7 @@ Please don't open a public issue for something that could be used against a runn
 
 - Report it privately through GitHub: [Report a vulnerability](https://github.com/Chatixia-AI/interlatch/security/advisories/new)
   (the **Security** tab of this repository).
-- If that page says private reporting is not enabled, open an issue that says only "security report, please get in
-  touch", without details, and a maintainer will reply with a private channel.
+- If that page says private reporting is not enabled, email [chatixia.dev@gmail.com](mailto:chatixia.dev@gmail.com).
 
 Say what you found, where in the code, and how it could be reached, in enough detail to reproduce. You should hear
 back within a week. Once a fix is released, the change is described in [CHANGELOG.md](CHANGELOG.md) and the report
