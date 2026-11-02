@@ -339,7 +339,7 @@ def test_reparse_finds_captured_chats(env):
     conn.execute("UPDATE sessions SET files_sig = 'old|v1' WHERE id = ?", (CHAT,))  # stored by an older parser
     conn.commit()
     assert reparse_archived(cfg, conn) == 1
-    assert conn.execute("SELECT files_sig FROM sessions WHERE id = ?", (CHAT,)).fetchone()[0].endswith("|v3")
+    assert conn.execute("SELECT files_sig FROM sessions WHERE id = ?", (CHAT,)).fetchone()[0].endswith("|v4")
 
 
 def test_claude_follows_the_leaf_the_site_shows():
@@ -351,6 +351,26 @@ def test_claude_follows_the_leaf_the_site_shows():
                               msg("a3", "h1", "assistant", "Green", 2)]}
     texts = [e.text for e in parse_conversation(conv, {}).events]
     assert "Blue" in texts and "Green" not in texts
+
+
+def _web_chat(*items):
+    return {"uuid": CHAT, "name": "News", "created_at": "2026-05-01T09:00:00Z", "updated_at": "2026-05-01T09:01:00Z", "chat_messages": [
+        {"uuid": "m1", "sender": "human", "created_at": "2026-05-01T09:00:00Z", "content": [{"type": "text", "text": "Any news?"}]},
+        {"uuid": "m2", "sender": "assistant", "created_at": "2026-05-01T09:01:00Z", "content": [
+            {"type": "tool_use", "id": "t1", "name": "web_search", "input": {"query": "news"}},
+            {"type": "tool_result", "tool_use_id": "t1", "name": "web_search", "content": list(items)}]}]}
+
+
+def test_claude_web_results_name_their_pages():
+    page = {"type": "knowledge", "title": "Top stories", "url": "https://example.com/news", "is_missing": False}
+    # the browser extension's copy has no page text
+    captured = parse_conversation(_web_chat(page, {**page, "title": "More", "url": "https://example.org/more"}), {})
+    assert next(e for e in captured.events if e.kind == "tool_result").text == \
+        "Top stories\nhttps://example.com/news\nMore\nhttps://example.org/more"
+    # a data export's does; a result that is only text stays as it was
+    exported = parse_conversation(_web_chat({**page, "text": "The page itself."}, {"type": "text", "text": "Done."}), {})
+    assert next(e for e in exported.events if e.kind == "tool_result").text == \
+        "Top stories\nhttps://example.com/news\nThe page itself.\nDone."
 
 
 def test_capture_from_the_browser_extension(env):

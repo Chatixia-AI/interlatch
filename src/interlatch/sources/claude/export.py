@@ -15,7 +15,7 @@ from ..builder import SessionBuilder, finish_session
 from ...core.sessions import ParsedSession
 from ...core.util import parse_ts, safe_text, to_iso
 
-CLAUDE_AI_PARSER_VERSION = 3  # 3: artifacts (claude.ai artifacts, files presented); 2: only the branch shown, pasted images
+CLAUDE_AI_PARSER_VERSION = 4  # 4: web results name their pages; 3: artifacts (claude.ai artifacts, files presented); 2: only the branch shown, pasted images
 AGENT = "claude-ai"
 SOURCE = "claude-ai-export"
 
@@ -53,10 +53,18 @@ def _blocks(msg: dict) -> list[dict]:
     return [{"type": "text", "text": msg.get("text") or ""}]
 
 
+def _result_item(item: dict) -> str:
+    """One item of a tool's result. A web search or fetch gives `knowledge` items: a page's title and address, and its
+    text in a data export (the browser extension's copy of a chat doesn't have the text)."""
+    if item.get("type") != "knowledge":
+        return item.get("text", "")
+    return "\n".join(part for part in (item.get("title"), item.get("url"), item.get("text")) if part and isinstance(part, str))
+
+
 def _result_text(block: dict) -> str:
     content = block.get("content")
     if isinstance(content, list):
-        return "\n".join(c.get("text", "") for c in content if isinstance(c, dict))
+        return "\n".join(_result_item(c) for c in content if isinstance(c, dict))
     return content if isinstance(content, str) else ""
 
 
