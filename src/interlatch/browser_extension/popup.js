@@ -19,7 +19,9 @@ function ago(ms) {
 }
 
 function siteLine(st) {
-  if (st?.running && Date.now() - st.running < STALE) return t("siteSyncing", st.progress || 0);
+  if (st?.running && Date.now() - st.running < STALE) {
+    return st.error ? t("siteRetrying", st.error) : t("siteSyncing", st.progress || 0); // the failure stays in view until it's fixed
+  }
   if (!st?.lastRun) return t(dash?.ok === false ? "siteNotYetOff" : "siteNotYet"); // opening a tab won't help then
   if (st.error) return t("siteStopped", ago(st.lastRun), st.error);
   if (st.more) return t(st.slowed ? "siteSlowed" : "siteCatching", st.captured || 0);

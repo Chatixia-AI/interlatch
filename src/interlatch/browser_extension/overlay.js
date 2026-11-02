@@ -9,8 +9,8 @@ globalThis.interlatchOverlay = (() => {
   const FADE = 400;
   const CSS = `
     .pill { --panel: #0d2a4d; --rule: #5d86b6; --ink: #e8f2ff; --dim: #8eb1d8; --mark: #6fe3c1;
-      display: flex; align-items: center; gap: 8px; max-width: 360px; padding: 8px 12px; pointer-events: none;
-      color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--mark);
+      display: flex; align-items: center; gap: 8px; max-width: 440px; padding: 8px 12px; pointer-events: none;
+      color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
       box-shadow: 0 6px 20px rgba(0, 0, 0, .28); font: 13px/1.4 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
       animation: in .18s ease-out; transition: opacity ${FADE}ms; }
     .pill.light { --panel: #ffffff; --rule: #8ba6c8; --ink: #0b1f38; --dim: #3d5878; --mark: #0c7c60; }
@@ -19,6 +19,7 @@ globalThis.interlatchOverlay = (() => {
     .pill.bad { --mark: #ff9b9b; pointer-events: auto; }
     .pill.bad.light { --mark: #b42323; }
     .pill.out { opacity: 0; }
+    .pill::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mark); }
     b { font-weight: 600; }
     span { overflow-wrap: anywhere; }
     a { flex: none; color: inherit; text-underline-offset: 3px; }

@@ -37,6 +37,7 @@ async function send(format, conversation) {
   // only 400 is about the chat itself (not one the dashboard can read), so it isn't sent again until it changes; the
   // rest is the dashboard's: 409 a sync holds the archive, 404 a version without /api/capture, 403 not this computer's
   if (res.status === 404) return { ok: false, retry: true, error: t("errUpdate") };
+  if (res.status === 409) return { ok: false, retry: true, busy: true }; // nothing's wrong: an Interlatch sync has the archive for now
   return { ok: false, retry: res.status !== 400, error: body.error || t("errAnswered", res.status) };
 }
 

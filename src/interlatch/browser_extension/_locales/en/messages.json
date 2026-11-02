@@ -202,5 +202,8 @@
   },
   "resError": {
     "message": "It stopped: the site above says why"
+  },
+  "siteRetrying": {
+    "message": "Trying again. Last try stopped: $1"
   }
 }

@@ -176,7 +176,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
       const state = { seen: {}, captured: 0, ...saved, running: started, progress: 0 }; // the popup shows the progress
       await chrome.storage.local.set({ [KEY]: state });
       const since = state.since ? state.since - MARGIN : started - (Number(days) || DEFAULT_DAYS) * DAY;
-      let sent = 0, read = 0, error = null, more = false, slowed = false, quiet = false, down = false;
+      let sent = 0, read = 0, error = null, more = false, slowed = false, quiet = false, down = false, busy = false;
       const fresh = [];
       const done = new Set();
       try {
@@ -192,6 +192,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
           } catch {
             r = { retry: true, error: t("errReloaded") };
           }
+          if (r?.busy) { more = busy = true; break; } // sent again by the next sync, a little later
           if (!r?.ok && r?.retry !== false) { error = r?.error || t("errNoReach"); down = !!r?.down; break; }
           state.seen[it.id] = it.updated; // sent, or refused for good (not sent again until it changes)
           if (r.ok && (r.result === "new" || r.result === "updated")) { state.progress = ++sent; fresh.push(it.id); }
@@ -212,7 +213,8 @@ These are the sites' internal endpoints, not a published API: if a site changes 
       if (sent) state.lastSent = Date.now();
       const told = wanted;
       wanted = false;
-      tell(state, { announce: told, quiet, down, seen: seenDashboard || saved?.captured, overlay: !noOverlay });
+      if (busy) wanted = told; // it says nothing now; the retry does
+      else tell(state, { announce: told, quiet, down, seen: seenDashboard || saved?.captured, overlay: !noOverlay });
       await chrome.storage.local.set({ [KEY]: state });
       await chrome.storage.local.remove(LOCK);
       if (more) setTimeout(sync, slowed ? SLOWED : AGAIN); // the rest, a little later
