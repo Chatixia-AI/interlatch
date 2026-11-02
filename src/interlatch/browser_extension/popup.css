@@ -62,6 +62,7 @@ h2 { display: flex; align-items: center; gap: 6px; margin: 0; font: 11px "IBM Pl
 .site .line.bad { color: var(--bad); }
 .hint { color: var(--faint); font-size: 12px; }
 .hint.bad { color: var(--bad); }
+#result { color: var(--ink); }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--rule2); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--ink); }
@@ -74,4 +75,5 @@ details { border-top: 1px solid var(--rule); padding-top: 8px; }
 summary { cursor: pointer; color: var(--dim); }
 details label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--dim); }
 details input[type=number] { width: 72px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule2); border-radius: 4px; padding: 2px 5px; }
+details input[type=checkbox] { margin: 0; accent-color: var(--gold); }
 details button { margin-top: 10px; }

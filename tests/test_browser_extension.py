@@ -37,7 +37,8 @@ def test_the_shipped_manifest():
     # it reads only the two sites, and sends only to this computer's dashboard
     assert manifest["host_permissions"] == ["http://127.0.0.1/*"] and manifest["permissions"] == ["storage"]
     assert manifest["content_scripts"][0]["matches"] == ["https://claude.ai/*", "https://chatgpt.com/*"]
-    for f in ("background.js", "capture.js", "popup.html", "popup.js", "popup.css", "plex-sans-400.woff2",
+    assert manifest["content_scripts"][0]["js"] == ["overlay.js", "capture.js"]  # capture.js calls the overlay
+    for f in ("background.js", "overlay.js", "capture.js", "popup.html", "popup.js", "popup.css", "plex-sans-400.woff2",
               "plex-sans-600.woff2", "plex-mono-400.woff2", f"_locales/{manifest['default_locale']}/messages.json",
               *manifest["icons"].values()):
         assert (browser_extension.BUNDLED / f).is_file(), f
@@ -62,9 +63,10 @@ def test_every_word_the_extension_uses_has_a_message():
     for script in ("popup.js", "background.js", "capture.js"):
         source = (root / script).read_text(encoding="utf-8")
         used |= set(re.findall(r'\bt\(\s*"(\w+)"', source))
+        for pair in re.findall(r'\bt\([^"]*\?\s*"(\w+)"\s*:\s*"(\w+)"', source):
+            used |= set(pair)
     popup = (root / "popup.js").read_text(encoding="utf-8")
     for table in re.findall(r"const (?:TITLES|DETAILS) = \{(.*?)\};", popup, re.S):
         used |= set(re.findall(r':\s*"(\w+)"', table))
-    used |= set(re.findall(r't\(st\.slowed \? "(\w+)" : "(\w+)"', popup)[0])
-    assert used >= {"stInstall", "stStopped", "stSaving", "siteSlowed", "errNotRunning"}  # the search found them
+    assert used >= {"stInstall", "stStopped", "stSaving", "siteSlowed", "siteNotYetOff", "errNotRunning", "ovSavedMany"}  # the search found them
     assert not used - _messages("en").keys()

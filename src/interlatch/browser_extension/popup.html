@@ -29,12 +29,14 @@
     <div class="site" data-site="chatgpt"><a href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT</a><span class="line"></span></div>
   </section>
   <p id="note" class="hint bad" data-i18n="noTab" hidden></p>
+  <p id="result" class="hint" role="status" hidden></p>
   <div id="actions" class="row">
     <button id="sync" class="primary" type="button" data-i18n="syncNow"></button>
     <label class="check"><input id="paused" type="checkbox"> <span data-i18n="pausedLabel"></span></label>
   </div>
   <details>
     <summary data-i18n="settings"></summary>
+    <label><span data-i18n="overlayLabel"></span> <input id="overlay" type="checkbox"></label>
     <label><span data-i18n="portLabel"></span> <input id="port" type="number" min="1" max="65535" placeholder="11524"></label>
     <label><span data-i18n="daysLabel"></span> <input id="days" type="number" min="1" max="3650" placeholder="30"></label>
     <button id="reset" type="button" data-i18n="reset" data-i18n-title="resetTitle"></button>

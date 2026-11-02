@@ -76,7 +76,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
     async headers() {
       if (!this.token) {
         const session = await getJSON("/api/auth/session");
-        if (!session.accessToken) throw new Error(t("errNotSignedIn"));
+        if (!session.accessToken) throw Object.assign(new Error(t("errNotSignedIn")), { status: 401 });
         this.token = session.accessToken;
       }
       const device = document.cookie.match(/(?:^|; )oai-did=([^;]+)/)?.[1];
@@ -131,19 +131,53 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const site = SITE === "claude-ai" ? claude : chatgpt;
   let running = false;
+  let wanted = false; // a sync you'd expect to hear about is due: not the timer's, which would interrupt a chat you're in
 
-  async function sync() {
+  /* What this sync has to say on the page. Chats saved by the timer wait for the next sync you'd expect (load, leaving a
+  chat, Sync now), so a long chat doesn't announce itself every 5 minutes. A long first sync says so once at the start
+  and once at the end. A failure is told once until it changes; being signed out of the site isn't one. */
+  function tell(state, { announce, quiet, down, seen, overlay }) {
+    const say = overlay ? interlatchOverlay.say : () => {};
+    if (state.error && !quiet) {
+      if (state.shownError === state.error) return;
+      state.shownError = state.error;
+      const link = down && !seen ? { href: t("installUrl"), text: t("stInstall") } : { href: t("helpUrl"), text: t("ovFix") };
+      say({ text: state.error[0].toUpperCase() + state.error.slice(1), kind: "bad", link, dismiss: t("ovDismiss") });
+      return;
+    }
+    if (state.shownError) {
+      state.shownError = null;
+      interlatchOverlay.clear(); // fixed: the failure's message goes with it
+    }
+    if (state.error) return;
+    if (state.more) {
+      if (!state.catchingUp) say({ text: t("ovCatching"), kind: "wait" });
+      state.catchingUp = true;
+      return;
+    }
+    const n = state.unannounced?.length || 0;
+    if (n && (announce || state.catchingUp)) {
+      say({ text: n === 1 ? t("ovSavedOne") : t("ovSavedMany", n) });
+      state.unannounced = [];
+    }
+    state.catchingUp = false;
+  }
+
+  async function sync(announce = false) {
+    wanted ||= announce === true;
     if (running) return;
     running = true;
     try {
-      const { [KEY]: saved, [LOCK]: lock, days, paused } = await chrome.storage.local.get([KEY, LOCK, "days", "paused"]);
+      const { [KEY]: saved, [LOCK]: lock, days, paused, noOverlay, seenDashboard } = await chrome.storage.local.get(
+        [KEY, LOCK, "days", "paused", "noOverlay", "seenDashboard"]);
       const started = Date.now();
       if (paused || (lock && started - lock < STALE_LOCK)) return;
       await chrome.storage.local.set({ [LOCK]: started });
       const state = { seen: {}, captured: 0, ...saved, running: started, progress: 0 }; // the popup shows the progress
       await chrome.storage.local.set({ [KEY]: state });
       const since = state.since ? state.since - MARGIN : started - (Number(days) || DEFAULT_DAYS) * DAY;
-      let sent = 0, read = 0, error = null, more = false, slowed = false;
+      let sent = 0, read = 0, error = null, more = false, slowed = false, quiet = false, down = false;
+      const fresh = [];
       const done = new Set();
       try {
         for await (const it of site.changed(since)) {
@@ -158,23 +192,27 @@ These are the sites' internal endpoints, not a published API: if a site changes 
           } catch {
             r = { retry: true, error: t("errReloaded") };
           }
-          if (!r?.ok && r?.retry !== false) { error = r?.error || t("errNoReach"); break; }
+          if (!r?.ok && r?.retry !== false) { error = r?.error || t("errNoReach"); down = !!r?.down; break; }
           state.seen[it.id] = it.updated; // sent, or refused for good (not sent again until it changes)
-          if (r.ok && (r.result === "new" || r.result === "updated")) state.progress = ++sent;
+          if (r.ok && (r.result === "new" || r.result === "updated")) { state.progress = ++sent; fresh.push(it.id); }
           if (!r.ok) state.refused = { at: Date.now(), error: r.error };
           await chrome.storage.local.set({ [KEY]: state });
           await sleep(PAUSE);
         }
       } catch (e) {
         if (e?.status === 429) more = slowed = true;
-        else error = String(e?.message || e);
+        else { error = String(e?.message || e); quiet = e?.status === 401 || e?.status === 403; } // signed out of the site
       }
       if (!error && !more) { // a later sync looks only from here; chats seen before that can't come up again unchanged
         state.since = started;
         for (const [id, updated] of Object.entries(state.seen)) if (time(updated) < started - MARGIN) delete state.seen[id];
       }
-      Object.assign(state, { lastRun: Date.now(), error, more, slowed, running: null, captured: (state.captured || 0) + sent });
+      Object.assign(state, { lastRun: Date.now(), error, quiet, more, slowed, running: null, lastSaved: sent,
+        captured: (state.captured || 0) + sent, unannounced: [...new Set([...(state.unannounced || []), ...fresh])] });
       if (sent) state.lastSent = Date.now();
+      const told = wanted;
+      wanted = false;
+      tell(state, { announce: told, quiet, down, seen: seenDashboard || saved?.captured, overlay: !noOverlay });
       await chrome.storage.local.set({ [KEY]: state });
       await chrome.storage.local.remove(LOCK);
       if (more) setTimeout(sync, slowed ? SLOWED : AGAIN); // the rest, a little later
@@ -185,7 +223,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const here = () => chrome.storage.local.set({ [`alive:${SITE}`]: Date.now() }); // the popup knows a tab answers
   here();
-  setTimeout(sync, 3000);
+  setTimeout(() => sync(true), 3000);
   setInterval(sync, EVERY);
   // the chat you were in, without waiting for the next 5 minutes: when you leave it for another chat (the sites
   // change the address without loading a page) or for another tab or app; at most once a minute
@@ -193,11 +231,11 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   const soon = () => {
     if (Date.now() - lastSoon < SOON_GAP) return;
     lastSoon = Date.now();
-    setTimeout(sync, SOON_DELAY);
+    setTimeout(() => sync(true), SOON_DELAY);
   };
   setInterval(() => { if (location.pathname !== path) { path = location.pathname; soon(); } }, 2000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") soon(); });
   chrome.storage.onChanged.addListener((changes) => { // Sync now, from the popup
-    if (changes.syncNow?.newValue) { here(); sync(); }
+    if (changes.syncNow?.newValue) { here(); sync(true); }
   });
 })();

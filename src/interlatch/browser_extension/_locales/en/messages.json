@@ -172,5 +172,35 @@
   },
   "siteNotYetOff": {
     "message": "Not synced yet"
+  },
+  "overlayLabel": {
+    "message": "Show messages on the page"
+  },
+  "ovSavedOne": {
+    "message": "1 chat saved"
+  },
+  "ovSavedMany": {
+    "message": "$1 chats saved"
+  },
+  "ovCatching": {
+    "message": "Saving your chats. The first sync can take a while."
+  },
+  "ovFix": {
+    "message": "How to fix"
+  },
+  "ovDismiss": {
+    "message": "Dismiss"
+  },
+  "resSaved": {
+    "message": "$1 saved"
+  },
+  "resMore": {
+    "message": "$1 saved so far, and more to come"
+  },
+  "resNothing": {
+    "message": "Nothing new"
+  },
+  "resError": {
+    "message": "It stopped: the site above says why"
   }
 }

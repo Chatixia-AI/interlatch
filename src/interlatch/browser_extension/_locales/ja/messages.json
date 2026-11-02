@@ -172,5 +172,35 @@
   },
   "siteNotYetOff": {
     "message": "まだ同期していません"
+  },
+  "overlayLabel": {
+    "message": "ページにメッセージを表示"
+  },
+  "ovSavedOne": {
+    "message": "チャットを 1 件保存しました"
+  },
+  "ovSavedMany": {
+    "message": "チャットを $1 件保存しました"
+  },
+  "ovCatching": {
+    "message": "チャットを保存しています。最初の同期には時間がかかることがあります。"
+  },
+  "ovFix": {
+    "message": "解決方法"
+  },
+  "ovDismiss": {
+    "message": "閉じる"
+  },
+  "resSaved": {
+    "message": "$1 保存しました"
+  },
+  "resMore": {
+    "message": "$1 保存しました。続きがあります"
+  },
+  "resNothing": {
+    "message": "新しいチャットはありません"
+  },
+  "resError": {
+    "message": "同期が止まりました。理由は上のサイトの欄に表示されています"
   }
 }

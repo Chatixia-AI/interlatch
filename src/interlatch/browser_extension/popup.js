@@ -8,6 +8,7 @@ const SITES = ["claude-ai", "chatgpt"];
 const STALE = 15 * 60e3; // a sync "running" longer than this ended with its tab
 
 let dash = null; // what the service worker last said about the dashboard; null until it has
+let asked = 0; // when Sync now was clicked, until its result is shown
 
 function ago(ms) {
   const s = Math.round((Date.now() - ms) / 1000);
@@ -31,7 +32,7 @@ installed; one that has answered before has stopped. */
 function overall(store) {
   const states = SITES.map((s) => store[`sync:${s}`]);
   if (!dash) return "checking";
-  if (!dash.ok) return !dash.down ? "problem" : store.seenDashboard || states.some((st) => st?.lastRun) ? "stopped" : "install";
+  if (!dash.ok) return !dash.down ? "problem" : store.seenDashboard || states.some((st) => st?.captured) ? "stopped" : "install";
   if (store.paused) return "paused";
   if (states.some((st) => st?.error)) return "trouble";
   return states.some((st) => st?.lastRun || st?.running) ? "saving" : "waiting";
@@ -52,13 +53,27 @@ function renderStatus(state) {
   $("st-cta").hidden = $("st-installed").hidden = state !== "install";
   $("st-cmd").hidden = $("st-port").hidden = !off;
   $("sites").hidden = $("actions").hidden = state === "install";
-  $("sync").disabled = !dash?.ok || !!$("sync").dataset.asked;
+  $("sync").disabled = !dash?.ok || state === "paused" || !!$("sync").dataset.asked;
   $("dashboard").hidden = !dash?.ok;
   if (dash?.base) $("dashboard").href = dash.base;
 }
 
+/* What Sync now did, once every site that answered has finished. */
+function renderResult(store) {
+  if (!asked) return;
+  const states = SITES.filter((s) => store[`alive:${s}`] >= asked).map((s) => store[`sync:${s}`]);
+  if (!states.length || !states.every((st) => st?.lastRun >= asked && !st.running)) return;
+  asked = 0;
+  const n = states.reduce((sum, st) => sum + (st.lastSaved || 0), 0);
+  const chats = n === 1 ? t("chatsOne") : t("chatsMany", n);
+  $("result").textContent = states.some((st) => st.error) ? t("resError") : states.some((st) => st.more) ? t("resMore", chats)
+    : n ? t("resSaved", chats) : t("resNothing");
+  $("result").hidden = false;
+}
+
 async function render() {
-  const store = await chrome.storage.local.get([...SITES.map((s) => `sync:${s}`), "port", "days", "paused", "theme", "seenDashboard"]);
+  const store = await chrome.storage.local.get([...SITES.flatMap((s) => [`sync:${s}`, `alive:${s}`]), "port", "days", "paused",
+    "theme", "seenDashboard", "noOverlay"]);
   for (const key of SITES) {
     const st = store[`sync:${key}`];
     const line = document.querySelector(`.site[data-site="${key}"] .line`);
@@ -67,16 +82,17 @@ async function render() {
     line.title = st?.lastSent ? t("lastSaved", ago(st.lastSent)) : "";
   }
   renderStatus(overall(store));
+  renderResult(store);
   // not while it's being typed in: a sync writing to storage renders again
   if (document.activeElement !== $("port")) $("port").value = store.port || "";
   if (document.activeElement !== $("days")) $("days").value = store.days || "";
   $("paused").checked = !!store.paused;
+  $("overlay").checked = !store.noOverlay;
   if (store.theme) document.documentElement.dataset.theme = store.theme;
 }
 
 async function checkDashboard() {
   dash = await chrome.runtime.sendMessage({ type: "status" }).catch(() => null) || { ok: false, down: true };
-  if (dash.ok) await chrome.storage.local.set({ seenDashboard: true });
   render();
 }
 
@@ -90,14 +106,17 @@ function translate() {
 }
 
 $("sync").addEventListener("click", async () => {
-  const asked = Date.now();
+  asked = Date.now();
+  const clicked = asked;
   $("sync").dataset.asked = "1";
+  $("result").hidden = true;
   $("sync").disabled = true;
   $("note").hidden = true;
   await chrome.storage.local.set({ syncNow: asked });
   setTimeout(async () => {
     const alive = await chrome.storage.local.get(SITES.map((s) => `alive:${s}`));
-    $("note").hidden = Object.values(alive).some((v) => v >= asked); // no tab of either site answered
+    $("note").hidden = Object.values(alive).some((v) => v >= clicked); // no tab of either site answered
+    if ($("note").hidden === false) asked = 0;
     delete $("sync").dataset.asked;
     render();
   }, 2500);
@@ -108,6 +127,7 @@ $("copy").addEventListener("click", async (e) => {
   setTimeout(() => { e.target.textContent = t("copy"); }, 1500);
 });
 $("paused").addEventListener("change", (e) => chrome.storage.local.set({ paused: e.target.checked }));
+$("overlay").addEventListener("change", (e) => chrome.storage.local.set({ noOverlay: !e.target.checked }));
 $("port").addEventListener("change", async (e) => {
   const port = Number(e.target.value);
   await (port > 0 && port < 65536 ? chrome.storage.local.set({ port }) : chrome.storage.local.remove("port"));

@@ -26,11 +26,14 @@ async function send(format, conversation) {
       signal: AbortSignal.timeout(WAIT),
     });
   } catch (e) {
-    return { ok: false, retry: true, error: e?.name === "TimeoutError"
+    return { ok: false, retry: true, down: e?.name !== "TimeoutError", error: e?.name === "TimeoutError"
       ? t("errTimeout", base) : t("errNotRunning", base) };
   }
   const body = await res.json().catch(() => ({}));
-  if (res.ok) return { ok: true, ...body };
+  if (res.ok) {
+    await chrome.storage.local.set({ seenDashboard: true });
+    return { ok: true, ...body };
+  }
   // only 400 is about the chat itself (not one the dashboard can read), so it isn't sent again until it changes; the
   // rest is the dashboard's: 409 a sync holds the archive, 404 a version without /api/capture, 403 not this computer's
   if (res.status === 404) return { ok: false, retry: true, error: t("errUpdate") };
@@ -43,11 +46,25 @@ async function status() {
     const res = await fetch(`${base}/api/me`, { headers: { "X-Interlatch": "1" }, signal: AbortSignal.timeout(5e3) });
     const me = await res.json();
     if (!res.ok) return { base, ok: false, error: me.error || t("errAnswered", res.status) };
+    if (me.viewer?.here !== false) await chrome.storage.local.set({ seenDashboard: true });
     return { base, ok: me.viewer?.here !== false, error: me.viewer?.here === false ? t("errNotHere") : null };
   } catch {
     return { base, ok: false, down: true }; // nothing answers there: not installed, stopped, or on another port
   }
 }
+
+// A red ! on the toolbar icon while a site's chats aren't being saved, for when no tab of it is in front of you.
+async function badge() {
+  const sites = await chrome.storage.local.get(["sync:claude-ai", "sync:chatgpt"]);
+  const bad = Object.values(sites).some((st) => st?.error && !st.quiet);
+  await chrome.action.setBadgeBackgroundColor({ color: "#c92a2a" });
+  await chrome.action.setBadgeText({ text: bad ? "!" : "" });
+}
+chrome.storage.onChanged.addListener((changes) => {
+  if (Object.keys(changes).some((k) => k.startsWith("sync:"))) badge();
+});
+chrome.runtime.onStartup.addListener(badge);
+chrome.runtime.onInstalled.addListener(badge);
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "capture" && sender.tab) {

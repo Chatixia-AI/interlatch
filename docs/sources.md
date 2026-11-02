@@ -125,6 +125,10 @@ A saved chat is the same session an export updates, stored and archived the same
 `archive/<claude-ai|chatgpt>/captured/<id>/`). Like imported chats, saved chats are **not analyzed automatically**:
 screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
 
+A small message at the bottom right of the page says when chats were saved (not on the 5-minute timer, so a long chat
+isn't interrupted) and stays when saving fails, with a red **!** on the toolbar icon. Turn the messages off in the
+extension's Settings.
+
 The extension's toolbar button says in one line whether it is saving your chats and, if not, what to do (install or
 start Interlatch). It follows the browser's language (English or Japanese) and shows each site's last sync and any
 error, with **Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
