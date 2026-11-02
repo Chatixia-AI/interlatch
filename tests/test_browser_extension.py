@@ -38,12 +38,12 @@ def test_the_shipped_manifest():
     assert manifest["host_permissions"] == ["http://127.0.0.1/*"] and manifest["permissions"] == ["storage"]
     assert manifest["content_scripts"][0]["matches"] == ["https://claude.ai/*", "https://chatgpt.com/*"]
     assert manifest["content_scripts"][0]["js"] == ["overlay.js", "capture.js"]  # capture.js calls the overlay
-    # the toolbar icon: grey by default, and background.js puts these on a tab of one of the sites
+    # the toolbar icon: a pause sign by default, and background.js puts the colour one on a tab of one of the sites
     assert set(manifest["action"]["default_icon"].values()).isdisjoint(manifest["icons"].values())
     background = (browser_extension.BUNDLED / "background.js").read_text(encoding="utf-8")
-    for f in re.findall(r'"(icon[\w-]*\.png)"', background):
-        assert f in manifest["icons"].values(), f
-    assert "icon-16.png" in background
+    icons = set(re.findall(r'"(icon[\w-]*\.png)"', background))
+    assert icons == {*manifest["action"]["default_icon"].values(), "icon-16.png", "icon-32.png"}
+    assert all((browser_extension.BUNDLED / f).is_file() for f in icons)
     for f in ("background.js", "overlay.js", "capture.js", "popup.html", "popup.js", "popup.css", "plex-sans-400.woff2",
               "plex-sans-600.woff2", "plex-mono-400.woff2", f"_locales/{manifest['default_locale']}/messages.json",
               *manifest["icons"].values(), *manifest["action"]["default_icon"].values()):

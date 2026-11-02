@@ -225,7 +225,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const here = () => chrome.storage.local.set({ [`alive:${SITE}`]: Date.now() }); // the popup knows a tab answers
   here();
-  const lit = () => chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); // the toolbar icon in colour on this tab
+  const lit = () => chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); // the toolbar icon and badge on this tab
   lit();
   window.addEventListener("pageshow", (e) => { if (e.persisted) lit(); }); // back from the browser's page cache: this script doesn't run again
   setTimeout(() => sync(true), 3000);
@@ -242,5 +242,6 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") soon(); });
   chrome.storage.onChanged.addListener((changes) => { // Sync now, from the popup
     if (changes.syncNow?.newValue) { here(); sync(true); }
+    if (Object.keys(changes).some((k) => k.startsWith("sync:") || ["paused", "port", "checkedAt"].includes(k))) lit();
   });
 })();

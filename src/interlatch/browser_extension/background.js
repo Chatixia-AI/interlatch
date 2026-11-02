@@ -54,26 +54,45 @@ async function status() {
   }
 }
 
-// The toolbar icon, for when no tab of a site is in front of you: a red ! while a site's chats aren't being saved, a green
-// check while they are and the dashboard answers, nothing when paused or before the first sync.
-async function badge() {
-  const { paused, "sync:claude-ai": claude, "sync:chatgpt": chatgpt } = await chrome.storage.local.get(["paused", "sync:claude-ai", "sync:chatgpt"]);
-  const sites = [claude, chatgpt];
-  const bad = sites.some((st) => st?.error && !st.quiet);
-  const good = !bad && !paused && sites.some((st) => st?.lastRun && !st.error) && (await status()).ok;
-  await chrome.action.setBadgeBackgroundColor({ color: bad ? "#c92a2a" : "#0c7c60" });
-  await chrome.action.setBadgeTextColor({ color: "#ffffff" });
-  await chrome.action.setBadgeText({ text: bad ? "!" : good ? "✓" : "" });
+// The toolbar icon says what's happening on this tab: a pause sign where nothing is read (the default, and on a site while
+// Paused), in colour on a site. A red ! while a site's chats aren't being saved shows on every tab; a green check, while
+// they are and the dashboard answers, only on a tab of a site, because on the others it would sit on the pause sign.
+const COLOUR = { 16: "icon-16.png", 32: "icon-32.png" };
+const IDLE = { 16: "icon-idle-16.png", 32: "icon-idle-32.png" };
+const RED = "#c92a2a";
+const GREEN = "#0c7c60";
+
+async function failing() {
+  const sites = await chrome.storage.local.get(["sync:claude-ai", "sync:chatgpt"]);
+  return { sites: Object.values(sites), bad: Object.values(sites).some((st) => st?.error && !st.quiet) };
 }
+
+async function badge() {
+  const { bad } = await failing();
+  await chrome.action.setBadgeBackgroundColor({ color: RED });
+  await chrome.action.setBadgeTextColor({ color: "#ffffff" });
+  await chrome.action.setBadgeText({ text: bad ? "!" : "" });
+}
+
+// A tab of a site; these settings go when it navigates away, and capture.js asks again whenever something changes.
+async function siteTab(tabId) {
+  const { paused } = await chrome.storage.local.get("paused");
+  const { sites, bad } = await failing();
+  const good = !bad && !paused && sites.some((st) => st?.lastRun && !st.error) && (await status()).ok;
+  await chrome.action.setIcon({ tabId, path: paused ? IDLE : COLOUR });
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: bad ? RED : GREEN });
+  await chrome.action.setBadgeText({ tabId, text: bad ? "!" : good ? "✓" : "" });
+}
+
 chrome.storage.onChanged.addListener((changes) => {
-  if (Object.keys(changes).some((k) => k.startsWith("sync:") || k === "paused" || k === "port")) badge();
+  if (Object.keys(changes).some((k) => k.startsWith("sync:"))) badge();
 });
 chrome.runtime.onStartup.addListener(badge);
 chrome.runtime.onInstalled.addListener(badge);
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-  if (msg?.type === "site" && sender.tab) { // the icon is grey, and in colour on a tab capture.js runs in; a navigation resets it
-    chrome.action.setIcon({ tabId: sender.tab.id, path: { 16: "icon-16.png", 32: "icon-32.png" } }).catch(() => {}); // the tab has gone
+  if (msg?.type === "site" && sender.tab) {
+    siteTab(sender.tab.id).catch(() => {}); // the tab has gone
     return false;
   }
   if (msg?.type === "capture" && sender.tab) {
@@ -81,7 +100,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg?.type === "status" && !sender.tab) {
-    badge(); // opening the popup is a fresh look at the dashboard
+    badge();
+    chrome.storage.local.set({ checkedAt: Date.now() }); // opening the popup is a fresh look at the dashboard: site tabs ask again
     status().then(reply);
     return true;
   }
