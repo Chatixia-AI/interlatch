@@ -848,6 +848,8 @@ window.INTERLATCH_JA = {
   "Click Load unpacked and choose {folder}": "「パッケージ化されていない拡張機能を読み込む」をクリックし、{folder} を選びます",
   "In the folder window, press ⌘⇧G, paste the path and press Return.": "フォルダーを選ぶ画面で ⌘⇧G を押し、パスを貼り付けて Return を押します。",
   "In the folder window, paste the path into the address bar at the top.": "フォルダーを選ぶ画面で、上部のアドレスバーにパスを貼り付けます。",
+  "Choose Start saving": "「保存を開始」を選ぶ",
+  "A page opens when the extension loads and says what it reads and where that goes. Nothing is read until you choose Start saving.": "拡張機能を読み込むとページが開き、読み取るものと送り先を説明します。「保存を開始」を選ぶまで何も読み取りません。",
   "Pin it and check the connection": "ピン留めして接続を確かめる",
   "Pin Interlatch from the puzzle-piece menu and click it: it should say Connected.": "パズルのピースのメニューから Interlatch をピン留めしてクリックします。「接続しました」と表示されれば接続できています。",
   "This dashboard isn't on the usual port: open Settings in the extension and set the port to {port}.": "このダッシュボードは通常のポートではありません。拡張の設定を開き、ポートを {port} にします。",

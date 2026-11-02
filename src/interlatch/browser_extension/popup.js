@@ -34,15 +34,16 @@ installed; one that has answered before has stopped. */
 function overall(store) {
   const states = SITES.map((s) => store[`sync:${s}`]);
   if (!dash) return "checking";
+  if (!store.consented) return "consent";
   if (!dash.ok) return !dash.down ? "problem" : store.seenDashboard || states.some((st) => st?.captured) ? "stopped" : "install";
   if (store.paused) return "paused";
   if (states.some((st) => st?.error)) return "trouble";
   return states.some((st) => st?.lastRun || st?.running) ? "saving" : "waiting";
 }
 
-const TITLES = { checking: "checking", saving: "stSaving", waiting: "stWaiting", paused: "stPaused", trouble: "stTrouble",
+const TITLES = { checking: "checking", consent: "stConsent", saving: "stSaving", waiting: "stWaiting", paused: "stPaused", trouble: "stTrouble",
   stopped: "stStopped", install: "stInstall", problem: "stProblem" };
-const DETAILS = { saving: "stSavingDetail", waiting: "stWaitingDetail", paused: "stPausedDetail", trouble: "stTroubleDetail",
+const DETAILS = { consent: "stConsentDetail", saving: "stSavingDetail", waiting: "stWaitingDetail", paused: "stPausedDetail", trouble: "stTroubleDetail",
   stopped: "stStoppedDetail", install: "stInstallDetail" };
 
 function renderStatus(state) {
@@ -54,7 +55,8 @@ function renderStatus(state) {
   const off = state === "install" || state === "stopped";
   $("st-cta").hidden = $("st-installed").hidden = state !== "install";
   $("st-cmd").hidden = $("st-port").hidden = !off;
-  $("sites").hidden = $("actions").hidden = state === "install";
+  $("st-start").hidden = state !== "consent";
+  $("sites").hidden = $("actions").hidden = state === "install" || state === "consent";
   $("sync").disabled = !dash?.ok || state === "paused" || !!$("sync").dataset.asked;
   $("dashboard").hidden = !dash?.ok;
   if (dash?.base) $("dashboard").href = dash.base;
@@ -75,7 +77,7 @@ function renderResult(store) {
 
 async function render() {
   const store = await chrome.storage.local.get([...SITES.flatMap((s) => [`sync:${s}`, `alive:${s}`]), "port", "days", "paused",
-    "theme", "seenDashboard", "noOverlay"]);
+    "theme", "seenDashboard", "noOverlay", "consented"]);
   for (const key of SITES) {
     const st = store[`sync:${key}`];
     const line = document.querySelector(`.site[data-site="${key}"] .line`);
