@@ -78,9 +78,9 @@ async function badge() {
 async function siteTab(tabId) {
   const { consented, paused: stopped } = await chrome.storage.local.get(["consented", "paused"]);
   const paused = stopped || !consented;
+  await chrome.action.setIcon({ tabId, path: paused ? IDLE : COLOUR }); // before asking the dashboard, which can take seconds
   const { sites, bad } = await failing();
   const good = !bad && !paused && sites.some((st) => st?.lastRun && !st.error) && (await status()).ok;
-  await chrome.action.setIcon({ tabId, path: paused ? IDLE : COLOUR });
   await chrome.action.setBadgeBackgroundColor({ tabId, color: bad ? RED : GREEN });
   await chrome.action.setBadgeText({ tabId, text: bad ? "!" : good ? "✓" : "" });
 }
