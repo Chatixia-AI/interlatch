@@ -263,8 +263,11 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const here = () => chrome.storage.local.set({ [`alive:${SITE}`]: Date.now() }); // the popup knows a tab answers
   here();
-  const lit = () => chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); // the toolbar icon and badge on this tab
+  // the toolbar icon and badge on this tab. A page the browser prerendered (the address bar guessing where you're going)
+  // isn't on show yet, the tab still has another page, and showing it clears them
+  const lit = () => { if (!document.prerendering) chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); };
   lit();
+  document.addEventListener("prerenderingchange", lit);
   window.addEventListener("pageshow", (e) => { if (e.persisted) lit(); }); // back from the browser's page cache: this script doesn't run again
   notice().catch(() => {}); // no message is the right answer when any of it can't tell
   setTimeout(() => sync(true), 3000);

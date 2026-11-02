@@ -281,3 +281,58 @@ vm.runInNewContext(fs.readFileSync(process.argv[1] + '/background.js', 'utf8'), 
 """
     result = subprocess.run([NODE, "-e", script, str(browser_extension.BUNDLED)], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
+
+
+@needs_node
+def test_a_prerendered_page_asks_for_its_icon_when_it_is_shown():
+    in_a_tab("""
+    let lit = 0, shownNow;
+    const send = chrome.runtime.sendMessage, listen = doc.addEventListener;
+    chrome.runtime.sendMessage = async (m) => { if (m.type === 'site') lit++; return send(m); };
+    doc.addEventListener = function (n, f) { if (n === 'prerenderingchange') shownNow = f; return listen.call(this, n, f); };
+    doc.prerendering = true;
+    load('capture.js');
+    await settle();
+    listeners.forEach((f) => f({ 'sync:claude-ai': { newValue: {} } }));
+    assert.equal(lit, 0);  // the tab is still showing another page: its icon isn't this page's to set
+    doc.prerendering = false;
+    shownNow();  // showing the page cleared the tab's icon, and this script doesn't run again
+    assert.equal(lit, 1);
+""")
+
+
+@needs_node
+def test_a_slow_dashboard_does_not_hold_up_the_icon():
+    script = """
+const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
+const store = { consented: true, 'sync:claude-ai': { lastRun: 1 } }, icons = [], badges = [], heard = [];
+let answer;
+const on = { addListener() {} };
+const chrome = {
+  i18n: { getMessage: (k) => k },
+  storage: { onChanged: on, local: {
+    get: async (k) => Object.fromEntries([k].flat().filter((n) => n in store).map((n) => [n, store[n]])),
+    set: async (v) => { Object.assign(store, v); },
+  } },
+  action: { setIcon: async (o) => { icons.push(o); }, setBadgeBackgroundColor: async () => {}, setBadgeTextColor: async () => {},
+            setBadgeText: async (o) => { badges.push(o.text); } },
+  runtime: { onStartup: on, onInstalled: on, onMessage: { addListener: (f) => heard.push(f) } },
+};
+const fetch = () => new Promise((r) => { answer = r; });
+vm.runInNewContext(fs.readFileSync(process.argv[1] + '/background.js', 'utf8'),
+                   { chrome, fetch, AbortSignal: { timeout() {} }, Object, Number, String, Promise });
+const settle = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+(async () => {
+  heard[0]({ type: 'site' }, { tab: { id: 7 } });
+  await settle();
+  assert.equal(icons.length, 1);  // the dashboard hasn't answered yet
+  assert.equal(icons[0].tabId, 7);
+  assert.equal(icons[0].path[16], 'icon-16.png');
+  assert.deepEqual(badges, []);  // the check mark is what waits for it
+  answer({ ok: true, json: async () => ({ viewer: { here: true } }) });
+  await settle();
+  assert.deepEqual(badges, ['✓']);
+})().catch((e) => { console.error(e); process.exit(1); });
+"""
+    result = subprocess.run([NODE, "-e", script, str(browser_extension.BUNDLED)], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
