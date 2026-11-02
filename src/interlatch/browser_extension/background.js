@@ -54,15 +54,19 @@ async function status() {
   }
 }
 
-// A red ! on the toolbar icon while a site's chats aren't being saved, for when no tab of it is in front of you.
+// The toolbar icon, for when no tab of a site is in front of you: a red ! while a site's chats aren't being saved, a green
+// check while they are and the dashboard answers, nothing when paused or before the first sync.
 async function badge() {
-  const sites = await chrome.storage.local.get(["sync:claude-ai", "sync:chatgpt"]);
-  const bad = Object.values(sites).some((st) => st?.error && !st.quiet);
-  await chrome.action.setBadgeBackgroundColor({ color: "#c92a2a" });
-  await chrome.action.setBadgeText({ text: bad ? "!" : "" });
+  const { paused, "sync:claude-ai": claude, "sync:chatgpt": chatgpt } = await chrome.storage.local.get(["paused", "sync:claude-ai", "sync:chatgpt"]);
+  const sites = [claude, chatgpt];
+  const bad = sites.some((st) => st?.error && !st.quiet);
+  const good = !bad && !paused && sites.some((st) => st?.lastRun && !st.error) && (await status()).ok;
+  await chrome.action.setBadgeBackgroundColor({ color: bad ? "#c92a2a" : "#0c7c60" });
+  await chrome.action.setBadgeTextColor({ color: "#ffffff" });
+  await chrome.action.setBadgeText({ text: bad ? "!" : good ? "✓" : "" });
 }
 chrome.storage.onChanged.addListener((changes) => {
-  if (Object.keys(changes).some((k) => k.startsWith("sync:"))) badge();
+  if (Object.keys(changes).some((k) => k.startsWith("sync:") || k === "paused" || k === "port")) badge();
 });
 chrome.runtime.onStartup.addListener(badge);
 chrome.runtime.onInstalled.addListener(badge);
@@ -73,6 +77,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg?.type === "status" && !sender.tab) {
+    badge(); // opening the popup is a fresh look at the dashboard
     status().then(reply);
     return true;
   }
