@@ -1,11 +1,10 @@
 # Submitting the browser extension to the Chrome Web Store
 
-Everything the dashboard asks for, ready to paste. Sign in as `chatixia.dev@gmail.com` at
-<https://chrome.google.com/webstore/devconsole>. Publish **Unlisted** first; go **Public** once a real install from the
-store has worked.
+Everything the dashboard asks for, ready to paste, checked against its forms on 2026-11-02. Sign in as
+`chatixia.dev@gmail.com` at <https://chrome.google.com/webstore/devconsole>. Publish **Unlisted** first; go **Public**
+once a real install from the store has worked.
 
-Google's docs don't list the data categories, certification wording or category names (some are only in a screenshot),
-so those below come from memory: go by what the dashboard shows.
+**Status:** 1.1.0 submitted for review as Unlisted on 2026-11-02. Item ID `dfoaabcfgmpgkfjaemipocpjhmenlheb`.
 
 ## 1. Build the ZIP
 
@@ -13,8 +12,9 @@ so those below come from memory: go by what the dashboard shows.
 python3 packaging/chrome-web-store/make_zip.py
 ```
 
-It writes `dist/interlatch-browser-extension-<version>.zip`. **New item › Choose file** takes it. Each later upload needs
-a higher `version` in `manifest.json`.
+It writes `dist/interlatch-browser-extension-<version>.zip`. **New item › Choose file** takes it; for a later version,
+use the **Package** page. Each published version needs a higher `version` in `manifest.json`. Build it from an up-to-date
+`main` right before uploading: other changes to the extension may have landed since the last build.
 
 ## 2. Store listing
 
@@ -58,8 +58,9 @@ claude.ai と ChatGPT のチャットを、あなたのコンピューター上�
 Interlatch は独立したプロジェクトで、Anthropic や OpenAI とは関係ありません。
 ```
 
-**Screenshots:** `screenshots/1-asks-first.png`, `2-says-where-chats-go.png`, `3-toolbar-button.png` (1280×800, from
-`screenshots.js`; retake them when the popup or page message changes). The site in the second is a plain stand-in, so no
+**Screenshots:** `screenshots/1-asks-first.png`, `2-says-where-chats-go.png`, `3-toolbar-button.png` (1280×800, 24-bit with
+no alpha, from `screenshots.js`; retake them when the popup or page message changes). The form has **Localized** and
+**Global** fields, both marked required: these go in both. The site in the second is a plain stand-in, so no
 real chats or other companies' pages appear.
 
 **Store icon:** `src/interlatch/browser_extension/icon-128.png`. Promo tiles are optional; listings without the small one
@@ -82,27 +83,34 @@ Saves the user's own claude.ai and ChatGPT chats into the Interlatch app on the 
 Keeps the extension's settings (dashboard port, Paused, first-sync range, whether the user chose Start saving) and its progress (when each site last synced and which chats were already sent), so it sends only chats that changed.
 ```
 
-**Justification for the host permission `http://127.0.0.1/*`:**
+**Host permission justification** (one box, for the sites and the dashboard together):
 
 ```text
-This is the only place the extension sends anything: the Interlatch dashboard, an app running on the user's own computer. A page on https can't call it, so the service worker does. The port is the user's setting (11524 by default), so no single port can be named. Nothing leaves the computer on this connection.
+https://claude.ai/* and https://chatgpt.com/*: reading the user's chats on these two sites is the extension's purpose. It asks each site for the chats that changed, from a tab where the user is already signed in, as the site's own page does, and shows a small message on the page saying that it's saving, with a Pause button. It runs on no other sites.
+
+http://127.0.0.1/*: the only place the extension sends anything, the Interlatch dashboard, an app on the user's own computer. A page on https can't call it, so the service worker does. The port is the user's setting (11524 by default), so no single port can be named. Nothing leaves the computer on this connection, which is why it is plain HTTP.
 ```
 
-**Justification for the content script on `https://claude.ai/*` and `https://chatgpt.com/*`:**
+The form warns that host permissions may mean an in-depth review, which delays publishing.
 
-```text
-Reading the user's chats on these two sites is the extension's purpose. It asks each site for the chats that changed, from a tab where the user is already signed in, as the site's own page does. It also shows a small message on the page saying that it's saving, with a Pause button. It runs on no other sites.
-```
+**Remote code:** **No, I am not using remote code**. The form can start with **Yes** selected, so check it. Every script is
+in the package, with no `eval` or outside scripts.
 
-**Remote code:** No, I am not using remote code.
+**Data usage:** this list is shown publicly on the listing. It must match
+[the privacy policy](../../docs/privacy.md#browser-extension) and what the extension does, or the extension can be removed.
+Tick:
 
-**Data usage, what it collects:** tick **Personal communications** (the chats), **Website content** (the same chats as
-pages of those sites) and **Authentication information** (on ChatGPT it reads the session token to make the site's own
-requests, and sends it only to chatgpt.com). A wrong tick is easier to fix than an omission: the fields must match
-[the privacy policy](../../docs/privacy.md#browser-extension) and what the extension does, or it can be removed. Leave the rest unticked.
+- **Personally identifiable information:** a chat holds no account fields such as an email or phone number, but anything
+  typed into a chat is saved, and the policy says chats can include personal information.
+- **Authentication information:** on ChatGPT it reads the session token to make the site's own requests, and sends it only
+  to chatgpt.com.
+- **Personal communications:** the chats.
+- **Website content:** the same chats, as content of those sites.
 
-**Certifications:** tick all three (not sold to third parties; not used for purposes unrelated to the single purpose; not
-used for credit decisions). All three are true of the extension.
+Leave **Health**, **Financial and payment**, **Location**, **Web history** and **User activity** unticked.
+
+**Certifications:** tick all three (no selling or transfer to third parties outside the approved use cases; no use unrelated
+to the single purpose; no use for creditworthiness or lending). They are required to publish.
 
 **Privacy policy URL:** `https://interlatch.com/docs/privacy/#browser-extension`. Check it loads before submitting: it's
 published when the docs site next builds after this is merged.
@@ -113,15 +121,20 @@ published when the docs site next builds after this is merged.
 
 ## 5. Test instructions
 
+Leave **Username** and **Password** empty: the extension has no login of its own, and real claude.ai or ChatGPT accounts
+hold real chats. If Google asks for a test account, make a new free one with a single harmless chat, and change its
+password after the review.
+
+**Additional instructions** has a 500-character limit:
+
 ```text
-The extension needs the Interlatch app, which is free and open source, running on the same computer.
-
-1. Install it (https://interlatch.com/docs/install/): curl -LsSf https://astral.sh/uv/install.sh | sh, then uv tool install --python 3.13 interlatch, then interlatch ui --open. The dashboard runs at http://127.0.0.1:11524.
-2. Install the extension. A page opens saying what it reads and where that goes. Choose Start saving.
-3. Sign in to claude.ai or chatgpt.com with any account that has a chat, and open or reload the tab. A message at the bottom right says it's saving, with a Pause button.
-4. Click the toolbar button: it shows each site's last sync. In the dashboard, the chat appears under Sessions.
-
-Why the connection is plain HTTP: it goes only to 127.0.0.1, an app on the same computer, and never leaves the machine.
+Needs the free Interlatch app on the same computer:
+1. Install uv, then run: uv tool install --python 3.13 interlatch && interlatch ui --open
+Docs: https://interlatch.com/docs/install/
+2. Install the extension. Choose Start saving on the page that opens.
+3. Open claude.ai or chatgpt.com, signed in with any free account that has a chat. A message at the bottom right says it's saving.
+4. The chat appears in the dashboard under Sessions.
+No extension login. Plain HTTP goes only to 127.0.0.1.
 ```
 
 ## What a reviewer may question
