@@ -3,6 +3,19 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.8 (2026-11-02)
+
+- **A clearer browser extension:** a small message on the page now says when chats were saved and stays when saving fails, and
+  the toolbar icon is in colour with a green **✓** on those sites, shows a pause sign elsewhere, and a red **!** when saving fails. The toolbar button says in one line whether it is saving your chats and, if not,
+  what to do, including how to install or start Interlatch. It has the look of interlatch.com, a link to the dashboard, a
+  Japanese version and a new icon ([Saving chats as you use the sites](docs/sources.md#saving-chats-as-you-use-the-sites)).
+- **Web searches in claude.ai chats:** a search or page read in a saved claude.ai chat now lists the pages it found, by
+  title and address, instead of an empty result. Chats you already have are updated too.
+- **The browser extension asks first:** a new install now opens a page saying what it reads and where that goes, and reads
+  nothing until you choose **Start saving**; an extension already saving keeps going. Opening claude.ai or chatgpt.com
+  also shows a message, at most once an hour, that its chats go only to the dashboard on this computer, with a **Pause**
+  button, and **Pause** now stops a sync already running ([Browser extension privacy](docs/privacy.md#browser-extension)).
+
 ## 0.29.7 (2026-10-30)
 
 - **Fixed: the dashboard could hang on a chat with a long tool output:** a ChatGPT chat whose Python run printed a
