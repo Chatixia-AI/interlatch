@@ -76,7 +76,8 @@ async function badge() {
 
 // A tab of a site; these settings go when it navigates away, and capture.js asks again whenever something changes.
 async function siteTab(tabId) {
-  const { paused } = await chrome.storage.local.get("paused");
+  const { consented, paused: stopped } = await chrome.storage.local.get(["consented", "paused"]);
+  const paused = stopped || !consented;
   const { sites, bad } = await failing();
   const good = !bad && !paused && sites.some((st) => st?.lastRun && !st.error) && (await status()).ok;
   await chrome.action.setIcon({ tabId, path: paused ? IDLE : COLOUR });
@@ -89,6 +90,16 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 chrome.runtime.onStartup.addListener(badge);
 chrome.runtime.onInstalled.addListener(badge);
+/* Nothing is read until you choose Start saving on the welcome page, which opens when the extension is installed. An
+update of one that has been saving keeps going: that person chose it when they loaded it by hand. */
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason === "install") {
+    await chrome.tabs.create({ url: "welcome.html" });
+    return;
+  }
+  const { sites } = await failing();
+  if (sites.length) await chrome.storage.local.set({ consented: true });
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "site" && sender.tab) {
@@ -97,6 +108,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg?.type === "capture" && sender.tab) {
     send(msg.format, msg.conversation).then(reply);
+    return true;
+  }
+  if (msg?.type === "reachable" && sender.tab) { // capture.js, before it says chats are being saved
+    status().then((r) => reply(!!r.ok));
     return true;
   }
   if (msg?.type === "status" && !sender.tab) {

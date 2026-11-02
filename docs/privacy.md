@@ -25,7 +25,7 @@ titles or prompts. Battles are worked out on your computer from the published sh
 the board) deletes your sheet ([The arena](party.md#the-arena)).
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
 The browser extension, if you load it, reads chats only on claude.ai and chatgpt.com, with your own sign-in, and sends
-them only to the dashboard on this computer ([Sources](sources.md#saving-chats-as-you-use-the-sites)).
+them only to the dashboard on this computer ([details](#browser-extension)).
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is
 remembered for a week. Without `gh` nothing is sent ([Suggestions](suggestions.md#privacy)).
@@ -141,3 +141,43 @@ it is on your computer, an **Original transcript** download, or the session file
 
 When a secret has reached a session, rotate it: redaction keeps it out of what Interlatch shows and sends, not out of
 the transcript the agent wrote.
+
+## Browser extension
+
+This is the privacy policy of **Interlatch: save web chats**, the browser extension
+([how it works](sources.md#saving-chats-as-you-use-the-sites)). Its one purpose is saving your claude.ai and ChatGPT
+chats into Interlatch on your computer. It reads nothing until you choose **Start saving** on the page that opens when
+you install it.
+
+**What it handles**
+
+- **Your chats on claude.ai and chatgpt.com:** titles, messages, project names and the other details each site returns
+  for a chat. Temporary chats are left out. Anything you wrote in a chat is part of it, so it can include personal
+  information.
+- **Your sign-in to those two sites:** it asks each site from a tab where you are already signed in, the way the site's
+  own page does. On ChatGPT that means reading the site's session token and device id for those requests. They go only
+  to chatgpt.com: the extension doesn't store them or send them to the dashboard.
+- **Its own settings and progress:** the dashboard's port, how far the last sync got and which chats it has already
+  sent, kept in the browser's extension storage.
+
+It reads nothing on other sites and doesn't record your browsing.
+
+**Where your chats go.** Only to the Interlatch dashboard on your own computer, at `http://127.0.0.1`. That connection
+doesn't leave the computer, which is why it isn't encrypted. The extension has no server, no analytics and no ads, and
+Interlatch's authors never receive your chats. Nothing is sold or used for advertising, credit decisions or anything
+other than saving your chats for you.
+
+**What Interlatch does with them.** The dashboard keeps them on your computer, in its archive, and doesn't analyze them
+on its own. Two things can send them further, and only if you choose them: analyzing a chat sends a condensed copy with
+secrets redacted to [the model you set up](analysis.md), and [a copy in Postgres](postgres.md) goes to the database you
+name. Chats aren't sent to a team hub ([what is shared](devices.md)).
+
+**Your choices.** **Pause** on the toolbar button or the page message stops reading and sending, including a sync that's
+running. Removing the extension stops it for good and clears its settings. Saved chats stay in Interlatch until you
+delete them there.
+
+**Limited Use.** The extension's use of the data above complies with the
+[Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/policies), including
+the [Limited Use requirements](https://developer.chrome.com/docs/webstore/program-policies/limited-use).
+
+**Contact:** [chatixia.dev@gmail.com](mailto:chatixia.dev@gmail.com).

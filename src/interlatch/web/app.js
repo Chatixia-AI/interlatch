@@ -6146,6 +6146,7 @@ route(/^\/extension$/, async () => {
     step(t("Turn on Developer mode"), edgeNote),
     step(t("Load the folder"), tx("Click Load unpacked and choose {folder}", { folder: h("code", null, dir) }), " ", dirCopy,
       h("div", { class: "muted" }, mac ? t("In the folder window, press ⌘⇧G, paste the path and press Return.") : t("In the folder window, paste the path into the address bar at the top."))),
+    step(t("Choose Start saving"), t("A page opens when the extension loads and says what it reads and where that goes. Nothing is read until you choose Start saving.")),
     step(t("Pin it and check the connection"), t("Pin Interlatch from the puzzle-piece menu and click it: it should say Connected."),
       port !== "11524" ? h("div", { class: "muted" }, t("This dashboard isn't on the usual port: open Settings in the extension and set the port to {port}.", { port })) : null),
     step(t("Open claude.ai or chatgpt.com"), tx("Open {claude} or {chatgpt}. Within seconds the extension shows Syncing…: chats from the last 30 days come in first, then new and changed ones every 5 minutes and soon after you leave a chat.",

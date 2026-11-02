@@ -111,7 +111,9 @@ extension has sent so far. In short:
 
 1. Open `chrome://extensions` (Edge: `edge://extensions`) and turn on **Developer mode**.
 2. Choose **Load unpacked** and pick `~/.interlatch/browser-extension` (the page has the path to copy).
-3. Open claude.ai or chatgpt.com.
+3. On the page that opens, read what the extension reads and where it goes, and choose **Start saving**. Nothing is read
+   before that; the toolbar button can bring the page back if you choose **Not now**.
+4. Open claude.ai or chatgpt.com.
 
 While a tab of either site is open, the extension asks the site which chats changed since it last looked: when the
 tab loads, every 5 minutes, and a few seconds after you leave a chat (for another chat, tab or app; at most once a
@@ -126,7 +128,10 @@ A saved chat is the same session an export updates, stored and archived the same
 screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
 
 A small message at the bottom right of the page says when chats were saved (not on the 5-minute timer, so a long chat
-isn't interrupted) and stays when saving fails. The toolbar icon is in colour on a claude.ai or chatgpt.com tab, with a green **✓** while saving works, and shows a pause sign on other sites and while **Paused**. A red **!** on any tab means saving fails. Turn the
+isn't interrupted) and stays when saving fails. When a tab of either site loads, at most once an hour per site, it also
+says the extension is saving that site's chats and that they go only to the dashboard on this computer, with a **Pause**
+button; it stays quiet while you are signed out, Paused or the dashboard doesn't answer. **Pause** stops a sync that's
+running too, and the rest follows when you resume. The toolbar icon is in colour on a claude.ai or chatgpt.com tab, with a green **✓** while saving works, and shows a pause sign on other sites and while **Paused**. A red **!** on any tab means saving fails. Turn the
 messages off in the extension's Settings.
 
 The extension's toolbar button says in one line whether it is saving your chats and, if not, what to do (install or

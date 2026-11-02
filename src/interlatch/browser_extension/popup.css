@@ -43,8 +43,8 @@ p { margin: 0; }
 .status p { color: var(--dim); }
 .status[data-state="saving"], .status[data-state="waiting"] { border-left-color: var(--teal); }
 .status[data-state="saving"] .dot, .status[data-state="waiting"] .dot { background: var(--teal); }
-.status[data-state="install"], .status[data-state="paused"] { border-left-color: var(--gold); }
-.status[data-state="install"] .dot, .status[data-state="paused"] .dot { background: var(--gold); }
+.status[data-state="install"], .status[data-state="paused"], .status[data-state="consent"] { border-left-color: var(--gold); }
+.status[data-state="install"] .dot, .status[data-state="paused"] .dot, .status[data-state="consent"] .dot { background: var(--gold); }
 .status[data-state="stopped"], .status[data-state="problem"], .status[data-state="trouble"] { border-left-color: var(--bad); }
 .status[data-state="stopped"] .dot, .status[data-state="problem"] .dot, .status[data-state="trouble"] .dot { background: var(--bad); }
 .cta, button.primary { justify-self: start; font-weight: 600; color: #0b1f38; background: #ffb45e; border: 1px solid #ffb45e; border-radius: 6px; padding: 5px 12px; text-decoration: none; }

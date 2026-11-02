@@ -27,6 +27,8 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   const STALE_LOCK = 15 * 60e3;
   const DEFAULT_DAYS = 30;
   const DAY = 86400e3;
+  const NOTICE = `notice:${SITE}`; // when this site's notice was last shown
+  const NOTICE_GAP = 60 * 60e3;
 
   const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,6 +47,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   // Each site: the chats changed since `since` (ms), newest first, and one chat as its data export holds it.
   const claude = {
+    signedIn: () => getJSON("/api/organizations"),
     async *changed(since) {
       const orgs = await getJSON("/api/organizations");
       for (const org of Array.isArray(orgs) ? orgs : []) {
@@ -73,6 +76,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 
   const chatgpt = {
     token: null,
+    signedIn() { return this.headers(); },
     async headers() {
       if (!this.token) {
         const session = await getJSON("/api/auth/session");
@@ -163,20 +167,52 @@ These are the sites' internal endpoints, not a published API: if a site changes 
     state.catchingUp = false;
   }
 
+  /* What the extension is doing here and where chats go, with Pause: once an hour per site, when you are looking at the
+  tab. It says so only when it's true: not before you chose Start saving, while Paused, signed out of the site or when
+  the dashboard doesn't answer. A failure to send has its own message (tell). */
+  const noticeFor = (paused) => ({ kind: "notice", text: t(paused ? "ovNoticePaused" : "ovNoticeSaving"), dismiss: t("ovDismiss"),
+    action: { text: t(paused ? "ovResume" : "ovPause"), run: async () => {
+      await chrome.storage.local.set({ paused: !paused });
+      interlatchOverlay.show(noticeFor(!paused));
+    } } });
+
+  async function due() {
+    const store = await chrome.storage.local.get([NOTICE, "consented", "paused", "noOverlay"]);
+    return store.consented && !store.paused && !store.noOverlay && Date.now() - (store[NOTICE] || 0) >= NOTICE_GAP;
+  }
+
+  async function notice() {
+    if (!await due()) return;
+    if (document.visibilityState !== "visible") {
+      await new Promise((resolve) => {
+        const look = () => {
+          if (document.visibilityState !== "visible") return;
+          document.removeEventListener("visibilitychange", look);
+          resolve();
+        };
+        document.addEventListener("visibilitychange", look);
+      });
+    }
+    await site.signedIn(); // throws when signed out
+    if (!await chrome.runtime.sendMessage({ type: "reachable" }) || !await due()) return; // another tab may have shown it meanwhile
+    await chrome.storage.local.set({ [NOTICE]: Date.now() });
+    interlatchOverlay.say(noticeFor(false));
+  }
+
   async function sync(announce = false) {
     wanted ||= announce === true;
     if (running) return;
     running = true;
     try {
-      const { [KEY]: saved, [LOCK]: lock, days, paused, noOverlay, seenDashboard } = await chrome.storage.local.get(
-        [KEY, LOCK, "days", "paused", "noOverlay", "seenDashboard"]);
+      const { [KEY]: saved, [LOCK]: lock, days, consented, paused, noOverlay, seenDashboard } = await chrome.storage.local.get(
+        [KEY, LOCK, "days", "consented", "paused", "noOverlay", "seenDashboard"]);
       const started = Date.now();
-      if (paused || (lock && started - lock < STALE_LOCK)) return;
+      if (!consented || paused || (lock && started - lock < STALE_LOCK)) return;
       await chrome.storage.local.set({ [LOCK]: started });
       const state = { seen: {}, captured: 0, ...saved, running: started, progress: 0 }; // the popup shows the progress
       await chrome.storage.local.set({ [KEY]: state });
       const since = state.since ? state.since - MARGIN : started - (Number(days) || DEFAULT_DAYS) * DAY;
-      let sent = 0, read = 0, error = null, more = false, slowed = false, quiet = false, down = false, busy = false;
+      let sent = 0, read = 0, error = null, more = false, slowed = false, quiet = false, down = false, busy = false, halted = false;
       const fresh = [];
       const done = new Set();
       try {
@@ -184,6 +220,8 @@ These are the sites' internal endpoints, not a published API: if a site changes 
           if (done.has(it.id)) continue;
           done.add(it.id);
           if (state.seen[it.id] === it.updated) continue; // sent already, and not changed since
+          // Paused during a sync: the rest waits for a sync after you resume
+          if ((await chrome.storage.local.get("paused")).paused) { more = halted = true; break; }
           if (read++ >= MAX) { more = true; break; }
           const conv = await site.read(it);
           let r;
@@ -213,7 +251,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
       if (sent) state.lastSent = Date.now();
       const told = wanted;
       wanted = false;
-      if (busy) wanted = told; // it says nothing now; the retry does
+      if (busy || halted) wanted = told; // it says nothing now; the retry does
       else tell(state, { announce: told, quiet, down, seen: seenDashboard || saved?.captured, overlay: !noOverlay });
       await chrome.storage.local.set({ [KEY]: state });
       await chrome.storage.local.remove(LOCK);
@@ -228,6 +266,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   const lit = () => chrome.runtime.sendMessage({ type: "site" }).catch(() => {}); // the toolbar icon and badge on this tab
   lit();
   window.addEventListener("pageshow", (e) => { if (e.persisted) lit(); }); // back from the browser's page cache: this script doesn't run again
+  notice().catch(() => {}); // no message is the right answer when any of it can't tell
   setTimeout(() => sync(true), 3000);
   setInterval(sync, EVERY);
   // the chat you were in, without waiting for the next 5 minutes: when you leave it for another chat (the sites
@@ -242,6 +281,11 @@ These are the sites' internal endpoints, not a published API: if a site changes 
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") soon(); });
   chrome.storage.onChanged.addListener((changes) => { // Sync now, from the popup
     if (changes.syncNow?.newValue) { here(); sync(true); }
-    if (Object.keys(changes).some((k) => k.startsWith("sync:") || ["paused", "port", "checkedAt"].includes(k))) lit();
+    if (changes.consented?.newValue) { // Start saving, on the welcome page
+      notice().catch(() => {});
+      sync(true);
+    }
+    if (changes.paused?.oldValue && !changes.paused.newValue) sync(); // resumed: what a Pause stopped goes on
+    if (Object.keys(changes).some((k) => k.startsWith("sync:") || ["consented", "paused", "port", "checkedAt"].includes(k))) lit();
   });
 })();

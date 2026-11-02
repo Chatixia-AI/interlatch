@@ -205,5 +205,77 @@
   },
   "siteRetrying": {
     "message": "再試行しています。前回は止まりました：$1"
+  },
+  "ovNoticeSaving": {
+    "message": "このサイトのチャットを保存しています。送り先はこのコンピューターのダッシュボードだけです。"
+  },
+  "ovNoticePaused": {
+    "message": "一時停止中です。チャットの読み取りも送信もしていません。"
+  },
+  "ovPause": {
+    "message": "一時停止"
+  },
+  "ovResume": {
+    "message": "再開"
+  },
+  "stConsent": {
+    "message": "まだ保存していません"
+  },
+  "stConsentDetail": {
+    "message": "開始を選ぶまで何も読み取りません。"
+  },
+  "stStart": {
+    "message": "内容を確認して開始"
+  },
+  "privacyUrl": {
+    "message": "https://interlatch.com/docs/ja/privacy/#ブラウザ拡張"
+  },
+  "wlTitle": {
+    "message": "保存を始める前に"
+  },
+  "wlIntro": {
+    "message": "この拡張機能は、claude.ai と ChatGPT のチャットをコンピューター上のアプリ Interlatch に保存し、あとで検索したり見つけ直したりできるようにします。"
+  },
+  "wlReadsTitle": {
+    "message": "読み取るもの"
+  },
+  "wlReads": {
+    "message": "claude.ai と chatgpt.com のチャット（タイトル、メッセージ、プロジェクト名）を、あなた自身のログインで読み取ります。一時チャットは対象外です。ほかのサイトは読み取りません。"
+  },
+  "wlGoesTitle": {
+    "message": "送り先"
+  },
+  "wlGoes": {
+    "message": "このコンピューターの Interlatch ダッシュボード（127.0.0.1）だけです。拡張機能がチャットをほかへ送ることはなく、Interlatch の作者に届くこともありません。"
+  },
+  "wlThenTitle": {
+    "message": "そのあと"
+  },
+  "wlThen": {
+    "message": "Interlatch はチャットをこのコンピューターに保管し、自動では分析しません。チャットの分析を選ぶと、要約したものが Interlatch に設定した AI モデルへ送られます。"
+  },
+  "wlStopTitle": {
+    "message": "やめ方"
+  },
+  "wlStop": {
+    "message": "ツールバーのボタンやページ上のメッセージからいつでも一時停止でき、拡張機能を削除することもできます。保存済みのチャットは、Interlatch で削除するまで残ります。"
+  },
+  "wlNeeds": {
+    "message": "このコンピューターではまだ Interlatch が動いていません。拡張機能には Interlatch が必要です。"
+  },
+  "wlStart": {
+    "message": "保存を開始"
+  },
+  "wlLater": {
+    "message": "今はしない"
+  },
+  "wlStarted": {
+    "message": "保存を開始しました。claude.ai か chatgpt.com を開くか、開いているタブを再読み込みしてください。"
+  },
+  "wlLaterDone": {
+    "message": "何も読み取っていません。ツールバーのボタンからいつでも開始できます。"
+  },
+  "wlPrivacy": {
+    "message": "プライバシーの詳細"
   }
 }

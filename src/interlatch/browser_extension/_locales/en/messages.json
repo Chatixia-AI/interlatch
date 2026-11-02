@@ -205,5 +205,77 @@
   },
   "siteRetrying": {
     "message": "Trying again. Last try stopped: $1"
+  },
+  "ovNoticeSaving": {
+    "message": "Saving this site's chats. They go only to the dashboard on this computer."
+  },
+  "ovNoticePaused": {
+    "message": "Paused: no chats are read or sent."
+  },
+  "ovPause": {
+    "message": "Pause"
+  },
+  "ovResume": {
+    "message": "Resume"
+  },
+  "stConsent": {
+    "message": "Not saving yet"
+  },
+  "stConsentDetail": {
+    "message": "Nothing is read until you choose to start."
+  },
+  "stStart": {
+    "message": "Review and start"
+  },
+  "privacyUrl": {
+    "message": "https://interlatch.com/docs/privacy/#browser-extension"
+  },
+  "wlTitle": {
+    "message": "Before anything is saved"
+  },
+  "wlIntro": {
+    "message": "This extension saves your claude.ai and ChatGPT chats into Interlatch, an app on your computer, so you can search them and find them again."
+  },
+  "wlReadsTitle": {
+    "message": "What it reads"
+  },
+  "wlReads": {
+    "message": "Your chats on claude.ai and chatgpt.com, with their titles, messages and project names, using your own sign-in. Temporary chats are left out. It reads nothing on other sites."
+  },
+  "wlGoesTitle": {
+    "message": "Where it goes"
+  },
+  "wlGoes": {
+    "message": "Only to the Interlatch dashboard on this computer (127.0.0.1). The extension sends your chats nowhere else, and Interlatch's authors never receive them."
+  },
+  "wlThenTitle": {
+    "message": "What happens next"
+  },
+  "wlThen": {
+    "message": "Interlatch keeps them on this computer and doesn't analyze them on its own. If you choose to analyze a chat, a condensed copy goes to the AI model you set up in Interlatch."
+  },
+  "wlStopTitle": {
+    "message": "How to stop"
+  },
+  "wlStop": {
+    "message": "Pause any time from the toolbar button or the message on the page, or remove the extension. Chats already saved stay in Interlatch until you delete them there."
+  },
+  "wlNeeds": {
+    "message": "Interlatch isn't running on this computer yet, and the extension needs it."
+  },
+  "wlStart": {
+    "message": "Start saving"
+  },
+  "wlLater": {
+    "message": "Not now"
+  },
+  "wlStarted": {
+    "message": "Saving is on. Open claude.ai or chatgpt.com, or reload a tab that's already open."
+  },
+  "wlLaterDone": {
+    "message": "Nothing is being read. You can start any time from the toolbar button."
+  },
+  "wlPrivacy": {
+    "message": "Privacy details"
   }
 }
