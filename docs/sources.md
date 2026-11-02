@@ -125,8 +125,13 @@ A saved chat is the same session an export updates, stored and archived the same
 `archive/<claude-ai|chatgpt>/captured/<id>/`). Like imported chats, saved chats are **not analyzed automatically**:
 screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
 
-The extension's toolbar button shows whether it reaches the dashboard, each site's last sync and any error, with
-**Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
+A small message at the bottom right of the page says when chats were saved (not on the 5-minute timer, so a long chat
+isn't interrupted) and stays when saving fails. The toolbar icon is in colour on a claude.ai or chatgpt.com tab, with a green **✓** while saving works, and shows a pause sign on other sites and while **Paused**. A red **!** on any tab means saving fails. Turn the
+messages off in the extension's Settings.
+
+The extension's toolbar button says in one line whether it is saving your chats and, if not, what to do (install or
+start Interlatch). It follows the browser's language (English or Japanese) and shows each site's last sync and any
+error, with **Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
 sync goes. It reads only claude.ai and chatgpt.com and sends only to `http://127.0.0.1`. The dashboard takes chats
 only from this computer, with a header no web page can send. The extension uses the sites' internal endpoints, not a
 published API: when a site changes them, the toolbar button shows the error until an Interlatch update catches up.

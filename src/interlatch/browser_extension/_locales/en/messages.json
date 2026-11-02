@@ -1,0 +1,209 @@
+{
+  "name": {
+    "message": "Interlatch: save web chats"
+  },
+  "description": {
+    "message": "Sends your claude.ai and ChatGPT chats to the Interlatch dashboard on this computer as you use the sites."
+  },
+  "installUrl": {
+    "message": "https://interlatch.com/docs/install/"
+  },
+  "helpUrl": {
+    "message": "https://interlatch.com/docs/sources/#saving-chats-as-you-use-the-sites"
+  },
+  "checking": {
+    "message": "Checking…"
+  },
+  "stSaving": {
+    "message": "Saving your chats"
+  },
+  "stSavingDetail": {
+    "message": "They go only to Interlatch on this computer."
+  },
+  "stWaiting": {
+    "message": "Connected"
+  },
+  "stWaitingDetail": {
+    "message": "Open claude.ai or chatgpt.com to start saving chats."
+  },
+  "stPaused": {
+    "message": "Paused"
+  },
+  "stPausedDetail": {
+    "message": "No chats are read or sent until you turn this off."
+  },
+  "stTrouble": {
+    "message": "Some chats aren't being saved"
+  },
+  "stTroubleDetail": {
+    "message": "The site below says why."
+  },
+  "stStopped": {
+    "message": "Interlatch isn't running"
+  },
+  "stStoppedDetail": {
+    "message": "Start it with this command, then open this again."
+  },
+  "stInstall": {
+    "message": "Install Interlatch"
+  },
+  "stInstallDetail": {
+    "message": "This extension saves your chats into Interlatch, an app on your computer. It needs Interlatch to work."
+  },
+  "stInstallCta": {
+    "message": "How to install"
+  },
+  "stInstalled": {
+    "message": "Already installed? Start it:"
+  },
+  "stProblem": {
+    "message": "Interlatch didn't answer"
+  },
+  "portHint": {
+    "message": "On another port? Set it in Settings."
+  },
+  "copy": {
+    "message": "Copy"
+  },
+  "copied": {
+    "message": "Copied"
+  },
+  "dashboard": {
+    "message": "Dashboard"
+  },
+  "sites": {
+    "message": "Sites"
+  },
+  "howItWorks": {
+    "message": "Chats are read while a claude.ai or chatgpt.com tab is open: every 5 minutes, and soon after you leave a chat. Older chats come in from a data export (Sources in the dashboard). Click for the guide."
+  },
+  "siteNotYet": {
+    "message": "Not synced yet: open or reload a tab"
+  },
+  "siteSyncing": {
+    "message": "Syncing… $1 saved so far"
+  },
+  "siteStopped": {
+    "message": "Last try $1 stopped: $2"
+  },
+  "siteCatching": {
+    "message": "Catching up: $1 saved so far"
+  },
+  "siteSlowed": {
+    "message": "Catching up: $1 saved so far. The site asked to slow down, so it goes on in a few minutes"
+  },
+  "siteSynced": {
+    "message": "Synced $1 · $2"
+  },
+  "chatsOne": {
+    "message": "1 chat"
+  },
+  "chatsMany": {
+    "message": "$1 chats"
+  },
+  "lastSaved": {
+    "message": "Last chat saved $1"
+  },
+  "agoNow": {
+    "message": "just now"
+  },
+  "agoMin": {
+    "message": "$1 min ago"
+  },
+  "agoHour": {
+    "message": "$1 h ago"
+  },
+  "agoDay": {
+    "message": "$1 d ago"
+  },
+  "noTab": {
+    "message": "No claude.ai or chatgpt.com tab answered. Reload one: a tab opened before the extension was loaded doesn't have it yet."
+  },
+  "syncNow": {
+    "message": "Sync now"
+  },
+  "pausedLabel": {
+    "message": "Paused"
+  },
+  "settings": {
+    "message": "Settings"
+  },
+  "portLabel": {
+    "message": "Dashboard port"
+  },
+  "daysLabel": {
+    "message": "Days the first sync goes back"
+  },
+  "reset": {
+    "message": "Sync again from the start"
+  },
+  "resetTitle": {
+    "message": "Forget what was sent: the next sync goes back the days above again"
+  },
+  "theme": {
+    "message": "Light or dark"
+  },
+  "errNotRunning": {
+    "message": "the Interlatch dashboard is not running at $1"
+  },
+  "errTimeout": {
+    "message": "the Interlatch dashboard at $1 didn't answer within a minute"
+  },
+  "errUpdate": {
+    "message": "update Interlatch: this dashboard can't take chats yet"
+  },
+  "errAnswered": {
+    "message": "the dashboard answered $1"
+  },
+  "errNotHere": {
+    "message": "not this computer's dashboard"
+  },
+  "errReloaded": {
+    "message": "the extension was reloaded: reload this tab"
+  },
+  "errNoReach": {
+    "message": "could not reach the dashboard"
+  },
+  "errNotSignedIn": {
+    "message": "not signed in to ChatGPT"
+  },
+  "errSite": {
+    "message": "$1 answered $2"
+  },
+  "siteNotYetOff": {
+    "message": "Not synced yet"
+  },
+  "overlayLabel": {
+    "message": "Show messages on the page"
+  },
+  "ovSavedOne": {
+    "message": "1 chat saved"
+  },
+  "ovSavedMany": {
+    "message": "$1 chats saved"
+  },
+  "ovCatching": {
+    "message": "Saving your chats. The first sync can take a while."
+  },
+  "ovFix": {
+    "message": "How to fix"
+  },
+  "ovDismiss": {
+    "message": "Dismiss"
+  },
+  "resSaved": {
+    "message": "$1 saved"
+  },
+  "resMore": {
+    "message": "$1 saved so far, and more to come"
+  },
+  "resNothing": {
+    "message": "Nothing new"
+  },
+  "resError": {
+    "message": "It stopped: the site above says why"
+  },
+  "siteRetrying": {
+    "message": "Trying again. Last try stopped: $1"
+  }
+}
