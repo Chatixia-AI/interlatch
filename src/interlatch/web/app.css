@@ -2749,6 +2749,10 @@ label.hub-pick { gap: 6px; }
 .ext-step { line-height: 1.7; }
 .ext-step code { word-break: break-all; }
 .ext-step .muted { font-size: 12.5px; }
+.ext-folder { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.ext-folder > summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.ext-folder[open] > summary { margin-bottom: 6px; }
+.ext-folder > .muted { font-size: 12.5px; line-height: 1.6; margin-bottom: 8px; }
 .ext-help { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 4px 0 12px; }
 .ext-help dt { font-family: var(--mono, monospace); font-size: 12.5px; }
 .ext-help dd { margin: 0; color: var(--muted); }

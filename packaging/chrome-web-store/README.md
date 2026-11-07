@@ -4,7 +4,11 @@ Everything the dashboard asks for, ready to paste, checked against its forms on 
 `chatixia.dev@gmail.com` at <https://chrome.google.com/webstore/devconsole>. Publish **Unlisted** first; go **Public**
 once a real install from the store has worked.
 
-**Status:** 1.1.0 submitted for review as Unlisted on 2026-11-02. Item ID `dfoaabcfgmpgkfjaemipocpjhmenlheb`.
+**Status:** 1.1.0 published as Unlisted (submitted 2026-11-02, live and installed from the store by 2026-11-08). Item ID
+`dfoaabcfgmpgkfjaemipocpjhmenlheb`, listing <https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb>.
+The dashboard's guide and the docs install from the store now, so a change to `src/interlatch/browser_extension/`
+reaches users only once a new version is uploaded and approved here; an Interlatch release alone updates only copies
+loaded from the folder.
 
 ## 1. Build the ZIP
 

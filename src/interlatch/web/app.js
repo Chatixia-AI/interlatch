@@ -6108,6 +6108,7 @@ async function copyText(text, btn) {
 // Browser extension: how to install it (browser_extension/), and what it has sent
 // =====================================================================================
 const extPrivacy = () => t("It reads your chats with your own sign-in, only on claude.ai and chatgpt.com, and sends them only to this dashboard; temporary chats are left out.");
+const EXT_STORE = "https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb";
 const EXT_BROWSERS = [["chrome", "Chrome", "chrome://extensions"], ["edge", "Edge", "edge://extensions"], ["brave", "Brave", "brave://extensions"]];
 let extBrowser = "chrome";
 route(/^\/extension$/, async () => {
@@ -6128,12 +6129,13 @@ route(/^\/extension$/, async () => {
   });
   // the extensions page's address differs by browser, and a browser won't open it from a link
   const urlCode = h("code"), urlCopy = h("button", { class: "btn small", type: "button", onclick: () => copyText(urlCode.textContent, urlCopy) }, t("Copy"));
-  const edgeNote = h("span");
+  const edgeNote = h("span"), storeNote = h("span");
   const tabs = h("div", { class: "seg", role: "tablist" });
   const showBrowser = (key) => {
     extBrowser = key;
     urlCode.textContent = EXT_BROWSERS.find((b) => b[0] === key)[2];
     edgeNote.textContent = key === "edge" ? t("In Edge, the switch is in the left column.") : t("The switch is at the top right of the page.");
+    storeNote.textContent = key === "edge" ? t("In Edge, first choose Allow extensions from other stores in the bar at the top of the store page.") : "";
     tabs.querySelectorAll("button").forEach((b) => { const on = b.dataset.key === key; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
   };
   tabs.append(...EXT_BROWSERS.map(([key, label]) => h("button", { type: "button", role: "tab", "data-key": key, onclick: () => showBrowser(key) }, label)));
@@ -6141,28 +6143,33 @@ route(/^\/extension$/, async () => {
   const dirCopy = h("button", { class: "btn small", type: "button", onclick: () => copyText(dir, dirCopy) }, t("Copy"));
   const step = (title, ...body) => h("li", null, h("b", null, title), h("div", { class: "ext-step" }, ...body));
   const site = (href, label) => h("a", { href, target: "_blank", rel: "noopener" }, label);
-  const steps = dir ? h("ol", { class: "ext-steps" },
-    step(t("Open the extensions page"), tx("Paste {address} into the address bar.", { address: urlCode }), " ", urlCopy),
-    step(t("Turn on Developer mode"), edgeNote),
-    step(t("Load the folder"), tx("Click Load unpacked and choose {folder}", { folder: h("code", null, dir) }), " ", dirCopy,
-      h("div", { class: "muted" }, mac ? t("In the folder window, press ⌘⇧G, paste the path and press Return.") : t("In the folder window, paste the path into the address bar at the top."))),
+  const steps = h("ol", { class: "ext-steps" },
+    step(t("Add it from the Chrome Web Store"), tx("Open {store} and click Add to Chrome, then Add extension.", { store: site(EXT_STORE, t("Interlatch in the Chrome Web Store")) }),
+      h("div", { class: "muted" }, storeNote, " ", t("Add it on the computer Interlatch runs on: it sends chats only to the dashboard on its own computer."))),
     step(t("Choose Start saving"), t("A page opens when the extension loads and says what it reads and where that goes. Nothing is read until you choose Start saving.")),
     step(t("Pin it and check the connection"), t("Pin Interlatch from the puzzle-piece menu and click it: it should say Connected."),
       port !== "11524" ? h("div", { class: "muted" }, t("This dashboard isn't on the usual port: open Settings in the extension and set the port to {port}.", { port })) : null),
     step(t("Open claude.ai or chatgpt.com"), tx("Open {claude} or {chatgpt}. Within seconds the extension shows Syncing…: chats from the last 30 days come in first, then new and changed ones every 5 minutes and soon after you leave a chat.",
-      { claude: site("https://claude.ai", "claude.ai"), chatgpt: site("https://chatgpt.com", "chatgpt.com") })))
-    : h("div", { class: "src-note" }, t("Install it on the computer Interlatch runs on: this page there shows the folder to load."));
+      { claude: site("https://claude.ai", "claude.ai"), chatgpt: site("https://chatgpt.com", "chatgpt.com") })));
+  // a build the store doesn't have yet loads from the folder the dashboard keeps up to date (runtime/browser_extension.py)
+  const fromFolder = dir ? h("details", { class: "ext-folder" }, h("summary", null, t("Load it from a folder instead")),
+    h("div", { class: "muted" }, t("For trying a build that isn't in the store yet. Remove the store copy first, or both copies send the same chats. A copy loaded from a folder doesn't update itself: after an Interlatch update, click the reload button on its card on the extensions page, then reload the sites' tabs.")),
+    h("ol", { class: "ext-steps" },
+      step(t("Open the extensions page"), tx("Paste {address} into the address bar.", { address: urlCode }), " ", urlCopy),
+      step(t("Turn on Developer mode"), edgeNote),
+      step(t("Load the folder"), tx("Click Load unpacked and choose {folder}", { folder: h("code", null, dir) }), " ", dirCopy,
+        h("div", { class: "muted" }, mac ? t("In the folder window, press ⌘⇧G, paste the path and press Return.") : t("In the folder window, paste the path into the address bar at the top.")))))
+    : null;
   const help = [ // the extension's own words
     [t("Not synced yet"), t("Reload the claude.ai or chatgpt.com tab: a tab opened before the extension was loaded doesn't have it.")],
     [t("Interlatch isn't running"), t("Interlatch isn't running, or runs on another port: set the port in the extension's Settings.")],
     [t("update Interlatch"), t("This dashboard is older than the extension: update Interlatch.")],
-    [t("After an Interlatch update"), t("Click the reload button on the extension's card on the extensions page, then reload the sites' tabs.")],
   ];
   return h("div", { class: "narrow-page wide" },
     h("div", { class: "page-head" }, titled("globe", h("h1", null, t("Browser extension")),
       h("div", { class: "sub" }, t("Saves your claude.ai and ChatGPT chats as you use the sites, so new chats need no data export. For Chrome, Edge, Brave and other Chromium browsers.")))),
     listSection(t("What it has sent"), null, null, statusRows),
-    h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("Install it")), tabs), steps),
+    h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("Install it")), tabs), steps, fromFolder),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("If something is off"))),
       h("dl", { class: "ext-help" }, help.flatMap(([q, a]) => [h("dt", null, q), h("dd", null, a)])),
       h("div", { class: "muted ext-privacy" }, extPrivacy())),
