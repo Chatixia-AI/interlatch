@@ -3,6 +3,11 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.9 (2026-11-07)
+
+- **A blueprint sign-in screen:** a hub's sign-in screen now sits on the dashboard's blueprint grid, with a soft light
+  and centre lines behind the card and its gold corner marks, in light and dark.
+
 ## 0.29.8 (2026-11-02)
 
 - **A clearer browser extension:** a small message on the page now says when chats were saved and stays when saving fails, and
