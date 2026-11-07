@@ -2132,9 +2132,29 @@ a.ar-tile-media.empty:hover { background: var(--accent-wash); }
 .viewer-pill .text-btn { color: var(--ink-2); font-size: 12.5px; padding: 0 10px; }
 .viewer-pill .text-btn:hover { background: var(--hover); color: var(--ink); }
 @media (max-width: 860px) { .viewer-pill .vp-name, .viewer-pill > .icon { display: none; } .viewer-pill { padding-left: 8px; } }
-.signin-screen { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; background: var(--page); color: var(--ink); }
+/* the sign-in screen: a blank drawing sheet. The stage's blueprint grid, with a major line through the middle, fading
+   out towards the edges; a soft light behind the card, and dashed centre lines through it (::before, ::after) */
+.signin-screen { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; color: var(--ink);
+  background-color: var(--page);
+  background-image:
+    radial-gradient(ellipse 75% 70% at 50% 50%, transparent 35%, var(--page) 100%),
+    radial-gradient(560px 440px at 50% 50%, var(--accent-wash-2), transparent 70%),
+    linear-gradient(var(--paper-grid) 1px, transparent 1px), linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(var(--paper-grid-fine) 1px, transparent 1px), linear-gradient(90deg, var(--paper-grid-fine) 1px, transparent 1px);
+  background-size: auto, auto, 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+  background-position: center, center, calc(50% - 48px) calc(50% - 48px), calc(50% - 48px) calc(50% - 48px),
+    calc(50% - 12px) calc(50% - 12px), calc(50% - 12px) calc(50% - 12px); }
+.signin-screen::before, .signin-screen::after { content: ""; position: fixed; z-index: -1; pointer-events: none; border: 0 dashed var(--baseline); opacity: 0.55; }
+.signin-screen::before { top: 0; bottom: 0; left: 50%; border-left-width: 1px;
+  -webkit-mask-image: linear-gradient(transparent 4%, #000 30%, #000 70%, transparent 96%); mask-image: linear-gradient(transparent 4%, #000 30%, #000 70%, transparent 96%); }
+.signin-screen::after { left: 0; right: 0; top: 50%; border-top-width: 1px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%); mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%); }
 :root.signed-out .shell { visibility: hidden; }
-.signin-card { width: min(480px, 100%); box-sizing: border-box; padding: 24px 26px; }
+/* the card: the sheet's one drawing, lifted off the grid and framed by the hero tile's gold registration ticks */
+.signin-card { position: relative; width: min(480px, 100%); box-sizing: border-box; padding: 24px 26px; box-shadow: var(--glass-shadow); }
+.signin-card::before, .signin-card::after { content: ""; position: absolute; width: 14px; height: 14px; border: 0 solid var(--gold); pointer-events: none; }
+.signin-card::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-top-left-radius: var(--radius); }
+.signin-card::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-bottom-right-radius: var(--radius); }
 .signin-card h1 { font-size: 22px; margin: 14px 0 8px; }
 .signin-card p { line-height: 1.5; }
 .signin-card .signin-note { padding: 10px 12px; border-radius: 8px; background: var(--critical-wash); color: var(--critical-ink); }
