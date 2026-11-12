@@ -15,6 +15,7 @@ put it there."""
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -621,27 +622,20 @@ def _read_workflows(d: Draft, files: list[Path]) -> None:
 # =====================================================================================
 # what sessions did
 # =====================================================================================
+# a single-quoted string (no escapes), a double-quoted one (a backslash keeps the next character), a separator, or a
+# run of anything else; an unterminated quote runs to the end of the command
+SHELL_TOKEN = re.compile(r"""'[^']*'?|"(?:\\.|[^"\\])*"?|[;|&\n]|[^'";|&\n]+""", re.S)
+
+
 def _segments(cmd: str) -> list[str]:
     """Split a shell command into its simple commands (on ; && || | & and newlines), outside quotes."""
-    out, cur, q, i = [], [], None, 0
-    while i < len(cmd):
-        c = cmd[i]
-        if q:
-            cur.append(c)
-            if c == q:
-                q = None
-            elif c == "\\" and q == '"' and i + 1 < len(cmd):
-                cur.append(cmd[i + 1])
-                i += 1
-        elif c in "'\"":
-            q = c
-            cur.append(c)
-        elif c in ";|&\n":
+    out, cur = [], []
+    for t in SHELL_TOKEN.findall(cmd):
+        if t in (";", "|", "&", "\n"):
             out.append("".join(cur))
             cur = []
         else:
-            cur.append(c)
-        i += 1
+            cur.append(t)
     out.append("".join(cur))
     return [s.strip() for s in out if s.strip()]
 
@@ -745,25 +739,39 @@ def _part_at(d: Draft, real_root: Path | None, cwd: Path | None, rest: str) -> d
     return d.folder_part("" if rel == "." else rel)
 
 
-def read_commands(d: Draft, rows: list[tuple[str, str | None, str]]) -> None:
-    """What the commands sessions ran say about this system: the servers its parts run on, where it is deployed,
-    which clouds, machines and databases it reaches."""
+Parsed = tuple[tuple[str, str, str], ...]
+
+
+def parse_command(cmd: str) -> Parsed | None:
+    """What read_commands reads in a command: each `cd`, and each simple command worth reading, as (the simple command,
+    its verb, the rest); None when nothing in it is. It depends on the text alone, so build() keeps it between builds."""
+    cmd = cmd[:SCAN_CHARS]
+    if not _interesting(cmd):
+        return None
+    out = []
+    for seg in _segments(cmd):
+        verb, rest = _verb(seg)
+        if verb == "cd" or _interesting(seg):
+            out.append((seg, verb, rest))
+    return tuple(out)
+
+
+_PARSED: dict[tuple[int, int], Parsed | None] = {}  # the last build's parse_command, by (tool call id, text hash)
+
+
+def read_commands(d: Draft, rows: list[tuple[str, str | None, Parsed]]) -> None:
+    """What the commands sessions ran (parse_command) say about this system: the servers its parts run on, where it is
+    deployed, which clouds, machines and databases it reaches."""
     root = d.root
     real_root = root.resolve() if root is not None else None
-    for sid, ts, cmd in rows:
-        cmd = cmd[:SCAN_CHARS]
-        if not _interesting(cmd):
-            continue
+    for sid, ts, parsed in rows:
         cwd: Path | None = None
-        for seg in _segments(cmd):
-            verb, rest = _verb(seg)
+        for seg, verb, rest in parsed:
             if verb == "cd":
                 arg = rest.split(None, 1)[1].strip().strip("'\"") if len(rest.split(None, 1)) > 1 else ""
                 if arg and not arg.startswith(("$", "-", "~")):
                     target = Path(arg) if arg.startswith("/") else ((cwd or root) / arg if root else None)
                     cwd = target
-                continue
-            if not _interesting(seg):
                 continue
             part = _part_at(d, real_root, cwd, rest)
             if part is OUTSIDE:  # cd'd into another project: what runs there is that project's
@@ -792,7 +800,7 @@ def read_commands(d: Draft, rows: list[tuple[str, str | None, str]]) -> None:
                         path = (m.group(2) or "/").split("?")[0]
                         owner["calls"][("/" + path.strip("/").split("/")[0]) if path.strip("/") else "/"] += 1
             # where it is deployed
-            for host in {h.lower() for h in HOST_RE.findall(seg)}:
+            for host in sorted({h.lower() for h in HOST_RE.findall(seg)}):  # sorted: the same map from every build
                 name, platform, what = _host_info(host)
                 if not platform:
                     continue
@@ -1044,11 +1052,18 @@ def build(conn: sqlite3.Connection, cfg, *, read_manifests_: bool | None = None)
             sess_sys[r["id"]] = k
             agents[k][r["agent"] or "claude"] += 1
     started = {r[0]: r[1] for r in conn.execute("SELECT id, started_at FROM sessions")}
+    global _PARSED
     cmds: dict[str, list] = defaultdict(list)
-    for sid, ts, cmd in conn.execute("SELECT session_id, ts, command FROM tool_calls WHERE command IS NOT NULL AND command != ''"):
+    parsed: dict[tuple[int, int], Parsed | None] = {}
+    for tid, sid, ts, cmd in conn.execute("SELECT id, session_id, ts, command FROM tool_calls "
+                                          "WHERE command IS NOT NULL AND command != ''"):
         k = sess_sys.get(sid)
         if k in drafts:
-            cmds[k].append((sid, ts, cmd))
+            key = (tid, hash(cmd))  # with the text's hash: a re-ingested session can reuse an id
+            p = parsed[key] = _PARSED[key] if key in _PARSED else parse_command(cmd)
+            if p:
+                cmds[k].append((sid, ts, p))
+    _PARSED = parsed  # only the commands this build read, so it never outgrows the archive
     for k, rows_ in cmds.items():
         read_commands(drafts[k], rows_)
 
@@ -1219,22 +1234,70 @@ def _system_stack(parts: list[dict]) -> list[str]:
 # cache: the map is rebuilt when sessions, files or the glossary change, or every few minutes for manifests
 # =====================================================================================
 _CACHE: dict = {"sig": None, "at": 0.0, "data": None}
-_LOCK = threading.Lock()  # one build at a time: requests that arrive meanwhile wait for it
+_LOCK = threading.Lock()  # one build at a time
 TTL = 300
+log = logging.getLogger("interlatch")
 
 
 def signature(conn: sqlite3.Connection, cfg) -> tuple:
+    """What the map was built from: the archive's counts, then the map's own settings (the last two)."""
     q = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
     return (q("SELECT COUNT(*) FROM sessions"), q("SELECT MAX(id) FROM tool_calls"), q("SELECT COUNT(*) FROM session_files"),
             q("SELECT MAX(updated_at) FROM glossary_usage"), cfg.systems_read_manifests, tuple(cfg.exclude_projects))
 
 
+def _fresh(sig: tuple) -> bool:
+    return _CACHE["data"] is not None and _CACHE["sig"] == sig and time.time() - _CACHE["at"] <= TTL
+
+
+def _db_file(conn: sqlite3.Connection) -> str:
+    """The archive's file, for a connection of the background build's own ('' for an in-memory one)."""
+    return next((r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "") or ""
+
+
 def cached(conn: sqlite3.Connection, cfg) -> dict:
-    with _LOCK:
-        sig = signature(conn, cfg)
-        if _CACHE["data"] is None or _CACHE["sig"] != sig or time.time() - _CACHE["at"] > TTL:
-            _CACHE.update(sig=sig, at=time.time(), data=build(conn, cfg))
+    """The map, without waiting for a rebuild once there is one: a map that is out of date is served as it is while a
+    new one is built in the background, and the next request gets that. A request waits only when there is no map yet
+    or the map's settings changed."""
+    sig = signature(conn, cfg)
+    if _fresh(sig):
         return _CACHE["data"]
+    db = _db_file(conn)
+    if _CACHE["data"] is None or _CACHE["sig"][-2:] != sig[-2:] or not db:
+        with _LOCK:
+            if not _fresh(sig):
+                _CACHE.update(sig=sig, at=time.time(), data=build(conn, cfg))
+            return _CACHE["data"]
+    refresh(db, cfg)
+    return _CACHE["data"]
+
+
+def refresh(db: str | Path, cfg) -> bool:
+    """Rebuild the map in the background from the archive at `db`, unless a build is running already (False). The
+    dashboard calls it at start, so the first visit to the map finds it built."""
+    if not _LOCK.acquire(blocking=False):
+        return False
+
+    def run():
+        sig = None
+        try:
+            conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=30)
+            conn.row_factory = sqlite3.Row
+            try:
+                sig = signature(conn, cfg)
+                if not _fresh(sig):
+                    _CACHE.update(sig=sig, at=time.time(), data=build(conn, cfg))
+            finally:
+                conn.close()
+        except Exception:
+            log.exception("building the Systems map from %s failed", db)
+            if sig is not None and _CACHE["data"] is not None:  # keep serving the last map; try again on the next change
+                _CACHE.update(sig=sig, at=time.time())
+        finally:
+            _LOCK.release()
+
+    threading.Thread(target=run, name="systems-map", daemon=True).start()
+    return True
 
 
 def landscape(data: dict) -> dict:

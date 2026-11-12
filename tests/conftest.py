@@ -300,9 +300,15 @@ def no_real_background_agents(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     real_popen = subprocess.Popen
 
+    def reaches_agents(cmd) -> bool:  # launchctl itself, or a shell script that runs it (install.refresh_ui_agent)
+        if not isinstance(cmd, (list, tuple)) or not cmd:
+            return False
+        name = Path(str(cmd[0])).name
+        return name in AGENT_MANAGERS or name in ("sh", "bash", "zsh") and any(m in str(a) for a in cmd[1:] for m in AGENT_MANAGERS)
+
     class Popen(real_popen):  # update.restart() asks launchd to restart the dashboard with a detached launchctl
         def __init__(self, cmd, *args, **kwargs):
-            if isinstance(cmd, (list, tuple)) and cmd and Path(str(cmd[0])).name in AGENT_MANAGERS:
+            if reaches_agents(cmd):
                 cmd = [sys.executable, "-c", ""]
             super().__init__(cmd, *args, **kwargs)
 
