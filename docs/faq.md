@@ -118,9 +118,6 @@ Postgres database you choose, for SQL and BI tools ([A copy in Postgres](postgre
 dashboard. From a terminal, `uv tool upgrade interlatch`. For the app, download the new release
 ([Updating](install.md#updating)).
 
-**I used Chronicle. What happens?** Interlatch was called Chronicle. Updating moves your install and data over by
-itself, and the `chronicle` command keeps working ([Moving from Chronicle](moving-from-chronicle.md)).
-
 **Is the dashboard at 11524 or 8765?** New installs use <http://127.0.0.1:11524/>. Installs made before 11524 became
 the default stay on 8765 (`[server] port` in `config.toml`), and the app picks a free port when 11524 is taken
 ([Troubleshooting](troubleshooting.md#install-and-the-app)).

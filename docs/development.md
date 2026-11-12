@@ -108,9 +108,9 @@ confirm the icon is in the menu bar of every display:
 <https://interlatch.com/docs/> is built with MkDocs Material from `docs/` and the READMEs, unchanged: `README.md`
 and `README.ja.md` become the home pages, and `docs/_site/hooks.py` points links that leave `docs/` at GitHub.
 The website around it, landing page included, lives in
-[Chatixia-AI/chronicle-site](https://github.com/Chatixia-AI/chronicle-site), which builds these docs as they are and
+[its own repository](https://github.com/Chatixia-AI/chronicle-site), which builds these docs as they are and
 publishes everything. `.github/workflows/docs.yml` checks the build on every pull request and, when the docs change on
-`main`, asks chronicle-site to rebuild (it also rebuilds daily).
+`main`, asks the website to rebuild (it also rebuilds daily).
 
 ```bash
 uv run --only-group docs mkdocs serve            # preview at http://127.0.0.1:8000/, reloads on save
@@ -124,8 +124,7 @@ Excalidraw VS Code extension (`pomdtr.excalidraw-editor`) or on excalidraw.com; 
 
 ## Code layout
 
-The code is the `interlatch` package in `src/interlatch/` (`src/chronicle/` only forwards `python -m chronicle`,
-which installs from before the rename still run):
+The code is the `interlatch` package in `src/interlatch/`:
 
 - `core/`: configuration, session records, paths, translations, agent names, pricing, redaction, this computer's
   identity, and what counts as an artifact a session made
@@ -149,7 +148,7 @@ which installs from before the rename still run):
 - `interfaces/`: the MCP server (`mcp.py`) and the files Interlatch exports (`exports/`: the Markdown vault, session
   exports, Excalidraw diagrams)
 - `runtime/`: Interlatch on this computer: installing it (hooks, MCP servers, background jobs), connecting agents
-  (`connectors.py`), the status line, moving from Chronicle, updates, notifications, the hub in a container;
+  (`connectors.py`), the status line, migrating older installs, updates, notifications, the hub in a container;
   `runtime/platforms/`: Windows (Task Scheduler, the notification area), the macOS app and its menu-bar icon
 - `interfaces/cli/`: the command line: `parser.py` assembles the commands, and each module in `commands/` holds a
   group of them (recording, archive, knowledge, setup, sharing, operations), each command's options beside its code;
@@ -192,12 +191,12 @@ left out of the MIT wheel and sdist. The core never imports it; [ee/README.md](.
 your own `~/.interlatch` and an installed Interlatch are never touched. Its config records, analyzes and
 shares nothing. `--app` opens the macOS app window instead, `--menu-bar` adds the [menu-bar icon](install.md#the-menu-bar-icon) to the
 browser dashboard (as the login item shows it), `--demo` uses the [demo data](#demo-data), `--fresh`
-re-copies the archive, and `--tree ../agents-chronicle-<topic>` runs another worktree's code. The server reads the
+re-copies the archive, and `--tree ../interlatch-<topic>` runs another worktree's code. The server reads the
 web files once at startup, so restart it after editing `app.css` or `app.js`.
 
 ```bash
 ./dev.sh                                  # http://127.0.0.1:8797/ (or the next free port)
-./dev.sh --tree ../agents-chronicle-<topic> --app
+./dev.sh --tree ../interlatch-<topic> --app
 ```
 
 ## Demo data

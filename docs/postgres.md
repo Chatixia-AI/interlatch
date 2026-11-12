@@ -111,7 +111,7 @@ writes the schema, with which `include`, and when it last did.
 
 Each computer writes a schema of its own. Interlatch refuses a schema that another computer already writes, so two
 computers never overwrite each other's copy. To copy several computers into one database, give each a different
-`[mirror] schema` (for example `chronicle_laptop` and `chronicle_desktop`). To bring several computers' sessions
+`[mirror] schema` (for example `laptop` and `desktop`). To bring several computers' sessions
 together in one archive instead, use a hub ([Phone and other computers](devices.md#your-other-computers)), and point the
 hub's mirror at Postgres.
 

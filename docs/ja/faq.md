@@ -113,9 +113,6 @@ SQL や BI ツールで使えます（[Postgres へのコピー](postgres.md)）
 ダッシュボードを再起動します。ターミナルからは `uv tool upgrade interlatch`。アプリは新しいリリースをダウンロードします
 （[アップデート](install.md#アップデート)）。
 
-**Chronicle を使っていた。どうなる？** Interlatch の以前の名前は Chronicle です。アップデートするとインストールとデータは自動的に
-移行され、`chronicle` コマンドもそのまま使えます（[Chronicle からの移行](moving-from-chronicle.md)）。
-
 **ダッシュボードは 11524 番？8765 番？** 新しいインストールは <http://127.0.0.1:11524/> です。11524 が既定になる前のインストールは
 8765 番のままです（`config.toml` の `[server] port`）。アプリは 11524 が使用中なら空いているポートを使います
 （[トラブルシューティング](troubleshooting.md#インストールとアプリ)）。

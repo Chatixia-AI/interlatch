@@ -42,19 +42,14 @@ npx @vscode/vsce package          # writes interlatch-0.4.0.vsix
 code --install-extension interlatch-0.4.0.vsix
 ```
 
-It needs Interlatch, or a Chronicle newer than 0.6.1, which adds the `/api/file` and `/api/files` endpoints the lists read. With an older one,
-the lists say to update.
-
-**From the Chronicle extension.** Until 0.3.0 this was the Chronicle extension (`chatixia.chronicle-sessions`, with
-**Chronicle: …** sections). Install this one, then uninstall Chronicle; while both are installed, Interlatch offers once
-to do it (**Uninstall Chronicle**). Settings you made for Chronicle keep working: an `interlatch.*` setting you haven't
-set takes its `chronicle.*` value.
+It reads the dashboard's `/api/file` and `/api/files` endpoints; with a dashboard too old to have them, the lists say to
+update.
 
 ## Settings
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `interlatch.url` | empty: your `chronicle.url` if you set one, else `http://127.0.0.1:11524`, else `:8765` | Where the dashboard runs. Change it if you set `[server] port` in Interlatch's [configuration](configuration.md). Only your user settings count: a workspace's `.vscode/settings.json` can't set it, so a repository can't point the extension at another server. |
+| `interlatch.url` | empty: `http://127.0.0.1:11524`, else `:8765` | Where the dashboard runs. Change it if you set `[server] port` in Interlatch's [configuration](configuration.md). Only your user settings count: a workspace's `.vscode/settings.json` can't set it, so a repository can't point the extension at another server. |
 | `interlatch.includeReads` | `true` | Also list sessions, and files, that were only read. Turn it off to see only what sessions changed. |
 | `interlatch.showIgnoredFiles` | `false` | Also show files git ignores (screenshots, build output, caches) in **Interlatch: Files in Workspace**. |
 

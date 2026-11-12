@@ -100,9 +100,9 @@ GitHub で `v<version>` タグのリリースを手動で公開する方法も�
 
 <https://interlatch.com/docs/> は `docs/` と README から MkDocs Material でそのまま生成されます。`README.md` と
 `README.ja.md` がホームページになり、`docs/` の外を指すリンクは `docs/_site/hooks.py` が GitHub へのリンクに書き換えます。
-ランディングページを含むサイト全体は [Chatixia-AI/chronicle-site](https://github.com/Chatixia-AI/chronicle-site) にあり、
+ランディングページを含むサイト全体は[専用のリポジトリ](https://github.com/Chatixia-AI/chronicle-site)にあり、
 このドキュメントをそのままビルドしてすべてを公開します。`.github/workflows/docs.yml` はプルリクエストごとにビルドを確認し、
-`main` でドキュメントが変わると chronicle-site に再ビルドを依頼します（毎日の再ビルドもあります）。
+`main` でドキュメントが変わるとサイトに再ビルドを依頼します（毎日の再ビルドもあります）。
 
 ```bash
 uv run --only-group docs mkdocs serve            # http://127.0.0.1:8000/ でプレビュー（保存で再読み込み）
@@ -116,8 +116,7 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 
 ## コードの構成
 
-コードは `src/interlatch/` の `interlatch` パッケージです（`src/chronicle/` は、改名前のインストールがまだ実行する
-`python -m chronicle` を転送するだけです）。
+コードは `src/interlatch/` の `interlatch` パッケージです。
 
 - `core/`：設定、セッションの記録、パス、翻訳、エージェント名、料金、伏せ字処理、このコンピューターの識別子、
   セッションが作ったものの見分け方
@@ -139,7 +138,7 @@ uv run --only-group docs mkdocs build --strict     # CI と同じ：リンクや
 - `interfaces/`：MCP サーバー（`mcp.py`）と、Interlatch が書き出すファイル（`exports/`：Markdown の保管庫、
   セッションのエクスポート、Excalidraw の図）
 - `runtime/`：このコンピューター上の Interlatch。インストール（フック、MCP サーバー、バックグラウンドジョブ）、
-  エージェントの接続（`connectors.py`）、ステータスライン、Chronicle からの移行、更新、通知、コンテナーのハブ。
+  エージェントの接続（`connectors.py`）、ステータスライン、古いインストールの移行、更新、通知、コンテナーのハブ。
   `runtime/platforms/`：Windows（タスク スケジューラ、通知領域）、macOS アプリとメニューバーのアイコン
 - `interfaces/cli/`：コマンドライン。`parser.py` がコマンドをまとめ、`commands/` の各モジュールがコマンドの
   グループ（記録、アーカイブ、ナレッジ、セットアップ、共有、運用）を持ち、各コマンドのオプションはその処理の隣に
@@ -180,12 +179,12 @@ import をこれと照らし合わせます。
 アーカイブを使うため、自分の `~/.interlatch` やインストール済みの Interlatch には触れません。設定は、記録・分析・共有を
 一切しないものです。`--app` で macOS アプリのウィンドウを開き、`--menu-bar` でブラウザのダッシュボードに[メニューバーアイコン](install.md#メニューバーアイコン)を
 加え（ログイン項目と同じ表示）、`--demo` で[デモデータ](#デモデータ)を使い、`--fresh` で
-アーカイブをコピーし直し、`--tree ../agents-chronicle-<topic>` でほかのワークツリーのコードを動かします。サーバーは起動時に
+アーカイブをコピーし直し、`--tree ../interlatch-<topic>` でほかのワークツリーのコードを動かします。サーバーは起動時に
 一度だけ web のファイルを読むため、`app.css` や `app.js` を編集したら再起動してください。
 
 ```bash
 ./dev.sh                                  # http://127.0.0.1:8797/（使用中なら次の空きポート）
-./dev.sh --tree ../agents-chronicle-<topic> --app
+./dev.sh --tree ../interlatch-<topic> --app
 ```
 
 ## デモデータ

@@ -10,6 +10,7 @@ claude.ai and ChatGPT chats, recorded on your own machine, and every lesson in t
   <a href="https://pypi.org/project/interlatch/"><img src="https://img.shields.io/pypi/v/interlatch?label=PyPI" alt="PyPI version"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/macOS-app%20%2B%20CLI-lightgrey?logo=apple" alt="macOS app and CLI">
+  <img src="https://img.shields.io/badge/Windows%20%7C%20Linux-CLI-lightgrey" alt="Windows and Linux CLI">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
   <a href="https://github.com/Chatixia-AI/interlatch/pkgs/container/interlatch-hub"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fipitio%2Fbackage%2Fraw%2Findex%2FChatixia-AI%2Finterlatch%2Finterlatch-hub.json&query=%24.downloads&logo=docker&label=hub%20image%20pulls" alt="Hub Docker image pulls"></a>
 </p>
@@ -29,9 +30,6 @@ days, and what one agent worked out never reaches the next. Interlatch records w
 from every agent, on your machine. It pulls out what was learned and gives it back to you in a dashboard and to all
 your agents through one MCP server. Each lesson stays latched to its source (the session, project and agent it came
 from) and earns trust as later work confirms it.
-
-<sub>Interlatch was called Chronicle. The `chronicle` command still works, and an existing install moves over by itself
-when you update ([Moving from Chronicle](docs/moving-from-chronicle.md)).</sub>
 
 [![Opening a session in Interlatch on demo data: its summary, a glossary term explained on hover, and the knowledge extracted from it](docs/images/demo.gif)](https://github.com/Chatixia-AI/interlatch/releases/download/v0.17.0/demo.mp4)
 
@@ -80,7 +78,7 @@ from the [demo data](docs/development.md#demo-data):
 
 ## Quick start
 
-You need macOS 13 or later and something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code)
+You need macOS, Windows or Linux and something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code)
 or [Codex](https://github.com/openai/codex), IBM Bob with a Bob API key, or a model provider's API with your own key
 ([Model providers](docs/analysis.md#model-providers)).
 
@@ -91,15 +89,16 @@ or [Codex](https://github.com/openai/codex), IBM Bob with a Bob API key, or a mo
    interlatch install
    ```
 
-   `interlatch install` finds the coding agents on your Mac, asks which to record, imports their past sessions and
-   asks whether to run Interlatch from login. For the app instead, download it from the
-   [latest release](https://github.com/Chatixia-AI/interlatch/releases/latest) (Apple silicon) and
-   choose **Connect**.
+   `interlatch install` finds the coding agents on your computer, asks which to record, imports their past sessions
+   and asks whether to run Interlatch from login. On a Mac with Apple silicon (macOS 13 or later) you can use the app
+   instead: download it from the [latest release](https://github.com/Chatixia-AI/interlatch/releases/latest) and
+   choose **Connect**. Windows and Linux have a few extra steps: [Windows](docs/install.md#windows),
+   [Linux](docs/install.md#linux).
 
 2. **Use your agents as usual.** Each session is recorded when it ends and analyzed in the background.
 
-3. **Explore.** Open the dashboard at <http://127.0.0.1:11524/> (or `interlatch ui --open`) and press **⌘K**, or ask
-   your agent what it learned last week.
+3. **Explore.** Open the dashboard at <http://127.0.0.1:11524/> (or `interlatch ui --open`) and press **⌘K**
+   (**Ctrl+K** on Windows and Linux), or ask your agent what it learned last week.
 
 Connect more agents later from **Settings › Sources**, `interlatch connect <agent>`, or by re-running
 `interlatch install`. [Install](docs/install.md) covers what each step sets up and how to remove it.
@@ -189,7 +188,7 @@ working? See [Troubleshooting](docs/troubleshooting.md).
 [Joining your team's hub](docs/join-a-hub.md) · [A copy in Postgres](docs/postgres.md) ·
 [What gets recorded and how analysis works](docs/analysis.md) ·
 [Configuration](docs/configuration.md) · [Data and privacy](docs/privacy.md) ·
-[FAQ](docs/faq.md) · [Troubleshooting](docs/troubleshooting.md) · [Moving from Chronicle](docs/moving-from-chronicle.md) ·
+[FAQ](docs/faq.md) · [Troubleshooting](docs/troubleshooting.md) ·
 [Development](docs/development.md)
 
 ## Contributing
