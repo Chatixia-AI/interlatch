@@ -485,7 +485,7 @@ def install_ui_agent(cfg: Config, exe: str, *, dry_run: bool = False, retire: bo
         "RunAtLoad": True,
         "KeepAlive": True,
         "ThrottleInterval": 30,
-        "ProcessType": "Background",
+        "ProcessType": UI_PROCESS_TYPE,
         "EnvironmentVariables": _agent_env(cfg),
         "StandardOutPath": str(cfg.logs_dir / "ui.out.log"),
         "StandardErrorPath": str(cfg.logs_dir / "ui.err.log"),
@@ -493,6 +493,52 @@ def install_ui_agent(cfg: Config, exe: str, *, dry_run: bool = False, retire: bo
     if err:
         return [f"dashboard agent failed: {err}"]
     return [f"dashboard always available at {url}"] + (retire_legacy_agent(UI_LABEL) if retire else [])
+
+
+# The dashboard answers clicks, so it runs as a standard process. As "Background", which every install wrote until
+# 2026-11, macOS kept it on the efficiency cores, throttled, and a request took about six times as long
+# (docs/design/systems-map-performance.md).
+UI_PROCESS_TYPE = "Standard"
+
+
+def refresh_ui_agent() -> str | None:
+    """Run by the dashboard at start: when its launchd agent is one written before UI_PROCESS_TYPE, rewrite the plist
+    and have launchd load it again, which starts a new dashboard and stops this one. launchd reads ProcessType only
+    when it loads an agent, and nothing else would load it again before the next login. Only on macOS, from the agent
+    itself; says what it did, or None."""
+    if platform.system() != "Darwin" or os.environ.get("XPC_SERVICE_NAME") != UI_LABEL:
+        return None
+    path = plist_path(UI_LABEL)
+    try:
+        with open(path, "rb") as fh:
+            plist = plistlib.load(fh)
+    except (OSError, plistlib.InvalidFileException, ValueError):
+        return None
+    if not isinstance(plist, dict) or plist.get("Label") != UI_LABEL or plist.get("ProcessType") == UI_PROCESS_TYPE:
+        return None
+    plist["ProcessType"] = UI_PROCESS_TYPE
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "wb") as fh:
+        plistlib.dump(plist, fh)
+    os.replace(tmp, path)
+    domain = f"gui/{os.getuid()}"
+    # its own session, so launchd stopping this agent's processes doesn't stop the shell; bootstrap fails while the
+    # old agent is still going away, so it tries for a while
+    script = (f"launchctl bootout {domain}/{UI_LABEL}; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do "
+              f"launchctl bootstrap {domain} {shlex.quote(str(path))} && exit 0; sleep 1; done; exit 1")
+    out = subprocess.DEVNULL
+    if isinstance(err_log := plist.get("StandardErrorPath"), str):  # launchctl's errors, if any, go to the agent's log
+        try:
+            out = open(err_log, "ab")
+        except OSError:
+            pass
+    try:
+        subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True, stdin=subprocess.DEVNULL, stdout=out,
+                         stderr=subprocess.STDOUT)
+    finally:
+        if out is not subprocess.DEVNULL:
+            out.close()
+    return f"dashboard agent now runs as a {UI_PROCESS_TYPE.lower()} process; launchd is loading it again"
 
 
 def install_launchd(cfg: Config, exe: str, *, interval: int = 900, dry_run: bool = False, retire: bool = True) -> list[str]:

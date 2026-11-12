@@ -2,6 +2,7 @@
 each with its evidence. Built against a fake home with two repos, a worktree and a folder that holds both."""
 
 import json
+import os
 import threading
 import urllib.error
 import urllib.parse
@@ -169,6 +170,81 @@ def test_commands_split_outside_quotes():
     assert systems._ssh_target("ssh", "ssh -i k -o BatchMode=yes root@10.0.0.1 'ls'") == "10.0.0.1"
     assert systems._ssh_target("scp", "scp ./a.txt deploy@box:/srv/") == "box"
     assert systems._host_info("app-x.scm.azurewebsites.net") == ("app-x", "Azure", "App Service")
+
+
+def test_commands_split_like_a_shell_does_with_odd_quoting():
+    assert systems._segments('echo "a \\" ; b" ; ls') == ['echo "a \\" ; b"', "ls"]  # an escaped quote stays inside
+    assert systems._segments("echo 'x;y") == ["echo 'x;y"]  # an unterminated quote runs to the end
+    assert systems._segments("a\\;b && c") == ["a\\", "b", "c"]  # a backslash outside quotes escapes nothing here
+    assert systems._segments("") == [] and systems._segments(" ; \n ") == []
+
+
+def test_hosts_in_one_command_become_parts_in_the_same_order_whatever_the_hash_seed():
+    """A rebuilt map in the background must not reorder parts: the hosts a command names were a set, walked in the
+    order of Python's per-process string hashing."""
+    import subprocess
+    import sys
+
+    code = ("from interlatch.projects import systems as s; d = s.Draft(None, 'x'); "
+            "s.read_commands(d, [('s1', None, s.parse_command('curl ' + ' '.join("
+            "f'https://app-{c}.azurewebsites.net' for c in 'qwertyuiop')))]); print(list(d.parts))")
+    runs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                           env={**os.environ, "PYTHONHASHSEED": str(seed)}).stdout for seed in range(4)}
+    assert len(runs) == 1 and "host:Azure:app-e" in runs.pop()
+
+
+def same_map(a: dict, b: dict) -> bool:
+    plain = lambda d: json.dumps({k: v for k, v in d.items() if k != "built_s"}, sort_keys=True,  # noqa: E731
+                                 default=lambda o: sorted(o) if isinstance(o, set) else str(o))
+    return plain(a) == plain(b)
+
+
+def test_each_command_is_parsed_once_and_again_when_its_id_comes_back_with_another(world, monkeypatch):
+    first = systems.build(world["conn"], world["cfg"])
+    parsed = []
+    real = systems.parse_command
+    monkeypatch.setattr(systems, "parse_command", lambda cmd: parsed.append(cmd) or real(cmd))
+    assert same_map(systems.build(world["conn"], world["cfg"]), first) and parsed == []
+    # a session ingested again can give a tool call's id to another command
+    world["conn"].execute("UPDATE tool_calls SET command = 'ssh deploy@new-box uptime' WHERE command = 'ibmcloud ce app list'")
+    world["conn"].commit()
+    again = systems.build(world["conn"], world["cfg"])
+    assert parsed == ["ssh deploy@new-box uptime"]
+    assert "new-box" in by_label(systems.system(again, str(world["worker"])))
+
+
+def test_an_out_of_date_map_is_served_at_once_while_a_new_one_is_built(world, monkeypatch, caplog):
+    import dataclasses
+
+    monkeypatch.setattr(systems, "_CACHE", {"sig": None, "at": 0.0, "data": None})
+    conn, cfg, worker = world["conn"], world["cfg"], str(world["worker"])
+    first = systems.cached(conn, cfg)  # no map yet: this request waits for it
+    assert systems.cached(conn, cfg) is first
+    conn.execute("INSERT INTO sessions(id, source, agent, project_path, project_name, started_at, active_s) "
+                 "VALUES ('s5', 'transcript', 'claude', ?, 'worker', '2026-09-25T10:00:00Z', 60)", (worker,))
+    conn.execute("INSERT INTO tool_calls(session_id, ts, name, command) VALUES ('s5', '2026-09-25T10:00:01Z', 'Bash', 'ssh ops@late-box ls')")
+    conn.commit()
+    assert systems.cached(conn, cfg) is first  # out of date: served as it is, rebuilt in the background
+    assert systems.refresh(cfg.db_path, cfg) is False  # one build at a time
+    with systems._LOCK:  # the background build is done
+        pass
+    new = systems.cached(conn, cfg)
+    assert new is not first and "late-box" in by_label(systems.system(new, worker))
+    assert "late-box" not in by_label(systems.system(first, worker))
+    # the map's own settings changed: the request waits for a map built with them
+    off = dataclasses.replace(cfg, systems_read_manifests=False)
+    assert systems.cached(conn, off) is not new and systems._CACHE["sig"][-2] is False
+    # a background build that fails keeps the last map, says why in the log, and waits for the next change to try again
+    kept = systems._CACHE["data"]
+    monkeypatch.setattr(systems, "build", lambda conn, cfg: 1 / 0)
+    for db in (world["home"] / "missing.db", cfg.db_path):
+        systems._CACHE["at"] = 0.0
+        assert systems.refresh(db, off)
+        with systems._LOCK:
+            pass
+        assert systems._CACHE["data"] is kept and f"building the Systems map from {db} failed" in caplog.text
+    assert systems.cached(conn, off) is kept and systems._LOCK.acquire(blocking=False)  # fresh again: no new build
+    systems._LOCK.release()
 
 
 def test_api(world):

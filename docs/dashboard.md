@@ -329,6 +329,11 @@ holds other projects is a group, and a project that also ran on another machine 
 runs on**. `interlatch systems` prints the same map in the terminal, `interlatch systems NAME --evidence` one system with
 its example commands. To use sessions only, set `[systems] read_manifests = false` ([Configuration](configuration.md#systems)).
 
+The dashboard builds the map a few seconds after it starts, so opening it doesn't wait. When sessions, files or the
+glossary change, or five minutes after the last build (for manifests edited on disk), opening the map shows the last
+build at once and starts a new one in the background; the next visit shows the new one. After you change
+`read_manifests` or the excluded projects, the next visit waits for a map built with the new setting.
+
 ## Glossary
 
 built by the analysis model from each project's distilled knowledge (not the raw transcripts), one call per
