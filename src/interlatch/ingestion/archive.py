@@ -51,8 +51,11 @@ class Archiver:
         if src.suffix == ".jsonl":
             dst = dst.with_name(dst.name + ".gz")
         prev = self.state.get(str(src))
-        if prev and prev[0] == st.st_size and prev[1] == st.st_mtime and dst.exists():
-            return dst
+        if prev and prev[0] == st.st_size and prev[1] == st.st_mtime:
+            if dst.exists():
+                return dst
+            if prev[2] and Path(prev[2]).exists():  # kept in the folder for older sessions (ingestion/space.py)
+                return Path(prev[2])
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_name(dst.name + f".tmp{os.getpid()}")
         try:
