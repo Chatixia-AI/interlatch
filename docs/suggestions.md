@@ -168,7 +168,7 @@ file they change, with setup steps in their own group. Each card shows:
 
 - the kind, where it came from (*from what goes wrong* or *from knowledge*), and the agent,
 - the evidence: "seen in 31 sessions across 17 projects · still happening · last 2026-10-01", or for knowledge
-  "established · confirmed in 2 sessions · agents-chronicle", with two example sessions to open,
+  "established · confirmed in 2 sessions · billing-api", with two example sessions to open,
 - any warnings (below),
 - the line itself, which you can edit. Your wording is saved when you leave the box and kept on later refreshes;
   **Reset to the proposed text** goes back.

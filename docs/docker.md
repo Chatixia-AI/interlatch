@@ -255,8 +255,7 @@ docker compose restart hub
 
 The container sets up `config.toml` from these variables on every start. A variable that is set wins over
 `config.toml`; one that is unset or empty leaves it as it is. Other settings stay in `config.toml`. Change them with
-`docker compose exec hub interlatch config set ...` and restart the hub. Each variable is also read under its name
-from before the rename (`CHRONICLE_HUB_URL` for `INTERLATCH_HUB_URL`, …), so an older `.env` keeps working.
+`docker compose exec hub interlatch config set ...` and restart the hub.
 
 | Variable | Default | |
 |---|---|---|
@@ -337,13 +336,6 @@ changes in `compose.override.yaml` (as for [your own certificate](#your-own-cert
 To stay on one version, set `INTERLATCH_VERSION` in `.env` to a release's version number. The dashboard can't update
 a container: **Status** says to pull the new image instead.
 
-**A hub set up as Chronicle** moves the same way: download the new `compose.yaml` (and the `Caddyfile`, if you
-never changed it), keep your `.env`, then pull and start as above. `docker compose logs hub` then says
-`Interlatch hub is up`. No data moves: the volumes, the Postgres database and user (`chronicle`) and the data in
-`/data` stay as they are. If `.env` pins a version from before the rename (`CHRONICLE_VERSION=0.13.0`), remove that
-line: the `interlatch-hub` image has no tags that old. A hub that only pulls, with its old `compose.yaml`, keeps
-working too: `ghcr.io/chatixia-ai/chronicle-hub` still gets each release ([Moving from Chronicle](moving-from-chronicle.md)).
-
 ## Back up
 
 Copy the hub's database while it runs, and dump the team store:
@@ -371,11 +363,11 @@ seconds the hub takes to start. Reload the page.
 everything it holds, but other computers can no longer send to it.
 
 **Your own dashboard at `http://127.0.0.1:11524/` stopped answering** after you read the hub's log in VS Code
-connected to the server over Remote-SSH. The 0.13.0 image prints `Chronicle dashboard: http://127.0.0.1:11524/`,
+connected to the server over Remote-SSH. Early hub images print the dashboard's address `http://127.0.0.1:11524/`,
 and VS Code forwards that port to your computer, in front of your own dashboard. In the VS Code window connected to
 the server (its corner says **SSH: …**), open **Ports**, right-click 11524 and choose **Stop Forwarding Port**.
 Adding `"remote.portsAttributes": { "11524": { "onAutoForward": "ignore" } }` to VS Code's settings keeps it from
-happening again. Later images print `Interlatch hub is up: <the hub's address>` instead (`Chronicle hub is up` before the rename).
+happening again. Later images print `Interlatch hub is up: <the hub's address>` instead.
 
 **HTTPS doesn't work.** Check that the name points at the server's IP address, that ports 80 and 443 are open, and
 what `docker compose logs caddy` says. Let's Encrypt can't reach a server that only your company network reaches:

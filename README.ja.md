@@ -10,6 +10,7 @@ claude.ai・ChatGPT のチャットを自分のマシンの中で記録し、そ
   <a href="https://pypi.org/project/interlatch/"><img src="https://img.shields.io/pypi/v/interlatch?label=PyPI" alt="PyPI のバージョン"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11 以上">
   <img src="https://img.shields.io/badge/macOS-app%20%2B%20CLI-lightgrey?logo=apple" alt="macOS アプリと CLI">
+  <img src="https://img.shields.io/badge/Windows%20%7C%20Linux-CLI-lightgrey" alt="Windows と Linux の CLI">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT ライセンス"></a>
   <a href="https://github.com/Chatixia-AI/interlatch/pkgs/container/interlatch-hub"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fipitio%2Fbackage%2Fraw%2Findex%2FChatixia-AI%2Finterlatch%2Finterlatch-hub.json&query=%24.downloads&logo=docker&label=hub%20image%20pulls" alt="ハブの Docker イメージの pull 数"></a>
 </p>
@@ -28,9 +29,6 @@ claude.ai・ChatGPT のチャットを自分のマシンの中で記録し、そ
 つまりすべてのエージェントのすべてのセッションを、あなたのマシンの中で記録します。そこから学んだことを取り出し、ダッシュボードで
 あなたに、1 つの MCP サーバー経由ですべてのエージェントに返します。どのナレッジも出どころ（元のセッション、プロジェクト、
 エージェント）につながったまま残り、あとの作業で裏付けられるほど信頼が増します。
-
-<sub>Interlatch は以前 Chronicle という名前でした。`chronicle` コマンドはそのまま使え、既存のインストールはアップデートすると
-自動で移行されます（[Chronicle からの移行](docs/ja/moving-from-chronicle.md)）。</sub>
 
 [![デモデータで Interlatch のセッションを開く：要約、ホバーで説明される用語集の用語、そこから抽出したナレッジ](docs/images/demo.gif)](https://github.com/Chatixia-AI/interlatch/releases/download/v0.17.0/demo.mp4)
 
@@ -78,7 +76,7 @@ Interlatch は終わったセッションを読み、残す価値のあること
 
 ## クイックスタート
 
-macOS 13 以降と、セッションを分析するものが必要です。ログイン済みの [Claude Code](https://claude.com/claude-code) か
+macOS、Windows または Linux と、セッションを分析するものが必要です。ログイン済みの [Claude Code](https://claude.com/claude-code) か
 [Codex](https://github.com/openai/codex)、Bob API キーを設定した IBM Bob、またはあなた自身のキーで使うモデルプロバイダーの API の
 どれかです（[モデルプロバイダー](docs/ja/analysis.md#モデルプロバイダー)）。
 
@@ -89,13 +87,14 @@ macOS 13 以降と、セッションを分析するものが必要です。ロ�
    interlatch install
    ```
 
-   `interlatch install` は Mac にあるコーディングエージェントを見つけ、どれを記録するか尋ね、過去のセッションを取り込み、
-   ログイン時から Interlatch を動かすかを尋ねます。アプリがよければ[最新リリース](https://github.com/Chatixia-AI/interlatch/releases/latest)
-   （Apple シリコン）からダウンロードして **Connect** を選びます。
+   `interlatch install` はコンピューターにあるコーディングエージェントを見つけ、どれを記録するか尋ね、過去のセッションを取り込み、
+   ログイン時から Interlatch を動かすかを尋ねます。Apple シリコンの Mac（macOS 13 以降）ではアプリも使えます。
+   [最新リリース](https://github.com/Chatixia-AI/interlatch/releases/latest)からダウンロードして **Connect** を選びます。
+   Windows と Linux は手順が少し増えます：[Windows](docs/ja/install.md#windows)、[Linux](docs/ja/install.md#linux)。
 
 2. **いつも通りエージェントを使う。** 各セッションは終了時に記録され、バックグラウンドで分析されます。
 
-3. **眺める。** ダッシュボード <http://127.0.0.1:11524/>（または `interlatch ui --open`）を開いて **⌘K** を押すか、
+3. **眺める。** ダッシュボード <http://127.0.0.1:11524/>（または `interlatch ui --open`）を開いて **⌘K**（Windows と Linux では **Ctrl+K**）を押すか、
    エージェントに「先週何を学んだ？」と聞きます。
 
 エージェントはあとから **Settings › Sources**、`interlatch connect <agent>`、または `interlatch install` の再実行で追加できます。
@@ -184,7 +183,7 @@ Windows のコンピューターからのチームのハブへの参加はまだ
 [チームのハブに参加する](docs/ja/join-a-hub.md) · [Postgres へのコピー](docs/ja/postgres.md) ·
 [記録内容と分析の仕組み](docs/ja/analysis.md) · [設定](docs/ja/configuration.md) ·
 [データとプライバシー](docs/ja/privacy.md) · [よくある質問](docs/ja/faq.md) · [トラブルシューティング](docs/ja/troubleshooting.md) ·
-[Chronicle からの移行](docs/ja/moving-from-chronicle.md) · [開発](docs/ja/development.md)
+[開発](docs/ja/development.md)
 
 ## コントリビュート
 

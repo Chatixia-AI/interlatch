@@ -5,7 +5,7 @@
 Start with `interlatch status` (or **Settings › Status** in the dashboard). It checks the hook, the background
 agents, the MCP server and the `claude` CLI, and lists recent analysis failures. Under **agents** it has a line for
 each coding agent found on this computer: whether Interlatch's MCP server is in it (and the hooks, for Claude Code), and
-whether the command it runs is gone or belongs to another install (an old `chronicle`, a checkout's `.venv`).
+whether the command it runs is gone or belongs to another install (an older install, a checkout's `.venv`).
 `interlatch connect <name>` points it at this one. Logs are in `~/.interlatch/logs/` (`chronicle.log` for everything,
 `hooks.log` for session-end hooks).
 
@@ -119,39 +119,6 @@ from one address within 15 minutes, each further try from there waits a little l
 up to a minute. Wait that long, then paste the code again, exactly as it was sent. A code that was already used or has
 expired doesn't count. Behind your own proxy, add its address to `[server] trusted_proxies` (`INTERLATCH_TRUSTED_PROXIES`
 in Docker) so the hub tells visitors apart rather than counting them all as the proxy.
-
-## Moving from Chronicle
-
-[Moving from Chronicle](moving-from-chronicle.md) says what the move changes. Each one is recorded in
-`~/.interlatch/logs/migrate.log`, and `interlatch migrate --dry-run` shows what is still to do.
-
-**After Update, the dashboard never came back, and `interlatch` is "command not found".** Update in 0.22.0 removed
-`agents-chronicle`, which took the `interlatch` and `chronicle` commands with it, and didn't put them back. The
-background agents, the session hooks and the MCP server all run that command, so they stopped too. Put the commands
-back with the extras you had (`uv tool list --show-extras` shows them), then restart the dashboard:
-
-```bash
-uv tool install --force --python 3.13 'interlatch[app]'   # or plain interlatch, without the desktop app
-launchctl kickstart -k gui/$(id -u)/com.interlatch.ui     # Linux: systemctl --user restart interlatch-ui.service
-```
-
-**The data folder is still `~/.claude-chronicle`.** The move runs when the dashboard, the background sync,
-`interlatch install` or the app starts; run `interlatch migrate` to do it now. It leaves the folder where it is when
-`CHRONICLE_HOME` or `INTERLATCH_HOME` names another folder (it says so), when `~/.interlatch` already exists as well
-(Interlatch then uses `~/.interlatch`; move what you need yourself), and when the folder can't simply be renamed, for
-example because it is a mount point or on another disk.
-
-**An agent shows `mcp__chronicle__…` tools, or the same tools twice.** A server added to one project, in its
-`.mcp.json` or as a project's server in `~/.claude.json`, isn't renamed: rename its `chronicle` entry `interlatch`.
-Restart the agent afterwards, since it reads its MCP servers when it starts. A project's shared
-`.claude/settings.json` keeps its `mcp__chronicle__…` rules until you rename them: the move only reports it.
-
-**`uv tool install interlatch` says "Executable already exists: chronicle".** `agents-chronicle` is still
-installed, and its commands have the same names: `uv tool uninstall agents-chronicle` first, or use **Update** in
-**Settings › Status › Updates**, which does both.
-
-**Update didn't offer to switch to `interlatch`.** An install from a checkout or a git URL isn't switched for you:
-uninstall it, then install `interlatch` ([Moving from Chronicle](moving-from-chronicle.md#update)).
 
 ## Starting over
 
