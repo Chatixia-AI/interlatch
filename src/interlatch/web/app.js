@@ -195,6 +195,13 @@ function fmtCompact(n) {
   if (a >= 1e3) return f(n / 1e3, "k");
   return String(Math.round(n));
 }
+function fmtBytes(n) { // a file size: 5.3 GB, 506 MB
+  if (n == null || isNaN(n)) return "–";
+  for (const [unit, size] of [["GB", 2 ** 30], ["MB", 2 ** 20], ["KB", 2 ** 10]]) {
+    if (n >= size) return `${(n / size).toFixed(n / size >= 100 ? 0 : 1).replace(/\.0$/, "")} ${unit}`;
+  }
+  return `${Math.round(n)} B`;
+}
 function fmtCost(v) {
   if (v == null) return "–";
   if (v >= 1000) return "$" + nf.format(Math.round(v));
@@ -6705,7 +6712,10 @@ route(/^\/status$/, async () => {
         h("div", { class: "subhead" }, t("Storage")),
         h("div", null, h("span", { class: "codeline" }, st.archive_dir), t(" raw transcripts (kept forever, gzip)")),
         h("div", { style: { marginTop: "6px" } }, h("span", { class: "codeline" }, st.notes_dir), t(" Markdown vault")),
-        h("div", { class: "muted", style: { marginTop: "6px" } }, t("Database {size}B", { size: fmtCompact(st.db_size) }))),
+        h("div", { class: "muted", style: { marginTop: "6px" } }, t("Database {size}", { size: fmtBytes(st.db_size) }), " · ",
+          h("a", { href: "#/storage" }, t("{size} in all", { size: fmtBytes(st.storage?.total) }))),
+        st.storage?.over ? h("div", { class: "warn-line", style: { marginTop: "6px" } },
+          t("Interlatch's folder is past the {n} GB you set.", { n: String(st.storage.warn_gb) })) : null),
       updatesCard(),
       h("section", { class: "card analysis-card" }, h("div", { class: "card-head" }, h("h2", null, t("Analysis"))),
       h("div", { class: "analysis-grid" },
@@ -8421,12 +8431,59 @@ route(/^\/friction$/, async (params) => {
 // Storage: a copy of the archive in a Postgres database you choose (mirror.py). The password goes in, never out.
 // =====================================================================================
 route(/^\/storage$/, async () => {
-  const mi = await api("/api/mirror");
+  const [mi, sp] = await Promise.all([api("/api/mirror"), api("/api/storage")]);
   return h("div", { class: "narrow-page" },
     h("div", { class: "page-head" }, titled("rack", h("h1", null, t("Storage")),
       h("div", { class: "sub" }, t("Interlatch keeps your archive in its own database on this computer. A copy can go to Postgres as well.")))),
-    mirrorCard(mi));
+    spaceCard(sp), h("div", { class: "section-gap" }, mirrorCard(mi)));
 });
+
+// what Interlatch's folder holds, the size to warn at, and the folder older sessions' transcripts go to ([storage])
+function spaceCard(sp) {
+  const names = { database: t("Database"), archive: t("Transcripts"), backups: t("Backups"), notes: t("Markdown vault"), logs: t("Logs"), other: t("Other") };
+  const hints = { database: t("sessions, lessons and the search index"), archive: t("every session's original files, compressed"),
+    backups: t("copies made before Interlatch changed a file"), other: t("settings, thumbnails and caches") };
+  const parts = sp.parts.filter((p) => p.bytes > 0);
+  const max = Math.max(1, ...parts.map((p) => p.bytes));
+  const table = h("div", { class: "table-wrap" }, h("table", { class: "data" }, h("tbody", null,
+    parts.map((p) => h("tr", null, h("td", { title: hints[p.key] || null }, names[p.key]), barCell(fmtBytes(p.bytes), p.bytes, max))),
+    sp.older.dir ? h("tr", null, h("td", { title: sp.older.dir }, t("Older sessions, in their folder")),
+      h("td", { class: "num" }, sp.older.reachable ? fmtBytes(sp.older.bytes) : t("not reachable"))) : null)));
+  const input = (name, value, attrs = {}) => h("input", { class: "input", name, value, autocomplete: "off", spellcheck: "false", ...attrs });
+  const folder = input("older_dir", sp.older.dir, { placeholder: t("a folder on another disk or in a cloud folder") });
+  const days = input("older_after_days", String(sp.older.days), { inputmode: "numeric" });
+  const warn = input("warn_gb", sp.warn_gb ? String(sp.warn_gb) : "", { inputmode: "decimal", placeholder: t("no limit") });
+  const form = h("form", { class: "ts-form", onsubmit: (e) => e.preventDefault() },
+    h("label", { title: t("A session moves once it is this old and the agent has deleted its own transcript. It still opens while the folder is reachable.") },
+      t("Folder for older sessions"), folder),
+    h("label", null, t("Older than (days)"), days),
+    h("label", { title: t("Shown here, on Status and in the log once Interlatch's folder passes it.") }, t("Warn above (GB)"), warn));
+  const result = h("div", { class: "ts-result" });
+  const say = (text, bad) => result.replaceChildren(h("div", { class: bad ? "warn-line" : "muted" }, text));
+  const save = h("button", { class: "btn primary", type: "button", onclick: async () => {
+    save.disabled = true;
+    const r = await post("/api/storage/save", { older_dir: folder.value, older_after_days: days.value, warn_gb: warn.value }).catch((e) => ({ error: e.message }));
+    save.disabled = false;
+    if (!r.ok) { say(r.error || t("Could not save"), true); return; }
+    toast(t("Saved"));
+    render();
+  } }, t("Save"));
+  const move = (back) => h("button", { class: "btn", type: "button", disabled: sp.running, onclick: async (e) => {
+    if (back && !confirm(t("Move every older session back into Interlatch's folder?"))) return;
+    e.target.disabled = true;
+    const r = await post("/api/storage/move", { back }).catch((x) => ({ error: x.message }));
+    if (r.error) { e.target.disabled = false; say(r.error, true); return; }
+    toast(r.started ? (back ? t("Bringing older sessions back…") : t("Moving older sessions…")) : t("Already running"));
+    watchJob("storage");
+  } }, back ? t("Bring back") : t("Move now"));
+  return h("section", { class: "card" }, cardHead(t("Space used"), { iconName: "data", hint: fmtBytes(sp.total) }),
+    sp.over ? h("div", { class: "warn-line" }, t("Interlatch's folder is past the {n} GB you set.", { n: String(sp.warn_gb) })) : null,
+    table,
+    sp.profile ? null : form,
+    sp.profile ? null : h("div", { class: "ts-actions" }, save, sp.older.dir ? move(false) : null, sp.older.sessions ? move(true) : null,
+      sp.older.dir ? h("span", { class: "muted" }, tn(sp.older.sessions, "{n} session kept there", "{n} sessions kept there", { n: fmtNum(sp.older.sessions) })) : null),
+    result);
+}
 
 function mirrorCard(mi) {
   const saved = mi.settings || {};
@@ -9009,7 +9066,7 @@ function paletteCommands() {
     nav(t("Suggestions"), "#/suggestions", "suggestions", t("fixes to approve")), nav(t("What goes wrong"), "#/friction", "gotcha", t("recurring failures")),
     ...(shellRealm && window.Innerlatch ? [...Innerlatch.commands(nav), nav(t("Back to Interlatch"), realmReturn, "door")]
       : gameOn() ? [{ ...nav("Innerlatch", "#/innerlatch", "door"), run: () => walkIn() }] : []),
-    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Browser extension"), "#/extension", "domain", t("save claude.ai and ChatGPT chats")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"), nav(t("Feedback"), "#/feedback", "feedback", t("report a problem, suggest an idea")),
+    nav(t("Status"), "#/status", "status"), nav(t("Sources"), "#/sources", "sources"), nav("MCP", "#/mcp", "mcp", t("connect other agents")), nav(t("Browser extension"), "#/extension", "domain", t("save claude.ai and ChatGPT chats")), nav(t("Devices"), "#/devices", "devices", t("phone, other computers")), nav(t("Hubs"), "#/hubs", "organization", t("where each group's knowledge goes")), { ...nav(t("Storage"), "#/storage", "data", t("space used, a copy in Postgres")), admin: true }, { ...nav(t("Re-analysis"), "#/reanalysis", "calendar", t("weekly, by project or group")), admin: true }, nav(t("Appearance"), "#/appearance", "appearance"), nav(t("Feedback"), "#/feedback", "feedback", t("report a problem, suggest an idea")),
     ...[[t("People"), "#/team", "preference", t("team")], [teamProjectsLabel(), "#/team/projects", "projects", t("team")], [t("Computers"), "#/team/computers", "devices", t("team")],
       [t("Team store"), "#/team/store", "data", t("team")], [t("Hub settings"), "#/team/settings", "settings", t("name, address, backups")]].map((x) => ({ ...nav(...x), hub: true, admin: true })),
     { group: cmds, label: t("Sync now"), icon: "sync", hint: "", run: syncNow, admin: true },

@@ -102,6 +102,32 @@ The [Systems map](dashboard.md#systems-map).
 | --- | --- | --- |
 | `read_manifests` | `true` | read a few manifest files in each project folder (package manifests, compose files, Dockerfiles, Terraform, CI workflows, vite configs, `.env.example`, deploy configs), read-only. `false`: parts come from what sessions did only |
 
+## `[storage]`
+
+How much disk Interlatch uses, and where the transcripts of older sessions are kept. **Settings › Storage** shows the
+size of each part of Interlatch's folder and writes these keys; `interlatch storage` prints the same.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `older_dir` | `""` | A folder outside Interlatch's own (a second disk, or a folder a cloud service syncs) for the transcripts of older sessions. Empty: everything stays in Interlatch's folder |
+| `older_after_days` | `90` | A session moves once it is this many days old **and** the agent has deleted its own transcript, so the archive's copy is the only one |
+| `warn_gb` | `0` | Settings › Storage, Status and the log say so once Interlatch's folder is larger than this many GB. `0`: no limit |
+
+What moving does and doesn't do:
+
+- Each background run moves at most 1 GB, oldest sessions first. `interlatch storage move` (or **Move now**) moves
+  everything that is due; `interlatch storage move --dry-run` only says what would move.
+- A file is copied, the copy is compared with the original, and only then is the original removed. The files keep
+  their place under the folder (`<older_dir>/claude/projects/...`).
+- A moved session opens, exports and shows its files as before while the folder can be reached. While it can't (a
+  disk that is unplugged), its summary, lessons and search still work, since those are in the database; its
+  original transcript and the content of files it wrote are unavailable until the folder is back.
+- Only transcripts move. The database, and with it everything you search, stays on this computer.
+- `interlatch storage back` (or **Bring back**) moves every session back. Do that before pointing `older_dir` at
+  another folder: the dashboard refuses to change it while sessions are kept there.
+- Forgetting a session while its folder can't be reached removes it from Interlatch but leaves its transcript in
+  that folder; delete it there by hand.
+
 ## `[mirror]`
 
 A copy of your archive in a Postgres database you choose ([A copy in Postgres](postgres.md)).

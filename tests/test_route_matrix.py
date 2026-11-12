@@ -148,6 +148,7 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("GET", "/api/people"): ADMIN,
     ("GET", "/api/mirror"): ADMIN,
     ("GET", "/api/mirror/status"): ADMIN,
+    ("GET", "/api/storage"): ADMIN,
     ("GET", "/api/team/settings"): ADMIN,
     ("GET", "/api/projects/shared"): ADMIN,
     # the computer itself: a person's own leaderboard
@@ -196,6 +197,8 @@ ROUTES: dict[tuple[str, str], Access] = {
     ("POST", "/api/mirror/test"): POST_ADMIN,
     ("POST", "/api/mirror/save"): POST_ADMIN,
     ("POST", "/api/mirror/sync"): POST_ADMIN,
+    ("POST", "/api/storage/save"): POST_ADMIN,
+    ("POST", "/api/storage/move"): POST_ADMIN,
     ("POST", "/api/team/settings"): POST_ADMIN,
     ("POST", "/api/team/accept"): POST_ADMIN.ok(400),  # no such setting
     ("POST", "/api/projects/shared/add"): POST_HERE.ok(400),  # admins too on a dedicated hub (test_dedicated_hub.py)
@@ -343,7 +346,7 @@ PARAMS_FOR = {"/api/connectors/{id}/connect": {"{id}": "claude"}, "/api/connecto
 # Dashboard api functions that would reach outside the temporary home (processes, network, the desktop): stubbed,
 # recording calls
 STUBS = {
-    "action_sync": False, "action_mirror_sync": False, "action_screen": False, "action_analyze": False,
+    "action_sync": False, "action_mirror_sync": False, "action_space_move": False, "action_screen": False, "action_analyze": False,
     "action_themes": False, "action_glossary": False, "action_review": False, "action_synthesize": False,
     "action_import": False, "action_push": False, "action_leaderboard_cancel": None,
     "action_leaderboard_signin": {"stub": True}, "action_leaderboard_finish": {"stub": True},

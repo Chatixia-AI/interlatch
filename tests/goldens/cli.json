@@ -2608,6 +2608,49 @@
     "hidden": false,
     "options": []
    },
+   "storage": {
+    "aliases": [],
+    "defaults": {
+     "fn": "<fn cmd_storage>"
+    },
+    "hidden": false,
+    "options": [
+     {
+      "action": "_StoreAction",
+      "choices": [
+       "status",
+       "move",
+       "back"
+      ],
+      "const": null,
+      "default": "status",
+      "dest": "action",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": "?",
+      "option_strings": [],
+      "required": false,
+      "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "dry_run",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--dry-run"
+      ],
+      "required": false,
+      "type": null
+     }
+    ]
+   },
    "suggest": {
     "aliases": [
      "suggestions"

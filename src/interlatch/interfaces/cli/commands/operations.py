@@ -341,6 +341,52 @@ def add_mirror(sub) -> None:
     s.set_defaults(fn=cmd_mirror)
 
 
+def cmd_storage(args) -> int:
+    """`interlatch storage`: what Interlatch's folder holds, and the folder older sessions' transcripts go to
+    ([storage] older_dir): move them there now, see what would move, or bring them all back."""
+    from ....core.util import setup_logging
+    from ....ingestion import space
+
+    cfg = load_cfg()
+    console = new_console()
+    if args.action in ("move", "back"):
+        if not cfg.storage_older_dir:
+            console.print("No folder for older sessions is set: `interlatch config set storage.older_dir <folder>`, or "
+                          "open Settings › Storage in the dashboard.", highlight=False)
+            return 1
+        setup_logging(cfg.logs_dir)
+        progress = lambda m: print(f"  {m}")  # noqa: E731
+        res = (space.bring_back(cfg, progress=progress, wait=60) if args.action == "back"
+               else space.move_older(cfg, dry_run=args.dry_run, progress=progress, wait=60))
+        for err in res["errors"][:5]:
+            console.print(f"[red]{err}[/]", highlight=False)
+        console.print(("would move: " if args.dry_run else "older sessions: ") + space.summary(res), highlight=False)
+        return 1 if res["errors"] else 0
+    conn = open_archive(cfg)
+    used = space.usage(cfg, conn)
+    console.print(f"Interlatch's folder: [bold]{space.human_bytes(used['total'])}[/] in {used['home']}", highlight=False)
+    for part in used["parts"]:
+        if part["bytes"]:
+            console.print(f"  {part['key']:<9} {space.human_bytes(part['bytes']):>10}", highlight=False)
+    older = used["older"]
+    if older["dir"]:
+        size = space.human_bytes(older["bytes"]) if older["reachable"] else "not reachable"
+        console.print(f"Older sessions (after {older['days']} days): {older['sessions']} in {older['dir']} ({size})",
+                      highlight=False)
+    else:
+        console.print("Older sessions stay here: no folder is set (storage.older_dir).", highlight=False)
+    if used["over"]:
+        console.print(f"[yellow]Past the {used['warn_gb']:g} GB set in storage.warn_gb.[/]", highlight=False)
+    return 0
+
+
+def add_storage(sub) -> None:
+    s = sub.add_parser("storage", help="the space Interlatch uses, and keeping older sessions' transcripts in another folder")
+    s.add_argument("action", nargs="?", choices=["status", "move", "back"], default="status")
+    s.add_argument("--dry-run", action="store_true", help="with move: say what would move, and move nothing")
+    s.set_defaults(fn=cmd_storage)
+
+
 def add_tailnet(sub) -> None:
     s = sub.add_parser("tailnet", help="reach the dashboard from your phone and other computers through Tailscale")
     s.add_argument("action", nargs="?", choices=["on", "off", "status"], default="status")

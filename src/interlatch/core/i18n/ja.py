@@ -165,6 +165,8 @@ JA: dict[str, str] = {
     "Analysis is off (record only): sessions are recorded but not analyzed":
         "分析はオフです（記録のみ）：セッションは記録されますが分析されません",
     "not saved: {keys}": "保存されませんでした：{keys}",
+    "sessions are kept in {folder}; bring them back before changing the folder":
+        "{folder} にセッションを保管しています。フォルダを変える前に戻してください",
     "{reason}, so nothing can be analyzed": "{reason}ため、何も分析できません",
     "{label} (`{cli}`) was not found": "{label}（`{cli}`）が見つかりません",
     "{label}: set its endpoint (providers.{name}.base_url)": "{label}：エンドポイントを設定してください（providers.{name}.base_url）",

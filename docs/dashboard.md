@@ -19,7 +19,9 @@ last sync and, once one is found, an available update ([Updating](install.md#upd
 and **Game mode** turns Innerlatch on or off (off by default; saved in config.toml, so for every browser, and on a hub for everyone signed in to it). The fonts ship with Interlatch, so the dashboard never
 calls out to a font service. **Settings › Devices** shows whether this computer is a hub or sends to
 one (then also the hub's projects it is in, to join, leave or rejoin), and how to open the dashboard on your phone. **Settings › Storage**
-sets up a copy of your archive in Postgres ([A copy in Postgres](postgres.md)). **Settings › Re-analysis** picks the
+shows the space each part of Interlatch's folder uses, sets the size to warn at and the folder older sessions'
+transcripts go to ([`[storage]`](configuration.md#storage)), and sets up a copy of your archive in Postgres
+([A copy in Postgres](postgres.md)). **Settings › Re-analysis** picks the
 day [weekly re-analyses](#project-groups) run and lists the projects and groups that have one. On a phone the rail becomes a tab bar at the bottom, the page takes
 the whole width, and the dashboard can be added to the Home Screen like an app
 ([Phone and other computers](devices.md)).
