@@ -383,6 +383,23 @@ def lookup(conn: sqlite3.Connection, term: str) -> dict | None:
     return matches[0] if matches else None
 
 
+def search_names(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Every name a term goes by (its own and its aliases, normalized) -> the term, its definition and the names a
+    search for it looks for: its own and the aliases sessions used (one only the model wrote finds nothing). A name
+    two terms share goes to the one more sessions mention."""
+    out: dict[str, dict] = {}
+    for r in conn.execute("SELECT term, definition, aliases_json, alias_seen_json FROM glossary "
+                          "ORDER BY n_sessions DESC, id"):
+        aliases = loads(r["aliases_json"], []) or []
+        seen = loads(r["alias_seen_json"], {}) or {}
+        entry = {"term": r["term"], "definition": r["definition"],
+                 "names": [r["term"], *(a for a in aliases if seen.get(a) != 0)]}
+        for name in [r["term"], *aliases]:
+            if norm(name):
+                out.setdefault(norm(name), entry)
+    return out
+
+
 # ------------------------------------------------------------------ themes: sub-groups inside big categories
 THEME_MIN_TERMS = 25  # smaller categories are browsable as they are
 THEMES_SYSTEM = """\

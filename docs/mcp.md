@@ -24,6 +24,12 @@ the network. Every tool only reads the local vault.
 | `find_artifacts` | What sessions made: documents, pages, diagrams, decks, published links, pull requests and commits, each with where it is, whether the file is still on disk as written, and the session that made it | `query`, `kind`, `project`, `limit` |
 | `recent_sessions` | Recent sessions, newest first | `project`, `days`, `limit` |
 
+`search_knowledge` and `search_sessions` search through the [glossary](dashboard.md#glossary): words that name a term,
+by its name or an alias, also find its other names, so "single sign-on" finds lessons that say "SSO" and a Japanese
+term finds its English name. Only aliases your sessions used are added, and the reply says which ("also searched:
+SSO"). When nothing matches, the reply says which words are glossary terms (with what they mean), which are not, and how
+many lessons and sessions it searched, so an agent can tell a wrong word from a gap in the archive.
+
 `project` takes a path or a name (`billing-api`). When it is left out, `resume`, `project_knowledge` and `glossary` use the
 project of the directory the client started the server in. Coding agents start it in your project; desktop chat apps
 such as Claude Desktop don't, so name the project in your question there. `resume` knows which agent is asking from
