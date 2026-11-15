@@ -172,6 +172,13 @@ elif "links between terms" in system:  # keeps link 0 read from its b side, drop
                       {"id": 1, "keep": False, "from": links[1]["a"], "label": ""},
                       {"id": 2, "keep": True, "from": 999999, "label": "  part of  "},
                       {"id": 999, "keep": True, "from": 1, "label": "unknown id"}][: 5 if len(links) > 2 else 1]}
+elif "file the new terms" in system:  # the first new term into the first theme (named in capitals), the next two
+    # into a new theme, the rest left over (an unknown id and a nameless theme are ignored)
+    themes = __import__("re").findall(r'^\{"name": "([^"]+)"', prompt, __import__("re").M)
+    new = [int(x) for x in __import__("re").findall(r'^\{"id": (\d+)', prompt.split("<new_terms>")[1], __import__("re").M)]
+    data = {"themes": [{"name": themes[0].upper(), "description": "ignored: a theme keeps its own", "term_ids": new[:1] + [999999]},
+                       {"name": "Formatting", "description": "Code style tools", "term_ids": new[1:3]},
+                       {"name": "", "description": "dropped: no name", "term_ids": new}]}
 elif "into themes" in system:
     ids = [int(x) for x in __import__("re").findall(r'"id": (\d+)', prompt)]
     data = {"themes": [{"name": "Testing", "description": "How tests run", "term_ids": ids[:1] + [999999]},

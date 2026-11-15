@@ -374,7 +374,11 @@ on the map (*on the map →*).
 
 The analysis model splits each glossary category with 25 or more terms into 4–10 named themes (for example concept →
 "Cloud infra, auth & integrations", "Agent dev workflow & tooling"), one call per category, so no level of
-the map is a long list. Themes are rebuilt after glossary rebuilds, only for categories whose terms changed; terms
-added since then show as *Not grouped yet*. Run it by hand with `interlatch glossary --themes [--force]` or the
-**Group into themes** button in the map's side panel. On a 1,360-term glossary, the ten big categories cost about
-$1.40 API-equivalent in total.
+the map is a long list. After each glossary rebuild, only the terms in no theme yet (new, or moved from another
+category) are sent, with the category's themes, and filed into them; the model makes a new theme only for a subject
+two or more new terms share, and the rest go to *Other*. Terms already placed stay where they are, so the map keeps
+its shape. A category with no themes yet, or more than half new, is grouped from scratch. Terms dropped from the
+glossary need no call: their themes are recounted, and a theme left empty goes. Until the next run, new terms show as
+*Not grouped yet*. Run it by hand with `interlatch glossary --themes` or the **Group into themes** button in the map's
+side panel; `--force` regroups every big category from scratch. On a 1,360-term glossary, grouping the ten big
+categories from scratch cost about $1.40 API-equivalent in total.
