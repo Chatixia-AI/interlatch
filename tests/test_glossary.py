@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -71,7 +72,8 @@ def test_parallel_glossary_builds(synced):
 
     conn, cfg, _ = _build(synced)
     results = build_glossaries(cfg, [CWD, GLOBAL, "/no/knowledge/here"], concurrency=3)
-    assert results[CWD] == 2 and results[GLOBAL] == 1 and results["/no/knowledge/here"] == "no knowledge"
+    assert results[CWD] == "up to date" and results[GLOBAL] == 1 and results["/no/knowledge/here"] == "no knowledge"
+    assert build_glossaries(cfg, [CWD, GLOBAL], concurrency=3, full=True) == {CWD: 2, GLOBAL: 1}
     assert conn.execute("SELECT COUNT(*) FROM glossary").fetchone()[0] == 2
 
 
@@ -210,7 +212,7 @@ def test_a_build_measures_terms_that_have_no_alias_evidence_yet(synced):
     _term(conn, "Old term", ["pytest", "never typed anywhere"])  # as an archive from before alias evidence holds it
     conn.execute("INSERT INTO glossary_usage(term_id, project_path) SELECT id, ? FROM glossary WHERE norm = 'old term'", (GLOBAL,))
     conn.commit()
-    build_glossary(conn, cfg, CWD)
+    build_glossary(conn, cfg, CWD, full=True)
     assert lookup(conn, "Old term")["alias_seen"] == {"pytest": 1, "never typed anywhere": 0}
 
 
@@ -279,6 +281,78 @@ def test_a_mostly_new_category_or_force_regroups_and_dropped_terms_need_no_call(
     build_themes(cfg, ["tool"], force=True)  # nothing new, but forced: from scratch
     assert "Group the terms into themes" in fake_log(synced)[-1]["prompt_head"]
     calls = len(fake_log(synced))
-    build_glossary(conn, cfg, CWD)  # drops the tools no project uses: their themes are recounted, no themes call
+    build_glossary(conn, cfg, CWD, full=True)  # drops the tools no project uses: their themes are recounted, no themes call
     assert [c for c in fake_log(synced)[calls:] if "themes" in c["prompt_head"]] == []
     assert _themed(conn) == {"Testing": ("How tests run", 1)} and "tool" not in themes_due(conn, min_terms=1)
+
+
+def _lesson(conn, title, project=CWD):
+    cur = conn.execute("INSERT INTO knowledge(session_id, project_path, project_name, kind, title, body, scope, confidence, "
+                       "source, fingerprint, created_at, updated_at, status) VALUES (?, ?, 'demo-app', 'gotcha', ?, 'b', "
+                       "'project', 'high', 'analysis', ?, '2026-11-15', '2026-11-15', 'active')", (SID, project, title, title))
+    conn.commit()
+    return cur.lastrowid
+
+
+def _usage(conn, term):
+    row = conn.execute("SELECT u.* FROM glossary_usage u JOIN glossary g ON g.id = u.term_id WHERE g.term = ? "
+                       "AND u.project_path = ?", (term, CWD)).fetchone()
+    return row and {"context": row["context"], "sources": json.loads(row["sources_json"])}
+
+
+def test_a_later_pass_reads_only_the_knowledge_added_since(synced):
+    from conftest import fake_log
+    from interlatch.knowledge.glossary import SEEN_KEY
+    from interlatch.storage.kv import kv_get
+
+    conn, cfg, _ = _build(synced)
+    newest = conn.execute("SELECT MAX(id) FROM knowledge WHERE project_path = ?", (CWD,)).fetchone()[0]
+    assert kv_get(conn, SEEN_KEY + CWD) == str(newest)
+    before = _usage(conn, "pytest")["sources"]
+    calls = len(fake_log(synced))
+    assert build_glossary(conn, cfg, CWD) == 0 and len(fake_log(synced)) == calls  # nothing new: no call
+
+    new = _lesson(conn, "Redis cache keys need a prefix")
+    assert build_glossary(conn, cfg, CWD) == 2
+    call = fake_log(synced)[-1]
+    prompt = call["prompt_head"]
+    assert prompt.rstrip().endswith("Update the glossary.") and "<knowledge_base>" not in prompt
+    assert '"term": "pytest"' in prompt.split("<existing_terms>")[1].split("</existing_terms>")[0]
+    assert [int(i) for i in re.findall(r'"id": (\d+)', prompt.split("<knowledge_items>")[1])] == [new]
+    assert any("already exists" in a for a in call["args"])  # the update note is in the system prompt
+    assert _usage(conn, "pytest")["sources"] == sorted({*before, new})  # sources add up
+    assert kv_get(conn, SEEN_KEY + CWD) == str(new)
+
+
+def test_an_update_drops_uses_whose_sources_all_went_inactive(synced):
+    conn, cfg, _ = _build(synced)
+    old = _lesson(conn, "Legacy cache layer")
+    for term, sources in (("Legacy cache", [old]), ("Unsourced", [])):
+        cur = conn.execute("INSERT INTO glossary(term, norm, category, definition) VALUES (?, ?, 'concept', 'd')",
+                           (term, term.lower()))
+        conn.execute("INSERT INTO glossary_usage(term_id, project_path, sources_json) VALUES (?, ?, ?)",
+                     (cur.lastrowid, CWD, json.dumps(sources)))
+    conn.execute("UPDATE knowledge SET status = 'dismissed' WHERE id = ?", (old,))
+    conn.commit()
+    _lesson(conn, "Something new")
+    build_glossary(conn, cfg, CWD)
+    assert lookup(conn, "Legacy cache") is None  # its only source was dismissed: the use and then the term go
+    assert _usage(conn, "Unsourced") == {"context": None, "sources": []}  # never cited a source: kept
+    assert old not in _usage(conn, "pytest")["sources"]
+
+
+def test_too_much_new_knowledge_or_no_terms_left_means_a_full_pass(synced, monkeypatch):
+    from conftest import fake_log
+    from interlatch.knowledge import glossary
+
+    conn, cfg, _ = _build(synced)
+    monkeypatch.setattr(glossary, "UPDATE_LIMIT", 1)
+    _lesson(conn, "One")
+    _lesson(conn, "Two")
+    build_glossary(conn, cfg, CWD)
+    assert fake_log(synced)[-1]["prompt_head"].rstrip().endswith("Write the glossary.")
+    conn.execute("DELETE FROM glossary_usage WHERE project_path = ?", (CWD,))  # e.g. a hub removed the project
+    conn.commit()
+    _lesson(conn, "Three")
+    build_glossary(conn, cfg, CWD)
+    assert fake_log(synced)[-1]["prompt_head"].rstrip().endswith("Write the glossary.")
