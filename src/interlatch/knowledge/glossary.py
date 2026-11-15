@@ -20,6 +20,8 @@ log = logging.getLogger("interlatch.glossary")
 CATEGORIES = ["system", "service", "component", "tool", "library", "platform", "concept", "acronym", "file",
               "command", "data", "domain", "organization", "other"]
 
+MAX_ALIASES = 10  # kept per term
+
 GLOSSARY_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -201,6 +203,7 @@ def _generate(cfg: Config, project_path: str, material: str, ids: list[int], run
 
 def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: list[int], res, material_chars: int) -> int:
     valid = set(ids)
+    _measure_aliases(conn)  # a merge below reads this evidence
     try:
         conn.execute("DELETE FROM glossary_usage WHERE project_path = ?", (project_path,))
         for t in terms:
@@ -228,10 +231,16 @@ def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: 
 def _upsert_term(conn: sqlite3.Connection, t: dict, *, source: str) -> int:
     key = norm(t["term"])
     row = conn.execute("SELECT * FROM glossary WHERE norm = ?", (key,)).fetchone()
-    if row is None:  # the new term may be another term's alias (or vice versa)
+    if row is None:
+        # the new term may be another term's alias, or share an alias with it that sessions used. A shared alias only
+        # the model wrote joins nothing: one invented name would fuse two terms
+        mine = {norm(a) for a in t["aliases"]}
         for cand in conn.execute("SELECT * FROM glossary").fetchall():
-            names = {norm(a) for a in loads(cand["aliases_json"], []) or []}
-            if key in names or names & {norm(a) for a in t["aliases"]}:
+            seen = loads(cand["alias_seen_json"], {}) or {}
+            names: dict[str, int] = {}
+            for a in loads(cand["aliases_json"], []) or []:
+                names[norm(a)] = max(names.get(norm(a), 0), seen.get(a) or 0)
+            if key in names or any(names.get(n) for n in mine):
                 row = cand
                 break
     if row is None:
@@ -240,21 +249,68 @@ def _upsert_term(conn: sqlite3.Connection, t: dict, *, source: str) -> int:
             "VALUES (?,?,?,?,?,?,?,?)",
             (t["term"], key, dumps(t["aliases"]), t["category"], t["definition"], source, dumps(t["related"]), utcnow_iso()))
         return cur.lastrowid
-    aliases = list(dict.fromkeys([*(loads(row["aliases_json"], []) or []), *t["aliases"],
-                                  *([t["term"]] if norm(t["term"]) != row["norm"] else [])]))
+    names: dict[str, str] = {}  # one spelling per name ("ACA", "aca"), the first one met
+    for a in [*(loads(row["aliases_json"], []) or []), *t["aliases"], t["term"]]:
+        if norm(a) and norm(a) != row["norm"]:
+            names.setdefault(norm(a), a)
+    aliases = list(names.values())
+    if len(aliases) > MAX_ALIASES:  # too many: the names no session used go first
+        seen = loads(row["alias_seen_json"], {}) or {}
+        aliases = sorted(aliases, key=lambda a: seen.get(a) == 0)
     related = list(dict.fromkeys([*(loads(row["related_json"], []) or []), *t["related"]]))[:12]
     # a cross-project definition wins; otherwise the latest pass refreshes it
     keep = row["definition_source"] == GLOBAL and source != GLOBAL
     conn.execute(
         "UPDATE glossary SET aliases_json = ?, related_json = ?, category = ?, definition = ?, definition_source = ?, "
         "updated_at = ? WHERE id = ?",
-        (dumps(aliases[:10]), dumps(related), row["category"] if keep else t["category"],
+        (dumps(aliases[:MAX_ALIASES]), dumps(related), row["category"] if keep else t["category"],
          row["definition"] if keep else t["definition"], row["definition_source"] if keep else source, utcnow_iso(), row["id"]))
     return row["id"]
 
 
+def alias_evidence(conn: sqlite3.Connection, aliases: list[str]) -> dict[str, int]:
+    """How many sessions' transcripts hold each alias, in any case and with its punctuation as written or as spaces
+    ("write-ahead log", "write ahead log"): 0 means the model wrote a name no session used. Aliases under 3
+    characters can't be searched (trigram FTS) and are left out: unknown, not unseen."""
+    seen: dict[str, int] = {}
+    for a in aliases:
+        forms = [f for f in dict.fromkeys([a, norm(a)]) if len(f) >= 3]
+        if not forms:
+            continue
+        try:
+            seen[a] = conn.execute(
+                "SELECT COUNT(DISTINCT e.session_id) FROM events_fts JOIN events e ON e.id = events_fts.rowid "
+                "WHERE events_fts MATCH ?", (" OR ".join('"' + f.replace('"', '""') + '"' for f in forms),)).fetchone()[0]
+        except sqlite3.OperationalError:
+            continue
+    return seen
+
+
+def _measure_aliases(conn: sqlite3.Connection) -> None:
+    """Alias evidence for the terms that have none yet: an archive from before it was recorded, or a term just added."""
+    rows = conn.execute("SELECT id, aliases_json FROM glossary WHERE alias_seen_json IS NULL").fetchall()
+    found = [(dumps(alias_evidence(conn, loads(r["aliases_json"], []) or [])), r["id"]) for r in rows]
+    if found:  # read first, write at once: a big archive takes a while to search and others write meanwhile
+        conn.executemany("UPDATE glossary SET alias_seen_json = ? WHERE id = ?", found)
+        conn.commit()
+
+
+def alias_split(e: dict) -> tuple[list[str], list[str]]:
+    """A term's aliases as (the ones its sessions used or that are too short to look for, the ones only the model wrote)."""
+    seen = e.get("alias_seen") or {}
+    return [a for a in e["aliases"] if seen.get(a) != 0], [a for a in e["aliases"] if seen.get(a) == 0]
+
+
+def also(e: dict) -> str:
+    """A term's aliases in a sentence, the ones no session used told apart; "" when it has none."""
+    used, unseen = alias_split(e)
+    return "; ".join(p for p in ("also: " + ", ".join(used) if used else "",
+                                 "added by the model, not seen in sessions: " + ", ".join(unseen) if unseen else "") if p)
+
+
 def refresh_stats(conn: sqlite3.Connection, keys: list[str] | None = None) -> None:
-    """Where each term shows up in the transcripts (FTS): sessions, mentions, first/last seen, top sessions."""
+    """Where each term shows up in the transcripts (FTS): sessions, mentions, first/last seen, top sessions, and the
+    sessions that used each alias."""
     rows = conn.execute("SELECT id, term, norm, aliases_json FROM glossary" + (
         f" WHERE norm IN ({','.join('?' * len(keys))})" if keys else ""), keys or []).fetchall()
     for r in rows:
@@ -277,8 +333,10 @@ def refresh_stats(conn: sqlite3.Connection, keys: list[str] | None = None) -> No
                     "top": [h["session_id"] for h in hits[:5]],
                 }
         conn.execute(
-            "UPDATE glossary SET n_sessions = ?, n_mentions = ?, first_seen = ?, last_seen = ?, top_sessions_json = ? WHERE id = ?",
-            (stats["n_sessions"], stats["n_mentions"], stats["first_seen"], stats["last_seen"], dumps(stats["top"]), r["id"]))
+            "UPDATE glossary SET n_sessions = ?, n_mentions = ?, first_seen = ?, last_seen = ?, top_sessions_json = ?, "
+            "alias_seen_json = ? WHERE id = ?",
+            (stats["n_sessions"], stats["n_mentions"], stats["first_seen"], stats["last_seen"], dumps(stats["top"]),
+             dumps(alias_evidence(conn, loads(r["aliases_json"], []) or [])), r["id"]))
     conn.commit()
 
 
@@ -309,6 +367,7 @@ def glossary_entries(conn: sqlite3.Connection, *, query: str | None = None, proj
     titles = {r[0]: r[1] for r in conn.execute("SELECT id, title FROM sessions")}
     for r in rows:
         r["aliases"] = loads(r.pop("aliases_json", None), []) or []
+        r["alias_seen"] = loads(r.pop("alias_seen_json", None), {}) or {}
         r["related"] = loads(r.pop("related_json", None), []) or []
         r["usage"] = usage.get(r["id"], [])
         r["top_sessions"] = [{"id": s, "title": titles.get(s)} for s in loads(r.pop("top_sessions_json", None), []) or []]
@@ -501,7 +560,7 @@ def map_data(conn: sqlite3.Connection, paths: list[str] | None = None) -> dict:
                 for r in conn.execute("SELECT id, title, agent, started_at, project_path FROM sessions")}
     terms, wanted = [], set()
     for r in conn.execute("SELECT id, term, category, definition, aliases_json, related_json, n_sessions, n_mentions, "
-                          "first_seen, last_seen, theme, top_sessions_json FROM glossary"):
+                          "first_seen, last_seen, theme, top_sessions_json, alias_seen_json FROM glossary"):
         uses = usage.get(r["id"], [])
         if inside is not None and not uses:
             continue
@@ -509,6 +568,7 @@ def map_data(conn: sqlite3.Connection, paths: list[str] | None = None) -> dict:
         wanted.update(sources)
         terms.append({"id": r["id"], "term": r["term"], "category": r["category"] or "other",
                       "definition": r["definition"], "aliases": loads(r["aliases_json"], []) or [],
+                      "alias_seen": loads(r["alias_seen_json"], {}) or {},
                       "related": loads(r["related_json"], []) or [], "n_sessions": r["n_sessions"] or 0,
                       "n_mentions": r["n_mentions"] or 0, "first_seen": r["first_seen"], "last_seen": r["last_seen"],
                       "theme": r["theme"], "projects": [{"path": u["path"], "context": u["context"]} for u in uses],

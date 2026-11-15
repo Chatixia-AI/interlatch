@@ -120,7 +120,7 @@ def cmd_knowledge(args) -> int:
 
 def cmd_glossary(args) -> int:
     from ....core.util import local_str, setup_logging
-    from ....knowledge.glossary import build_glossaries, glossary_entries, lookup
+    from ....knowledge.glossary import also, build_glossaries, glossary_entries, lookup
     from ....knowledge.synthesize import GLOBAL
 
     cfg = load_cfg()
@@ -162,7 +162,7 @@ def cmd_glossary(args) -> int:
         if not e:
             print(f"{args.term!r} is not in the glossary")
             return 1
-        console.print(f"[bold]{e['term']}[/] [dim]{e['category']}" + (f" · also: {', '.join(e['aliases'])}" if e["aliases"] else "") + "[/]",
+        console.print(f"[bold]{e['term']}[/] [dim]{e['category']}" + (f" · {also(e)}" if e["aliases"] else "") + "[/]",
                       highlight=False)
         console.print(e["definition"] or "", highlight=False, markup=False)
         for u in e["usage"]:

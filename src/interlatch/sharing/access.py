@@ -85,7 +85,7 @@ def limit(conn: sqlite3.Connection, projects: list[str]) -> None:
 
 # glossary columns that hold what one project, or every project, said of a term rather than what it is
 _GLOSSARY_SPAN = {"aliases_json", "related_json", "n_sessions", "n_mentions", "first_seen", "last_seen",
-                  "top_sessions_json"}
+                  "top_sessions_json", "alias_seen_json"}
 
 
 def _glossary(conn: sqlite3.Connection, lit: str) -> None:

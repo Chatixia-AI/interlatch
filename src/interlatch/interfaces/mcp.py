@@ -311,13 +311,13 @@ class Tools:
         return "\n".join(lines)
 
     def glossary(self, term: str | None = None, project: str | None = None) -> str:
-        from ..knowledge.glossary import glossary_entries, lookup
+        from ..knowledge.glossary import also, glossary_entries, lookup
 
         if term:
             e = lookup(self.conn, term)
             if not e:
                 return f"{term!r} is not in the glossary."
-            lines = [f"**{e['term']}** ({e['category']})" + (f" — also: {', '.join(e['aliases'])}" if e["aliases"] else ""),
+            lines = [f"**{e['term']}** ({e['category']})" + (f" — {also(e)}" if e["aliases"] else ""),
                      "", e["definition"] or ""]
             for u in e["usage"]:
                 if u["context"]:
