@@ -145,7 +145,7 @@ def _export_knowledge(conn, root: Path, names: dict) -> int:
 
 
 def _export_glossary(conn, root: Path, labels: dict, names: dict) -> int:
-    from ...knowledge.glossary import glossary_entries
+    from ...knowledge.glossary import also, glossary_entries
 
     entries = glossary_entries(conn)
     if not entries:
@@ -159,8 +159,7 @@ def _export_glossary(conn, root: Path, labels: dict, names: dict) -> int:
             lines += [f"## {letter}", ""]
         lines.append(f"### {e['term']}")
         meta = [e["category"] or ""]
-        if e["aliases"]:
-            meta.append("also: " + ", ".join(e["aliases"]))
+        meta.append(also(e))
         if e["n_sessions"]:
             meta.append(f"in {e['n_sessions']} sessions, {local_str(e['first_seen'], '%Y-%m-%d')} → {local_str(e['last_seen'], '%Y-%m-%d')}")
         lines += [f"<sub>{' · '.join(m for m in meta if m)}</sub>", "", redact(e["definition"] or ""), ""]

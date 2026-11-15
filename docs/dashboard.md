@@ -341,6 +341,11 @@ project plus a cross-project pass, refreshed whenever a project's knowledge base
 a category, aliases (abbreviations, translations of Japanese business terms), a definition, a per-project usage
 note, related terms, and full-text statistics: how many sessions mention it, first and last seen, top sessions.
 
+Each alias is also looked up in your transcripts. One that no session used is shown last, dotted, with **Added by the
+model** on hover, and it is the first to go when a term has more than ten. Two terms are joined into one only on a
+shared alias your sessions used, so a name the model made up can't merge two different things. Translations often
+show as added by the model: you write the term one way, and the model adds the other language's name.
+
 ## Map
 
 ![The Map in dark mode: glossary categories opened to a term, with its definition, uses and sources](images/map.png)

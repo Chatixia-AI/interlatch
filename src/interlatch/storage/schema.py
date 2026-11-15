@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 22  # 22: sessions.link_*, the project a web chat most likely belongs to (chat_links.py)
+SCHEMA_VERSION = 23  # 23: glossary.alias_seen_json, the sessions that used each alias (glossary.alias_evidence)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -318,7 +318,8 @@ CREATE TABLE IF NOT EXISTS glossary (
     last_seen TEXT,
     top_sessions_json TEXT,
     updated_at TEXT,
-    theme TEXT                                     -- sub-group within the category (build_themes), NULL if none
+    theme TEXT,                                    -- sub-group within the category (build_themes), NULL if none
+    alias_seen_json TEXT                           -- {alias: sessions whose transcript holds it}; NULL: not measured yet
 );
 
 CREATE TABLE IF NOT EXISTS glossary_themes (
