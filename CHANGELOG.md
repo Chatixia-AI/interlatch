@@ -3,6 +3,13 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.12 (2026-11-15)
+
+- **The glossary tool no longer answers with the wrong term:** asked about a name no glossary term holds, the MCP
+  `glossary` tool used to answer with a term whose definition merely mentioned it, and from 0.29.11 listed that
+  term's lessons as "about it". It now says the name isn't a term, lists the lessons about the name itself, and names
+  the closest entry as one that only mentions it.
+
 ## 0.29.11 (2026-11-15)
 
 - **Glossary aliases checked against your sessions:** each alias a term gets is looked up in your transcripts. One no
