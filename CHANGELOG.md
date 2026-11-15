@@ -3,6 +3,32 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.11 (2026-11-15)
+
+- **Glossary aliases checked against your sessions:** each alias a term gets is looked up in your transcripts. One no
+  session used is marked "added by the model" on the Glossary, the Map, `interlatch glossary` and the MCP `glossary`
+  tool, and goes first when a term has more than ten. Two terms are merged only on an alias your sessions used, so
+  an invented name no longer fuses two different terms ([Dashboard](docs/dashboard.md)).
+- **Search finds a term by its other names:** in the MCP `search_knowledge` and `search_sessions` tools and
+  `interlatch search`, words that name a glossary term also find its other names that your sessions used, so
+  "single sign-on" finds lessons that say "SSO". The reply says what it added, and when nothing matches it says which
+  words the glossary knows and how much it searched ([MCP server](docs/mcp.md)).
+- **Themes keep their shape and cost less:** after a glossary rebuild, only the terms in no theme yet are sent to the
+  model and filed into the category's existing themes, instead of regrouping the whole category for every new term.
+  A category with no themes yet, or more than half new, is still grouped from scratch, and
+  `interlatch glossary --themes --force` regroups them all ([Themes](docs/dashboard.md#themes)).
+- **Glossary refreshes read only what is new:** after a knowledge base is re-synthesized, its glossary reads only the
+  knowledge items added since the last refresh, with the terms it already has, instead of all of the project's
+  knowledge again; nothing new costs no call. Terms whose only sources were dismissed drop out without a call.
+  `interlatch glossary --rebuild` and **Rebuild glossary** still read everything ([Dashboard](docs/dashboard.md#glossary)).
+- **Lessons know what they are about:** each lesson is linked, with no model call, to the glossary terms and Systems
+  map parts its text names (a deployed app, a database, a tool), as soon as it is written or changed.
+  `interlatch knowledge --relink` rebuilds every link in seconds ([What a lesson is about](docs/analysis.md#what-a-lesson-is-about)).
+- **Agents see what is known about a thing:** the MCP `glossary` tool lists the lessons about a term, or about a
+  deployed app, database or outside service the Systems map knows, with how many each project has; `search_knowledge`
+  puts lessons about a named thing first. Tested with Claude Code agents on a copy of an archive: they reached 68% of
+  the relevant lessons instead of 53%, in fewer calls ([MCP server](docs/mcp.md)).
+
 ## 0.29.10 (2026-11-12)
 
 - **A faster dashboard on macOS:** the dashboard's launchd agent ran it as a background process, which macOS keeps on
