@@ -211,3 +211,14 @@ def test_tables_agents_dont_need_read_as_empty(profiled, monkeypatch):
         if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (t,)).fetchone():
             assert tools.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
     assert conn.execute("SELECT COUNT(*) FROM reviews").fetchone()[0] == 1  # the archive itself is untouched
+
+
+def test_an_agent_sees_the_links_of_its_own_lessons_only(profiled, monkeypatch):
+    conn = profiled["conn"]
+    for word in ("ACME_CANARY", "PERSONAL_CANARY"):
+        kid = conn.execute("SELECT id FROM knowledge WHERE fingerprint = ?", (f"fp-{word}",)).fetchone()[0]
+        conn.execute("INSERT INTO knowledge_links(knowledge_id, norm, name, target, basis, place) VALUES (?, ?, ?, ?, "
+                     "'term', 'title')", (kid, word.lower(), word, word))
+    conn.commit()
+    tools = _tools(profiled["cfg"], monkeypatch, MINE)
+    assert [r[0] for r in tools.conn.execute("SELECT name FROM knowledge_links")] == ["PERSONAL_CANARY"]

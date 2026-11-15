@@ -10,7 +10,7 @@
 | `interlatch sessions [-p project] [--since 7d]` | セッションの一覧 |
 | `interlatch show <id-prefix> [--transcript\|--markdown\|--json]` | セッションの概要、または会話全体 |
 | `interlatch search <words>` | トランスクリプトとナレッジの全文検索（言語を問わず、3 文字以上）。用語集の用語にあたる語は、そのほかの名前でも検索 |
-| `interlatch knowledge [query] [-k gotcha] [-p project]` | 抽出されたナレッジの閲覧 |
+| `interlatch knowledge [query] [-k gotcha] [-p project]` | 抽出されたナレッジの閲覧。`--relink` で、すべての教訓を、その文中にある用語集の用語とシステムマップの部品に結び付け直します（モデルなし、数秒） |
 | `interlatch projects` / `interlatch stats [--since 30d]` | プロジェクト別と全体の統計 |
 | `interlatch analyze <id> \| --pending [--limit N] [--dry-run] [--backend codex]` | 今すぐ分析（`--dry-run` は要約のサイズを表示するだけで、トークンを使いません。`--backend` はこの実行だけで使うエージェントか[モデルプロバイダー](analysis.md#モデルプロバイダー)を選びます） |
 | `interlatch synthesize [--project P] [--global] [--all]` | ナレッジベースを再構築 |

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 23  # 23: glossary.alias_seen_json, the sessions that used each alias (glossary.alias_evidence)
+SCHEMA_VERSION = 24  # 24: knowledge_links and knowledge.links_hash, the known things each lesson names (knowledge/links.py)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -241,10 +241,22 @@ CREATE TABLE IF NOT EXISTS knowledge (
     superseded_reason TEXT,                        -- duplicate | outdated | contradicted
     superseded_at TEXT,
     case_json TEXT,                                -- lesson material (analysis.session.case_of): a fix, gotcha or decision's case file, and principle, checks, topics, diagram
-    sources_json TEXT                              -- the files it was learned from, each with a hash of what it held then (knowledge/freshness.py)
+    sources_json TEXT,                             -- the files it was learned from, each with a hash of what it held then (knowledge/freshness.py)
+    links_hash TEXT                                -- the text and rules its knowledge_links were found with (knowledge/links.py); NULL: not linked
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_session ON knowledge(session_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_path);
+
+CREATE TABLE IF NOT EXISTS knowledge_links (     -- derived, rebuilt by knowledge/links.py: a lesson and a thing it names
+    knowledge_id INTEGER NOT NULL,
+    norm TEXT NOT NULL,                            -- glossary.norm of the name, what reads match on
+    name TEXT NOT NULL,                            -- as the lesson's text has it
+    target TEXT,                                   -- the glossary term or Systems map part label it stood for
+    basis TEXT NOT NULL,                           -- term | part
+    place TEXT NOT NULL,                           -- title (the lesson is about it) | body (mentions it)
+    PRIMARY KEY (knowledge_id, norm)
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_links_norm ON knowledge_links(norm);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
     title, body, tags_json, content='knowledge', content_rowid='id', tokenize='trigram'
