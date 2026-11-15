@@ -79,3 +79,22 @@ def test_lessons_about_a_term_across_projects_say_where_and_narrow_by_project(sy
     one = tools.glossary(term="pytest", project=other)
     assert "Lessons about it (1):" in one and "pytest needs a conftest here" in one and "By project" not in one
     assert "pytest fixtures leak state" not in one
+
+
+def test_a_term_whose_definition_only_mentions_the_name_is_not_answered_as_it(synced, monkeypatch):
+    """Asked about a name no term holds, the glossary does not present the term whose definition mentions it (and that
+    term's lessons) as the answer: it lists the lessons about the name asked for, and names the closest entry as such."""
+    conn, cfg = _archive(synced, monkeypatch)
+    conn.execute("INSERT INTO glossary(term, norm, category, definition, aliases_json) VALUES ('app-demo', 'app demo', "
+                 "'platform', 'The App Service that hosts demo-app behind Easy Auth.', '[\"demo webapp\"]')")
+    conn.execute("INSERT INTO glossary_usage(term_id, project_path) SELECT id, ? FROM glossary WHERE norm = 'app demo'", (CWD,))
+    _lesson(conn, "app-demo restarts take 90 s", "Warm-up.")
+    _lesson(conn, "Easy Auth returns 401 before the app sees a request", "Check which layer answered.")
+    conn.commit()
+    link_lessons(conn, cfg, full=True)
+    reply = Tools(cfg).glossary(term="Easy Auth")
+    assert reply.startswith("'Easy Auth' is not in the glossary")
+    assert "app-demo restarts take 90 s" not in reply  # the other term's lessons are not "about it"
+    assert reply.endswith("The closest glossary entry only mentions it: **app-demo** (platform): "
+                          "The App Service that hosts demo-app behind Easy Auth.")
+    assert "**app-demo**" in Tools(cfg).glossary(term="demo webapp").splitlines()[0]  # by an alias: the term itself

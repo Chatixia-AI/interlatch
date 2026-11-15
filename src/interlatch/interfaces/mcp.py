@@ -358,16 +358,20 @@ class Tools:
         return "\n".join(lines)
 
     def glossary(self, term: str | None = None, project: str | None = None) -> str:
-        from ..knowledge.glossary import also, glossary_entries, lookup
+        from ..knowledge.glossary import also, glossary_entries, lookup, norm
 
         if term:
             e = lookup(self.conn, term)
             path = self._resolve_project(project) if project else None
-            if not e:
+            # lookup falls back to a term whose definition merely contains the words: that is not this term
+            named = e is not None and norm(term) in {e["norm"], *(norm(a) for a in e["aliases"])}
+            if not named:
                 about = self._lessons_about([term], path)
+                closest = (f"\n\nThe closest glossary entry only mentions it: **{e['term']}** ({e['category']}): "
+                           f"{one_line(e['definition'] or '', 200)}") if e else ""
                 if about:  # a Systems map part, or a name the glossary doesn't hold that lessons are linked to
-                    return f"{term!r} is not in the glossary, but lessons are about it.\n\n" + about
-                return f"{term!r} is not in the glossary."
+                    return f"{term!r} is not in the glossary, but lessons are about it.\n\n" + about + closest
+                return f"{term!r} is not in the glossary." + closest
             lines = [f"**{e['term']}** ({e['category']})" + (f" — {also(e)}" if e["aliases"] else ""),
                      "", e["definition"] or ""]
             for u in e["usage"]:
