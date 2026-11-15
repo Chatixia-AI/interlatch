@@ -69,8 +69,9 @@ TOOLS = [
         "description": "Search knowledge extracted from past coding-agent sessions (fixes, gotchas, decisions, "
                        "facts, commands, preferences), including teammates' lessons when this computer shares with "
                        "a team hub. Best first stop for 'have we solved this before?'. Words that name a glossary "
-                       "term also find its other names (abbreviations, translations), and the reply says which. "
-                       "When nothing matches, it says which words the glossary knows and how much was searched.",
+                       "term also find its other names (abbreviations, translations), and the reply says which; "
+                       "lessons about a named thing come before those that only mention it. When nothing matches, it "
+                       "says which words the glossary knows and how much was searched.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -142,8 +143,12 @@ TOOLS = [
         "annotations": {"title": "Glossary", "readOnlyHint": True, "destructiveHint": False,
                         "idempotentHint": True, "openWorldHint": False},
         "description": "The developer's own vocabulary: internal system and service names, acronyms, domain terms "
-                       "(incl. translations). With a term: its definition, aliases, how each project uses it and where "
-                       "it appears. Without: the glossary of a project (default: the current one).",
+                       "(incl. translations). With a term: its definition, aliases, how each project uses it, where "
+                       "it appears, and the lessons about it, most trusted first: the quickest way to learn what is "
+                       "known about a system, service, tool or deployment before working on it. Also takes the name "
+                       "of a deployed app, database or outside service the Systems map knows. With a term and a "
+                       "project: the lessons about it in that project. Without a term: the glossary of a project "
+                       "(default: the current one).",
         "inputSchema": {
             "type": "object",
             "properties": {"term": {"type": "string"}, "project": {"type": "string"}},
@@ -357,7 +362,11 @@ class Tools:
 
         if term:
             e = lookup(self.conn, term)
+            path = self._resolve_project(project) if project else None
             if not e:
+                about = self._lessons_about([term], path)
+                if about:  # a Systems map part, or a name the glossary doesn't hold that lessons are linked to
+                    return f"{term!r} is not in the glossary, but lessons are about it.\n\n" + about
                 return f"{term!r} is not in the glossary."
             lines = [f"**{e['term']}** ({e['category']})" + (f" — {also(e)}" if e["aliases"] else ""),
                      "", e["definition"] or ""]
@@ -370,12 +379,50 @@ class Tools:
                 lines.append(f"Mentioned in {e['n_sessions']} sessions ({local_str(e['first_seen'], '%Y-%m-%d')} → "
                              f"{local_str(e['last_seen'], '%Y-%m-%d')}): " + ", ".join(
                                  f"{s['title']} `{s['id'][:8]}`" for s in e["top_sessions"][:3]))
+            about = self._lessons_about([e["term"], *e["aliases"]], path)
+            if about:
+                lines += ["", about]
             return "\n".join(lines)
         path = self._resolve_project(project) if project else (kb_for_path(self.conn, self.cwd) or {}).get("project_path")
         entries = glossary_entries(self.conn, project=path) if path else glossary_entries(self.conn)
         if not entries:
             return "No glossary yet."
         return "\n".join(f"- **{e['term']}** ({e['category']}): {one_line(e['definition'] or '', 200)}" for e in entries[:120])
+
+    def _lessons_about(self, names: list[str], project: str | None = None, limit: int = 10) -> str:
+        """The lessons whose title names any of `names` (knowledge/links.py), in `project` or everywhere, most trusted
+        first; across several projects, how many each has; and how many more mention it. "" when none is about it."""
+        from collections import Counter
+
+        from ..knowledge.ladder import STAGE_ORDER_SQL
+        from ..knowledge.links import lessons_about
+
+        about = lessons_about(self.conn, names)
+        if not about:
+            return ""
+        rows = [dict(r) for r in self.conn.execute(
+            f"SELECT k.*, s.started_at AS session_started FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id "
+            f"WHERE k.id IN ({','.join('?' * len(about))}) ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, "
+            f"COALESCE(s.started_at, k.created_at) DESC", about)]
+        if project:
+            rows = [k for k in rows if k["project_path"] == project]
+            if not rows:
+                return f"No lessons about it in {project_labels(self.conn).get(project) or project}."
+        lines = [f"Lessons about it ({len(rows)}):"]
+        per = Counter(k.get("project_name") or "-" for k in rows)
+        if len(per) > 1:  # an agent working in one of them narrows with project=
+            lines.append("By project: " + ", ".join(f"{name} {n}" for name, n in per.most_common(8))
+                         + ". Pass project= (with this term, or to search_knowledge) for one project's.")
+        for k in rows[:limit]:
+            lines.append(f"- [{k['kind']} · {stage_label(k)}] {k['title']} — {k.get('project_name') or '-'}: "
+                         f"{one_line(k.get('body') or '', 220)}")
+        more = len(set(lessons_about(self.conn, names, place=None)) - set(about))
+        rest = len(rows) - limit
+        if rest > 0 or more:
+            lines.append(" ".join(x for x in (f"{rest} more about it." if rest > 0 else "",
+                                              f"{more} more mention it." if more else "") if x)
+                         + " search_knowledge finds them.")
+        return "\n".join(lines)
 
     def find_artifacts(self, query: str | None = None, kind: str | None = None, project: str | None = None, limit: int = 20) -> str:
         from ..artifacts.queries import query as find

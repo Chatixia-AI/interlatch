@@ -177,10 +177,18 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
     """`sessions`: (SQL on the sessions table, its params) to keep the lessons of those sessions only. `source`: only
     items from there ('analysis', 'memory', 'team'), filtered before the limit. `cases`: only the ones with a case
     file (analysis.session.case_of). `lessons`: only the kinds a lesson is made of (learning.PRACTICE_SQL).
-    `glossary`: see query_groups."""
-    where, params = [], []
+    `glossary`: see query_groups; lessons about a name the query holds come first (knowledge/links.py)."""
+    where, params, first, first_params = [], [], "", []
     if query and query.strip():
         groups = query_groups(conn, query, glossary=glossary)
+        if glossary:
+            from ..knowledge.glossary import norm
+
+            names = sorted({n for g in groups for n in g["names"]} | {g["term"]["term"] for g in groups if g["term"]})
+            keys = sorted({norm(n) for n in names if norm(n)})
+            first = (f"(k.id IN (SELECT knowledge_id FROM knowledge_links WHERE place = 'title' AND (norm IN "
+                     f"({','.join('?' * len(keys))}) OR target IN ({','.join('?' * len(names))})))) DESC, ")
+            first_params = [*keys, *names]
         fts = fts_query(groups)
         short = short_terms(groups)
         if fts:
@@ -217,8 +225,8 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
     sql = "SELECT k.*, s.title AS session_title, s.started_at AS session_started FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, COALESCE(s.started_at, k.created_at) DESC, k.id DESC LIMIT ? OFFSET ?"
-    params.extend([limit, max(0, offset)])
+    sql += f" ORDER BY {first}k.pinned DESC, {STAGE_ORDER_SQL}, COALESCE(s.started_at, k.created_at) DESC, k.id DESC LIMIT ? OFFSET ?"
+    params.extend([*first_params, limit, max(0, offset)])
     try:
         rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
     except sqlite3.OperationalError:
