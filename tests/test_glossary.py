@@ -228,3 +228,57 @@ def test_alias_evidence_reaches_the_map_the_mcp_reply_and_the_export(synced):
     assert reply.splitlines()[0] == "**pytest** (tool) — also: py.test; added by the model, not seen in sessions: pytest runner"
     export_markdown(conn, cfg)
     assert "also: py.test; added by the model, not seen in sessions: pytest runner" in (cfg.notes_dir / "Glossary.md").read_text()
+
+
+def _tools(conn, *names):
+    for name in names:
+        conn.execute("INSERT INTO glossary(term, norm, category, definition) VALUES (?, ?, 'tool', 'a tool')", (name, name))
+    conn.commit()
+
+
+def _themed(conn):
+    return {r["name"]: (r["description"], r["n_terms"]) for r in conn.execute("SELECT * FROM glossary_themes WHERE category = 'tool'")}
+
+
+def test_new_terms_are_filed_into_the_existing_themes(synced):
+    from conftest import fake_log
+    from interlatch.knowledge.glossary import build_themes, themes_due
+
+    conn, cfg, _ = _build(synced)
+    _tools(conn, "ruff", "mypy", "pylint", "flake8", "bandit")
+    assert build_themes(cfg, ["tool"]) == {"tool": 2}  # first time: the whole category, Testing and Other
+    before = dict(conn.execute("SELECT term, theme FROM glossary WHERE category = 'tool'").fetchall())
+    _tools(conn, "black", "isort", "tox", "nox")  # 4 new of 10: filed, not regrouped
+    assert themes_due(conn, min_terms=3) == ["tool"]
+    assert build_themes(cfg) == {} and build_themes(cfg, ["tool"]) == {"tool": 3}  # the default needs 25 terms
+    prompt = fake_log(synced)[-1]["prompt_head"]
+    assert "File the new terms" in prompt and '"name": "Testing"' in prompt and '"examples": ["pytest"]' in prompt
+    new_terms = prompt.split("<new_terms>")[1]
+    assert all(f'"term": "{n}"' in new_terms for n in ("black", "isort", "tox", "nox")) and "ruff" not in new_terms
+    after = dict(conn.execute("SELECT term, theme FROM glossary WHERE category = 'tool'").fetchall())
+    assert {t: after[t] for t in before} == before  # placed terms stay put
+    assert {t: after[t] for t in ("black", "isort", "tox", "nox")} == \
+        {"black": "Other", "isort": "Formatting", "tox": "Formatting", "nox": "Other"}  # "OTHER", the biggest, is Other
+    assert _themed(conn) == {"Testing": ("How tests run", 1), "Other": ("Terms that fit none of the other themes.", 7),
+                             "Formatting": ("Code style tools", 2)}
+    assert themes_due(conn, min_terms=3) == []
+    assert conn.execute("SELECT COUNT(*) FROM analyses WHERE kind = 'themes'").fetchone()[0] == 2
+
+
+def test_a_mostly_new_category_or_force_regroups_and_dropped_terms_need_no_call(synced):
+    from conftest import fake_log
+    from interlatch.knowledge.glossary import build_themes, themes_due
+
+    conn, cfg, _ = _build(synced)
+    _tools(conn, "ruff", "mypy")
+    build_themes(cfg, ["tool"])
+    _tools(conn, "black", "isort", "tox", "nox")  # 4 new of 7: more than half, grouped afresh
+    build_themes(cfg, ["tool"])
+    assert "Group the terms into themes" in fake_log(synced)[-1]["prompt_head"]
+    assert _themed(conn) == {"Testing": ("How tests run", 1), "Other": ("Terms that fit none of the other themes.", 6)}
+    build_themes(cfg, ["tool"], force=True)  # nothing new, but forced: from scratch
+    assert "Group the terms into themes" in fake_log(synced)[-1]["prompt_head"]
+    calls = len(fake_log(synced))
+    build_glossary(conn, cfg, CWD)  # drops the tools no project uses: their themes are recounted, no themes call
+    assert [c for c in fake_log(synced)[calls:] if "themes" in c["prompt_head"]] == []
+    assert _themed(conn) == {"Testing": ("How tests run", 1)} and "tool" not in themes_due(conn, min_terms=1)

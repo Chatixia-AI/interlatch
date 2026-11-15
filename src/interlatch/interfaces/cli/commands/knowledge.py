@@ -564,7 +564,7 @@ def add_glossary(sub) -> None:
     s.add_argument("--rebuild", action="store_true", help="rebuild with the analysis model (-p PROJECT or --all)")
     s.add_argument("--all", action="store_true")
     s.add_argument("--themes", action="store_true", help="group big categories into themes with the analysis model (the Map's Theme level)")
-    s.add_argument("--force", action="store_true", help="with --themes: regroup categories that have not changed")
+    s.add_argument("--force", action="store_true", help="with --themes: regroup every big category from scratch, not just file its new terms")
     s.set_defaults(fn=cmd_glossary)
 
 

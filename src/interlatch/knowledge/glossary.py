@@ -215,6 +215,7 @@ def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: 
                 (term_id, project_path, t["context"], dumps([i for i in t["sources"] if i in valid]), utcnow_iso()),
             )
         conn.execute("DELETE FROM glossary WHERE id NOT IN (SELECT term_id FROM glossary_usage)")
+        _recount_themes(conn)
         conn.execute(
             "INSERT INTO analyses(kind, target, started_at, finished_at, model, status, input_chars, chunks, cost_usd, duration_ms) "
             "VALUES ('glossary', ?, ?, ?, ?, 'done', ?, 1, ?, ?)",
@@ -436,86 +437,139 @@ THEMES_SCHEMA = {
 }
 
 
+REGROUP_SHARE = 0.5  # a category more than this new since it was grouped is regrouped from scratch
+THEMES_PLACE_SYSTEM = """\
+You file the new terms of one category of a developer's vocabulary (terms from their coding-agent sessions, each \
+with a short definition) into the themes the category is already organized in, so its mindmap stays as it is.
+Put each new term id into the existing theme that fits it best, under that theme's exact name. Make a new theme (1 \
+to 4 words a developer recognizes at a glance, and one short sentence) only for a subject none of the existing \
+themes covers that at least two new terms share. Leave out terms that fit nowhere."""
+
+
 def _category_terms(conn: sqlite3.Connection, category: str) -> list[sqlite3.Row]:
-    return conn.execute("SELECT id, term, aliases_json, definition FROM glossary WHERE category = ? ORDER BY id",
+    return conn.execute("SELECT id, term, aliases_json, definition, theme FROM glossary WHERE category = ? ORDER BY id",
                         (category,)).fetchall()
 
 
-def _fingerprint(rows) -> str:
-    import hashlib
+def _themes_of(conn: sqlite3.Connection, category: str) -> dict[str, str]:
+    """A category's themes, biggest first: name -> description."""
+    return {r["name"]: r["description"] for r in conn.execute(
+        "SELECT name, description FROM glossary_themes WHERE category = ? ORDER BY n_terms DESC, name", (category,))}
 
-    return hashlib.sha1(",".join(str(r["id"]) for r in rows).encode()).hexdigest()[:16]
+
+def _unplaced(rows, themes: dict[str, str]) -> list:
+    """The terms in none of `themes`: new since the category was grouped, or moved in from another category."""
+    return [r for r in rows if r["theme"] not in themes]
+
+
+def _recount_themes(conn: sqlite3.Connection) -> None:
+    """Theme sizes from the terms in them, and no theme left empty (its terms were dropped or moved). No commit."""
+    conn.execute("UPDATE glossary_themes SET n_terms = (SELECT COUNT(*) FROM glossary g WHERE "
+                 "g.category = glossary_themes.category AND g.theme = glossary_themes.name)")
+    conn.execute("DELETE FROM glossary_themes WHERE n_terms = 0")
 
 
 def themes_due(conn: sqlite3.Connection, *, force: bool = False, min_terms: int = THEME_MIN_TERMS) -> list[str]:
-    """Categories big enough for themes whose term set changed since they were last grouped."""
-    from ..storage.kv import kv_get
-
+    """Categories big enough for themes that have terms in no theme yet (all of them with `force`). A term dropped
+    from a category needs no model: the glossary build recounts its theme."""
     due = []
     for (cat,) in conn.execute("SELECT category FROM glossary WHERE category IS NOT NULL GROUP BY category "
                                "HAVING COUNT(*) >= ? ORDER BY COUNT(*) DESC", (min_terms,)):
-        if force or kv_get(conn, f"themes:{cat}") != _fingerprint(_category_terms(conn, cat)):
+        if force or _unplaced(_category_terms(conn, cat), _themes_of(conn, cat)):
             due.append(cat)
     return due
 
 
-def _theme_material(rows) -> str:
-    return "<terms>\n" + "\n".join(json.dumps({
+def _theme_material(rows, tag: str = "terms") -> str:
+    return f"<{tag}>\n" + "\n".join(json.dumps({
         "id": r["id"], "term": r["term"], "aliases": (loads(r["aliases_json"], []) or [])[:3],
-        "definition": truncate(r["definition"] or "", 200)}, ensure_ascii=False) for r in rows) + "\n</terms>"
+        "definition": truncate(r["definition"] or "", 200)}, ensure_ascii=False) for r in rows) + f"\n</{tag}>"
 
 
-def _generate_themes(cfg: Config, category: str, rows, runner: Runner):
-    prompt = f"<category>{category}</category>\n\n{_theme_material(rows)}\n\nGroup the terms into themes."
-    return runner.run(prompt, THEMES_SCHEMA, system=written_in(cfg, THEMES_SYSTEM, note=THEMES_JA), model=cfg.synthesis.model)
+def _place_material(rows, themes: dict[str, str]) -> str:
+    """The category's themes, each with a few of its terms, and the terms in none of them."""
+    examples: dict[str, list[str]] = {}
+    for r in rows:
+        if r["theme"] in themes:
+            examples.setdefault(r["theme"], []).append(r["term"])
+    return ("<themes>\n" + "\n".join(json.dumps({"name": n, "description": d, "examples": examples.get(n, [])[:6]},
+                                                 ensure_ascii=False) for n, d in themes.items())
+            + "\n</themes>\n\n" + _theme_material(_unplaced(rows, themes), "new_terms"))
 
 
-def _store_themes(conn: sqlite3.Connection, category: str, rows, res, other: tuple[str, str] = OTHER_THEME["en"]) -> int:
-    """Validate Claude's grouping (unknown ids dropped, every term placed once, leftovers in `other`) and store it."""
-    from ..storage.kv import kv_set
+def _generate_themes(cfg: Config, category: str, rows, runner: Runner, themes: dict[str, str] | None = None):
+    """One call: group the category's terms into themes, or with `themes` (its current ones) file the terms in none
+    of them into those."""
+    if themes:
+        prompt = f"<category>{category}</category>\n\n{_place_material(rows, themes)}\n\nFile the new terms into the themes."
+        system = THEMES_PLACE_SYSTEM
+    else:
+        prompt = f"<category>{category}</category>\n\n{_theme_material(rows)}\n\nGroup the terms into themes."
+        system = THEMES_SYSTEM
+    return runner.run(prompt, THEMES_SCHEMA, system=written_in(cfg, system, note=THEMES_JA), model=cfg.synthesis.model)
 
-    valid = {r["id"] for r in rows}
+
+def _placements(res, valid: set[int], known: dict[str, str]) -> tuple[dict[int, str], dict[str, str]]:
+    """The model's grouping of the `valid` term ids, checked: unknown ids and nameless themes dropped, each term in one
+    theme, and a name that is a `known` theme's in any case is that theme. Returns term id -> theme name, and the new
+    themes -> description."""
+    names = {n.casefold(): n for n in known}
     placed: dict[int, str] = {}
-    themes: dict[str, str] = {}
+    new: dict[str, str] = {}
     for t in res.data.get("themes") or []:
         if not isinstance(t, dict):
             continue
         name = one_line(str(t.get("name") or ""), 60).strip()
-        if not name:
-            continue
         ids = [i for i in (t.get("term_ids") or []) if isinstance(i, int) and i in valid and i not in placed]
-        if not ids:
+        if not name or not ids:
             continue
-        themes.setdefault(name, one_line(str(t.get("description") or ""), 240))
+        name = names.setdefault(name.casefold(), name)
+        if name not in known:
+            new.setdefault(name, one_line(str(t.get("description") or ""), 240))
         for i in ids:
             placed[i] = name
-    for i in valid - placed.keys():
-        placed[i] = other[0]
-        themes.setdefault(other[0], other[1])
+    return placed, new
+
+
+def _store_themes(conn: sqlite3.Connection, category: str, rows, res, other: tuple[str, str] = OTHER_THEME["en"],
+                  themes: dict[str, str] | None = None) -> int:
+    """Store the model's grouping of a category, leftovers in `other`. With `themes` (the category's, as the model was
+    shown them): only the terms in none of them move, into those or the new ones it made. Returns #themes."""
+    themes = themes or {}
+    todo = _unplaced(rows, themes)
+    placed, new = _placements(res, {r["id"] for r in todo}, themes)
+    for r in todo:
+        if r["id"] not in placed:
+            placed[r["id"]] = other[0]
+            if other[0] not in themes:
+                new.setdefault(other[0], other[1])
+    material = _place_material(rows, themes) if themes else _theme_material(rows)
     try:
-        conn.execute("DELETE FROM glossary_themes WHERE category = ?", (category,))
         now = utcnow_iso()
-        for name, desc in themes.items():
-            n = sum(1 for v in placed.values() if v == name)
-            conn.execute("INSERT INTO glossary_themes(category, name, description, n_terms, updated_at) VALUES (?,?,?,?,?)",
-                         (category, name, desc, n, now))
+        if not themes:
+            conn.execute("DELETE FROM glossary_themes WHERE category = ?", (category,))
+        conn.executemany("INSERT OR IGNORE INTO glossary_themes(category, name, description, n_terms, updated_at) "
+                         "VALUES (?,?,?,0,?)", [(category, n, d, now) for n, d in new.items()])
         conn.executemany("UPDATE glossary SET theme = ? WHERE id = ?", [(v, k) for k, v in placed.items()])
-        kv_set(conn, f"themes:{category}", _fingerprint(rows))
+        _recount_themes(conn)
         conn.execute(
             "INSERT INTO analyses(kind, target, started_at, finished_at, model, status, input_chars, chunks, cost_usd, duration_ms) "
             "VALUES ('themes', ?, ?, ?, ?, 'done', ?, 1, ?, ?)",
-            (category, now, now, res.model, len(_theme_material(rows)), res.cost_usd, res.duration_ms))
+            (category, now, now, res.model, len(material), res.cost_usd, res.duration_ms))
         conn.commit()
     except BaseException:
         conn.rollback()
         raise
-    log.info("themes for %s: %d themes over %d terms ($%.3f)", category, len(themes), len(valid), res.cost_usd)
-    return len(themes)
+    n = conn.execute("SELECT COUNT(*) FROM glossary_themes WHERE category = ?", (category,)).fetchone()[0]
+    log.info("themes for %s: %d themes, %d of %d terms placed ($%.3f)", category, n, len(todo), len(rows), res.cost_usd)
+    return n
 
 
 def build_themes(cfg: Config, categories: list[str] | None = None, *, force: bool = False, concurrency: int = 3,
                  progress=None) -> dict[str, int | str]:
-    """Group big glossary categories into themes, one Claude call per category (only those that changed)."""
+    """Theme the big glossary categories, one model call per category that has terms in no theme: those terms are
+    filed into its themes, or the whole category is grouped afresh when it has none yet, more than REGROUP_SHARE of it
+    is new, or with `force`."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from ..storage.sqlite import connect
@@ -525,15 +579,24 @@ def build_themes(cfg: Config, categories: list[str] | None = None, *, force: boo
     results: dict[str, int | str] = {}
     try:
         due = categories if categories is not None else themes_due(conn, force=force)
-        inputs = {c: _category_terms(conn, c) for c in due}
-        inputs = {c: rows for c, rows in inputs.items() if rows}
+        inputs = {}
+        for c in due:
+            rows = _category_terms(conn, c)
+            themes = {} if force else _themes_of(conn, c)
+            todo = _unplaced(rows, themes)
+            if not todo:
+                continue
+            if len(todo) > REGROUP_SHARE * len(rows):
+                themes = {}
+            inputs[c] = (rows, themes)
         with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-            futures = {pool.submit(_generate_themes, cfg, c, rows, runner): c for c, rows in inputs.items()}
+            futures = {pool.submit(_generate_themes, cfg, c, rows, runner, themes): c for c, (rows, themes) in inputs.items()}
             for fut in as_completed(futures):
                 cat = futures[fut]
+                rows, themes = inputs[cat]
                 try:
-                    results[cat] = _store_themes(conn, cat, inputs[cat], fut.result(),
-                                                 OTHER_THEME.get(cfg.analysis.language, OTHER_THEME["en"]))
+                    results[cat] = _store_themes(conn, cat, rows, fut.result(),
+                                                 OTHER_THEME.get(cfg.analysis.language, OTHER_THEME["en"]), themes)
                 except Exception as exc:
                     conn.rollback()
                     results[cat] = f"failed: {exc}"
