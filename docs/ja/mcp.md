@@ -24,6 +24,12 @@ Interlatch には [Model Context Protocol](https://modelcontextprotocol.io) の�
 | `find_artifacts` | セッションが作ったもの：ドキュメント、ページ、図、スライド、公開したリンク、プルリクエスト、コミット。それぞれの場所、ファイルが書いたときのままディスクにあるか、作ったセッション | `query`, `kind`, `project`, `limit` |
 | `recent_sessions` | 最近のセッション（新しい順） | `project`, `days`, `limit` |
 
+`search_knowledge` と `search_sessions` は[用語集](dashboard.md#用語集)を通して検索します。用語の名前か別名にあたる語は、その用語の
+ほかの名前でも検索するので、「single sign-on」で「SSO」と書かれた教訓が見つかり、日本語の用語で英語の名前も見つかります。加えるのは
+セッションで使われた別名だけで、何を加えたかを返答に示します（「also searched: SSO」）。何も見つからないときは、どの語が用語集の
+用語か（その意味も）、どの語がそうでないか、何件の教訓とセッションを検索したかを示すので、エージェントは語の誤りとアーカイブに
+ないことを見分けられます。
+
 `project` にはパスか名前（`billing-api`）を渡します。省略すると、`resume`、`project_knowledge` と `glossary` はクライアントがサーバーを
 起動したディレクトリのプロジェクトを使います。コーディングエージェントはプロジェクトの中で起動しますが、Claude Desktop のような
 チャットアプリはそうではないので、質問の中でプロジェクト名を挙げてください。`resume` は、接続時にクライアントが名乗る名前から

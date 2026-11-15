@@ -18,7 +18,7 @@ from ..sharing.pull import team_from
 from ..knowledge.freshness import stale_note
 from ..knowledge.ladder import stage_label
 from ..core.redact import redact
-from ..application.search import search_knowledge, search_sessions
+from ..application.search import added_names, query_groups, search_knowledge, search_sessions
 from ..knowledge.synthesize import GLOBAL, kb_for_path
 from ..core.util import human_duration, local_str, one_line, to_iso, truncate, utcnow
 from ..application.records import resolve_session_id, session_record
@@ -68,7 +68,9 @@ TOOLS = [
                         "idempotentHint": True, "openWorldHint": False},
         "description": "Search knowledge extracted from past coding-agent sessions (fixes, gotchas, decisions, "
                        "facts, commands, preferences), including teammates' lessons when this computer shares with "
-                       "a team hub. Best first stop for 'have we solved this before?'.",
+                       "a team hub. Best first stop for 'have we solved this before?'. Words that name a glossary "
+                       "term also find its other names (abbreviations, translations), and the reply says which. "
+                       "When nothing matches, it says which words the glossary knows and how much was searched.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -87,7 +89,7 @@ TOOLS = [
                         "idempotentHint": True, "openWorldHint": False},
         "description": "Full-text search across past session transcripts (prompts, the agent's replies, tool calls) "
                        "and session summaries, imported claude.ai and ChatGPT chats included. Returns matching "
-                       "sessions with snippets.",
+                       "sessions with snippets. Words that name a glossary term also find its other names.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -221,11 +223,48 @@ class Tools:
         agent = agent if agent in AGENTS else agent_of_client(self.client)
         return resume_text(self.conn, path, name, agent=agent, limit=max_chars)
 
+    def _also(self, groups: list[dict]) -> str:
+        added = added_names(groups)
+        return f" (also searched: {', '.join(added)}, from the glossary)" if added else ""
+
+    def _not_found(self, headline: str, groups: list[dict], path: str | None, *, lessons: bool,
+                   agent: str | None = None) -> str:
+        """An empty result that helps tell a wrong word from a gap in the archive: which words the glossary knows (and
+        what they mean), which it doesn't, and how much was searched (`lessons`: knowledge, else transcripts; `agent`:
+        that agent's sessions only)."""
+        lines = [headline]
+        for g in groups:
+            if g["term"]:
+                lines.append(f"- {g['text']!r} is the glossary term **{g['term']['term']}**: "
+                             f"{one_line(g['term']['definition'] or '', 200)}")
+        unknown = [repr(g["text"]) for g in groups if not g["term"]]
+        if unknown:
+            lines.append(f"- Not in the glossary: {', '.join(unknown)}. The archive may use another name for "
+                         f"{'it' if len(unknown) == 1 else 'them'}; the glossary tool lists a project's terms.")
+        n, done = self.conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(analysis_status = 'done'), 0) FROM sessions WHERE (? IS NULL OR project_path = ?) "
+            "AND (? IS NULL OR COALESCE(agent, 'claude') = ?)", (path, path, agent, agent)).fetchone()
+        scope = f"in {project_labels(self.conn).get(path) or path}" if path else "across all projects"
+        whose = f"{short_name(agent)} " if agent else ""
+        if path and not n:
+            lines.append(f"Interlatch has no {whose}sessions recorded {scope}.")
+        elif lessons:
+            k = self.conn.execute("SELECT COUNT(*) FROM knowledge WHERE status = 'active' AND (? IS NULL OR project_path = ?)",
+                                  (path, path)).fetchone()[0]
+            lines.append(f"Searched {k} lessons {scope}, from {done} of {n} sessions analyzed. "
+                         "search_sessions searches the transcripts themselves.")
+        else:
+            lines.append(f"Searched the transcripts of {n} {whose}sessions {scope}.")
+        return "\n".join(lines)
+
     def search_knowledge(self, query: str, project: str | None = None, kind: str | None = None, limit: int = 15) -> str:
-        rows = search_knowledge(self.conn, query, project=self._resolve_project(project), kind=kind, limit=limit)
+        path = self._resolve_project(project)
+        groups = query_groups(self.conn, query, glossary=True)
+        rows = search_knowledge(self.conn, query, project=path, kind=kind, limit=limit, glossary=True)
         if not rows:
-            return f"No knowledge found for {query!r}."
-        out = [f"{len(rows)} knowledge item(s) for {query!r}:\n"]
+            return self._not_found(f"No {kind + ' ' if kind else ''}knowledge found for {query!r}{self._also(groups)}.",
+                                   groups, path, lessons=True)
+        out = [f"{len(rows)} knowledge item(s) for {query!r}{self._also(groups)}:\n"]
         for k in rows:
             src = f"session {k['session_id'][:8]} ({local_str(k.get('session_started'), '%Y-%m-%d')})" if k["session_id"] else k["source"]
             if k["source"] == "team":  # a teammate's lesson the team hub sent: whose sessions stated it
@@ -238,14 +277,17 @@ class Tools:
         return "\n".join(out)
 
     def search_sessions(self, query: str, project: str | None = None, agent: str | None = None, limit: int = 10) -> str:
-        rows = search_sessions(self.conn, query, project=self._resolve_project(project), limit=limit * 5 if agent else limit)
+        path = self._resolve_project(project)
+        groups = query_groups(self.conn, query, glossary=True)
+        rows = search_sessions(self.conn, query, project=path, limit=limit * 5 if agent else limit, glossary=True)
         ids = [s["session_id"] for s in rows]
         agents = dict(self.conn.execute(f"SELECT id, agent FROM sessions WHERE id IN ({','.join('?' * len(ids))})", ids)) if ids else {}
         if agent:
             rows = [s for s in rows if (agents.get(s["session_id"]) or "claude") == agent][:limit]
         if not rows:
-            return f"No {short_name(agent) + ' ' if agent else ''}sessions matched {query!r}."
-        out = [f"{len(rows)} session(s) matching {query!r}:\n"]
+            return self._not_found(f"No {short_name(agent) + ' ' if agent else ''}sessions matched {query!r}{self._also(groups)}.",
+                                   groups, path, lessons=False, agent=agent)
+        out = [f"{len(rows)} session(s) matching {query!r}{self._also(groups)}:\n"]
         for s in rows:
             out.append(f"- **{s['title']}** — `{s['session_id'][:8]}` · {short_name(agents.get(s['session_id']))} · {s.get('project_name')} · "
                        f"{local_str(s.get('started_at'), '%Y-%m-%d')} · {s.get('outcome') or 'not analyzed'} · {s['hits']} hit(s)")

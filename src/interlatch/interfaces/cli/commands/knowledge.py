@@ -104,7 +104,7 @@ def cmd_knowledge(args) -> int:
     cfg = load_cfg()
     conn = open_archive(cfg)
     console = new_console()
-    rows = search_knowledge(conn, args.query, project=args.project, kind=args.kind, limit=args.limit)
+    rows = search_knowledge(conn, args.query, project=args.project, kind=args.kind, limit=args.limit, glossary=True)
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
         return 0
