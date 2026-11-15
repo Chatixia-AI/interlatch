@@ -130,6 +130,16 @@ uses whose lessons were dismissed, the suggestions queue, which project a web ch
 every count and chart. The glossary and theme costs above are for a pass over a whole project or category; most
 passes now read only what is new, so they cost less.
 
+### What a lesson is about
+
+After each run, every new or changed lesson is linked to the things it names that Interlatch already knows: glossary
+terms (by name, or an alias your sessions used) and Systems map parts (a deployed app, a database, an outside
+service). A name in the title means the lesson is *about* it; one only in the body, that it *mentions* it. Names are
+matched on word boundaries, only for terms its project uses, and a name with punctuation only as written (`/status`
+is not the word "status"). No model is involved: relinking every lesson takes seconds (`interlatch knowledge
+--relink`). Checked by hand on 30 lessons the rules were not tuned on, 89% of title links named what the lesson is
+about.
+
 ## Language
 
 Interlatch writes in English unless `[analysis] language` is `ja` ([Configuration](configuration.md#analysis), or

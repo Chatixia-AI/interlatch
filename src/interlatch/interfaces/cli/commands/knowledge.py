@@ -104,6 +104,13 @@ def cmd_knowledge(args) -> int:
     cfg = load_cfg()
     conn = open_archive(cfg)
     console = new_console()
+    if args.relink:
+        from ....knowledge.links import link_lessons
+
+        n = link_lessons(conn, cfg, full=True)
+        total = conn.execute("SELECT COUNT(DISTINCT knowledge_id) FROM knowledge_links WHERE place = 'title'").fetchone()[0]
+        print(f"linked {n} lessons; {total} are about something the glossary or the Systems map knows")
+        return 0
     rows = search_knowledge(conn, args.query, project=args.project, kind=args.kind, limit=args.limit, glossary=True)
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
@@ -554,6 +561,8 @@ def add_knowledge(sub) -> None:
     s.add_argument("-n", "--limit", type=int, default=30)
     s.add_argument("--brief", action="store_true")
     s.add_argument("--json", action="store_true")
+    s.add_argument("--relink", action="store_true",
+                   help="link every lesson again to the glossary terms and Systems map parts it names (no model)")
     s.set_defaults(fn=cmd_knowledge)
 
 

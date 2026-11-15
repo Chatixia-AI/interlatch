@@ -7,7 +7,8 @@ Two layers, so one forgotten filter can't show another project:
    temp schema first), so every query an allowed endpoint makes sees only the person's projects (limit()):
    - sessions: theirs, analyzed, with only the columns a member's computer shares as knowledge (protocol.SHARED_COLS,
      SHARED_ANALYSIS_COLS); prompts, paths, commands, prompt-made titles, mood and friction notes read as NULL
-   - knowledge: project lessons from those sessions' analysis (never lessons about a person, never global ones)
+   - knowledge: project lessons from those sessions' analysis (never lessons about a person, never global ones), and
+     knowledge_links: the links of those lessons only
    - project_kb: their projects' knowledge bases; api_calls: their sessions' token counts
    - hub_news: what computers sent to their projects (news.py), no computer joining
    - glossary: the terms their projects use, with what their projects say of them only. A term is one row however
@@ -66,13 +67,15 @@ def limit(conn: sqlite3.Connection, projects: list[str]) -> None:
             cols.append(c)
         else:
             cols.append(f"NULL AS {c}")
-    for t in ("sessions", "knowledge", "project_kb", "api_calls", "hub_news", *GLOSSARY, *EMPTY):  # never a view left from before
+    for t in ("sessions", "knowledge", "knowledge_links", "project_kb", "api_calls", "hub_news", *GLOSSARY, *EMPTY):  # never a view left from before
         conn.execute(f"DROP VIEW IF EXISTS temp.{t}")
     mine = f"project_path IN ({lit}) AND analysis_status = 'done' AND source NOT IN ('history')"
     conn.execute(f"CREATE TEMP VIEW sessions AS SELECT {', '.join(cols)} FROM main.sessions WHERE {mine}")
     conn.execute("CREATE TEMP VIEW knowledge AS SELECT * FROM main.knowledge WHERE "
                  f"project_path IN ({lit}) AND source = 'analysis' AND scope = 'project' AND kind != 'preference' "
                  f"AND session_id IN (SELECT id FROM main.sessions WHERE {mine})")
+    conn.execute("CREATE TEMP VIEW knowledge_links AS SELECT * FROM main.knowledge_links WHERE knowledge_id IN "
+                 "(SELECT id FROM temp.knowledge)")
     conn.execute(f"CREATE TEMP VIEW project_kb AS SELECT * FROM main.project_kb WHERE project_path IN ({lit})")
     conn.execute("CREATE TEMP VIEW api_calls AS SELECT * FROM main.api_calls WHERE "
                  f"session_id IN (SELECT id FROM main.sessions WHERE {mine})")
