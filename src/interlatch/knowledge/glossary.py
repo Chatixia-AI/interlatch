@@ -71,6 +71,13 @@ work with, and any recurring vocabulary of their own.
 Leave out generic programming words. Ground every definition in the material given; put abbreviations, \
 expansions and alternative spellings in aliases; cite the ids of the knowledge items that mention each term. \
 Aim for 15-50 terms."""
+# a pass that reads only the knowledge items added since the last one (build_glossaries)
+UPDATE_NOTE = """\
+This glossary already exists: <existing_terms> lists its terms, and the knowledge items given are only the ones added \
+since it was written. Return the terms these items mention: new ones, and existing ones, spelled exactly as listed, \
+whose definition or use here they add to or change. Leave out every other existing term: it stays as it is."""
+UPDATE_LIMIT = 200  # more new knowledge items than this since the last pass: rebuild from all of it
+SEEN_KEY = "glossary_read:"  # kv, + project path: the newest knowledge item id the project's glossary has read
 # with [analysis] language = "ja", besides analysis.language.JAPANESE
 TERMS_JA = ("Write definitions and context in Japanese. A term stays spelled as the developer writes it; translations go "
             "in aliases.")
@@ -110,13 +117,47 @@ def normalize_terms(data: dict) -> list[dict]:
     return out
 
 
-def _material(conn: sqlite3.Connection, project_path: str) -> tuple[str, list[int]]:
-    """The distilled knowledge a glossary pass reads (never raw transcripts)."""
+_GLOBAL_ITEMS = "status = 'active' AND (scope = 'global' OR kind IN ('preference', 'reference'))"
+_PROJECT_ITEMS = "status = 'active' AND project_path = ?"
+
+
+def _since(conn: sqlite3.Connection, project_path: str) -> int | None:
+    """The newest knowledge item id the project's glossary last read, or None when it needs a pass over all of its
+    knowledge: never built (or built before this was kept), none of its terms left, or more new items than
+    UPDATE_LIMIT."""
+    from ..storage.kv import kv_get
+
+    seen = kv_get(conn, SEEN_KEY + project_path)
+    if seen is None or not conn.execute("SELECT 1 FROM glossary_usage WHERE project_path = ? LIMIT 1",
+                                        (project_path,)).fetchone():
+        return None
+    where, params = (_GLOBAL_ITEMS, []) if project_path == GLOBAL else (_PROJECT_ITEMS, [project_path])
+    new = conn.execute(f"SELECT COUNT(*) FROM knowledge WHERE {where} AND id > ?", [*params, int(seen)]).fetchone()[0]
+    return None if new > UPDATE_LIMIT else int(seen)
+
+
+def _known_terms(conn: sqlite3.Connection, project_path: str) -> str:
+    rows = conn.execute("SELECT g.term, g.category, g.aliases_json FROM glossary g JOIN glossary_usage u ON u.term_id = g.id "
+                        "WHERE u.project_path = ? ORDER BY g.term COLLATE NOCASE", (project_path,)).fetchall()
+    return "<existing_terms>\n" + "\n".join(json.dumps(
+        {"term": r["term"], "category": r["category"], "aliases": (loads(r["aliases_json"], []) or [])[:3]},
+        ensure_ascii=False) for r in rows) + "\n</existing_terms>"
+
+
+def _material(conn: sqlite3.Connection, project_path: str, since: int | None = None) -> tuple[str, list[int]]:
+    """The distilled knowledge a glossary pass reads (never raw transcripts). `since`: only the knowledge items newer
+    than that id, with the glossary's existing terms instead of the knowledge base, session titles and tags."""
     parts: list[str] = []
-    if project_path == GLOBAL:
+    if since is not None:
+        where, params = (_GLOBAL_ITEMS, []) if project_path == GLOBAL else (_PROJECT_ITEMS, [project_path])
+        items = conn.execute(f"SELECT id, kind, title, body, project_name FROM knowledge WHERE {where} AND id > ? "
+                             "ORDER BY id DESC", [*params, since]).fetchall()
+        kb = None
+        parts.append(_known_terms(conn, project_path))
+    elif project_path == GLOBAL:
         items = conn.execute(
-            "SELECT id, kind, title, body, project_name FROM knowledge WHERE status = 'active' "
-            "AND (scope = 'global' OR kind IN ('preference', 'reference')) ORDER BY id DESC LIMIT 300").fetchall()
+            f"SELECT id, kind, title, body, project_name FROM knowledge WHERE {_GLOBAL_ITEMS} ORDER BY id DESC LIMIT 300"
+        ).fetchall()
         kb = conn.execute("SELECT * FROM project_kb WHERE project_path = ?", (GLOBAL,)).fetchone()
         tags = conn.execute("SELECT tags_json FROM sessions WHERE tags_json IS NOT NULL").fetchall()
         counts: dict[str, int] = {}
@@ -128,8 +169,8 @@ def _material(conn: sqlite3.Connection, project_path: str) -> tuple[str, list[in
             parts.append("<frequent_session_tags>\n" + ", ".join(f"{k} ({v})" for k, v in top) + "\n</frequent_session_tags>")
     else:
         items = conn.execute(
-            "SELECT id, kind, title, body, project_name FROM knowledge WHERE status = 'active' AND project_path = ? "
-            "ORDER BY id DESC LIMIT 250", (project_path,)).fetchall()
+            f"SELECT id, kind, title, body, project_name FROM knowledge WHERE {_PROJECT_ITEMS} ORDER BY id DESC LIMIT 250",
+            (project_path,)).fetchall()
         kb = conn.execute("SELECT * FROM project_kb WHERE project_path = ?", (project_path,)).fetchone()
         sessions = conn.execute(
             "SELECT title, tags_json FROM sessions WHERE project_path = ? AND source != 'history' ORDER BY started_at DESC LIMIT 60",
@@ -150,14 +191,22 @@ def _material(conn: sqlite3.Connection, project_path: str) -> tuple[str, list[in
     return "\n\n".join(parts), [k["id"] for k in items]
 
 
-def build_glossary(conn: sqlite3.Connection, cfg: Config, project_path: str, runner: Runner | None = None) -> int:
-    """(Re)build one project's glossary contribution (or the cross-project one for GLOBAL). Returns #terms."""
-    material, ids = _material(conn, project_path)
-    return _store(conn, project_path, *_generate(cfg, project_path, material, ids, runner or make_runner(cfg)))
+def build_glossary(conn: sqlite3.Connection, cfg: Config, project_path: str, runner: Runner | None = None, *,
+                   full: bool = False) -> int:
+    """Bring one project's glossary contribution (or the cross-project one for GLOBAL) up to date with its knowledge:
+    from the items added since the last pass, or from all of it (`full`, or see _since). Returns #terms the pass
+    wrote, 0 when nothing was new."""
+    since = None if full else _since(conn, project_path)
+    material, ids = _material(conn, project_path, since)
+    if not ids and since is not None:
+        return 0
+    return _store(conn, project_path, *_generate(cfg, project_path, material, ids, runner or make_runner(cfg), since))
 
 
-def build_glossaries(cfg: Config, paths: list[str], *, concurrency: int = 3, progress=None) -> dict[str, int | str]:
-    """Build several glossaries: Claude calls run in parallel, database writes stay serialized (one connection)."""
+def build_glossaries(cfg: Config, paths: list[str], *, concurrency: int = 3, progress=None,
+                     full: bool = False) -> dict[str, int | str]:
+    """Build several glossaries (see build_glossary): model calls run in parallel, database writes stay serialized
+    (one connection). Returns #terms per path, or "up to date", "no knowledge" or "failed: …"."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from ..storage.sqlite import connect
@@ -168,13 +217,14 @@ def build_glossaries(cfg: Config, paths: list[str], *, concurrency: int = 3, pro
     try:
         inputs = {}
         for path in paths:
-            material, ids = _material(conn, path)
+            since = None if full else _since(conn, path)
+            material, ids = _material(conn, path, since)
             if ids:
-                inputs[path] = (material, ids)
+                inputs[path] = (material, ids, since)
             else:
-                results[path] = "no knowledge"
+                results[path] = "no knowledge" if since is None else "up to date"
         with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-            futures = {pool.submit(_generate, cfg, p, m, i, runner): p for p, (m, i) in inputs.items()}
+            futures = {pool.submit(_generate, cfg, p, m, i, runner, s): p for p, (m, i, s) in inputs.items()}
             for fut in as_completed(futures):
                 path = futures[fut]
                 try:
@@ -190,32 +240,67 @@ def build_glossaries(cfg: Config, paths: list[str], *, concurrency: int = 3, pro
     return results
 
 
-def _generate(cfg: Config, project_path: str, material: str, ids: list[int], runner: Runner):
+def _generate(cfg: Config, project_path: str, material: str, ids: list[int], runner: Runner, since: int | None = None):
     if not ids:
         raise ValueError(f"no knowledge to build a glossary from for {project_path}")
     is_global = project_path == GLOBAL
     header = "" if is_global else f"<project path=\"{project_path}\" />\n\n"
-    res = runner.run(header + material + "\n\nWrite the glossary.", GLOSSARY_SCHEMA,
-                     system=written_in(cfg, GLOBAL_SYSTEM if is_global else PROJECT_SYSTEM, note=TERMS_JA),
+    system = GLOBAL_SYSTEM if is_global else PROJECT_SYSTEM
+    res = runner.run(header + material + ("\n\nUpdate the glossary." if since is not None else "\n\nWrite the glossary."),
+                     GLOSSARY_SCHEMA, system=written_in(cfg, system + ("\n\n" + UPDATE_NOTE if since is not None else ""),
+                                                        note=TERMS_JA),
                      model=cfg.synthesis.model)
-    return normalize_terms(res.data), ids, res, len(material)
+    return normalize_terms(res.data), ids, res, len(material), since is not None
 
 
-def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: list[int], res, material_chars: int) -> int:
+def _prune_usage(conn: sqlite3.Connection, project_path: str) -> None:
+    """Keep only the active knowledge items among each use's sources, and drop a use none of whose sources is active
+    any more (dismissed or superseded since). A use that never cited a source stays. No commit."""
+    for u in conn.execute("SELECT term_id, sources_json FROM glossary_usage WHERE project_path = ?",
+                          (project_path,)).fetchall():
+        sources = loads(u["sources_json"], []) or []
+        if not sources:
+            continue
+        live = [r[0] for r in conn.execute(f"SELECT id FROM knowledge WHERE status = 'active' AND id IN "
+                                           f"({','.join('?' * len(sources))})", sources)]
+        if not live:
+            conn.execute("DELETE FROM glossary_usage WHERE term_id = ? AND project_path = ?", (u["term_id"], project_path))
+        elif len(live) < len(sources):
+            conn.execute("UPDATE glossary_usage SET sources_json = ? WHERE term_id = ? AND project_path = ?",
+                         (dumps(sorted(live)), u["term_id"], project_path))
+
+
+def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: list[int], res, material_chars: int,
+           update: bool = False) -> int:
+    """Store a pass's terms and how this project uses them. A full pass replaces the project's uses; an `update` (from
+    the items added since the last pass) adds to them, keeps the sources a use already had, and drops the uses whose
+    sources all went inactive. Either way the terms no project uses any more go, and the pass's newest item id is
+    kept for the next update."""
+    from ..storage.kv import kv_set
+
     valid = set(ids)
     _measure_aliases(conn)  # a merge below reads this evidence
     try:
-        conn.execute("DELETE FROM glossary_usage WHERE project_path = ?", (project_path,))
+        if not update:
+            conn.execute("DELETE FROM glossary_usage WHERE project_path = ?", (project_path,))
         for t in terms:
             term_id = _upsert_term(conn, t, source=project_path)
+            sources = [i for i in t["sources"] if i in valid]
+            old = conn.execute("SELECT sources_json FROM glossary_usage WHERE term_id = ? AND project_path = ?",
+                               (term_id, project_path)).fetchone()
+            if old:
+                sources = sorted({*(loads(old[0], []) or []), *sources})
             conn.execute(
                 "INSERT INTO glossary_usage(term_id, project_path, context, sources_json, updated_at) VALUES (?,?,?,?,?) "
                 "ON CONFLICT(term_id, project_path) DO UPDATE SET context = excluded.context, "
                 "sources_json = excluded.sources_json, updated_at = excluded.updated_at",
-                (term_id, project_path, t["context"], dumps([i for i in t["sources"] if i in valid]), utcnow_iso()),
+                (term_id, project_path, t["context"], dumps(sources), utcnow_iso()),
             )
+        if update:
+            _prune_usage(conn, project_path)
         conn.execute("DELETE FROM glossary WHERE id NOT IN (SELECT term_id FROM glossary_usage)")
         _recount_themes(conn)
+        kv_set(conn, SEEN_KEY + project_path, str(max(ids)))
         conn.execute(
             "INSERT INTO analyses(kind, target, started_at, finished_at, model, status, input_chars, chunks, cost_usd, duration_ms) "
             "VALUES ('glossary', ?, ?, ?, ?, 'done', ?, 1, ?, ?)",
@@ -225,7 +310,8 @@ def _store(conn: sqlite3.Connection, project_path: str, terms: list[dict], ids: 
         conn.rollback()
         raise
     refresh_stats(conn, [norm(t["term"]) for t in terms])
-    log.info("glossary for %s: %d terms ($%.3f)", project_path, len(terms), res.cost_usd)
+    log.info("glossary %s for %s: %d terms from %d items ($%.3f)", "update" if update else "build", project_path,
+             len(terms), len(ids), res.cost_usd)
     return len(terms)
 
 

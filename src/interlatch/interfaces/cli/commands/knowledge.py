@@ -153,7 +153,8 @@ def cmd_glossary(args) -> int:
             return 2
         conn.close()
         print(f"building {len(targets)} glossar{'y' if len(targets) == 1 else 'ies'} with {analyzer_label(cfg)}…")
-        results = build_glossaries(cfg, targets, concurrency=cfg.analysis.concurrency + 1, progress=lambda m: print(f"  {m}"))
+        results = build_glossaries(cfg, targets, concurrency=cfg.analysis.concurrency + 1, progress=lambda m: print(f"  {m}"),
+                                   full=True)
         ok = sum(1 for v in results.values() if isinstance(v, int))
         print(f"done: {ok}/{len(targets)} built, {sum(v for v in results.values() if isinstance(v, int))} terms")
         return 0

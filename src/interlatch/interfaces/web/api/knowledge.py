@@ -148,7 +148,8 @@ def action_glossary(ctx: Context, path: str | None) -> bool:
                 "SELECT DISTINCT project_path FROM knowledge WHERE status = 'active' AND project_path IS NOT NULL")] + [GLOBAL]
         finally:
             conn.close()
-        results = build_glossaries(ctx.cfg, targets, concurrency=ctx.cfg.analysis.concurrency + 1, progress=progress)
+        results = build_glossaries(ctx.cfg, targets, concurrency=ctx.cfg.analysis.concurrency + 1, progress=progress,
+                                   full=True)
         built = sum(1 for v in results.values() if isinstance(v, int))
         return f"glossary rebuilt for {built}/{len(targets)} projects"
 

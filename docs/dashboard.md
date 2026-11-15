@@ -337,7 +337,12 @@ build at once and starts a new one in the background; the next visit shows the n
 ## Glossary
 
 built by the analysis model from each project's distilled knowledge (not the raw transcripts), one call per
-project plus a cross-project pass, refreshed whenever a project's knowledge base is re-synthesized. Each term has
+project plus a cross-project pass, refreshed whenever a project's knowledge base is re-synthesized. A refresh reads only
+the knowledge items added since the last one, with the glossary's existing terms, and adds new terms or updates the
+ones those items mention; nothing new means no call. A term used only because of knowledge items that were since
+dismissed or superseded drops out of that project, with no call. The first pass, a pass after more than 200 new
+items, and `interlatch glossary --rebuild` (or **Rebuild glossary** on the Glossary page) read all of a project's knowledge
+again. Each term has
 a category, aliases (abbreviations, translations of Japanese business terms), a definition, a per-project usage
 note, related terms, and full-text statistics: how many sessions mention it, first and last seen, top sessions.
 
