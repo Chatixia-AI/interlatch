@@ -2,7 +2,7 @@
 # publishes it as ghcr.io/chatixia-ai/interlatch-hub. Built without it, it installs the latest release from PyPI; a
 # wheel in docker/wheels/ is installed instead, to try a change before it is released:
 #   uv build --wheel -o docker/wheels && docker build -t interlatch-hub docker
-FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58
+FROM python:3.15.2-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 ARG INTERLATCH_VERSION=
 LABEL org.opencontainers.image.title="Interlatch hub" \
