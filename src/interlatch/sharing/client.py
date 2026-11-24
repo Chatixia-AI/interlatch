@@ -27,6 +27,7 @@ from .protocol import PROTOCOL, FolderError, HubError, HubUnauthorized, HubUnrea
 SHARING_LOCK = "hub-sharing.lock"  # on a spoke: one push, hello or folder change at a time (sharing())
 PUSH_WAIT_S = 600  # a push waits this long for another to finish
 CHANGE_WAIT_S = 60  # a folder change, which someone is waiting on, this long
+CONNECT_TIMEOUT_S = 10  # reaching the hub at all: one behind a firewall answers nothing, and the system waits 75 s
 
 
 @dataclass
@@ -228,9 +229,15 @@ class HubClient:
             self.conn = None
 
     def _connection(self) -> http.client.HTTPConnection:
-        if self.conn is None:
+        """The kept-alive connection, opened when there is none (or the hub closed it after its last answer).
+        Connecting gets CONNECT_TIMEOUT_S at most; once connected, the hub has `timeout` to take a push and answer."""
+        if self.conn is None or self.conn.sock is None:
+            self.close()
             cls = http.client.HTTPSConnection if self.https else http.client.HTTPConnection
-            self.conn = cls(self.host, self.port, timeout=self.timeout)
+            conn = cls(self.host, self.port, timeout=min(self.timeout, CONNECT_TIMEOUT_S))
+            conn.connect()
+            conn.sock.settimeout(self.timeout)
+            self.conn = conn
         return self.conn
 
     def request(self, method: str, path: str, *, params: dict | None = None, body=None, length: int | None = None,
@@ -249,6 +256,9 @@ class HubClient:
                 body.seek(0)
             try:
                 conn = self._connection()
+            except (OSError, http.client.HTTPException) as exc:  # not there, or not answering: asking again only waits again
+                raise HubUnreachable(f"can't reach the hub at {self.url}: {exc}") from exc
+            try:
                 conn.request(method, target, body=body, headers=hdrs)
                 resp = conn.getresponse()
                 data = resp.read()
