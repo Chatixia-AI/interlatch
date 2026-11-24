@@ -30,6 +30,7 @@ class WorkReport:
     suggestions: int = 0  # new suggestions this run's refresh found
     shared: str | None = None  # [hub] share = "knowledge": what was sent to the hub
     mirrored: str | None = None  # [mirror] to = "postgres": what was written to the mirror
+    moved: str | None = None  # [storage] older_dir: the older sessions whose transcripts went there
     cost_usd: float = 0.0
     paused_until: str | None = None
     note: str | None = None
@@ -45,6 +46,8 @@ class WorkReport:
             parts.append(f"hub: {self.shared}")
         if self.mirrored:
             parts.append(f"mirror: {self.mirrored}")
+        if self.moved:
+            parts.append(f"older sessions: {self.moved}")
         if self.note:
             parts.append(self.note)
         return ", ".join(parts)

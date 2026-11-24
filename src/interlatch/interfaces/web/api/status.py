@@ -226,6 +226,10 @@ def status(ctx: Context) -> dict:
     st["menu_bar"] = setting_info(ctx.cfg)
     st["db_size"] = ctx.cfg.db_path.stat().st_size if ctx.cfg.db_path.exists() else 0
     st["archive_dir"] = str(ctx.cfg.archive_dir)
+    from ....ingestion import space
+
+    used = space.usage(ctx.cfg)
+    st["storage"] = {"total": used["total"], "warn_gb": used["warn_gb"], "over": used["over"]}
     st["notes_dir"] = str(ctx.cfg.notes_dir)
     st["config"] = {"model": make_runner(ctx.cfg).model_label(), "auto": ctx.cfg.analysis.auto,
                     "backfill": ctx.cfg.analysis.backfill, "max_per_run": ctx.cfg.analysis.max_per_run}

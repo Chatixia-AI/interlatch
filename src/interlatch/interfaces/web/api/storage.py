@@ -1,4 +1,5 @@
-"""Settings › Storage: a copy of this archive in Postgres (sharing nothing back; the password goes in, never out)."""
+"""Settings › Storage: the space Interlatch uses and the folder older sessions go to, and a copy of this archive in
+Postgres (sharing nothing back; the password goes in, never out)."""
 
 from __future__ import annotations
 
@@ -114,3 +115,54 @@ def action_mirror_sync(ctx: Context) -> bool:
         return f"mirror: {res.summary()}"
 
     return mirror.enabled(cfg) and ctx.jobs.start("mirror", job)
+
+
+def space_info(ctx: Context) -> dict:
+    """What Interlatch's folder holds, part by part, and the [storage] settings."""
+    from ....ingestion import space
+
+    return {**space.usage(ctx.cfg, ctx.conn), "profile": bool(ctx.cfg.archive_home),
+            "running": ctx.jobs.snapshot().get("storage", {}).get("state") == "running"}
+
+
+def action_space_save(ctx: Context, body: dict) -> dict:
+    """Save [storage]: the folder for older sessions (checked first), after how many days, and the size to warn at."""
+    from ....core.config import load_config, set_config_value
+    from ....ingestion import space
+
+    cfg = ctx.cfg
+    folder = str(body.get("older_dir") or "").strip()
+    try:
+        days, warn = int(body.get("older_after_days") or cfg.storage_older_days), float(body.get("warn_gb") or 0)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": tr("not saved: {keys}", keys="older_after_days, warn_gb")}
+    if days < 1 or warn < 0:
+        return {"ok": False, "error": tr("not saved: {keys}", keys="older_after_days, warn_gb")}
+    try:
+        path = space.check_older_dir(cfg, folder) if folder else None
+    except space.StorageError as exc:
+        return {"ok": False, "error": tr(str(exc))}
+    old = cfg.storage_older_dir
+    if old and path != old and space.usage(cfg, ctx.conn)["older"]["sessions"]:
+        return {"ok": False, "error": tr("sessions are kept in {folder}; bring them back before changing the folder",
+                                         folder=str(old))}
+    set_config_value(cfg, "storage", "older_dir", json.dumps(str(path) if path else ""))
+    set_config_value(cfg, "storage", "older_after_days", str(days))
+    set_config_value(cfg, "storage", "warn_gb", f"{warn:g}")
+    ctx.cfg = load_config(cfg.home)
+    return {"ok": True, "space": space_info(ctx)}
+
+
+def action_space_move(ctx: Context, back: bool) -> bool:
+    """Move older sessions to their folder now (no size limit, unlike a background run), or bring them all back."""
+    from ....ingestion import space
+
+    cfg = ctx.cfg
+
+    def job(progress):
+        res = (space.bring_back if back else space.move_older)(cfg, progress=progress, wait=60)
+        if res["errors"]:
+            raise RuntimeError(f"{space.summary(res)}: {res['errors'][0]}")
+        return f"older sessions: {space.summary(res)}"
+
+    return bool(cfg.storage_older_dir) and ctx.jobs.start("storage", job)

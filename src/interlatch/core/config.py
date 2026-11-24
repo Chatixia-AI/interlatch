@@ -177,6 +177,15 @@ include = "knowledge"
 # The Postgres schema it writes to. One computer per schema.
 schema = "chronicle"
 
+[storage]
+# Keep the transcripts of older sessions in another folder: a second disk, or a folder a cloud service syncs. A
+# session moves once it is older than older_after_days and the agent's own transcript is gone; it still opens from
+# the dashboard while that folder is reachable. Empty: everything stays in Interlatch's folder. `interlatch storage`.
+older_dir = ""
+older_after_days = 90
+# Say so (Settings › Storage, Status, the log) when Interlatch's folder passes this many GB. 0: no limit.
+warn_gb = 0
+
 [inject]
 # Inject a short digest of the project's knowledge base into new sessions (SessionStart hook).
 session_start = false
@@ -338,6 +347,9 @@ class Config:
     mirror_to: str = ""
     mirror_include: str = "knowledge"
     mirror_schema: str = "chronicle"
+    storage_older_dir: Path | None = None  # [storage] older_dir: where older sessions' transcripts go (ingestion/space.py)
+    storage_older_days: int = 90
+    storage_warn_gb: float = 0.0
     inject_session_start: bool = False
     inject_max_chars: int = 3000
     update_check_daily: bool = False
@@ -521,6 +533,14 @@ def _section(data: dict, name: str) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _number(value, default, kind):
+    """A number from config.toml, or `default` when it isn't one (a typo never stops Interlatch)."""
+    try:
+        return kind(value) if value is not None and not isinstance(value, bool) else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _pick(cls, values: dict):
     allowed = cls.__dataclass_fields__.keys()
     return cls(**{k: v for k, v in values.items() if k in allowed})
@@ -591,6 +611,8 @@ def _load_config(home: Path, *, create: bool = True) -> Config:
     mirror_to = str(mirror.get("to") or "").strip().lower()
     mirror_include = str(mirror.get("include") or "knowledge").strip().lower()
     mirror_schema = str(mirror.get("schema") or "chronicle").strip()
+    storage = _section(data, "storage")
+    older_dir = str(storage.get("older_dir") or "").strip()
 
     env_dirs = env("CLAUDE_DIRS")
     raw_dirs = env_dirs.split(os.pathsep) if env_dirs else sources.get("claude_dirs", ["~/.claude"])
@@ -636,6 +658,9 @@ def _load_config(home: Path, *, create: bool = True) -> Config:
         mirror_to=mirror_to if mirror_to in MIRRORS else "",
         mirror_include="everything" if mirror_include == "everything" else "knowledge",  # a typo never sends transcripts
         mirror_schema=mirror_schema if mirror_schema.isidentifier() and mirror_schema.isascii() else "chronicle",
+        storage_older_dir=Path(older_dir).expanduser() if older_dir else None,
+        storage_older_days=max(1, _number(storage.get("older_after_days"), 90, int)),
+        storage_warn_gb=max(0.0, _number(storage.get("warn_gb"), 0.0, float)),
         inject_session_start=bool(inject.get("session_start", False)),
         inject_max_chars=int(inject.get("max_chars", 3000)),
         update_check_daily=bool(_section(data, "updates").get("check_daily", False)),

@@ -49,6 +49,7 @@ EXPECTED_COMMANDS = {
     "mcp": [],
     "leaderboard": [],
     "mirror": [],
+    "storage": [],
     "tailnet": [],
     "hub": [],
     "push": [],

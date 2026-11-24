@@ -48,7 +48,7 @@ def _ingest_main(conn, cfg, archiver, claude_dir, proj: Path, main: Path, report
     sig = files_signature(main, session_dir)
     row = conn.execute("SELECT files_sig, parser_version, ended_flag FROM sessions WHERE id = ?", (sid,)).fetchone()
     archive_root = cfg.archive_dir / archive_key(claude_dir) / "projects" / proj.name
-    archive_main = archive_root / (main.name + ".gz")
+    archive_main = archiver.archive(main, archive_root / main.name)  # where its copy is: already made, so only looked up
     if row and row["files_sig"] == sig and row["parser_version"] == PARSER_VERSION and not force:
         if ended and not row["ended_flag"]:
             conn.execute("UPDATE sessions SET ended_flag = 1 WHERE id = ?", (sid,))

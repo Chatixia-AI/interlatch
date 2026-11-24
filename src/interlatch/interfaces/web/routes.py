@@ -307,6 +307,7 @@ GET: list[Route] = [
     # its address and user: at the computer itself, or an admin of a hub
     Route("/api/mirror", OWNER, lambda h, ctx, m, q: h._json(api.storage.mirror_info(ctx))),
     Route("/api/mirror/status", OWNER, lambda h, ctx, m, q: h._json(api.storage.mirror_status(ctx))),
+    Route("/api/storage", OWNER, lambda h, ctx, m, q: h._json(api.storage.space_info(ctx))),
     Route("/api/team/settings", ADMIN, lambda h, ctx, m, q: h._json(api.hub_admin.hub_settings(ctx))),
     Route("/api/projects/shared", ADMIN,
           lambda h, ctx, m, q: h._json({**api.devices.shared_projects(ctx), "here": h._from_here()})),
@@ -448,6 +449,9 @@ POST: list[Route] = [
     Route("/api/mirror/test", OWNER, lambda h, ctx, m, b: h._json(api.storage.action_mirror_test(ctx, b))),
     Route("/api/mirror/save", OWNER, lambda h, ctx, m, b: h._json(api.storage.action_mirror_save(ctx, b))),
     Route("/api/mirror/sync", OWNER, lambda h, ctx, m, b: h._json({"started": api.storage.action_mirror_sync(ctx)})),
+    Route("/api/storage/save", OWNER, lambda h, ctx, m, b: h._json(api.storage.action_space_save(ctx, b))),
+    Route("/api/storage/move", OWNER,
+          lambda h, ctx, m, b: h._json({"started": api.storage.action_space_move(ctx, bool(b.get("back")))})),
     # what leaves this computer, or its own sign-in: only from here
     Route("/api/devices/share", HERE, _share),
     Route("/api/devices/hub-signin", HERE, _hub_signin),

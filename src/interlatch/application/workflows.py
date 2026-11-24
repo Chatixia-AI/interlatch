@@ -30,6 +30,7 @@ def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyse
     report = WorkReport()
     if cfg.sends_files:  # its sessions go to the hub, which analyzes them; analyzing here would pay twice
         report.note = f"analysis runs on the hub ({cfg.hub_url})"
+        _storage(cfg, report, session_ids)
         return report
     if wait and progress:
         with file_lock(cfg.locks_dir / "worker.lock", blocking=False) as free:
@@ -71,8 +72,30 @@ def run_worker(cfg: Config, *, session_ids: list[str] | None = None, max_analyse
         from ..storage.mirror import sync as mirror_sync
 
         report.mirrored = mirror_sync(cfg).summary()  # never raises; a missed write is caught up by the next run
+    _storage(cfg, report, session_ids)
     log.info("worker: %s", report.summary())
     return report
+
+
+def _storage(cfg: Config, report: WorkReport, session_ids) -> None:
+    """After a background or `interlatch work` run: move older sessions' transcripts to [storage] older_dir, and say
+    so in the log when Interlatch's folder is past [storage] warn_gb."""
+    if session_ids:
+        return
+    from ..ingestion import space
+
+    try:
+        if cfg.storage_older_dir and not cfg.archive_home:
+            res = space.move_older(cfg, limit=space.RUN_BYTES)
+            if res["sessions"] or res["errors"]:
+                report.moved = space.summary(res)
+        if cfg.storage_warn_gb:
+            used = space.usage(cfg)
+            if used["over"]:
+                log.warning("Interlatch's folder uses %s, more than the %g GB set in [storage] warn_gb",
+                            space.human_bytes(used["total"]), cfg.storage_warn_gb)
+    except Exception:  # storage housekeeping must never fail a run
+        log.exception("storage housekeeping failed")
 
 
 def _profile_label(cfg: Config, owner: str) -> str:
