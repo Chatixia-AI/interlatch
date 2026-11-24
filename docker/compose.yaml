@@ -20,7 +20,7 @@ name: chronicle
 
 services:
   caddy:
-    image: caddy:2.11.7@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
+    image: caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf
     restart: unless-stopped
     ports:
       - "80:80"
@@ -62,7 +62,7 @@ services:
       - hub-data:/data
 
   postgres:  # stays on 17: a new major version can't read the old one's data
-    image: postgres:17.11@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    image: postgres:17.11@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
     restart: unless-stopped
     environment:
       POSTGRES_DB: chronicle

@@ -1,21 +1,21 @@
-"""Search text as the archive's full-text index takes it: quoted trigram phrases, and the terms too short for it."""
+"""Search text as the archive's full-text index takes it: quoted trigram phrases, and the terms too short for it.
+
+A query arrives as groups (application.search.query_groups): every group must match, any one of its names will do."""
 
 from __future__ import annotations
 
-import re
 
-
-def fts_query(text: str) -> str | None:
-    """Turn free text into a safe FTS5 query (AND of quoted phrases, trigram needs >= 3 chars)."""
-    terms = [t for t in re.findall(r'"[^"]+"|\S+', text.strip())]
+def fts_query(groups: list[dict]) -> str | None:
+    """A safe FTS5 query for the groups long enough for the trigram index (3+ characters): each a quoted phrase, or
+    an OR of them, ANDed."""
     out = []
-    for t in terms:
-        t = t.strip('"').replace('"', '""')
-        if len(t) >= 3:
-            out.append(f'"{t}"')
+    for g in groups:
+        if len(g["text"]) >= 3:
+            phrases = ['"' + n.replace('"', '""') + '"' for n in g["names"]]
+            out.append(phrases[0] if len(phrases) == 1 else "(" + " OR ".join(phrases) + ")")
     return " AND ".join(out) if out else None
 
 
-def short_terms(text: str) -> list[str]:
+def short_terms(groups: list[dict]) -> list[str]:
     """Search terms too short for the trigram index (handled with LIKE)."""
-    return [t.strip('"') for t in re.findall(r'"[^"]+"|\S+', text.strip()) if 0 < len(t.strip('"')) < 3]
+    return [g["text"] for g in groups if len(g["text"]) < 3]

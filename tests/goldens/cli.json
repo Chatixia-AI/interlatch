@@ -1932,6 +1932,22 @@
       ],
       "required": false,
       "type": null
+     },
+     {
+      "action": "_StoreTrueAction",
+      "choices": null,
+      "const": true,
+      "default": false,
+      "dest": "relink",
+      "exclusive_group": null,
+      "help_suppressed": false,
+      "metavar": null,
+      "nargs": 0,
+      "option_strings": [
+       "--relink"
+      ],
+      "required": false,
+      "type": null
      }
     ]
    },

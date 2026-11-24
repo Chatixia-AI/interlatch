@@ -32,7 +32,7 @@ DENY = ("analyses", "reviews", "glossary_themes", "machines", "people", "hub_pro
         "people_audit", "hub_news", "suggestions", "suggestion_scopes", "project_groups", "project_group_picks",
         "group_shares", "files_state", "kv", "session_owner")
 # shadowed below with their own filter
-FILTERED = ("sessions", "knowledge", "project_kb", "glossary", "glossary_usage", *BY_SESSION)
+FILTERED = ("sessions", "knowledge", "knowledge_links", "project_kb", "glossary", "glossary_usage", *BY_SESSION)
 # full-text indexes: queried only joined with the table they index
 FTS = ("events_fts", "knowledge_fts")
 
@@ -89,6 +89,8 @@ def scope(conn: sqlite3.Connection, owner: str) -> None:
                  f"(session_id IN ({owned})) OR (session_id IS NULL AND source != 'team' AND project_path IN ({paths})) "
                  f"OR (source = 'team' AND session_id IS NULL AND {team} AND project_path IN ({paths})) "
                  f"{personal_extra}")
+    conn.execute("CREATE TEMP VIEW knowledge_links AS SELECT * FROM main.knowledge_links WHERE knowledge_id IN "
+                 "(SELECT id FROM temp.knowledge)")
     conn.execute(f"CREATE TEMP VIEW project_kb AS SELECT * FROM main.project_kb WHERE project_path IN ({paths})")
     conn.execute(f"CREATE TEMP VIEW glossary_usage AS SELECT * FROM main.glossary_usage WHERE project_path IN ({paths})")
     # a term written from the owner's projects only, without the sessions it was seen in elsewhere

@@ -69,14 +69,30 @@ def write_shim(target: str) -> Path:
     return path
 
 
+def _on_path() -> list[Path]:
+    """Every `interlatch` on PATH in PATH's order, then every `chronicle`."""
+    hits = (shutil.which(name, path=folder) for name in COMMANDS for folder in os.get_exec_path() if folder)
+    return list(dict.fromkeys(Path(hit).absolute() for hit in hits if hit))
+
+
+def _other_install(command: Path) -> bool:
+    """Whether a command on PATH is another install's: as found, or with its links followed, it is in the bin (Scripts)
+    folder of a Python environment that is not the one running. A terminal with a checkout's .venv switched on has
+    that one first on PATH; a checkout's command run by its path finds the installed one's link there."""
+    here = Path(sys.prefix).resolve()
+    return any((env / "pyvenv.cfg").is_file() and env.resolve() != here
+               for env in {command.parent.parent, command.resolve().parent.parent})
+
+
 def executable() -> str:
     """Absolute path of the installed `interlatch` command, or `chronicle` (its alias), else python -m interlatch.
 
     A PATH entry outside this environment (~/.local/bin/interlatch) wins: it survives `uv tool install --force`, and
-    the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle."""
+    the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle. Never
+    another install's command (_other_install), wherever it is on PATH: this names the install that is running."""
     if getattr(sys, "frozen", False):  # inside Interlatch.app
         return str(write_shim(sys.executable))
-    found = [str(Path(f).absolute() if not on_windows() else Path(f).resolve()) for f in map(shutil.which, COMMANDS) if f]
+    found = [str(f if not on_windows() else f.resolve()) for f in _on_path() if not _other_install(f)]
     outside = [f for f in found if not f.startswith(os.path.join(sys.prefix, ""))]
     if outside or found:
         return (outside or found)[0]

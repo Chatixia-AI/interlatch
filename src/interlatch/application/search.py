@@ -1,4 +1,5 @@
-"""Full-text search over transcripts and knowledge (FTS5 trigram, with LIKE for very short terms)."""
+"""Full-text search over transcripts and knowledge (FTS5 trigram, with LIKE for very short terms). With `glossary`,
+words that name a glossary term also find the term's other names."""
 
 from __future__ import annotations
 
@@ -12,6 +13,51 @@ from ..core.util import loads
 
 def query_terms(query: str) -> list[str]:
     return [t.strip('"') for t in re.findall(r'"[^"]+"|\S+', query.strip()) if t.strip('"')]
+
+
+TERM_WORDS = 5  # the most words a glossary name in a query is looked up as
+
+
+def query_groups(conn: sqlite3.Connection, query: str, *, glossary: bool = False) -> list[dict]:
+    """The query as groups that must all match, each a list of names any one of which will do: a word or quoted phrase,
+    or with `glossary` the longest run of words (up to TERM_WORDS) that names a glossary term by its name or an alias,
+    which then also finds the term's name and the aliases sessions used ("single sign-on" finds "SSO"). Each group:
+    {"text": as typed, "names": [...], "term": the glossary term or None}. Names under 3 characters can't be looked up
+    in the trigram index: a word that short stays on its own, a shorter other name is left out."""
+    words = query_terms(query)
+    if not glossary or not words:
+        return [{"text": w, "names": [w], "term": None} for w in words]
+    from ..knowledge.glossary import norm, search_names
+
+    names = search_names(conn)
+    groups, i = [], 0
+    while i < len(words):
+        for j in range(min(len(words), i + TERM_WORDS), i, -1):
+            text = " ".join(words[i:j])
+            entry = names.get(norm(text)) if len(text) >= 3 else None
+            if entry:
+                found = {norm(text): text}
+                for n in entry["names"]:
+                    if len(n) >= 3:
+                        found.setdefault(norm(n), n)
+                groups.append({"text": text, "names": list(found.values()), "term": entry})
+                i = j
+                break
+        else:
+            groups.append({"text": words[i], "names": [words[i]], "term": None})
+            i += 1
+    return groups
+
+
+def added_names(groups: list[dict]) -> list[str]:
+    """The names the glossary added to a query."""
+    return [n for g in groups for n in g["names"][1:]]
+
+
+def _like_groups(column: str, groups: list[dict]) -> tuple[str, list]:
+    """Every group in `column`, any of its names."""
+    return (" AND ".join("(" + " OR ".join(f"{column} LIKE ?" for _ in g["names"]) + ")" for g in groups),
+            [f"%{n}%" for g in groups for n in g["names"]])
 
 
 def make_snippet(text: str, terms: list[str], width: int = 180) -> str:
@@ -33,10 +79,10 @@ def _like_clause(column: str, terms: list[str]) -> tuple[str, list]:
     return " AND ".join(f"{column} LIKE ?" for _ in terms), [f"%{t}%" for t in terms]
 
 
-def _matching_events(query: str, columns: str, ranked: bool) -> tuple[str, list, list]:
-    """SELECT over the events matching `query` (FTS5 trigram, LIKE for short terms): sql, params, extra where clauses."""
-    fts = fts_query(query)
-    short = short_terms(query)
+def _matching_events(groups: list[dict], columns: str, ranked: bool) -> tuple[str, list, list]:
+    """SELECT over the events matching `groups` (FTS5 trigram, LIKE for short terms): sql, params, extra where clauses."""
+    fts = fts_query(groups)
+    short = short_terms(groups)
     where, params = [], []
     if fts:
         sql = (f"SELECT {columns}{', bm25(events_fts) AS rank' if ranked else ''} "
@@ -52,11 +98,13 @@ def _matching_events(query: str, columns: str, ranked: bool) -> tuple[str, list,
 
 
 def search_events(conn: sqlite3.Connection, query: str, *, project: str | None = None, session_id: str | None = None,
-                  kinds: list[str] | None = None, limit: int = 50) -> list[dict]:
-    terms = query_terms(query)
+                  kinds: list[str] | None = None, limit: int = 50, glossary: bool = False,
+                  groups: list[dict] | None = None) -> list[dict]:
+    groups = groups if groups is not None else query_groups(conn, query, glossary=glossary)
+    terms = [n for g in groups for n in g["names"]]
     if not terms:
         return []
-    sql, params, where = _matching_events(query, "e.id, e.session_id, e.agent_id, e.seq, e.ts, e.kind, e.tool_name, e.text", True)
+    sql, params, where = _matching_events(groups, "e.id, e.session_id, e.agent_id, e.seq, e.ts, e.kind, e.tool_name, e.text", True)
     if session_id:
         where.append("e.session_id = ?")
         params.append(session_id)
@@ -87,12 +135,14 @@ def search_events(conn: sqlite3.Connection, query: str, *, project: str | None =
     return rows
 
 
-def search_sessions(conn: sqlite3.Connection, query: str, *, project: str | None = None, limit: int = 10) -> list[dict]:
+def search_sessions(conn: sqlite3.Connection, query: str, *, project: str | None = None, limit: int = 10,
+                    glossary: bool = False) -> list[dict]:
     """Sessions ranked by transcript matches plus title/summary/tag matches."""
-    terms = query_terms(query)
+    groups = query_groups(conn, query, glossary=glossary)
+    terms = [n for g in groups for n in g["names"]]
     if not terms:
         return []
-    hits = search_events(conn, query, project=project, limit=400)
+    hits = search_events(conn, query, project=project, limit=400, groups=groups)
     by_session: dict[str, dict] = {}
     for h in hits:
         s = by_session.setdefault(h["session_id"], {
@@ -103,7 +153,7 @@ def search_sessions(conn: sqlite3.Connection, query: str, *, project: str | None
         s["score"] += 1.0
         if len(s["snippets"]) < 3:
             s["snippets"].append({"kind": h["kind"], "seq": h["seq"], "agent_id": h["agent_id"], "text": h["snippet"]})
-    clause, params = _like_clause("(COALESCE(title,'') || ' ' || COALESCE(summary,'') || ' ' || COALESCE(tags_json,'') || ' ' || COALESCE(first_prompt,''))", terms)
+    clause, params = _like_groups("(COALESCE(title,'') || ' ' || COALESCE(summary,'') || ' ' || COALESCE(tags_json,'') || ' ' || COALESCE(first_prompt,''))", groups)
     sql = f"SELECT id, title, project_name, started_at, outcome, summary FROM sessions WHERE {clause}"
     if project:
         sql += " AND (project_path = ? OR project_name = ?)"
@@ -123,14 +173,24 @@ def search_sessions(conn: sqlite3.Connection, query: str, *, project: str | None
 def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, project: str | None = None,
                      kind: str | None = None, include_inactive: bool = False, limit: int = 30,
                      sessions: tuple[str, list] | None = None, source: str | None = None,
-                     cases: bool = False, lessons: bool = False, offset: int = 0) -> list[dict]:
+                     cases: bool = False, lessons: bool = False, offset: int = 0, glossary: bool = False) -> list[dict]:
     """`sessions`: (SQL on the sessions table, its params) to keep the lessons of those sessions only. `source`: only
     items from there ('analysis', 'memory', 'team'), filtered before the limit. `cases`: only the ones with a case
-    file (analysis.session.case_of). `lessons`: only the kinds a lesson is made of (learning.PRACTICE_SQL)."""
-    where, params = [], []
+    file (analysis.session.case_of). `lessons`: only the kinds a lesson is made of (learning.PRACTICE_SQL).
+    `glossary`: see query_groups; lessons about a name the query holds come first (knowledge/links.py)."""
+    where, params, first, first_params = [], [], "", []
     if query and query.strip():
-        fts = fts_query(query)
-        short = short_terms(query)
+        groups = query_groups(conn, query, glossary=glossary)
+        if glossary:
+            from ..knowledge.glossary import norm
+
+            names = sorted({n for g in groups for n in g["names"]} | {g["term"]["term"] for g in groups if g["term"]})
+            keys = sorted({norm(n) for n in names if norm(n)})
+            first = (f"(k.id IN (SELECT knowledge_id FROM knowledge_links WHERE place = 'title' AND (norm IN "
+                     f"({','.join('?' * len(keys))}) OR target IN ({','.join('?' * len(names))})))) DESC, ")
+            first_params = [*keys, *names]
+        fts = fts_query(groups)
+        short = short_terms(groups)
         if fts:
             where.append("k.id IN (SELECT rowid FROM knowledge_fts WHERE knowledge_fts MATCH ?)")
             params.append(fts)
@@ -165,8 +225,8 @@ def search_knowledge(conn: sqlite3.Connection, query: str | None = None, *, proj
     sql = "SELECT k.*, s.title AS session_title, s.started_at AS session_started FROM knowledge k LEFT JOIN sessions s ON s.id = k.session_id"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY k.pinned DESC, {STAGE_ORDER_SQL}, COALESCE(s.started_at, k.created_at) DESC, k.id DESC LIMIT ? OFFSET ?"
-    params.extend([limit, max(0, offset)])
+    sql += f" ORDER BY {first}k.pinned DESC, {STAGE_ORDER_SQL}, COALESCE(s.started_at, k.created_at) DESC, k.id DESC LIMIT ? OFFSET ?"
+    params.extend([*first_params, limit, max(0, offset)])
     try:
         rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
     except sqlite3.OperationalError:
@@ -185,7 +245,7 @@ def search_all(conn: sqlite3.Connection, query: str, *, project: str | None = No
     terms = query_terms(query)
     if not terms:
         return {"total": 0, "mentions": 0, "sessions": []}
-    sql, params, where = _matching_events(query, "e.id, e.session_id, e.agent_id, e.seq", False)
+    sql, params, where = _matching_events(query_groups(conn, query), "e.id, e.session_id, e.agent_id, e.seq", False)
     if project:
         where.append("e.session_id IN (SELECT id FROM sessions WHERE project_path = ? OR project_name = ?)")
         params += [project, project]

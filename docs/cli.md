@@ -9,8 +9,8 @@
 | `interlatch ui [--open] [--menu-bar]` | Dashboard (also always running at :11524 after install; if it is, `interlatch ui` says so and `--open` opens it). On macOS the one that runs at login also shows [the menu-bar icon](install.md#the-menu-bar-icon) if you turned it on at install; `--menu-bar`/`--no-menu-bar` overrides that. Sessions, Knowledge, Projects and Glossary switch between Cards and List (a sortable table; click a row for details), remembered per page |
 | `interlatch sessions [-p project] [--since 7d]` | List sessions |
 | `interlatch show <id-prefix> [--transcript\|--markdown\|--json]` | Session overview or full conversation |
-| `interlatch search <words>` | Full-text search over transcripts + knowledge (any language, 3+ chars) |
-| `interlatch knowledge [query] [-k gotcha] [-p project]` | Browse extracted knowledge |
+| `interlatch search <words>` | Full-text search over transcripts + knowledge (any language, 3+ chars); words that name a glossary term also find its other names |
+| `interlatch knowledge [query] [-k gotcha] [-p project]` | Browse extracted knowledge; `--relink` links every lesson again to the glossary terms and Systems map parts it names (no model, seconds) |
 | `interlatch projects` / `interlatch stats [--since 30d]` | Per-project and overall statistics |
 | `interlatch analyze <id> \| --pending [--limit N] [--dry-run] [--backend codex]` | Analyze now (`--dry-run` shows digest sizes, no tokens spent; `--backend` picks the agent or [model provider](analysis.md#model-providers) for this run only) |
 | `interlatch synthesize [--project P] [--global] [--all]` | Rebuild knowledge bases |

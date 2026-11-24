@@ -108,6 +108,38 @@ instance, have no cache split (so no cost estimate), Bob tasks have no per-call 
    When nothing is ready but sessions are still active, it offers those instead: one that continues is analyzed
    again later. The command palette (⌘K) has it too, as **Analyze the queue now**.
 
+### Every step at a glance
+
+What calls a model, when, and what stops it. The cost is the median that Interlatch recorded per call on one archive
+from 15 October to 15 November 2026, at list price for the model (on a subscription it is not a bill). Your numbers
+depend on session length and model.
+
+| Step (`analyses` kind) | Model | When it runs | Turned off by | Median per call |
+| --- | --- | --- | --- | --- |
+| Session analysis (`session`) | `analysis.model` | A session ended or idle for `idle_minutes`, with at least `min_prompts` prompts; up to `max_per_run` per run | `analysis.auto = false` (analyze by hand), or `backend = "none"` | $0.32 |
+| Parts of a long session (`chunk`) | `analysis.model` | A digest longer than `chunk_chars`: one call per part, then the merge | Part of session analysis | $0.61 |
+| Knowledge base (`synthesis`) | `synthesis.model` | A project gained `min_new_items` items, or its [weekly re-analysis](dashboard.md#project-groups) day came | `synthesis.auto = false` (weekly re-analysis still runs where you turned it on) | $0.87 |
+| Glossary (`glossary`) | `synthesis.model` | After a knowledge base is written: only the items added since the last pass; nothing new, no call | As knowledge bases; `interlatch glossary --rebuild` reads everything | $0.60 (whole project) |
+| Themes (`themes`) | `synthesis.model` | After the glossary, for categories of 25+ terms that have terms in no theme: only those terms are filed | As knowledge bases; `--themes --force` regroups everything | $0.10 (whole category) |
+| Weekly review (`review`) | `synthesis.model` | Once every session of a finished week is analyzed | `synthesis.auto = false` | $0.51 |
+| Group links (`group_graph`) | `synthesis.model` | **Analyze** on a group's Mindmap or Connections, and a group's weekly re-analysis when its links changed | Not pressing it; weekly re-analysis off | $0.40 |
+| Screening imported chats (`screen`) | `analysis.screen_model` | When you [screen imported chats](sources.md#screening-imported-chats) | Not screening | $0.10 |
+
+These run with no model call: alias evidence and search through the glossary, recounting themes and dropping glossary
+uses whose lessons were dismissed, the suggestions queue, which project a web chat belongs to, the Systems map, and
+every count and chart. The glossary and theme costs above are for a pass over a whole project or category; most
+passes now read only what is new, so they cost less.
+
+### What a lesson is about
+
+After each run, every new or changed lesson is linked to the things it names that Interlatch already knows: glossary
+terms (by name, or an alias your sessions used) and Systems map parts (a deployed app, a database, an outside
+service). A name in the title means the lesson is *about* it; one only in the body, that it *mentions* it. Names are
+matched on word boundaries, only for terms its project uses, and a name with punctuation only as written (`/status`
+is not the word "status"). No model is involved: relinking every lesson takes seconds (`interlatch knowledge
+--relink`). Checked by hand on 30 lessons the rules were not tuned on, 89% of title links named what the lesson is
+about.
+
 ## Language
 
 Interlatch writes in English unless `[analysis] language` is `ja` ([Configuration](configuration.md#analysis), or

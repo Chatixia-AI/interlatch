@@ -136,6 +136,8 @@ def _run_locked(cfg: Config, conn, report: WorkReport, *, session_ids, max_analy
         _weekly_refresh(cfg, conn, runner, report, due, progress=progress)
         if auto:
             _weekly_review(cfg, conn, runner, report, progress=progress)
+    if analyze or synthesize:
+        _links(cfg, conn, report)
     if export and cfg.export_markdown:
         try:
             report.exported = export(conn, cfg)
@@ -155,6 +157,18 @@ def _link_chats(conn) -> None:
     except Exception:  # a suggestion must never block analysis
         conn.rollback()
         log.exception("linking chats to projects failed")
+
+
+def _links(cfg: Config, conn, report: WorkReport) -> None:
+    """Link new lessons, and every lesson of a project whose glossary was just refreshed, to the things they name
+    (rules, no model)."""
+    from ..knowledge.links import link_lessons
+
+    try:
+        link_lessons(conn, cfg, projects=sorted(report.synthesized))
+    except Exception:  # links must never block analysis
+        conn.rollback()
+        log.exception("linking lessons failed")
 
 
 def _suggestions(cfg: Config, conn, report: WorkReport) -> None:

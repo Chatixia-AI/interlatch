@@ -383,3 +383,41 @@ def test_shared_projects_on_the_dashboard(limited):
     code, r = _call(url, "/api/projects/shared/remove", {"path": OTHER})
     assert code == 200 and [x["path"] for x in r["shared"]] == [PROJECTS]
     assert [a["action"] for a in people.audit_log(conn)][:2] == ["project-remove", "project-add"]
+
+
+# tables a limited connection leaves as they are: the hub's own records, which only endpoints outside LIMITED_GET read
+UNSHADOWED = {"hub_projects", "kv", "machines", "people", "people_audit", "people_codes", "people_tokens"}
+
+
+def test_every_table_is_filtered_for_a_limited_person_or_listed_as_safe(synced):
+    """A new table must get a view in access.limit, or be added above on purpose: a table nobody classified would show
+    every project's rows to someone limited to theirs."""
+    from interlatch.sharing import access
+
+    c = connect(synced["cfg"].db_path)
+    try:
+        access.limit(c, [PROJECTS])
+        tables = {r[0] for r in c.execute("SELECT name FROM main.sqlite_master WHERE type = 'table' "
+                                          "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%fts%'")}
+        views = {r[0] for r in c.execute("SELECT name FROM temp.sqlite_master WHERE type = 'view'")}
+        assert tables - views == UNSHADOWED
+    finally:
+        c.close()
+
+
+def test_a_limited_person_sees_the_links_of_their_projects_lessons_only(synced):
+    from interlatch.sharing import access
+
+    cfg, conn = synced["cfg"], synced["conn"]
+    _project_setup(conn, cfg)
+    for title in ("Resona lesson", "OTHER-CANARY lesson"):
+        kid = conn.execute("SELECT id FROM knowledge WHERE title = ?", (title,)).fetchone()[0]
+        conn.execute("INSERT INTO knowledge_links(knowledge_id, norm, name, target, basis, place) VALUES (?, ?, ?, ?, 'term', "
+                     "'title')", (kid, title.lower(), title, title))
+    conn.commit()
+    c = connect(cfg.db_path)
+    try:
+        access.limit(c, [PROJECTS])
+        assert [r[0] for r in c.execute("SELECT name FROM knowledge_links")] == ["Resona lesson"]
+    finally:
+        c.close()

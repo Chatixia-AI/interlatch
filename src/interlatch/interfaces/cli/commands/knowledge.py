@@ -104,7 +104,14 @@ def cmd_knowledge(args) -> int:
     cfg = load_cfg()
     conn = open_archive(cfg)
     console = new_console()
-    rows = search_knowledge(conn, args.query, project=args.project, kind=args.kind, limit=args.limit)
+    if args.relink:
+        from ....knowledge.links import link_lessons
+
+        n = link_lessons(conn, cfg, full=True)
+        total = conn.execute("SELECT COUNT(DISTINCT knowledge_id) FROM knowledge_links WHERE place = 'title'").fetchone()[0]
+        print(f"linked {n} lessons; {total} are about something the glossary or the Systems map knows")
+        return 0
+    rows = search_knowledge(conn, args.query, project=args.project, kind=args.kind, limit=args.limit, glossary=True)
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
         return 0
@@ -120,7 +127,7 @@ def cmd_knowledge(args) -> int:
 
 def cmd_glossary(args) -> int:
     from ....core.util import local_str, setup_logging
-    from ....knowledge.glossary import build_glossaries, glossary_entries, lookup
+    from ....knowledge.glossary import also, build_glossaries, glossary_entries, lookup
     from ....knowledge.synthesize import GLOBAL
 
     cfg = load_cfg()
@@ -153,7 +160,8 @@ def cmd_glossary(args) -> int:
             return 2
         conn.close()
         print(f"building {len(targets)} glossar{'y' if len(targets) == 1 else 'ies'} with {analyzer_label(cfg)}…")
-        results = build_glossaries(cfg, targets, concurrency=cfg.analysis.concurrency + 1, progress=lambda m: print(f"  {m}"))
+        results = build_glossaries(cfg, targets, concurrency=cfg.analysis.concurrency + 1, progress=lambda m: print(f"  {m}"),
+                                   full=True)
         ok = sum(1 for v in results.values() if isinstance(v, int))
         print(f"done: {ok}/{len(targets)} built, {sum(v for v in results.values() if isinstance(v, int))} terms")
         return 0
@@ -162,7 +170,7 @@ def cmd_glossary(args) -> int:
         if not e:
             print(f"{args.term!r} is not in the glossary")
             return 1
-        console.print(f"[bold]{e['term']}[/] [dim]{e['category']}" + (f" · also: {', '.join(e['aliases'])}" if e["aliases"] else "") + "[/]",
+        console.print(f"[bold]{e['term']}[/] [dim]{e['category']}" + (f" · {also(e)}" if e["aliases"] else "") + "[/]",
                       highlight=False)
         console.print(e["definition"] or "", highlight=False, markup=False)
         for u in e["usage"]:
@@ -553,6 +561,8 @@ def add_knowledge(sub) -> None:
     s.add_argument("-n", "--limit", type=int, default=30)
     s.add_argument("--brief", action="store_true")
     s.add_argument("--json", action="store_true")
+    s.add_argument("--relink", action="store_true",
+                   help="link every lesson again to the glossary terms and Systems map parts it names (no model)")
     s.set_defaults(fn=cmd_knowledge)
 
 
@@ -564,7 +574,7 @@ def add_glossary(sub) -> None:
     s.add_argument("--rebuild", action="store_true", help="rebuild with the analysis model (-p PROJECT or --all)")
     s.add_argument("--all", action="store_true")
     s.add_argument("--themes", action="store_true", help="group big categories into themes with the analysis model (the Map's Theme level)")
-    s.add_argument("--force", action="store_true", help="with --themes: regroup categories that have not changed")
+    s.add_argument("--force", action="store_true", help="with --themes: regroup every big category from scratch, not just file its new terms")
     s.set_defaults(fn=cmd_glossary)
 
 

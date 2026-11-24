@@ -660,6 +660,7 @@ window.INTERLATCH_JA = {
   "all mentions →": "すべての言及 →",
   "on the map →": "マップ上で見る →",
   "also {names}": "別名：{names}",
+  "Added by the model: not found in your sessions": "モデルが追加した別名です。セッションには見つかりませんでした",
   "Term": "用語",
   "Category": "カテゴリ",
   "Definition": "定義",
