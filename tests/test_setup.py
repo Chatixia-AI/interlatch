@@ -425,3 +425,72 @@ def test_tests_never_reach_this_computers_own_agents():
     assert Path("~/.config").expanduser() not in install.systemd_dir().parents
     r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{install.UI_LABEL}"], capture_output=True, text=True)
     assert r.returncode == 113 and r.stdout == ""
+
+
+def test_the_dashboard_agent_runs_as_a_standard_process_and_the_sync_in_the_background(env, monkeypatch):
+    """A Background dashboard ran on the efficiency cores, throttled: the Systems map took 15-20 s instead of 3."""
+    from interlatch.runtime import install
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr(install, "uses_systemd", lambda: False)
+    monkeypatch.setattr(install, "on_windows", lambda: False)
+    written = {}
+    monkeypatch.setattr(install, "_bootstrap", lambda label, plist: written.update({label: plist}))
+    install.install_ui_agent(env["cfg"], "/opt/bin/interlatch", retire=False)
+    install.install_launchd(env["cfg"], "/opt/bin/interlatch", retire=False)
+    assert written[install.UI_LABEL]["ProcessType"] == "Standard"
+    assert (written[install.LAUNCHD_LABEL]["ProcessType"], written[install.LAUNCHD_LABEL]["Nice"]) == ("Background", 10)
+
+
+def test_a_dashboard_agent_written_before_reloads_itself_as_a_standard_process(tmp_path, monkeypatch):
+    import plistlib
+    import shlex
+    import subprocess
+
+    from interlatch.runtime import install
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    path = install.plist_path(install.UI_LABEL)  # conftest's scratch folder, never ~/Library/LaunchAgents
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old = {"Label": install.UI_LABEL, "ProgramArguments": ["/opt/bin/interlatch", "ui"], "KeepAlive": True,
+           "ProcessType": "Background", "StandardErrorPath": str(tmp_path / "ui.err.log")}
+    path.write_bytes(plistlib.dumps(old))
+    started = []
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: started.append((cmd, kw)))
+
+    monkeypatch.delenv("XPC_SERVICE_NAME", raising=False)  # `interlatch ui` in a terminal: not the agent
+    assert install.refresh_ui_agent() is None and not started
+    monkeypatch.setenv("XPC_SERVICE_NAME", install.UI_LABEL)
+    assert install.refresh_ui_agent() == "dashboard agent now runs as a standard process; launchd is loading it again"
+    assert plistlib.loads(path.read_bytes()) == {**old, "ProcessType": "Standard"}
+    [(cmd, kw)] = started
+    domain = f"gui/{os.getuid()}"
+    assert cmd[:2] == ["/bin/sh", "-c"] and kw["start_new_session"]
+    assert cmd[2].startswith(f"launchctl bootout {domain}/{install.UI_LABEL}; ")
+    assert f"launchctl bootstrap {domain} {shlex.quote(str(path))} && exit 0" in cmd[2]
+    assert install.refresh_ui_agent() is None and len(started) == 1  # once: the new agent is a standard one
+
+
+def test_an_agent_file_that_isnt_the_dashboards_is_left_alone(monkeypatch):
+    import plistlib
+    import subprocess
+
+    from interlatch.runtime import install
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setenv("XPC_SERVICE_NAME", install.UI_LABEL)
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: pytest.fail("reloaded an agent it shouldn't"))
+    path = install.plist_path(install.UI_LABEL)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert install.refresh_ui_agent() is None  # no file
+    for body in (b"not a plist", plistlib.dumps(["a", "list"]), plistlib.dumps({"Label": "other", "ProcessType": "Background"})):
+        path.write_bytes(body)
+        assert install.refresh_ui_agent() is None and path.read_bytes() == body
+
+
+def test_tests_never_run_launchctl_through_a_shell_either():
+    """install.refresh_ui_agent() runs launchctl from a detached /bin/sh: conftest stops that too."""
+    import subprocess
+
+    p = subprocess.Popen(["/bin/sh", "-c", "launchctl print gui/0/nothing; exit 7"])
+    assert p.wait() == 0  # an empty Python ran instead

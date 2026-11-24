@@ -83,7 +83,6 @@ nav:
       - Data and privacy: privacy.md
       - FAQ: faq.md
       - Troubleshooting: troubleshooting.md
-      - Moving from Chronicle: moving-from-chronicle.md
       - Development: development.md
   - 日本語:
       - ホーム: ja/index.md
@@ -105,5 +104,4 @@ nav:
       - データとプライバシー: ja/privacy.md
       - よくある質問: ja/faq.md
       - トラブルシューティング: ja/troubleshooting.md
-      - Chronicle からの移行: ja/moving-from-chronicle.md
       - 開発: ja/development.md

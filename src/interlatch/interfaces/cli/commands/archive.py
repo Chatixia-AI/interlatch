@@ -103,15 +103,17 @@ def cmd_show(args) -> int:
 def cmd_search(args) -> int:
     from rich.markup import escape
 
-    from ....application.search import search_knowledge, search_sessions
+    from ....application.search import added_names, query_groups, search_knowledge, search_sessions
     from ....core.util import local_str
 
     cfg = load_cfg()
     conn = open_archive(cfg)
     console = new_console()
     query = " ".join(args.query)
+    if added := added_names(query_groups(conn, query, glossary=True)):
+        console.print(f"[dim]also searching {escape(', '.join(added))} (glossary)[/]\n", highlight=False)
     if not args.sessions_only:
-        ks = search_knowledge(conn, query, project=args.project, limit=args.limit)
+        ks = search_knowledge(conn, query, project=args.project, limit=args.limit, glossary=True)
         if ks:
             console.print(f"[bold]Knowledge[/] ({len(ks)})")
             for k in ks:
@@ -119,7 +121,7 @@ def cmd_search(args) -> int:
                               f"{(k.get('session_id') or '')[:8]}[/]", highlight=False)
             console.print()
     if not args.knowledge_only:
-        ss = search_sessions(conn, query, project=args.project, limit=args.limit)
+        ss = search_sessions(conn, query, project=args.project, limit=args.limit, glossary=True)
         console.print(f"[bold]Sessions[/] ({len(ss)})")
         for s in ss:
             console.print(f"  [green]{s['session_id'][:8]}[/] {local_str(s['started_at'], '%Y-%m-%d')} "

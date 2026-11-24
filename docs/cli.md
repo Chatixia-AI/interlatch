@@ -9,8 +9,8 @@
 | `interlatch ui [--open] [--menu-bar]` | Dashboard (also always running at :11524 after install; if it is, `interlatch ui` says so and `--open` opens it). On macOS the one that runs at login also shows [the menu-bar icon](install.md#the-menu-bar-icon) if you turned it on at install; `--menu-bar`/`--no-menu-bar` overrides that. Sessions, Knowledge, Projects and Glossary switch between Cards and List (a sortable table; click a row for details), remembered per page |
 | `interlatch sessions [-p project] [--since 7d]` | List sessions |
 | `interlatch show <id-prefix> [--transcript\|--markdown\|--json]` | Session overview or full conversation |
-| `interlatch search <words>` | Full-text search over transcripts + knowledge (any language, 3+ chars) |
-| `interlatch knowledge [query] [-k gotcha] [-p project]` | Browse extracted knowledge |
+| `interlatch search <words>` | Full-text search over transcripts + knowledge (any language, 3+ chars); words that name a glossary term also find its other names |
+| `interlatch knowledge [query] [-k gotcha] [-p project]` | Browse extracted knowledge; `--relink` links every lesson again to the glossary terms and Systems map parts it names (no model, seconds) |
 | `interlatch projects` / `interlatch stats [--since 30d]` | Per-project and overall statistics |
 | `interlatch analyze <id> \| --pending [--limit N] [--dry-run] [--backend codex]` | Analyze now (`--dry-run` shows digest sizes, no tokens spent; `--backend` picks the agent or [model provider](analysis.md#model-providers) for this run only) |
 | `interlatch synthesize [--project P] [--global] [--all]` | Rebuild knowledge bases |
@@ -34,7 +34,6 @@
 | `interlatch mcp [--print-config]` | Run the MCP server (clients start it), or print a config entry for any other MCP client |
 | `interlatch status` | Health: hooks, agents, MCP, queue, failures |
 | `interlatch feedback [bug\|idea] [--title T] [--print]` | Report a problem (a new issue on GitHub, the default) or suggest an idea (a new discussion in Ideas): shows this install's details (versions, system, how it was installed, analysis, its part in a hub, agents recorded; never paths, addresses or what is in your sessions), then opens the page with them filled in. Nothing is sent until you post it there. `--print`: only print the page's address. Alias `bug`. In the dashboard: **Settings › Feedback** |
-| `interlatch migrate [--dry-run]` | Move a Chronicle setup over: `~/.claude-chronicle` to `~/.interlatch`, and hooks, MCP servers, permission rules and background agents to the new names. Runs by itself when the dashboard, the sync, `install` or the app starts; `--dry-run` shows what it would change ([Moving from Chronicle](moving-from-chronicle.md)) |
 | `interlatch tailnet on\|off\|status [--anyone]` | Open the dashboard on your phone and other devices through Tailscale Serve, to your Tailscale login only (`--anyone`: everyone in your tailnet) ([Phone and other computers](devices.md#your-phone)) |
 | `interlatch mirror [status]` / `mirror sync [--full]` | The copy of this archive in Postgres: where it is, what each table holds and the last write; or write it now (`--full`: every row again) ([A copy in Postgres](postgres.md)) |
 | `interlatch hub enable [--rotate]` | Make this computer the hub for your others; prints the `interlatch hub join` command to run on them |

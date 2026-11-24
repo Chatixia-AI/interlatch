@@ -42,19 +42,14 @@ npx @vscode/vsce package          # interlatch-0.4.0.vsix を作成
 code --install-extension interlatch-0.4.0.vsix
 ```
 
-一覧が読み込む `/api/file` と `/api/files` エンドポイントは、Interlatch と 0.6.1 より新しい Chronicle にあります。
-古いバージョンでは、一覧にアップデートするよう表示されます。
-
-**Chronicle 拡張機能から移る場合。** 0.3.0 より前は Chronicle 拡張機能（`chatixia.chronicle-sessions`、セクションは
-**Chronicle: …**）でした。この拡張機能をインストールしてから Chronicle をアンインストールしてください。両方が
-インストールされていると、Interlatch が一度だけアンインストールを提案します（**Uninstall Chronicle**）。Chronicle で
-変えた設定はそのまま使えます。設定していない `interlatch.*` は、対応する `chronicle.*` の値を使います。
+一覧はダッシュボードの `/api/file` と `/api/files` エンドポイントを読みます。これらがない古いダッシュボードでは、
+一覧にアップデートするよう表示されます。
 
 ## 設定
 
 | 設定 | 既定値 | 内容 |
 | --- | --- | --- |
-| `interlatch.url` | 空：`chronicle.url` を設定していればその値、なければ `http://127.0.0.1:11524`、それもなければ `:8765` | ダッシュボードのアドレス。Interlatch の[設定](configuration.md)で `[server] port` を変えた場合は合わせて変更します。ユーザー設定の値だけが使われます。ワークスペースの `.vscode/settings.json` では設定できないので、リポジトリが拡張機能を別のサーバーに向けることはできません。 |
+| `interlatch.url` | 空：`http://127.0.0.1:11524`、なければ `:8765` | ダッシュボードのアドレス。Interlatch の[設定](configuration.md)で `[server] port` を変えた場合は合わせて変更します。ユーザー設定の値だけが使われます。ワークスペースの `.vscode/settings.json` では設定できないので、リポジトリが拡張機能を別のサーバーに向けることはできません。 |
 | `interlatch.includeReads` | `true` | 読んだだけのセッションとファイルも表示します。オフにすると、セッションが変更したものだけになります。 |
 | `interlatch.showIgnoredFiles` | `false` | git が無視するファイル（スクリーンショット、ビルド出力、キャッシュ）も **Interlatch: Files in Workspace** に表示します。 |
 

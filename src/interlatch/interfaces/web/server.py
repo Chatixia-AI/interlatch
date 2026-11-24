@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -84,6 +85,14 @@ def serve(cfg: Config, host: str | None = None, port: int | None = None, open_br
             print(f"Quit from the notification-area icon. {QUIT_TEXT}", flush=True)
             return
     update.RESTARTABLE = True  # this process is only the dashboard, so an update can re-exec it
+    from ...runtime.install import refresh_ui_agent
+
+    try:
+        if done := refresh_ui_agent():
+            print(done, flush=True)
+            time.sleep(30)  # launchd stops this process in a moment and starts the new agent; if not, serve anyway
+    except OSError as exc:
+        print(f"Could not update the dashboard's launchd agent: {exc}", file=sys.stderr, flush=True)
     try:
         httpd = make_server(cfg, host, port)
     except OSError as exc:
@@ -94,6 +103,12 @@ def serve(cfg: Config, host: str | None = None, port: int | None = None, open_br
     print(banner or f"Interlatch dashboard: {url}  (Ctrl+C to stop)", flush=True)
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    if not cfg.hub_dedicated:  # the Systems map, built before anyone opens it (not while the dashboard starts up)
+        from ...projects import systems
+
+        warm = threading.Timer(10, systems.refresh, (cfg.db_path, cfg))
+        warm.daemon = True
+        warm.start()
     from ...runtime.platforms.menubar import run_with_server, wants_menu_bar
 
     if (wants_menu_bar(cfg) if menu_bar is None else menu_bar) and run_with_server(cfg, httpd, url):

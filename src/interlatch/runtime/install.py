@@ -69,14 +69,30 @@ def write_shim(target: str) -> Path:
     return path
 
 
+def _on_path() -> list[Path]:
+    """Every `interlatch` on PATH in PATH's order, then every `chronicle`."""
+    hits = (shutil.which(name, path=folder) for name in COMMANDS for folder in os.get_exec_path() if folder)
+    return list(dict.fromkeys(Path(hit).absolute() for hit in hits if hit))
+
+
+def _other_install(command: Path) -> bool:
+    """Whether a command on PATH is another install's: as found, or with its links followed, it is in the bin (Scripts)
+    folder of a Python environment that is not the one running. A terminal with a checkout's .venv switched on has
+    that one first on PATH; a checkout's command run by its path finds the installed one's link there."""
+    here = Path(sys.prefix).resolve()
+    return any((env / "pyvenv.cfg").is_file() and env.resolve() != here
+               for env in {command.parent.parent, command.resolve().parent.parent})
+
+
 def executable() -> str:
     """Absolute path of the installed `interlatch` command, or `chronicle` (its alias), else python -m interlatch.
 
     A PATH entry outside this environment (~/.local/bin/interlatch) wins: it survives `uv tool install --force`, and
-    the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle."""
+    the move from the agents-chronicle package, whose environment goes away, keeps ~/.local/bin/chronicle. Never
+    another install's command (_other_install), wherever it is on PATH: this names the install that is running."""
     if getattr(sys, "frozen", False):  # inside Interlatch.app
         return str(write_shim(sys.executable))
-    found = [str(Path(f).absolute() if not on_windows() else Path(f).resolve()) for f in map(shutil.which, COMMANDS) if f]
+    found = [str(f if not on_windows() else f.resolve()) for f in _on_path() if not _other_install(f)]
     outside = [f for f in found if not f.startswith(os.path.join(sys.prefix, ""))]
     if outside or found:
         return (outside or found)[0]
@@ -485,7 +501,7 @@ def install_ui_agent(cfg: Config, exe: str, *, dry_run: bool = False, retire: bo
         "RunAtLoad": True,
         "KeepAlive": True,
         "ThrottleInterval": 30,
-        "ProcessType": "Background",
+        "ProcessType": UI_PROCESS_TYPE,
         "EnvironmentVariables": _agent_env(cfg),
         "StandardOutPath": str(cfg.logs_dir / "ui.out.log"),
         "StandardErrorPath": str(cfg.logs_dir / "ui.err.log"),
@@ -493,6 +509,52 @@ def install_ui_agent(cfg: Config, exe: str, *, dry_run: bool = False, retire: bo
     if err:
         return [f"dashboard agent failed: {err}"]
     return [f"dashboard always available at {url}"] + (retire_legacy_agent(UI_LABEL) if retire else [])
+
+
+# The dashboard answers clicks, so it runs as a standard process. As "Background", which every install wrote until
+# 2026-11, macOS kept it on the efficiency cores, throttled, and a request took about six times as long
+# (docs/design/systems-map-performance.md).
+UI_PROCESS_TYPE = "Standard"
+
+
+def refresh_ui_agent() -> str | None:
+    """Run by the dashboard at start: when its launchd agent is one written before UI_PROCESS_TYPE, rewrite the plist
+    and have launchd load it again, which starts a new dashboard and stops this one. launchd reads ProcessType only
+    when it loads an agent, and nothing else would load it again before the next login. Only on macOS, from the agent
+    itself; says what it did, or None."""
+    if platform.system() != "Darwin" or os.environ.get("XPC_SERVICE_NAME") != UI_LABEL:
+        return None
+    path = plist_path(UI_LABEL)
+    try:
+        with open(path, "rb") as fh:
+            plist = plistlib.load(fh)
+    except (OSError, plistlib.InvalidFileException, ValueError):
+        return None
+    if not isinstance(plist, dict) or plist.get("Label") != UI_LABEL or plist.get("ProcessType") == UI_PROCESS_TYPE:
+        return None
+    plist["ProcessType"] = UI_PROCESS_TYPE
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "wb") as fh:
+        plistlib.dump(plist, fh)
+    os.replace(tmp, path)
+    domain = f"gui/{os.getuid()}"
+    # its own session, so launchd stopping this agent's processes doesn't stop the shell; bootstrap fails while the
+    # old agent is still going away, so it tries for a while
+    script = (f"launchctl bootout {domain}/{UI_LABEL}; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do "
+              f"launchctl bootstrap {domain} {shlex.quote(str(path))} && exit 0; sleep 1; done; exit 1")
+    out = subprocess.DEVNULL
+    if isinstance(err_log := plist.get("StandardErrorPath"), str):  # launchctl's errors, if any, go to the agent's log
+        try:
+            out = open(err_log, "ab")
+        except OSError:
+            pass
+    try:
+        subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True, stdin=subprocess.DEVNULL, stdout=out,
+                         stderr=subprocess.STDOUT)
+    finally:
+        if out is not subprocess.DEVNULL:
+            out.close()
+    return f"dashboard agent now runs as a {UI_PROCESS_TYPE.lower()} process; launchd is loading it again"
 
 
 def install_launchd(cfg: Config, exe: str, *, interval: int = 900, dry_run: bool = False, retire: bool = True) -> list[str]:

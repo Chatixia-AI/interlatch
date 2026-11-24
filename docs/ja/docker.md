@@ -254,8 +254,7 @@ docker compose restart hub
 
 コンテナーは起動のたびに、次の変数から `config.toml` を設定します。値のある変数は `config.toml` より優先され、
 未設定または空の変数は `config.toml` をそのままにします。それ以外の設定は `config.toml` に残ります。
-`docker compose exec hub interlatch config set ...` で変更し、ハブを再起動してください。どの変数も、名前が変わる前の
-名前（`INTERLATCH_HUB_URL` なら `CHRONICLE_HUB_URL`）でも読み込むので、以前の `.env` もそのまま使えます。
+`docker compose exec hub interlatch config set ...` で変更し、ハブを再起動してください。
 
 | 変数 | 既定値 | |
 |---|---|---|
@@ -337,13 +336,6 @@ Postgres は 17 のままです。新しいメジャーバージョンは、移�
 バージョンを固定するには、`.env` の `INTERLATCH_VERSION` にリリースのバージョン番号を設定します。ダッシュボードからは
 コンテナーをアップデートできません。**Status** には、代わりに新しいイメージを取得するよう表示されます。
 
-**Chronicle として用意したハブ**も同じ手順で移行できます。新しい `compose.yaml`（`Caddyfile` も、変更していなければ）を
-ダウンロードし、`.env` はそのままにして、上と同じく取得と起動をします。`docker compose logs hub` に
-`Interlatch hub is up` と表示されます。データは移動しません。ボリューム、Postgres のデータベースとユーザー（`chronicle`）、
-`/data` のデータはそのままです。`.env` で名前が変わる前のバージョンを固定している（`CHRONICLE_VERSION=0.13.0`）場合は、
-その行を削除してください。`interlatch-hub` のイメージにはそれほど古いタグがありません。古い `compose.yaml` のまま取得する
-だけのハブも動き続けます。`ghcr.io/chatixia-ai/chronicle-hub` にも各リリースが届きます（[Chronicle からの移行](moving-from-chronicle.md)）。
-
 ## バックアップする
 
 ハブの動作中にデータベースをコピーし、チームストアをダンプします。
@@ -371,11 +363,11 @@ docker compose exec -T postgres pg_dump -U chronicle chronicle > team-store.sql
 実行します。保持しているものはそのまま残りますが、ほかのコンピューターはそこへ送れなくなります。
 
 **自分のダッシュボード `http://127.0.0.1:11524/` が応答しなくなった。** VS Code の Remote-SSH でサーバーにつなぎ、
-ハブのログを読んだあとに起こります。0.13.0 のイメージは `Chronicle dashboard: http://127.0.0.1:11524/` と表示し、
+ハブのログを読んだあとに起こります。初期のハブのイメージはダッシュボードのアドレス `http://127.0.0.1:11524/` を表示し、
 VS Code がそのポートを自分のコンピューターへ転送して、自分のダッシュボードの前に立ってしまいます。サーバーにつないだ
 VS Code のウィンドウ（隅に **SSH: …** と表示されるもの）で **Ports** を開き、11524 を右クリックして **Stop
 Forwarding Port** を選びます。VS Code の設定に `"remote.portsAttributes": { "11524": { "onAutoForward": "ignore" } }` を
-加えると、再発しません。以降のイメージは代わりに `Interlatch hub is up: <ハブのアドレス>`（名前が変わる前は `Chronicle hub is up`）と表示します。
+加えると、再発しません。以降のイメージは代わりに `Interlatch hub is up: <ハブのアドレス>` と表示します。
 
 **HTTPS がつながらない。** 名前がサーバーの IP アドレスを指しているか、ポート 80 と 443 が開いているか、
 `docker compose logs caddy` の内容を確認してください。社内ネットワークからしか届かないサーバーには Let's Encrypt が

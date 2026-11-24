@@ -2,9 +2,17 @@
 
 [← Interlatch](../README.md) · [Docs index](README.md)
 
-Interlatch runs on macOS and [Windows](#windows) and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup lists them all and asks which to use (Claude Code when it is installed, unless you pick another); switch any time in **Status › Analysis**, with `interlatch install --backend <name>` or with `interlatch config set analysis.backend <name>`. There are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
+Interlatch runs on macOS, [Windows](#windows) and [Linux](#linux) and needs something to analyze sessions: a logged-in [Claude Code](https://claude.com/claude-code) (`claude`) or [Codex](https://github.com/openai/codex) (`codex`), IBM Bob with a Bob API key, or a model provider's API with your own key ([Model providers](analysis.md#model-providers)). Setup lists them all and asks which to use (Claude Code when it is installed, unless you pick another); switch any time in **Status › Analysis**, with `interlatch install --backend <name>` or with `interlatch config set analysis.backend <name>`. On a Mac there are two ways to run it; both use the same data in `~/.interlatch` and can coexist.
 
-Interlatch was called Chronicle. To update from Chronicle, see [Moving from Chronicle](moving-from-chronicle.md).
+| Where | How to install |
+| --- | --- |
+| macOS 13 or later, Apple silicon | The [desktop app](#desktop-app) or the [command line](#command-line) |
+| macOS on an Intel Mac | The [command line](#command-line) |
+| Windows 10 and 11 | The [command line in PowerShell](#windows) |
+| Linux | The [command line](#linux), with systemd running it in the background |
+| A server for your team | [A hub in Docker](docker.md) |
+| VS Code, Cursor, Windsurf, Antigravity, VSCodium | The [VS Code extension](vscode.md#install), next to any of the above |
+| Chrome, Edge, Brave | The [browser extension](sources.md#saving-chats-as-you-use-the-sites), for claude.ai and ChatGPT chats |
 
 ## Desktop app
 
@@ -61,7 +69,7 @@ run `uv tool install --python 3.13 .` in it.
    first install only, and again while the chosen one can't run; `--backend <name>` answers without asking (and,
    without a terminal, says which `interlatch config` commands finish setting it up). With nothing ready,
    sessions are recorded but not analyzed until one is set up.
-2. Lists the coding agents on this Mac (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode) and the MCP-only clients it
+2. Lists the coding agents on this computer (Claude Code, Codex, GitHub Copilot, IBM Bob, Google Antigravity, OpenCode) and the MCP-only clients it
    finds (Claude Desktop, Cursor, Windsurf, Gemini CLI), with how many sessions each has on disk.
 3. Asks, for each one found and not yet connected, whether to record it (default yes), and whether to give each
    MCP client Interlatch's tools. Codex Cloud is offered after Codex and defaults to no, since it goes online.
@@ -171,6 +179,41 @@ Not on Windows yet:
 - **Joining a team hub** is untested from Windows: the hub matches Windows folders however they're spelled, but no
   team has run one with a Windows computer yet.
 
+## Linux
+
+On Linux Interlatch is the command-line install; there is no desktop app. Install uv with its installer (or your
+package manager), then Interlatch:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh     # uv, if you don't have it yet
+source "$HOME/.local/bin/env"                       # where uv and interlatch go; new terminals know it already
+uv tool install --python 3.13 interlatch
+interlatch install
+```
+
+`interlatch install` asks what it asks on a Mac. In place of launchd it writes systemd user units to
+`~/.config/systemd/user/` and enables them:
+
+| Unit | What it does |
+| --- | --- |
+| `interlatch-sync.timer` | Runs `interlatch-sync.service`, which is `interlatch sync --work`, every 15 minutes |
+| `interlatch-ui.service` | Keeps the dashboard at <http://127.0.0.1:11524/>, restarted 30 seconds after it stops |
+
+User units run while you are logged in. On a computer that should keep recording with nobody logged in, such as a
+[hub](devices.md#a-linux-hub) for your other computers, run `loginctl enable-linger $USER` once. Their output goes to
+the journal (`journalctl --user -u interlatch-ui.service`); Interlatch's own logs are in `~/.interlatch/logs/`. Restart
+the dashboard with `systemctl --user restart interlatch-ui.service`. `--no-launchd` and `--no-ui` skip or remove these
+units as they do the launchd agents, and `interlatch uninstall` disables and removes them.
+
+Without systemd (some containers, WSL without systemd), `interlatch install` says it skipped the background pieces.
+Run `interlatch ui` for the dashboard and schedule the sync yourself, for example with cron:
+
+```bash
+*/15 * * * * $HOME/.local/bin/interlatch sync --work --quiet
+```
+
+New-version [notifications](#updating) use `notify-send`. There is no menu-bar or tray icon on Linux.
+
 ## The menu-bar icon
 
 On macOS, Interlatch's mark (the stack of pages from its app icon) can sit in the menu bar. The desktop app always
@@ -251,7 +294,6 @@ line.
 | `uv tool install .` (a checkout) | `uv tool upgrade --reinstall interlatch`, offered when the checkout's files changed after the install; no network check |
 | `uv sync` / `uv run` in a checkout (editable) | Nothing: the card says **git pull to update** |
 | `pipx` or `pip` | `pipx upgrade interlatch` or `pip install --upgrade interlatch` |
-| `uv tool install agents-chronicle` or `pipx install agents-chronicle` (Chronicle's package) | Moves it to `interlatch` with the same extras, even at the same version: uv installs `interlatch` over it, uninstalls `agents-chronicle`, then installs `interlatch` again; pipx uninstalls, then installs ([Moving from Chronicle](moving-from-chronicle.md)) |
 | The desktop app | Nothing: **Download** opens the latest release to drag into Applications |
 
 Only **Check for updates** goes online (to pypi.org), or, if you turn on **Check for updates daily** on the same

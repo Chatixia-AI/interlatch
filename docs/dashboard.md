@@ -329,12 +329,27 @@ holds other projects is a group, and a project that also ran on another machine 
 runs on**. `interlatch systems` prints the same map in the terminal, `interlatch systems NAME --evidence` one system with
 its example commands. To use sessions only, set `[systems] read_manifests = false` ([Configuration](configuration.md#systems)).
 
+The dashboard builds the map a few seconds after it starts, so opening it doesn't wait. When sessions, files or the
+glossary change, or five minutes after the last build (for manifests edited on disk), opening the map shows the last
+build at once and starts a new one in the background; the next visit shows the new one. After you change
+`read_manifests` or the excluded projects, the next visit waits for a map built with the new setting.
+
 ## Glossary
 
 built by the analysis model from each project's distilled knowledge (not the raw transcripts), one call per
-project plus a cross-project pass, refreshed whenever a project's knowledge base is re-synthesized. Each term has
+project plus a cross-project pass, refreshed whenever a project's knowledge base is re-synthesized. A refresh reads only
+the knowledge items added since the last one, with the glossary's existing terms, and adds new terms or updates the
+ones those items mention; nothing new means no call. A term used only because of knowledge items that were since
+dismissed or superseded drops out of that project, with no call. The first pass, a pass after more than 200 new
+items, and `interlatch glossary --rebuild` (or **Rebuild glossary** on the Glossary page) read all of a project's knowledge
+again. Each term has
 a category, aliases (abbreviations, translations of Japanese business terms), a definition, a per-project usage
 note, related terms, and full-text statistics: how many sessions mention it, first and last seen, top sessions.
+
+Each alias is also looked up in your transcripts. One that no session used is shown last, dotted, with **Added by the
+model** on hover, and it is the first to go when a term has more than ten. Two terms are joined into one only on a
+shared alias your sessions used, so a name the model made up can't merge two different things. Translations often
+show as added by the model: you write the term one way, and the model adds the other language's name.
 
 ## Map
 
@@ -364,7 +379,11 @@ on the map (*on the map →*).
 
 The analysis model splits each glossary category with 25 or more terms into 4–10 named themes (for example concept →
 "Cloud infra, auth & integrations", "Agent dev workflow & tooling"), one call per category, so no level of
-the map is a long list. Themes are rebuilt after glossary rebuilds, only for categories whose terms changed; terms
-added since then show as *Not grouped yet*. Run it by hand with `interlatch glossary --themes [--force]` or the
-**Group into themes** button in the map's side panel. On a 1,360-term glossary, the ten big categories cost about
-$1.40 API-equivalent in total.
+the map is a long list. After each glossary rebuild, only the terms in no theme yet (new, or moved from another
+category) are sent, with the category's themes, and filed into them; the model makes a new theme only for a subject
+two or more new terms share, and the rest go to *Other*. Terms already placed stay where they are, so the map keeps
+its shape. A category with no themes yet, or more than half new, is grouped from scratch. Terms dropped from the
+glossary need no call: their themes are recounted, and a theme left empty goes. Until the next run, new terms show as
+*Not grouped yet*. Run it by hand with `interlatch glossary --themes` or the **Group into themes** button in the map's
+side panel; `--force` regroups every big category from scratch. On a 1,360-term glossary, grouping the ten big
+categories from scratch cost about $1.40 API-equivalent in total.

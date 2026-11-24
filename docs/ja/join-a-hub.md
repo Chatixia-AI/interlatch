@@ -25,8 +25,7 @@ interlatch hub join https://interlatch.example.com --code XXXX-XXXX-XXXX --share
 
 ## 1. Interlatch をインストールする
 
-インストール済みなら飛ばしてください。以前の名前の Chronicle が入っている場合は、代わりに
-[Chronicle からの移行](moving-from-chronicle.md)を読んでください。
+インストール済みなら飛ばしてください。
 
 ```bash
 uv tool install --python 3.13 interlatch

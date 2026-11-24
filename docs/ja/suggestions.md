@@ -162,7 +162,7 @@ Interlatch が行う設定の変更はこれだけです。編集したテキス
 
 - 種類、出どころ（*from what goes wrong* または *from knowledge*）、エージェント
 - 根拠：「seen in 31 sessions across 17 projects · still happening · last 2026-10-01」、ナレッジなら
-  「established · confirmed in 2 sessions · agents-chronicle」と、開ける例のセッション 2 件
+  「established · confirmed in 2 sessions · billing-api」と、開ける例のセッション 2 件
 - 警告（後述）
 - 行そのもの。編集できます。入力欄を離れると文言が保存され、以後の更新でも残ります。**Reset to the proposed text** で元に戻せます。
 

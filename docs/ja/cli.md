@@ -9,8 +9,8 @@
 | `interlatch ui [--open] [--menu-bar]` | ダッシュボード（インストール後は :11524 で常時稼働。稼働中なら `interlatch ui` がそう表示し、`--open` でそれを開きます）。macOS でログイン時に起動するものは、インストール時にオンにしていれば[メニューバーアイコン](install.md#メニューバーアイコン)も表示します。`--menu-bar`/`--no-menu-bar` で切り替えられます。Sessions、Knowledge、Projects、Glossary は Cards と List（並べ替え可能な表。行をクリックで詳細）を切り替えられ、ページごとに記憶されます |
 | `interlatch sessions [-p project] [--since 7d]` | セッションの一覧 |
 | `interlatch show <id-prefix> [--transcript\|--markdown\|--json]` | セッションの概要、または会話全体 |
-| `interlatch search <words>` | トランスクリプトとナレッジの全文検索（言語を問わず、3 文字以上） |
-| `interlatch knowledge [query] [-k gotcha] [-p project]` | 抽出されたナレッジの閲覧 |
+| `interlatch search <words>` | トランスクリプトとナレッジの全文検索（言語を問わず、3 文字以上）。用語集の用語にあたる語は、そのほかの名前でも検索 |
+| `interlatch knowledge [query] [-k gotcha] [-p project]` | 抽出されたナレッジの閲覧。`--relink` で、すべての教訓を、その文中にある用語集の用語とシステムマップの部品に結び付け直します（モデルなし、数秒） |
 | `interlatch projects` / `interlatch stats [--since 30d]` | プロジェクト別と全体の統計 |
 | `interlatch analyze <id> \| --pending [--limit N] [--dry-run] [--backend codex]` | 今すぐ分析（`--dry-run` は要約のサイズを表示するだけで、トークンを使いません。`--backend` はこの実行だけで使うエージェントか[モデルプロバイダー](analysis.md#モデルプロバイダー)を選びます） |
 | `interlatch synthesize [--project P] [--global] [--all]` | ナレッジベースを再構築 |
@@ -34,7 +34,6 @@
 | `interlatch mcp [--print-config]` | MCP サーバーを実行（クライアントが起動します）、またはほかの MCP クライアント用の設定項目を出力 |
 | `interlatch status` | 状態確認：フック、エージェント、MCP、キュー、失敗 |
 | `interlatch feedback [bug\|idea] [--title T] [--print]` | 不具合を報告（GitHub の新しい Issue、既定）、またはアイデアを提案（Ideas の新しいディスカッション）。このインストールの情報（バージョン、システム、インストール方法、分析、ハブでの役割、記録しているエージェント。パス、アドレス、セッションの中身は含みません）を表示してから、それを記入済みのページを開きます。そこで投稿するまで何も送られません。`--print`：ページのアドレスを表示するだけ。別名 `bug`。ダッシュボードでは **設定 › フィードバック** |
-| `interlatch migrate [--dry-run]` | Chronicle の環境を移行：`~/.claude-chronicle` を `~/.interlatch` に移し、フック、MCP サーバー、許可ルール、バックグラウンドエージェントを新しい名前にします。ダッシュボード、同期、`install`、アプリが始まるときに自動で行われます。`--dry-run` は何が変わるかを表示するだけです（[Chronicle からの移行](moving-from-chronicle.md)） |
 | `interlatch tailnet on\|off\|status [--anyone]` | Tailscale Serve でダッシュボードをスマートフォンやほかのデバイスから開けるようにする。通すのはあなたの Tailscale ログインだけ（`--anyone` で tailnet の全員）（[スマートフォンとほかのコンピューター](devices.md#スマートフォン)） |
 | `interlatch mirror [status]` / `mirror sync [--full]` | このアーカイブの Postgres へのコピー：書き込み先、テーブルごとの中身、最後の書き込みを表示。または今すぐ書き込む（`--full`：すべての行を書き直す）（[Postgres へのコピー](postgres.md)） |
 | `interlatch hub enable [--rotate]` | このコンピューターをほかのコンピューターのハブにする。ほかのコンピューターで実行する `interlatch hub join` のコマンドを表示 |

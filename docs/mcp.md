@@ -20,9 +20,20 @@ the network. Every tool only reads the local vault.
 | `get_session` | One session: summary, outcome, knowledge, files changed, prompts | `session_id` (or a unique prefix) |
 | `get_transcript` | Part of a session's conversation, optionally with tool calls | `session_id`, `offset`, `limit`, `include_tools` |
 | `project_knowledge` | A project's knowledge base: architecture, how to run, test and deploy it, gotchas, decisions, open threads. `project="global"` gives the cross-project playbook. | `project` |
-| `glossary` | A term's definition, aliases, uses and sources, or a project's whole glossary | `term`, `project` |
+| `glossary` | A term's definition, aliases, uses and sources, and the [lessons about it](analysis.md#what-a-lesson-is-about) (with `project`: in that project), or a project's whole glossary. Also takes the name of a deployed app, database or outside service the Systems map knows | `term`, `project` |
 | `find_artifacts` | What sessions made: documents, pages, diagrams, decks, published links, pull requests and commits, each with where it is, whether the file is still on disk as written, and the session that made it | `query`, `kind`, `project`, `limit` |
 | `recent_sessions` | Recent sessions, newest first | `project`, `days`, `limit` |
+
+`search_knowledge` and `search_sessions` search through the [glossary](dashboard.md#glossary): words that name a term,
+by its name or an alias, also find its other names, so "single sign-on" finds lessons that say "SSO" and a Japanese
+term finds its English name. Only aliases your sessions used are added, and the reply says which ("also searched:
+SSO"). When nothing matches, the reply says which words are glossary terms (with what they mean), which are not, and how
+many lessons and sessions it searched, so an agent can tell a wrong word from a gap in the archive. `search_knowledge`
+puts the lessons about a named thing before those that only mention it.
+
+In a test on a copy of one archive, Claude Code agents asked seven "what do we know about X?" questions (a deployed
+app, an outside API, tools, services) reached 68% of the lessons marked by hand as relevant, against 53% before lessons
+were linked, in 2.6 tool calls instead of 3.1.
 
 `project` takes a path or a name (`billing-api`). When it is left out, `resume`, `project_knowledge` and `glossary` use the
 project of the directory the client started the server in. Coding agents start it in your project; desktop chat apps

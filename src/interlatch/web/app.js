@@ -272,6 +272,18 @@ const FRICTION_KIND = {
 };
 function catLabel(c) { return GLOSS_CAT[c || "other"] || c; }
 function catBadge(c) { return h("span", { class: "badge cat" }, icon(ICONS[c] && c !== "x" ? c : "dot"), catLabel(c)); }
+// "also a, b": a term's aliases, the ones its sessions used first; a name only the model wrote (seen in 0 sessions,
+// glossary.py alias_evidence) is marked. max: show that many, then "+n more"
+function aliasNodes(e, max) {
+  const seen = e.alias_seen || {};
+  const names = [...e.aliases].sort((a, b) => (seen[a] === 0) - (seen[b] === 0));
+  const shown = max ? names.slice(0, max) : names;
+  const out = [];
+  shown.forEach((a, i) => out.push(i ? t(", ") : "",
+    seen[a] === 0 ? h("span", { class: "alias-unseen", title: t("Added by the model: not found in your sessions") }, a) : a));
+  if (names.length > shown.length) out.push(" " + t("+{n} more", { n: names.length - shown.length }));
+  return tx("also {names}", { names: out.filter(Boolean) });
+}
 // outcome -> [status class, label]; status colors always travel with an icon and a label
 const OUTCOME = {
   completed: ["good", t("Completed")], partial: ["warning", t("Partial")], blocked: ["critical", t("Blocked")],
@@ -4338,7 +4350,7 @@ route(/^\/glossary$/, async (params) => {
     h("a", { href: `#/map?term=${encodeURIComponent(e.term)}${MAP_HIDDEN.has(e.category) ? "&all=1" : ""}` }, t("on the map →")));
   const card = (e) => h("article", { class: "card gcard", id: `g-${slugId(e.term)}` },
     h("div", { class: "ghead" },
-      h("div", { class: "gname" }, h("div", { class: "gterm-title" }, e.term), e.aliases.length ? h("div", { class: "galiases" }, t("also {names}", { names: e.aliases.join(t(", ")) })) : null),
+      h("div", { class: "gname" }, h("div", { class: "gterm-title" }, e.term), e.aliases.length ? h("div", { class: "galiases" }, aliasNodes(e)) : null),
       catBadge(e.category)),
     h("div", { class: "gdef" }, e.definition || ""), usage(e), related(e), foot(e));
   const listView = () => h("section", { class: "card flush" }, localTable(data.items, [
@@ -4349,7 +4361,7 @@ route(/^\/glossary$/, async (params) => {
     { key: "mentions", label: t("Mentions"), num: true, desc: true, value: (e) => e.n_mentions || 0 },
     { key: "last", label: t("Last seen"), desc: true, value: (e) => e.last_seen },
   ], (e) => expandable(h("tr", { class: "grow", id: `g-${slugId(e.term)}` },
-    h("td", { class: "term-cell" }, h("div", { class: "gterm-title" }, e.term), e.aliases.length ? h("div", { class: "s" }, t("also {names}", { names: e.aliases.join(t(", ")) })) : null),
+    h("td", { class: "term-cell" }, h("div", { class: "gterm-title" }, e.term), e.aliases.length ? h("div", { class: "s" }, aliasNodes(e)) : null),
     h("td", null, catBadge(e.category)),
     h("td", { class: "def-cell" }, e.definition || ""),
     h("td", { class: "num" }, e.n_sessions ? fmtNum(e.n_sessions) : "–"),
@@ -4799,7 +4811,7 @@ function mindmapView(data, opts) {
       body = [
         catTag(tm.category), tm.theme ? h("span", { class: "mm-theme-tag" }, tm.theme) : null,
         h("h3", null, tm.term),
-        tm.aliases.length ? h("div", { class: "mm-aliases" }, t("also {names}", { names: tm.aliases.slice(0, 4).join(t(", ")) + (tm.aliases.length > 4 ? " " + t("+{n} more", { n: tm.aliases.length - 4 }) : "") })) : null,
+        tm.aliases.length ? h("div", { class: "mm-aliases" }, aliasNodes(tm, 4)) : null,
         h("p", { class: "mm-def gloss" }, tm.definition || ""),
         h("div", { class: "mm-stats" },
           tm.n_sessions ? [h("span", null, h("b", null, fmtNum(tm.n_sessions)), " ", tn(tm.n_sessions, "session", "sessions")),

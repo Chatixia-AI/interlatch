@@ -24,8 +24,7 @@ your teammates' lessons back. It takes about five minutes. Whoever runs the hub 
 
 ## 1. Install Interlatch
 
-Skip this if Interlatch is already installed. With Chronicle, its earlier name, see
-[Moving from Chronicle](moving-from-chronicle.md) instead.
+Skip this if Interlatch is already installed.
 
 ```bash
 uv tool install --python 3.13 interlatch

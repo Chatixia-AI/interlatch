@@ -2,9 +2,17 @@
 
 [← Interlatch](../../README.ja.md) · [ドキュメント一覧](README.md)
 
-Interlatch は macOS で動作し、セッションを分析するものが必要です。ログイン済みの [Claude Code](https://claude.com/claude-code)（`claude`）か [Codex](https://github.com/openai/codex)（`codex`）、Bob API キーを設定した IBM Bob、またはあなた自身のキーで使うモデルプロバイダーの API（[モデルプロバイダー](analysis.md#モデルプロバイダー)）のどれかです。セットアップは Claude Code がインストールされていればそれを使い、なければ Codex を提案します。**Status › Analysis** または `interlatch config set analysis.backend codex` でいつでも切り替えられます。使い方は 2 通りあり、どちらも `~/.interlatch` の同じデータを使うため、併用できます。
+Interlatch は macOS、[Windows](#windows)、[Linux](#linux) で動作し、セッションを分析するものが必要です。ログイン済みの [Claude Code](https://claude.com/claude-code)（`claude`）か [Codex](https://github.com/openai/codex)（`codex`）、Bob API キーを設定した IBM Bob、またはあなた自身のキーで使うモデルプロバイダーの API（[モデルプロバイダー](analysis.md#モデルプロバイダー)）のどれかです。セットアップは Claude Code がインストールされていればそれを使い、なければ Codex を提案します。**Status › Analysis** または `interlatch config set analysis.backend codex` でいつでも切り替えられます。Mac では使い方が 2 通りあり、どちらも `~/.interlatch` の同じデータを使うため、併用できます。
 
-Interlatch は以前 Chronicle という名前でした。Chronicle からのアップデートは[Chronicle からの移行](moving-from-chronicle.md)を参照してください。
+| 環境 | インストール方法 |
+| --- | --- |
+| macOS 13 以降、Apple シリコン | [デスクトップアプリ](#デスクトップアプリ)または[コマンドライン](#コマンドライン) |
+| Intel Mac の macOS | [コマンドライン](#コマンドライン) |
+| Windows 10 と 11 | [PowerShell でコマンドライン](#windows) |
+| Linux | [コマンドライン](#linux)。バックグラウンドの実行は systemd |
+| チームのサーバー | [Docker でハブを動かす](docker.md) |
+| VS Code、Cursor、Windsurf、Antigravity、VSCodium | 上のどれかに加えて [VS Code 拡張機能](vscode.md#インストール) |
+| Chrome、Edge、Brave | claude.ai と ChatGPT のチャット用の[ブラウザ拡張](sources.md#ブラウザ拡張でチャットを保存する) |
 
 ## デスクトップアプリ
 
@@ -53,7 +61,7 @@ interlatch install                               # pick the agents to record, im
 `interlatch install`（`interlatch setup` でも可）は次の順にセットアップします：
 
 1. セッションを分析するエージェント（既定は Claude Code）を確認します。見つからず Codex がインストールされていれば、Codex で分析するか尋ねます。どちらもなければ、セッションは記録されますが、どちらかをインストールするまで分析されません。
-2. この Mac にあるコーディングエージェント（Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity、OpenCode）と、MCP のみのクライアント
+2. このコンピューターにあるコーディングエージェント（Claude Code、Codex、GitHub Copilot、IBM Bob、Google Antigravity、OpenCode）と、MCP のみのクライアント
    （Claude Desktop、Cursor、Windsurf、Gemini CLI）を、ディスク上のセッション数とともに一覧にします。
 3. 見つかってまだ接続していないものごとに、記録するか（既定は「はい」）、MCP クライアントには Interlatch のツールを
    渡すかを尋ねます。Codex Cloud はオンラインにアクセスするため、Codex の後に尋ね、既定は「いいえ」です。
@@ -160,6 +168,41 @@ Windows ではまだできないこと：
 - **チームのハブへの参加**は Windows から未検証です。ハブは Windows のフォルダーを書き方にかかわらず照合しますが、
   Windows のコンピューターを含むチームではまだ運用されていません。
 
+## Linux
+
+Linux ではコマンドラインでインストールします。デスクトップアプリはありません。uv をインストーラー（またはパッケージマネージャー）で
+入れてから、Interlatch をインストールします。
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh     # uv がまだなければ
+source "$HOME/.local/bin/env"                       # uv と interlatch の置き場所。新しいターミナルでは不要
+uv tool install --python 3.13 interlatch
+interlatch install
+```
+
+`interlatch install` が尋ねることは Mac と同じです。launchd の代わりに、systemd のユーザーユニットを
+`~/.config/systemd/user/` に書いて有効にします。
+
+| ユニット | 役割 |
+| --- | --- |
+| `interlatch-sync.timer` | `interlatch-sync.service`（`interlatch sync --work`）を 15 分ごとに実行 |
+| `interlatch-ui.service` | ダッシュボードを <http://127.0.0.1:11524/> で動かし続け、止まると 30 秒後に再起動 |
+
+ユーザーユニットはログインしている間だけ動きます。誰もログインしていなくても記録を続けたいコンピューター（ほかのコンピューターの
+[ハブ](devices.md#linux-のハブ)など）では、一度だけ `loginctl enable-linger $USER` を実行してください。出力はジャーナルに入り
+（`journalctl --user -u interlatch-ui.service`）、Interlatch 自身のログは `~/.interlatch/logs/` にあります。ダッシュボードは
+`systemctl --user restart interlatch-ui.service` で再起動します。`--no-launchd` と `--no-ui` は launchd エージェントと同じように
+これらのユニットを省くか削除し、`interlatch uninstall` は無効にして削除します。
+
+systemd がない環境（一部のコンテナー、systemd なしの WSL）では、`interlatch install` はバックグラウンドの部分を省いたと表示します。
+ダッシュボードは `interlatch ui` で動かし、同期は cron などで自分で予定してください。
+
+```bash
+*/15 * * * * $HOME/.local/bin/interlatch sync --work --quiet
+```
+
+新しいバージョンの[通知](#アップデート)は `notify-send` を使います。Linux にはメニューバーやトレイのアイコンはありません。
+
 ## メニューバーアイコン
 
 macOS では、Interlatch のマーク（アプリアイコンの重なったページ）をメニューバーに置けます。デスクトップアプリでは常に表示されます。
@@ -239,7 +282,6 @@ Browser**、**Connect Claude Code…**、**Open at Login**、**Install Command-L
 | `uv tool install .`（チェックアウトから） | インストール後にチェックアウトのファイルが変わったとき、`uv tool upgrade --reinstall interlatch`（ネットワーク確認なし） |
 | チェックアウトで `uv sync` / `uv run`（editable） | 実行しません。カードに **git pull to update** と表示されます |
 | `pipx` または `pip` | `pipx upgrade interlatch` または `pip install --upgrade interlatch` |
-| `uv tool install agents-chronicle` または `pipx install agents-chronicle`（Chronicle のパッケージ） | バージョンが同じでも、同じエクストラのまま `interlatch` に移します。uv では `interlatch` を上書きでインストールし、`agents-chronicle` をアンインストールしてから、`interlatch` をもう一度インストールします。pipx ではアンインストールしてからインストールします（[Chronicle からの移行](moving-from-chronicle.md)） |
 | デスクトップアプリ | 実行しません。**Download** で最新リリースを開き、アプリケーションフォルダにドラッグします |
 
 ネットワークに接続するのは **Check for updates**（pypi.org）だけです。同じカードの **Check for updates daily** をオンにすると、ダッシュボードを開いている間 1 日 1 回確認します。**Notify me about new versions**（`interlatch install` でも尋ねます）をオンにすると、ダッシュボードを開いていなくてもバックグラウンド同期が 1 日 1 回確認し、リリースごとに 1 回、アップデート方法を書いたデスクトップ通知を表示します（macOS は通知センター、Linux は `notify-send`）。macOS では通知を Interlatch の代わりに Script Editor が出すため、クリックすると Script Editor が開きます。アップデート先は通知の本文に書かれています。最後の結果は再起動後も残ります。アップデートが見つかると通知が表示され（リリースごと、チェックアウトなら新しいコミットごとに 1 回。**Later** で閉じられます）、Settings にドットが付き、ステータスバーに **Update to …** が出ます。チェックアウトの Updates カードには、再インストールで入るコミットと変更ファイルが並びます。
