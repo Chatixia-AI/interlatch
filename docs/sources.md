@@ -103,17 +103,24 @@ Mac as an ordinary Claude Code transcript. Codex Cloud tasks are a separate sour
 ### Saving chats as you use the sites
 
 The browser extension saves claude.ai and ChatGPT chats as you use the sites, so new chats need no new export. It
-works in Chrome, Edge, Brave and other Chromium browsers. It isn't in the Chrome Web Store: you load it from a folder
-the dashboard keeps for it.
+works in Chrome, Edge, Brave and other Chromium browsers, and you add it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb).
 
 **Settings › Browser extension** in the dashboard walks you through it, for Chrome, Edge or Brave, and shows what the
 extension has sent so far. In short:
 
-1. Open `chrome://extensions` (Edge: `edge://extensions`) and turn on **Developer mode**.
-2. Choose **Load unpacked** and pick `~/.interlatch/browser-extension` (the page has the path to copy).
-3. On the page that opens, read what the extension reads and where it goes, and choose **Start saving**. Nothing is read
+1. On the computer Interlatch runs on, open
+   [Interlatch in the Chrome Web Store](https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb) and
+   choose **Add to Chrome**. In Edge, first choose **Allow extensions from other stores** in the bar at the top of the
+   page.
+2. On the page that opens, read what the extension reads and where it goes, and choose **Start saving**. Nothing is read
    before that; the toolbar button can bring the page back if you choose **Not now**.
-4. Open claude.ai or chatgpt.com.
+3. Open claude.ai or chatgpt.com.
+
+To try a build that isn't in the store yet, load it from the folder the dashboard keeps for it instead: open
+`chrome://extensions` (Edge: `edge://extensions`), turn on **Developer mode**, choose **Load unpacked** and pick
+`~/.interlatch/browser-extension` (the dashboard's guide has the path to copy, under **Load it from a folder instead**).
+Remove the store copy first, or both copies send the same chats.
 
 While a tab of either site is open, the extension asks the site which chats changed since it last looked: when the
 tab loads, every 5 minutes, and a few seconds after you leave a chat (for another chat, tab or app; at most once a
@@ -139,9 +146,10 @@ start Interlatch). It follows the browser's language (English or Japanese) and s
 error, with **Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
 sync goes. It reads only claude.ai and chatgpt.com and sends only to `http://127.0.0.1`. The dashboard takes chats
 only from this computer, with a header no web page can send. The extension uses the sites' internal endpoints, not a
-published API: when a site changes them, the toolbar button shows the error until an Interlatch update catches up.
-After an Interlatch update the dashboard refreshes the folder, and Chrome loads the new version when it restarts (or
-with the reload button on `chrome://extensions`).
+published API: when a site changes them, the toolbar button shows the error until a new version of the extension
+catches up. The store copy updates itself. A copy loaded from the folder doesn't: after an Interlatch update the
+dashboard refreshes the folder, and Chrome loads the new version when it restarts (or with the reload button on
+`chrome://extensions`).
 
 ### Screening imported chats
 
