@@ -3,6 +3,27 @@
 <!-- Don't add lines here: a pull request puts its line in a new file in changelog.d/ (see changelog.d/README.md),
      and each release moves the files it took into a dated section below. -->
 
+## 0.29.13 (2026-11-24)
+
+- **A hub you can't reach no longer slows every sync:** when the hub didn't answer at all (a company VPN you aren't
+  on, a hub that is switched off), each background sync waited about two and a half minutes on it before moving on,
+  so new sessions showed up late. Interlatch now gives up connecting after 10 seconds and tries again at the next
+  sync.
+- **`interlatch status` and `connect` no longer mix up two installs:** in a terminal where another copy of Interlatch
+  came first on `PATH` (a checkout's `.venv` switched on in an editor), `interlatch status` said every agent ran "not
+  this install", and `interlatch connect` wrote that other copy's command into the agent's settings. Both now go by
+  the install that is running.
+- **Storage you can see and keep in check:** **Settings › Storage** now shows how much space each part of Interlatch's
+  folder uses, and warns once the folder passes a size you set. Older sessions' transcripts can go to another folder
+  (a second disk, or a cloud folder): a session moves once it is older than the days you set and the agent has deleted
+  its own transcript, and it still opens from the dashboard while that folder is reachable. `interlatch storage` shows
+  the same, moves them now, or brings them back ([`[storage]`](docs/configuration.md#storage)).
+- **Browser extension from the Chrome Web Store:** add it with one click from the
+  [Chrome Web Store](https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb), and it keeps itself up
+  to date. **Settings › Browser extension** now walks you through the store; loading it from a folder is still there,
+  under **Load it from a folder instead**, for trying a build the store doesn't have yet
+  ([Saving chats as you use the sites](docs/sources.md#saving-chats-as-you-use-the-sites)).
+
 ## 0.29.12 (2026-11-15)
 
 - **The glossary tool no longer answers with the wrong term:** asked about a name no glossary term holds, the MCP
