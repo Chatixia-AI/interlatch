@@ -3,7 +3,7 @@
     "message": "Interlatch: save web chats"
   },
   "description": {
-    "message": "Sends your claude.ai and ChatGPT chats to the Interlatch dashboard on this computer as you use the sites."
+    "message": "Sends your claude.ai, ChatGPT and Hark chats to the Interlatch dashboard on this computer as you use the sites."
   },
   "installUrl": {
     "message": "https://interlatch.com/docs/install/"
@@ -24,7 +24,7 @@
     "message": "Connected"
   },
   "stWaitingDetail": {
-    "message": "Open claude.ai or chatgpt.com to start saving chats."
+    "message": "Open claude.ai, chatgpt.com or hark.com to start saving chats."
   },
   "stPaused": {
     "message": "Paused"
@@ -75,7 +75,7 @@
     "message": "Sites"
   },
   "howItWorks": {
-    "message": "Chats are read while a claude.ai or chatgpt.com tab is open: every 5 minutes, and soon after you leave a chat. Older chats come in from a data export (Sources in the dashboard). Click for the guide."
+    "message": "Chats are read while a claude.ai, chatgpt.com or hark.com tab is open: every 5 minutes, and soon after you leave a chat. Older claude.ai and ChatGPT chats come in from a data export (Sources in the dashboard). Click for the guide."
   },
   "siteNotYet": {
     "message": "Not synced yet: open or reload a tab"
@@ -117,7 +117,7 @@
     "message": "$1 d ago"
   },
   "noTab": {
-    "message": "No claude.ai or chatgpt.com tab answered. Reload one: a tab opened before the extension was loaded doesn't have it yet."
+    "message": "No claude.ai, chatgpt.com or hark.com tab answered. Reload one: a tab opened before the extension was loaded doesn't have it yet."
   },
   "syncNow": {
     "message": "Sync now"
@@ -234,13 +234,13 @@
     "message": "Before anything is saved"
   },
   "wlIntro": {
-    "message": "This extension saves your claude.ai and ChatGPT chats into Interlatch, an app on your computer, so you can search them and find them again."
+    "message": "This extension saves your claude.ai, ChatGPT and Hark chats into Interlatch, an app on your computer, so you can search them and find them again."
   },
   "wlReadsTitle": {
     "message": "What it reads"
   },
   "wlReads": {
-    "message": "Your chats on claude.ai and chatgpt.com, with their titles, messages and project names, using your own sign-in. Temporary chats are left out. It reads nothing on other sites."
+    "message": "Your chats on claude.ai, chatgpt.com and hark.com, with their titles, messages and project names, using your own sign-in. Temporary chats, and the sign-in screens Hark asks you to fill in, are left out. It reads nothing on other sites."
   },
   "wlGoesTitle": {
     "message": "Where it goes"
@@ -270,7 +270,7 @@
     "message": "Not now"
   },
   "wlStarted": {
-    "message": "Saving is on. Open claude.ai or chatgpt.com, or reload a tab that's already open."
+    "message": "Saving is on. Open claude.ai, chatgpt.com or hark.com, or reload a tab that's already open."
   },
   "wlLaterDone": {
     "message": "Nothing is being read. You can start any time from the toolbar button."

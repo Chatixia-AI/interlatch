@@ -2177,7 +2177,8 @@
       "action": "_StoreAction",
       "choices": [
        "chatgpt",
-       "claude-ai"
+       "claude-ai",
+       "hark"
       ],
       "const": null,
       "default": null,

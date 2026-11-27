@@ -28,7 +28,7 @@ from pathlib import Path
 from ..core.redact import redact
 from ..core.util import one_line
 
-CHAT_SOURCES = ("chatgpt-export", "claude-ai-export")
+CHAT_SOURCES = ("chatgpt-export", "claude-ai-export", "hark-capture")
 NOT_PROJECTS = ("", "Desktop", "Downloads", "Documents")  # folders under home that hold sessions but are no project
 SKIP_DIRS = {"node_modules", ".venv", "venv", "env", ".git", "dist", "build", "out", ".next", ".nuxt", "__pycache__",
              ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache", "target", "vendor", "coverage", "site-packages",

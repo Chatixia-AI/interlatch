@@ -302,19 +302,20 @@ const STATUS_LABEL = {
 const RUN_STATUS = { done: t("done"), error: t("Error"), running: t("analyzing…") }; // a row of a session's analysis runs
 const STATUS_ICON = { pending: "queued", stale: "queued", running: "running", error: "gotcha", skipped: "skipped", done: "completed" };
 
-const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "GitHub Copilot", bob: "IBM Bob", antigravity: "Google Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
-const AGENT_SHORT = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT" };
+const AGENTS = { claude: "Claude Code", codex: "Codex", copilot: "GitHub Copilot", bob: "IBM Bob", antigravity: "Google Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT", hark: "Hark" };
+const AGENT_SHORT = { claude: "Claude", codex: "Codex", copilot: "Copilot", bob: "Bob", antigravity: "Antigravity", opencode: "OpenCode", "claude-ai": "Claude.ai", chatgpt: "ChatGPT", hark: "Hark" };
 function agentShort(a) { return AGENT_SHORT[a] || a || "Claude"; }
 function agentName(a) { return AGENTS[a] || "Claude Code"; }
 // the agent that analyzes sessions (Status › Analysis): full name, and the short one for "… is writing"
 function analyzer() { return lastStatus?.analysis?.label || "Claude Code"; }
 function analyzerShort() { return analyzer() === "Claude Code" ? "Claude" : analyzer(); }
 // an agent's own mark (web/agent-*.svg; codex-cloud is Codex's); the one-colour marks (Copilot, ChatGPT) are CSS masks
-// so they take the text colour in both themes. An agent without a mark keeps the colour dot.
+// so they take the text colour in both themes. An agent without a mark (Hark) keeps the colour dot.
 const AGENT_MONO = new Set(["copilot", "chatgpt", "opencode"]);
+const AGENT_NO_MARK = new Set(["hark"]);
 function agentIcon(a) {
   a = a === "codex-cloud" ? "codex" : a || "claude";
-  if (!AGENTS[a]) return h("span", { class: `src-dot a-${a}`, "aria-hidden": "true" });
+  if (!AGENTS[a] || AGENT_NO_MARK.has(a)) return h("span", { class: `src-dot a-${a}`, "aria-hidden": "true" });
   return AGENT_MONO.has(a) ? h("span", { class: `agent-icon mono a-${a}`, "aria-hidden": "true" })
     : h("img", { class: "agent-icon", src: `agent-${a}.svg`, alt: "", "aria-hidden": "true", draggable: "false" });
 }
@@ -1557,6 +1558,13 @@ function connectorState(c) {
   return c.connected ? (issues.length ? ["warning", tn(issues.length, "{n} issue", "{n} issues")] : ["good", t("Connected")])
     : c.detected ? ["warning", t("Not connected")] : ["", t("Not installed")];
 }
+// A web chat's badge, on Sources and on Home: Hark by its Mac app (runtime/hark_app.py), the others by how chats came in
+function chatState(f) {
+  const app = f.app;
+  if (app?.installed) return app.device_link?.state === "trouble" ? ["warning", t("Link trouble")]
+    : app.running ? ["good", t("Running")] : ["", t("Not running")];
+  return f.last_capture ? ["good", t("Saving")] : f.sessions ? ["good", t("Imported")] : ["", f.exportable === false ? t("Not set up") : t("Not imported")];
+}
 // Home's Agents card: each agent's status and the period's numbers, whichever agent Home shows. A dash where the
 // agent records no such thing at all (a chat export has no tokens); a click on a row filters Home to that agent.
 // The status comes from Sources' checks, which are slower than the numbers, so it fills in after the page.
@@ -1622,7 +1630,12 @@ function agentsCard(rows, { agent, project, period, pick }) {
       }
     }
     for (const f of Object.values(imports)) {
-      if (f.agent in badgeCell) badgeCell[f.agent].replaceChildren(badge(f.agent, f.sessions ? ["good", t("Imported")] : ["", t("Not imported")]));
+      if (f.agent in badgeCell) badgeCell[f.agent].replaceChildren(badge(f.agent, chatState(f)));
+      else if (f.app?.installed && !project) { // the Hark app is on this Mac, no chat saved yet
+        badgeCell[f.agent] = h("td", { class: "nowrap" }, badge(f.agent, chatState(f)));
+        tbody.append(h("tr", null, h("td", null, h("span", { class: "agent-cell" }, agentIcon(f.agent), h("b", null, agentName(f.agent))),
+          h("div", { class: "muted small agent-sub" }, t("no sessions yet"))), badgeCell[f.agent], h("td", { colspan: cols - 2 })));
+      }
     }
   }).catch(() => {});
   return card;
@@ -5945,6 +5958,24 @@ async function systemView(params) {
 // =====================================================================================
 const srcOpen = new Set(); // rows the user opened; kept across re-renders (connect, disconnect, import)
 let srcTouched = false;
+// The Hark app on this Mac, from its log (runtime/hark_app.py): installed and running, and its device link, through
+// which Hark's assistant uses tools on this Mac
+function harkAppChecks(app) {
+  const check = (ok, label, detail) => h("div", { class: "check" },
+    h("span", { class: `mark ${ok ? "ok" : ok === null ? "na" : "no"}` }, ok ? "✓" : ok === null ? "–" : "✗"),
+    h("div", null, h("div", null, label), detail ? h("div", { class: "d" }, detail) : null));
+  if (!app.installed) return h("div", { class: "checks" }, check(null, t("Hark app"), t("Not installed on this Mac")));
+  const link = app.device_link;
+  const launched = app.last_launch ? t("launched {when}", { when: ago(app.last_launch) }) : null;
+  return h("div", { class: "checks" },
+    check(app.running, t("Hark app"), [app.version, app.running ? t("running") : t("not running"), launched].filter(Boolean).join(" · ")),
+    check(link ? link.state === "connected" : null, t("Device link"),
+      link?.state === "connected" ? t("connected {when}; tools offered: {tools}", { when: ago(link.at), tools: app.tools || t("not in the log") })
+        : link ? t("{when}: {detail}", { when: ago(link.at), detail: link.detail }) : t("not linked since the app started")),
+    app.problems?.length ? h("details", { class: "check-more" }, h("summary", { class: "muted small" },
+      tn(app.problems.length, "{n} warning in its log", "{n} warnings in its log")),
+      h("ul", { class: "muted small" }, app.problems.map((p) => h("li", { title: fmtDT(p.at) }, `${ago(p.at)}: ${p.text}`)))) : null);
+}
 function srcRow(key, summary, body, { open = false } = {}) { // one expandable row of a Sources list
   const d = h("details", { class: "src-row", "data-key": key, open: srcOpen.has(key) || (!srcTouched && open) },
     h("summary", null, h("span", { class: "chev", "aria-hidden": "true" }, "›"), summary), h("div", { class: "src-body" }, body));
@@ -6059,11 +6090,13 @@ route(/^\/sources$/, async (params) => {
     } }, t("Queue {n} worth analyzing", { n: fmtNum(sc.to_queue) }));
     const summary = [
       agentIcon(f.agent),
-      h("span", { class: "src-title" }, h("b", null, f.label), h("small", null, cap ? t("browser extension and data export") : t("from a data export"))),
+      h("span", { class: "src-title" }, h("b", null, f.label), h("small", null, f.exportable === false ? t("browser extension")
+        : cap ? t("browser extension and data export") : t("from a data export"))),
       h("span", { class: "src-sum" }, f.sessions ? [stat(f.sessions, t("chats")), screened ? stat(sc.analyze, t("worth analyzing")) : null,
         cap ? h("span", null, tx("saved {when}", { when: h("b", null, ago(cap.at)) }))
-          : h("span", null, tx("imported {when}", { when: h("b", null, last ? ago(last.at) : t("never")) }))] : h("span", null, t("nothing imported yet"))),
-      cap ? badge("good", t("Saving")) : f.sessions ? badge("good", t("Imported")) : badge("", t("Not imported"))];
+          : h("span", null, tx("imported {when}", { when: h("b", null, last ? ago(last.at) : t("never")) }))]
+        : h("span", null, f.exportable === false ? t("nothing saved yet") : t("nothing imported yet"))),
+      badge(...chatState(f))];
     const body = [
       h("div", { class: "src-stats" }, stat(f.sessions, t("chats")), stat(f.analyzed, t("analyzed")),
         sc.queued ? stat(sc.queued, t("queued")) : null,
@@ -6072,12 +6105,14 @@ route(/^\/sources$/, async (params) => {
       screened ? h("div", { class: "src-stats screen-stats" }, h("span", { class: "muted" }, t("Screened:")),
         verdict("analyze", sc.analyze, t("worth analyzing")), verdict("maybe", sc.maybe, t("maybe")), verdict("skip", sc.skip, t("not worth it")),
         sc.unscreened ? verdict("none", sc.unscreened, t("not screened")) : null) : null,
-      h("div", { class: "src-note" }, tx("Export from {where}; the email's link downloads a .zip to import here or with {command}. Import newer exports any time: only new and changed chats are added.",
-        { where: h("b", null, HOW[f.agent] || f.label), command: h("code", null, "interlatch import <zip>") })),
+      f.app ? harkAppChecks(f.app) : null,
+      f.exportable === false ? h("div", { class: "src-note" }, t("Hark keeps its chats on hark.com, not on this Mac, and has no data export: the browser extension saves them as you use hark.com, one session per chat per day. The tools Hark ran on this Mac are in those chats; the app's log only says whether it runs and is linked."))
+        : h("div", { class: "src-note" }, tx("Export from {where}; the email's link downloads a .zip to import here or with {command}. Import newer exports any time: only new and changed chats are added.",
+          { where: h("b", null, HOW[f.agent] || f.label), command: h("code", null, "interlatch import <zip>") })),
       h("div", { class: "src-foot" }, h("span", { class: "muted" }, t("Not analyzed automatically. Screening reads only each chat's opening (title, first and last prompt) to sort out the ones worth analyzing; nothing is analyzed until you queue them.")),
         h("div", { class: "src-actions" }, f.sessions ? h("a", { class: "btn small", href: `#/sessions?agent=${f.agent}` }, t("Sessions")) : null,
           sc.unscreened ? screenBtn : null, sc.to_queue ? queueBtn : null))];
-    return srcRow(`chat:${f.key}`, summary, body, { open: !!(sc.unscreened || sc.to_queue) });
+    return srcRow(`chat:${f.key}`, summary, body, { open: !!(sc.unscreened || sc.to_queue) || f.app?.device_link?.state === "trouble" });
   };
 
   // ---- the browser extension: saves the chats from the sites as you use them (browser_extension/)
@@ -6086,7 +6121,7 @@ route(/^\/sources$/, async (params) => {
     h("span", { "aria-hidden": "true" }),
     h("span", { class: "src-title" }, h("b", null, t("Browser extension")), h("small", null, t("Chrome, Edge or Brave"))),
     h("span", { class: "src-sum" }, h("span", null, lastSent ? tx("last sent {when}", { when: h("b", null, ago(lastSent)) })
-      : t("saves chats as you use claude.ai and chatgpt.com"))),
+      : t("saves chats as you use claude.ai, chatgpt.com and hark.com"))),
     lastSent ? badge("good", t("Connected")) : badge("", t("Not set up"))], [
     h("div", { class: "src-foot" }, h("span", { class: "muted" }, extPrivacy()),
       h("div", { class: "src-actions" }, h("a", { class: `btn small${lastSent ? "" : " primary"}`, href: "#/extension" }, t("Install guide")))),
@@ -6098,7 +6133,7 @@ route(/^\/sources$/, async (params) => {
       h("div", { class: "sub" }, tx("The coding agents Interlatch records. Connecting starts archiving and analyzing their sessions and gives the agent Interlatch's MCP tools. To give other tools the MCP server, see {link}.",
         { link: h("a", { href: "#/mcp" }, "MCP") })))),
     section(t("Coding agents"), t("{a} of {b} connected · click a row for its checks", { a: connected, b: sources.length }), null, sources.map(agentRow)),
-    section(t("Web chats"), t("Chats on claude.ai and chatgpt.com are not stored on this computer: the browser extension saves them as you use the sites, and a data export brings in older ones."),
+    section(t("Web chats"), t("Chats on claude.ai, chatgpt.com and hark.com are not stored on this computer: the browser extension saves them as you use the sites, and a data export brings in older claude.ai and ChatGPT ones."),
       h("div", { class: "src-actions" }, importBtn, picker), [extRow, ...formats.map(formatRow)]),
   );
 });
@@ -6126,7 +6161,7 @@ async function copyText(text, btn) {
 // =====================================================================================
 // Browser extension: how to install it (browser_extension/), and what it has sent
 // =====================================================================================
-const extPrivacy = () => t("It reads your chats with your own sign-in, only on claude.ai and chatgpt.com, and sends them only to this dashboard; temporary chats are left out.");
+const extPrivacy = () => t("It reads your chats with your own sign-in, only on claude.ai, chatgpt.com and hark.com, and sends them only to this dashboard; temporary chats and the sign-in screens Hark asks you to fill in are left out.");
 const EXT_STORE = "https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb";
 const EXT_BROWSERS = [["chrome", "Chrome", "chrome://extensions"], ["edge", "Edge", "edge://extensions"], ["brave", "Brave", "brave://extensions"]];
 let extBrowser = "chrome";
@@ -6168,8 +6203,8 @@ route(/^\/extension$/, async () => {
     step(t("Choose Start saving"), t("A page opens when the extension loads and says what it reads and where that goes. Nothing is read until you choose Start saving.")),
     step(t("Pin it and check the connection"), t("Pin Interlatch from the puzzle-piece menu and click it: it should say Connected."),
       port !== "11524" ? h("div", { class: "muted" }, t("This dashboard isn't on the usual port: open Settings in the extension and set the port to {port}.", { port })) : null),
-    step(t("Open claude.ai or chatgpt.com"), tx("Open {claude} or {chatgpt}. Within seconds the extension shows Syncing…: chats from the last 30 days come in first, then new and changed ones every 5 minutes and soon after you leave a chat.",
-      { claude: site("https://claude.ai", "claude.ai"), chatgpt: site("https://chatgpt.com", "chatgpt.com") })));
+    step(t("Open claude.ai, chatgpt.com or hark.com"), tx("Open {claude}, {chatgpt} or {hark}. Within seconds the extension shows Syncing…: chats from the last 30 days come in first, then new and changed ones every 5 minutes and soon after you leave a chat.",
+      { claude: site("https://claude.ai", "claude.ai"), chatgpt: site("https://chatgpt.com", "chatgpt.com"), hark: site("https://hark.com/chat", "hark.com") })));
   // a build the store doesn't have yet loads from the folder the dashboard keeps up to date (runtime/browser_extension.py)
   const fromFolder = dir ? h("details", { class: "ext-folder" }, h("summary", null, t("Load it from a folder instead")),
     h("div", { class: "muted" }, t("For trying a build that isn't in the store yet. Remove the store copy first, or both copies send the same chats. A copy loaded from a folder doesn't update itself: after an Interlatch update, click the reload button on its card on the extensions page, then reload the sites' tabs.")),
@@ -6180,13 +6215,13 @@ route(/^\/extension$/, async () => {
         h("div", { class: "muted" }, mac ? t("In the folder window, press ⌘⇧G, paste the path and press Return.") : t("In the folder window, paste the path into the address bar at the top.")))))
     : null;
   const help = [ // the extension's own words
-    [t("Not synced yet"), t("Reload the claude.ai or chatgpt.com tab: a tab opened before the extension was loaded doesn't have it.")],
+    [t("Not synced yet"), t("Reload the claude.ai, chatgpt.com or hark.com tab: a tab opened before the extension was loaded doesn't have it.")],
     [t("Interlatch isn't running"), t("Interlatch isn't running, or runs on another port: set the port in the extension's Settings.")],
     [t("update Interlatch"), t("This dashboard is older than the extension: update Interlatch.")],
   ];
   return h("div", { class: "narrow-page wide" },
     h("div", { class: "page-head" }, titled("globe", h("h1", null, t("Browser extension")),
-      h("div", { class: "sub" }, t("Saves your claude.ai and ChatGPT chats as you use the sites, so new chats need no data export. For Chrome, Edge, Brave and other Chromium browsers.")))),
+      h("div", { class: "sub" }, t("Saves your claude.ai, ChatGPT and Hark chats as you use the sites, so new chats need no data export. For Chrome, Edge, Brave and other Chromium browsers.")))),
     listSection(t("What it has sent"), null, null, statusRows),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("Install it")), tabs), steps, fromFolder),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("h2", null, t("If something is off"))),

@@ -69,15 +69,18 @@ def action_connector(ctx: Context, name: str, action: str) -> dict:
 
 
 def imports(ctx: Context, here: bool = False) -> dict:
-    """Per chat format, its imports and captures; from this computer itself also the browser extension's folder."""
+    """Per chat format, its imports and captures; from this computer itself also the browser extension's folder, and
+    the Hark app on this Mac (runtime/hark_app.py)."""
     from ....ingestion.chat_import import import_status
-    from ....runtime import browser_extension
+    from ....runtime import browser_extension, hark_app
 
     out = import_status(ctx.conn)
     if here:
         ext = browser_extension.folder(ctx.cfg)
         for f in out.values():
             f["extension_dir"] = str(ext) if ext else None
+        if "hark" in out:
+            out["hark"]["app"] = hark_app.status()
     return out
 
 

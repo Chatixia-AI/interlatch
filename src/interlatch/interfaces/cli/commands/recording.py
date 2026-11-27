@@ -286,7 +286,7 @@ def add_import(sub) -> None:
 def add_screen(sub) -> None:
     s = sub.add_parser("screen", help="sort imported chats into worth analyzing, maybe and not worth it, reading only "
                                       "their openings; nothing is analyzed until you queue them")
-    s.add_argument("--source", choices=["chatgpt", "claude-ai"], help="only this export (default: both)")
+    s.add_argument("--source", choices=["chatgpt", "claude-ai", "hark"], help="only these chats (default: all)")
     s.add_argument("--limit", type=int, help="screen (or list) at most N chats, newest first")
     s.add_argument("--sample", type=int, metavar="N", help="screen N chats picked at random, to try it first")
     s.add_argument("--redo", action="store_true", help="screen chats again that were screened already")

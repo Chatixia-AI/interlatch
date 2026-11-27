@@ -4,7 +4,7 @@ sync did, settings. Its words are in _locales/. */
 
 const $ = (id) => document.getElementById(id);
 const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
-const SITES = ["claude-ai", "chatgpt"];
+const SITES = ["claude-ai", "chatgpt", "hark"];
 const STALE = 15 * 60e3; // a sync "running" longer than this ended with its tab
 
 let dash = null; // what the service worker last said about the dashboard; null until it has

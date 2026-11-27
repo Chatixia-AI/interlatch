@@ -102,7 +102,7 @@ Mac as an ordinary Claude Code transcript. Codex Cloud tasks are a separate sour
 
 ### Saving chats as you use the sites
 
-The browser extension saves claude.ai and ChatGPT chats as you use the sites, so new chats need no new export. It
+The browser extension saves claude.ai, ChatGPT and [Hark](#hark) chats as you use the sites, so new chats need no new export. It
 works in Chrome, Edge, Brave and other Chromium browsers, and you add it from the
 [Chrome Web Store](https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb).
 
@@ -115,7 +115,7 @@ extension has sent so far. In short:
    page.
 2. On the page that opens, read what the extension reads and where it goes, and choose **Start saving**. Nothing is read
    before that; the toolbar button can bring the page back if you choose **Not now**.
-3. Open claude.ai or chatgpt.com.
+3. Open claude.ai, chatgpt.com or hark.com.
 
 To try a build that isn't in the store yet, load it from the folder the dashboard keeps for it instead: open
 `chrome://extensions` (Edge: `edge://extensions`), turn on **Developer mode**, choose **Load unpacked** and pick
@@ -131,25 +131,43 @@ sync of a few hundred chats takes a while; when a site asks it to slow down, it 
 are left out. Chats in a ChatGPT project are grouped under `chatgpt.com/<project>`.
 
 A saved chat is the same session an export updates, stored and archived the same way (its latest copy in
-`archive/<claude-ai|chatgpt>/captured/<id>/`). Like imported chats, saved chats are **not analyzed automatically**:
+`archive/<claude-ai|chatgpt|hark>/captured/<id>/`). Like imported chats, saved chats are **not analyzed automatically**:
 screen them (below) and queue the ones worth it, or choose **Analyze now** on one.
 
 A small message at the bottom right of the page says when chats were saved (not on the 5-minute timer, so a long chat
 isn't interrupted) and stays when saving fails. When a tab of either site loads, at most once an hour per site, it also
 says the extension is saving that site's chats and that they go only to the dashboard on this computer, with a **Pause**
 button; it stays quiet while you are signed out, Paused or the dashboard doesn't answer. **Pause** stops a sync that's
-running too, and the rest follows when you resume. The toolbar icon is in colour on a claude.ai or chatgpt.com tab, with a green **✓** while saving works, and shows a pause sign on other sites and while **Paused**. A red **!** on any tab means saving fails. Turn the
+running too, and the rest follows when you resume. The toolbar icon is in colour on a claude.ai, chatgpt.com or hark.com tab, with a green **✓** while saving works, and shows a pause sign on other sites and while **Paused**. A red **!** on any tab means saving fails. Turn the
 messages off in the extension's Settings.
 
 The extension's toolbar button says in one line whether it is saving your chats and, if not, what to do (install or
 start Interlatch). It follows the browser's language (English or Japanese) and shows each site's last sync and any
 error, with **Sync now**, **Paused**, the dashboard's port (11524 unless you changed `[server] port`) and how far back the first
-sync goes. It reads only claude.ai and chatgpt.com and sends only to `http://127.0.0.1`. The dashboard takes chats
+sync goes. It reads only claude.ai, chatgpt.com and hark.com and sends only to `http://127.0.0.1`. The dashboard takes chats
 only from this computer, with a header no web page can send. The extension uses the sites' internal endpoints, not a
 published API: when a site changes them, the toolbar button shows the error until a new version of the extension
 catches up. The store copy updates itself. A copy loaded from the folder doesn't: after an Interlatch update the
 dashboard refreshes the folder, and Chrome loads the new version when it restarts (or with the reload button on
 `chrome://extensions`).
+
+### Hark
+
+[Hark](https://hark.com) keeps its chats on its servers, and the Hark Mac app is a window onto hark.com that stores none
+of them. Hark has no data export, so the browser extension is the only way in: keep a hark.com tab open in the browser
+the extension is in, and it saves your chats as it does on the other sites.
+
+Hark has one main chat that never ends and one chat per Hark project, so each chat is saved one day at a time (your
+local day): a session per chat per day, with your prompts, Hark's replies and thinking, its scheduled check-ins, and
+the tools it used, such as a browser run with its steps, or files and shell on your Mac. Days of the main chat are
+under `hark.com`, a project's under `hark.com/<project>`. The extension leaves out the sign-in screens Hark asks you to
+fill in, screenshots and live-view links (agent `hark`, `source = hark-capture`).
+
+When the Hark app is installed, **Sources › Web chats › Hark** also shows what the app's log on this Mac says
+(`~/Library/Logs/com.harklabs.hark.mac/shell.log`): the app's version, whether it is running and when it was launched,
+and its *device link*, the connection through which Hark's assistant uses tools on this Mac: when it connected, which
+tools it offers, and recent warnings. The log doesn't list each tool Hark ran; those are in the saved chats. Home's
+Agents card shows the app as **Running**, **Not running** or **Link trouble**. Nothing is sent to Hark.
 
 ### Screening imported chats
 

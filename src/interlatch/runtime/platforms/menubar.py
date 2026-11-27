@@ -31,7 +31,7 @@ POLL_S = 30  # how often the icon catches up with what other processes did
 POLL_BUSY_S = 4  # while something runs, so the icon settles soon after it ends
 TITLE_MAX = 48
 # imported chats are not work done on this computer; the hub's copies of other computers' sessions are ("remote")
-RECENT_SKIP = ("history", "chatgpt-export", "claude-ai-export")
+RECENT_SKIP = ("history", "chatgpt-export", "claude-ai-export", "hark-capture")
 JOB_LABELS = {"sync": "Syncing", "push": "Sending to the hub", "import": "Importing chats",
               "screen": "Screening imported chats", "update": "Updating Interlatch", "themes": "Grouping glossary themes",
               "analyze": "Analyzing", "glossary": "Updating the glossary", "review": "Writing the weekly review",
