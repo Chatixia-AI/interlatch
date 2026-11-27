@@ -101,9 +101,9 @@ def test_no_folder_without_an_extension(tmp_path, monkeypatch):
 def test_the_shipped_manifest():
     manifest = json.loads((browser_extension.BUNDLED / "manifest.json").read_text())
     assert manifest["manifest_version"] == 3
-    # it reads only the two sites, and sends only to this computer's dashboard
+    # it reads only the three sites, and sends only to this computer's dashboard
     assert manifest["host_permissions"] == ["http://127.0.0.1/*"] and manifest["permissions"] == ["storage"]
-    assert manifest["content_scripts"][0]["matches"] == ["https://claude.ai/*", "https://chatgpt.com/*"]
+    assert manifest["content_scripts"][0]["matches"] == ["https://claude.ai/*", "https://chatgpt.com/*", "https://hark.com/*"]
     assert manifest["content_scripts"][0]["js"] == ["overlay.js", "capture.js"]  # capture.js calls the overlay
     # the toolbar icon: a pause sign by default, and background.js puts the colour one on a tab of one of the sites
     assert set(manifest["action"]["default_icon"].values()).isdisjoint(manifest["icons"].values())

@@ -1,6 +1,6 @@
 /* Interlatch: save web chats. The service worker: the one part that talks to the dashboard on this computer.
 
-capture.js runs in claude.ai and chatgpt.com tabs and reads the chats there; a page on https can't call
+capture.js runs in claude.ai, chatgpt.com and hark.com tabs and reads the chats there; a page on https can't call
 http://127.0.0.1, so it hands each chat here and this sends it to POST /api/capture (the dashboard's
 chat_import.capture). The dashboard takes it only from this computer, with the X-Interlatch header no web page can
 send it. */
@@ -63,7 +63,7 @@ const RED = "#c92a2a";
 const GREEN = "#0c7c60";
 
 async function failing() {
-  const sites = await chrome.storage.local.get(["sync:claude-ai", "sync:chatgpt"]);
+  const sites = await chrome.storage.local.get(["sync:claude-ai", "sync:chatgpt", "sync:hark"]);
   return { sites: Object.values(sites), bad: Object.values(sites).some((st) => st?.error && !st.quiet) };
 }
 

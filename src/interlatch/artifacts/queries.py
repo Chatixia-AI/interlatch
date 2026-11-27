@@ -31,7 +31,7 @@ def status_of(row: dict, local_machine: str | None = None) -> str:
         return "link"
     if row["kind"] == "commit":
         return "commit"
-    if (row.get("meta") or {}).get("where") or row.get("agent") in ("claude-ai", "chatgpt"):
+    if (row.get("meta") or {}).get("where") or row.get("agent") in ("claude-ai", "chatgpt", "hark"):
         return "chat"
     if local_machine and row.get("machine_id") and row["machine_id"] != local_machine:
         return "elsewhere"

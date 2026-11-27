@@ -3,7 +3,7 @@
     "message": "Interlatch: Web チャットを保存"
   },
   "description": {
-    "message": "claude.ai と ChatGPT のチャットを、サイトを使うたびにこのコンピューターの Interlatch ダッシュボードへ送ります。"
+    "message": "claude.ai、ChatGPT、Hark のチャットを、サイトを使うたびにこのコンピューターの Interlatch ダッシュボードへ送ります。"
   },
   "installUrl": {
     "message": "https://interlatch.com/docs/ja/install/"
@@ -24,7 +24,7 @@
     "message": "接続しました"
   },
   "stWaitingDetail": {
-    "message": "claude.ai か chatgpt.com を開くと保存が始まります。"
+    "message": "claude.ai、chatgpt.com、hark.com のどれかを開くと保存が始まります。"
   },
   "stPaused": {
     "message": "一時停止中"
@@ -75,7 +75,7 @@
     "message": "サイト"
   },
   "howItWorks": {
-    "message": "チャットを読むのは claude.ai か chatgpt.com のタブが開いている間です（5 分ごと、そしてチャットを離れた少し後）。それより前のチャットはデータエクスポートから取り込みます（ダッシュボードのソース）。クリックすると説明を開きます。"
+    "message": "チャットを読むのは claude.ai、chatgpt.com、hark.com のタブが開いている間です（5 分ごと、そしてチャットを離れた少し後）。それより前の claude.ai と ChatGPT のチャットはデータエクスポートから取り込みます（ダッシュボードのソース）。クリックすると説明を開きます。"
   },
   "siteNotYet": {
     "message": "まだ同期していません。タブを開くか再読み込みしてください"
@@ -117,7 +117,7 @@
     "message": "$1 日前"
   },
   "noTab": {
-    "message": "claude.ai か chatgpt.com のタブから応答がありません。タブを再読み込みしてください。拡張を読み込む前に開いたタブでは動きません。"
+    "message": "claude.ai、chatgpt.com、hark.com のタブから応答がありません。タブを再読み込みしてください。拡張を読み込む前に開いたタブでは動きません。"
   },
   "syncNow": {
     "message": "今すぐ同期"
@@ -234,13 +234,13 @@
     "message": "保存を始める前に"
   },
   "wlIntro": {
-    "message": "この拡張機能は、claude.ai と ChatGPT のチャットをコンピューター上のアプリ Interlatch に保存し、あとで検索したり見つけ直したりできるようにします。"
+    "message": "この拡張機能は、claude.ai、ChatGPT、Hark のチャットをコンピューター上のアプリ Interlatch に保存し、あとで検索したり見つけ直したりできるようにします。"
   },
   "wlReadsTitle": {
     "message": "読み取るもの"
   },
   "wlReads": {
-    "message": "claude.ai と chatgpt.com のチャット（タイトル、メッセージ、プロジェクト名）を、あなた自身のログインで読み取ります。一時チャットは対象外です。ほかのサイトは読み取りません。"
+    "message": "claude.ai、chatgpt.com、hark.com のチャット（タイトル、メッセージ、プロジェクト名）を、あなた自身のログインで読み取ります。一時チャットと、Hark が入力を求めるサインイン画面は対象外です。ほかのサイトは読み取りません。"
   },
   "wlGoesTitle": {
     "message": "送り先"
@@ -270,7 +270,7 @@
     "message": "今はしない"
   },
   "wlStarted": {
-    "message": "保存を開始しました。claude.ai か chatgpt.com を開くか、開いているタブを再読み込みしてください。"
+    "message": "保存を開始しました。claude.ai、chatgpt.com、hark.com のどれかを開くか、開いているタブを再読み込みしてください。"
   },
   "wlLaterDone": {
     "message": "何も読み取っていません。ツールバーのボタンからいつでも開始できます。"

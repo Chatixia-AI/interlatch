@@ -30,7 +30,8 @@ from ..sources import chatgpt as chatgpt_export
 from ..sources.claude import export as claude_export
 from ..core.util import utcnow_iso
 from ..core.sessions import NOT_ANALYZED_CAPTURED, NOT_ANALYZED_CHAT
-from ..sources.chats import CHATGPT, CLAUDE_AI, FORMATS, Format
+from ..sources import hark as hark_chats
+from ..sources.chats import CHATGPT, CLAUDE_AI, FORMATS, HARK, Format
 
 log = logging.getLogger("interlatch.chat_import")
 
@@ -269,7 +270,7 @@ _CHAT_ID_RE = re.compile(r"[0-9A-Za-z_-]{1,100}")  # a chat's id names its archi
 
 def capture(cfg, conn, key: str, conv, *, analyze: bool = False) -> dict:
     """One chat the browser extension (browser_extension/) read from claude.ai or chatgpt.com, in the JSON a data
-    export holds, stored as an import stores it: not analyzed automatically, unchanged chats left alone. Its latest
+    export holds (from hark.com: one day of a chat, sources/hark.py), stored as an import stores it: not analyzed automatically, unchanged chats left alone. Its latest
     copy is kept as archive/<format>/captured/<id>/conversations.json.gz, where reparse_archived finds it."""
     from ..storage.kv import kv_get, kv_set
     from .deletion import forgotten_ids
@@ -277,8 +278,9 @@ def capture(cfg, conn, key: str, conv, *, analyze: bool = False) -> dict:
 
     fmt = next((f for f in FORMATS if f.key == key), None)
     if fmt is None or not isinstance(conv, dict):
-        raise ExportError("not a claude.ai or ChatGPT chat")
-    if not (chatgpt_export.is_chatgpt([conv]) if fmt is CHATGPT else claude_export.is_claude([conv])):
+        raise ExportError("not a claude.ai, ChatGPT or Hark chat")
+    recognized = {CHATGPT: chatgpt_export.is_chatgpt, HARK: hark_chats.is_hark}.get(fmt, claude_export.is_claude)
+    if not recognized([conv]):
         raise ExportError(f"not a {fmt.label} chat")
     sid = fmt.module.conversation_id(conv)
     if not isinstance(sid, str) or not _CHAT_ID_RE.fullmatch(sid):
@@ -379,7 +381,8 @@ def import_status(conn) -> dict:
     for fmt in FORMATS:
         r = conn.execute("SELECT COUNT(*), SUM(analysis_status = 'done') FROM sessions WHERE source = ?", (fmt.source,)).fetchone()
         last = stored(fmt.last_import_key)
-        out[fmt.key] = {"label": fmt.label, "agent": fmt.agent, "sessions": r[0] or 0, "analyzed": r[1] or 0, "last_import": last,
+        out[fmt.key] = {"label": fmt.label, "agent": fmt.agent, "exportable": fmt.exportable, "sessions": r[0] or 0,
+                        "analyzed": r[1] or 0, "last_import": last,
                         "last_capture": stored(fmt.last_capture_key),
                         "screen": screen_status(conn, fmt.source)}
     return out

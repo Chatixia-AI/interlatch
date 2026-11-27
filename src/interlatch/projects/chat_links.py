@@ -1,4 +1,4 @@
-"""Which of your coding projects a web chat (claude.ai, ChatGPT) is about: a suggestion on the chat, never a move.
+"""Which of your coding projects a web chat (claude.ai, ChatGPT, Hark) is about: a suggestion on the chat, never a move.
 
 A chat stays under claude.ai or chatgpt.com; its `link_*` columns say which project it most likely belongs to, how
 sure that is, and who said so. Several steps suggest, each only where a surer one hasn't:
@@ -37,7 +37,7 @@ _COMMON = {"app", "apps", "web", "site", "website", "api", "server", "client", "
            "demo", "docs", "project", "projects", "main", "code", "tools", "tool", "data", "home", "work", "notes",
            "scripts", "src", "lib", "core", "game", "blog", "mobile", "admin", "dashboard", "service", "bot", "chat",
            "agent", "agents", "config", "setup", "temp", "tmp", "sandbox", "playground", "personal"}
-_SITE_RE = re.compile(r"^(claude\.ai|chatgpt\.com)/(.+)$")
+_SITE_RE = re.compile(r"^(claude\.ai|chatgpt\.com|hark\.com)/(.+)$")
 
 
 def _norm(s: str) -> str:

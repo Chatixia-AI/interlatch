@@ -961,6 +961,7 @@ mark { background: var(--accent-wash-2); color: inherit; border-radius: 3px; pad
 .agent-tag.a-opencode { --c: var(--series-6); }
 .agent-tag.a-claude-ai { --c: var(--series-2); }
 .agent-tag.a-chatgpt { --c: var(--series-5); }
+.agent-tag.a-hark { --c: var(--series-1); }
 /* Sources: one list per kind of source; each row opens to its checks and actions */
 .narrow-page.wide { max-width: 980px !important; }
 .card.src-list { padding: 0; margin-bottom: 18px; overflow: hidden; }
@@ -1013,6 +1014,7 @@ tr:hover .cell-bar i:not(.part) { background: var(--chart-strong); }
 .src-dot.a-opencode { --c: var(--series-6); }
 .src-dot.a-claude-ai { --c: var(--series-2); }
 .src-dot.a-chatgpt { --c: var(--series-5); }
+.src-dot.a-hark { --c: var(--series-1); }
 .src-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .src-title b { font-weight: 600; font-size: 14px; white-space: nowrap; }
 .src-title small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

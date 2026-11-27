@@ -24,8 +24,9 @@ levels, and the team you field (which agents, in what order), with your board na
 titles or prompts. Battles are worked out on your computer from the published sheets; **Leave the arena** (or leaving
 the board) deletes your sheet ([The arena](party.md#the-arena)).
 Importing a claude.ai or ChatGPT export reads only the chats, never the account files (`users.json`, `user.json`).
-The browser extension, if you load it, reads chats only on claude.ai and chatgpt.com, with your own sign-in, and sends
-them only to the dashboard on this computer ([details](#browser-extension)).
+The browser extension, if you load it, reads chats only on claude.ai, chatgpt.com and hark.com, with your own sign-in, and
+sends them only to the dashboard on this computer ([details](#browser-extension)). On a Mac with the Hark app, the
+dashboard reads the app's log to show whether it runs and is linked to this Mac; that stays on the computer.
 To warn before a suggested line lands in a public repository, Interlatch runs `gh repo view` with your own `gh` login
 for projects with a GitHub remote; that sends GitHub the repository's name and nothing else, and the answer is
 remembered for a week. Without `gh` nothing is sent ([Suggestions](suggestions.md#privacy)).
@@ -145,16 +146,17 @@ the transcript the agent wrote.
 ## Browser extension
 
 This is the privacy policy of **Interlatch: save web chats**, the browser extension
-([how it works](sources.md#saving-chats-as-you-use-the-sites)). Its one purpose is saving your claude.ai and ChatGPT
-chats into Interlatch on your computer. It reads nothing until you choose **Start saving** on the page that opens when
+([how it works](sources.md#saving-chats-as-you-use-the-sites)). Its one purpose is saving your claude.ai, ChatGPT
+and Hark chats into Interlatch on your computer. It reads nothing until you choose **Start saving** on the page that opens when
 you install it.
 
 **What it handles**
 
-- **Your chats on claude.ai and chatgpt.com:** titles, messages, project names and the other details each site returns
-  for a chat. Temporary chats are left out. Anything you wrote in a chat is part of it, so it can include personal
+- **Your chats on claude.ai, chatgpt.com and hark.com:** titles, messages, project names and the other details each site
+  returns for a chat. Temporary chats are left out. On hark.com it keeps only messages, the tools Hark used and project
+  names, and leaves out the sign-in screens Hark asks you to fill in, screenshots and live-view links. Anything you wrote in a chat is part of it, so it can include personal
   information.
-- **Your sign-in to those two sites:** it asks each site from a tab where you are already signed in, the way the site's
+- **Your sign-in to those three sites:** it asks each site from a tab where you are already signed in, the way the site's
   own page does. On ChatGPT that means reading the site's session token and device id for those requests. They go only
   to chatgpt.com: the extension doesn't store them or send them to the dashboard.
 - **Its own settings and progress:** the dashboard's port, how far the last sync got and which chats it has already

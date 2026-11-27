@@ -1,9 +1,9 @@
-/* Interlatch: save web chats. Runs in claude.ai and chatgpt.com tabs.
+/* Interlatch: save web chats. Runs in claude.ai, chatgpt.com and hark.com tabs.
 
 While a tab of the site is open (on load, then every few minutes), it asks the site's own conversation list which
 chats changed since the last sync, reads each one the way the site's page does (same origin, your own sign-in), and
 hands it to background.js for the dashboard. A chat is read in the JSON a data export holds, so the dashboard stores
-it as an import would, as the same session. The first sync goes back `days` (30 by default); older chats come in from a
+it as an import would, as the same session. Hark has no data export: its chats go one day at a time (hark, below). The first sync goes back `days` (30 by default); older chats come in from a
 data export. Temporary chats are left out. A sync reads at most MAX chats and the next one follows a few minutes
 later, so a first sync with many chats doesn't run into the site's rate limit; when the site asks to slow down anyway
 (429), the sync waits longer.
@@ -12,7 +12,7 @@ These are the sites' internal endpoints, not a published API: if a site changes 
 "use strict";
 
 (() => {
-  const SITE = { "claude.ai": "claude-ai", "chatgpt.com": "chatgpt" }[location.hostname];
+  const SITE = { "claude.ai": "claude-ai", "chatgpt.com": "chatgpt", "hark.com": "hark" }[location.hostname];
   if (!SITE) return;
   const KEY = `sync:${SITE}`;
   const LOCK = `lock:${SITE}`; // one tab syncs a site at a time
@@ -133,7 +133,81 @@ These are the sites' internal endpoints, not a published API: if a site changes 
     },
   };
 
-  const site = SITE === "claude-ai" ? claude : chatgpt;
+  /* hark.com: one chat that never ends (`main`) and one per Hark project. A chat is sent one day at a time (local time)
+  so the main chat doesn't become one endless session: <chat id>_<YYYY-MM-DD>, the day's messages and the work Hark
+  dispatched that day (sources/hark.py). A changed chat is read back, newest page first, to the start of the first day
+  that can have changed, so each day sent is whole. Only the fields Interlatch reads are kept: never the sign-in
+  screens Hark asks you to fill in (its `asks`), screenshots or live-view links. */
+  const HARK_PAGES = 100; // pages of one chat in one sync: a first sync of a busy main chat
+  const pad = (n) => String(n).padStart(2, "0");
+  const dayOf = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const dayStart = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const num = (v) => (typeof v === "number" && v > 0 ? v : 0);
+  const slimCall = (c) => ({ toolName: c.toolName, status: c.status, input: c.input, dispatchId: c.dispatchId,
+    dispatchedAt: c.dispatchedAt, updatedAt: c.updatedAt });
+  const slimMessage = (m) => ({ id: m.id, role: m.role, content: typeof m.content === "string" ? m.content : "",
+    timestamp: m.timestamp, source: m.source, thought: typeof m.thought === "string" ? m.thought : null,
+    task_name: m.task_name ?? null, brief: m.brief ?? null, jobStatus: m.jobStatus ?? null, threadId: m.threadId ?? null,
+    toolCalls: Array.isArray(m.toolCalls) ? m.toolCalls.filter((c) => c && typeof c === "object").map(slimCall) : [] });
+  const slimPanel = (p, at) => ({ dispatchId: p.dispatchId, kind: p.kind, status: p.status, narrative: p.narrative,
+    latestNarration: p.latestNarration, startedAt: num(p.startedAt) || at,
+    phases: Array.isArray(p.phases) ? p.phases.map((x) => ({ title: x?.title, status: x?.status })) : [] });
+
+  const hark = {
+    signedIn: () => getJSON("/api/conversations"),
+    async *changed(since) {
+      const { conversations } = await getJSON("/api/conversations");
+      for (const c of Array.isArray(conversations) ? conversations : []) {
+        if (!c?.id || time(c.activityAt || c.updatedAt) < since) continue;
+        yield* await this.days(c, dayStart(since));
+      }
+    },
+    async days(c, from) {
+      const messages = new Map(), panels = new Map();
+      let url = `/api/messages/history?conversationId=${encodeURIComponent(c.id)}&v=2`;
+      for (let n = 0; url && n < HARK_PAGES; n++) {
+        if (n) await sleep(PAUSE);
+        const page = await getJSON(url);
+        let older = false;
+        for (const m of Object.values(page.messages || {})) {
+          if (!m?.id || (m.role !== "user" && m.role !== "assistant")) continue;
+          if (num(m.timestamp) < from) { older = true; continue; }
+          messages.set(m.id, slimMessage(m));
+        }
+        for (const w of Object.values(page.windows || {})) {
+          for (const p of w?.panels || []) {
+            const at = num(p?.startedAt) || num(w.at);
+            if (p?.dispatchId && at >= from) panels.set(p.dispatchId, slimPanel(p, at));
+          }
+        }
+        const back = page.older;
+        url = !older && back?.hasMore && back.cursor ? `/api/messages/history?conversationId=${encodeURIComponent(c.id)}&v=2`
+          + `&before=${encodeURIComponent(back.cursor.id)}&beforeCreatedAt=${encodeURIComponent(back.cursor.createdAt)}` : null;
+      }
+      const byDay = new Map();
+      const day = (key) => byDay.get(key) || byDay.set(key, { messages: [], panels: [], updated: 0 }).get(key);
+      for (const m of messages.values()) {
+        const d = day(dayOf(m.timestamp));
+        d.messages.push(m);
+        d.updated = Math.max(d.updated, m.timestamp, ...m.toolCalls.map((x) => num(x.updatedAt)));
+      }
+      for (const p of panels.values()) {
+        const d = day(dayOf(p.startedAt));
+        d.panels.push(p);
+        d.updated = Math.max(d.updated, p.startedAt);
+      }
+      const chat = { id: c.id, kind: c.kind, title: c.title ?? null, createdAt: c.createdAt };
+      return [...byDay].filter(([, d]) => d.messages.length).sort(([a], [b]) => (a < b ? 1 : -1)).map(([key, d]) => {
+        d.messages.sort((a, b) => a.timestamp - b.timestamp);
+        const id = `${c.id}_${key}`;
+        return { id, updated: String(d.updated),
+          conv: { hark: 1, id, day: key, updated: d.updated, conversation: chat, messages: d.messages, panels: d.panels } };
+      }); // newest day first, as the other sites list their chats
+    },
+    read: async (it) => it.conv, // read already, with the chat's pages
+  };
+
+  const site = { "claude-ai": claude, chatgpt, hark }[SITE];
   let running = false;
   let wanted = false; // a sync you'd expect to hear about is due: not the timer's, which would interrupt a chat you're in
 

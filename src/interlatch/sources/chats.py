@@ -1,11 +1,13 @@
-"""The chat exports Interlatch imports (claude.ai, ChatGPT): each one's name, the agent and source its sessions
-are recorded under, and the module that decodes it."""
+"""The web chats Interlatch stores (claude.ai and ChatGPT from a data export or the browser extension, Hark from the
+extension only): each one's name, the agent and source its sessions are recorded under, and the module that decodes
+it."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from . import chatgpt as chatgpt_export
+from . import hark as hark_chats
 from .claude import export as claude_export
 
 
@@ -14,6 +16,7 @@ class Format:
     key: str  # kv and archive name
     label: str
     module: object
+    exportable: bool = True  # the site offers a data export to import (Hark doesn't)
 
     @property
     def agent(self) -> str:
@@ -34,4 +37,5 @@ class Format:
 
 CLAUDE_AI = Format("claude-ai", "claude.ai", claude_export)
 CHATGPT = Format("chatgpt", "ChatGPT", chatgpt_export)
-FORMATS = (CLAUDE_AI, CHATGPT)
+HARK = Format("hark", "Hark", hark_chats, exportable=False)
+FORMATS = (CLAUDE_AI, CHATGPT, HARK)
