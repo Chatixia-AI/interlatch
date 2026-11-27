@@ -84,7 +84,7 @@ jobs:
         with:
           fetch-depth: 0  # the version comes from the tags
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           enable-cache: false  # a release never restores a cache another run could have written
       - run: uv run --locked pytest -q
@@ -126,7 +126,7 @@ jobs:
           ref: v${{ needs.plan.outputs.version }}
           fetch-depth: 0  # the version comes from the tag
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           enable-cache: false  # a release never restores a cache another run could have written
       - run: uv build
@@ -250,7 +250,7 @@ jobs:
           ref: ${{ needs.plan.outputs.version != '' && format('v{0}', needs.plan.outputs.version) || github.sha }}
           fetch-depth: 0  # the version comes from the tags
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           enable-cache: false  # a release never restores a cache another run could have written
 
