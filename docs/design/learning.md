@@ -6,8 +6,8 @@ Status: proposal, 2026-10-08. Built so far: steps 1 and 2 of the order of work (
 see [Case files](../analysis.md#case-files)), step 4 (the hub), and on 2026-10-09
 [Learn from your work](../dashboard.md#pages): every lesson in a library by topic, each told at once (a case file's
 scene, question and answer, the explanation, the leads ruled out, and the principle, checks and diagram the analysis
-found), with work notes and revisits kept in the browser. Asking before telling stays in All knowledge. The
-[roadmap](../../ROADMAP.md) says when the rest, measurement included, is planned.
+found), with work notes and revisits kept in the browser. Asking before telling stays in All knowledge. The rest,
+measurement included, is tracked as [issues](https://github.com/Chatixia-AI/interlatch/issues) with no dates.
 
 Interlatch writes down what every session taught, and today almost all of it goes to the agents: the MCP tools and
 the start-of-session notes. People meet the same lessons as lists. On a computer that shares with a team hub, its
