@@ -4,7 +4,8 @@ Everything the dashboard asks for, ready to paste, checked against its forms on 
 `chatixia.dev@gmail.com` at <https://chrome.google.com/webstore/devconsole>. Publish **Unlisted** first; go **Public**
 once a real install from the store has worked.
 
-**Status:** 1.1.0 published as Unlisted (submitted 2026-11-02, live and installed from the store by 2026-11-08). Item ID
+**Status:** 1.1.0 published as Unlisted (submitted 2026-11-02, live and installed from the store by 2026-11-08). 1.2.0
+adds hark.com (Interlatch 0.29.14): a new host permission, so its review can take longer; the text below is 1.2.0's. Item ID
 `dfoaabcfgmpgkfjaemipocpjhmenlheb`, listing <https://chromewebstore.google.com/detail/dfoaabcfgmpgkfjaemipocpjhmenlheb>.
 The dashboard's guide and the docs install from the store now, so a change to `src/interlatch/browser_extension/`
 reaches users only once a new version is uploaded and approved here; an Interlatch release alone updates only copies
@@ -29,11 +30,11 @@ use the **Package** page. Each published version needs a higher `version` in `ma
 **Description (English):**
 
 ```text
-Keep your claude.ai and ChatGPT chats in Interlatch, on your own computer, so you can search them and find them again.
+Keep your claude.ai, ChatGPT and Hark chats in Interlatch, on your own computer, so you can search them and find them again.
 
 It saves them as you use the sites: when a tab loads, every 5 minutes, and soon after you leave a chat.
 
-What it reads: your chats on claude.ai and chatgpt.com, with their titles, messages and project names, using your own sign-in. Temporary chats are left out. It reads nothing on other sites.
+What it reads: your chats on claude.ai, chatgpt.com and hark.com, with their titles, messages and project names, using your own sign-in. Temporary chats, and the sign-in screens Hark asks you to fill in, are left out. It reads nothing on other sites.
 
 Where it goes: only to the Interlatch dashboard on this computer (127.0.0.1). The extension has no server, no analytics and no ads, and Interlatch's authors never receive your chats.
 
@@ -41,17 +42,17 @@ You stay in charge: it reads nothing until you choose Start saving, says on the 
 
 It needs Interlatch, a free, open-source app on your computer: https://interlatch.com/docs/install/
 
-Interlatch is an independent project, not affiliated with Anthropic or OpenAI.
+Interlatch is an independent project, not affiliated with Anthropic, OpenAI or Hark.
 ```
 
 **Description (Japanese):**
 
 ```text
-claude.ai と ChatGPT のチャットを、あなたのコンピューター上の Interlatch に保存し、あとで検索したり見つけ直したりできるようにします。
+claude.ai、ChatGPT、Hark のチャットを、あなたのコンピューター上の Interlatch に保存し、あとで検索したり見つけ直したりできるようにします。
 
 サイトを使うたびに保存します。タブを読み込んだとき、5 分ごと、チャットを離れた少しあとに動きます。
 
-読み取るもの: claude.ai と chatgpt.com のチャット（タイトル、メッセージ、プロジェクト名）を、あなた自身のログインで読み取ります。一時チャットは対象外です。ほかのサイトは読み取りません。
+読み取るもの: claude.ai、chatgpt.com、hark.com のチャット（タイトル、メッセージ、プロジェクト名）を、あなた自身のログインで読み取ります。一時チャットと、Hark が入力を求めるサインイン画面は対象外です。ほかのサイトは読み取りません。
 
 送り先: このコンピューターの Interlatch ダッシュボード（127.0.0.1）だけです。拡張機能にはサーバーも分析ツールも広告もなく、Interlatch の作者にチャットが届くことはありません。
 
@@ -59,7 +60,7 @@ claude.ai と ChatGPT のチャットを、あなたのコンピューター上�
 
 コンピューター上の無料のオープンソースアプリ Interlatch が必要です: https://interlatch.com/docs/ja/install/
 
-Interlatch は独立したプロジェクトで、Anthropic や OpenAI とは関係ありません。
+Interlatch は独立したプロジェクトで、Anthropic、OpenAI、Hark とは関係ありません。
 ```
 
 **Screenshots:** `screenshots/1-asks-first.png`, `2-says-where-chats-go.png`, `3-toolbar-button.png` (1280×800, 24-bit with
@@ -78,7 +79,7 @@ real chats or other companies' pages appear.
 **Single purpose:**
 
 ```text
-Saves the user's own claude.ai and ChatGPT chats into the Interlatch app on the user's computer, so they can search them and find them again.
+Saves the user's own claude.ai, ChatGPT and Hark chats into the Interlatch app on the user's computer, so they can search them and find them again.
 ```
 
 **Justification for `storage`:**
@@ -90,7 +91,7 @@ Keeps the extension's settings (dashboard port, Paused, first-sync range, whethe
 **Host permission justification** (one box, for the sites and the dashboard together):
 
 ```text
-https://claude.ai/* and https://chatgpt.com/*: reading the user's chats on these two sites is the extension's purpose. It asks each site for the chats that changed, from a tab where the user is already signed in, as the site's own page does, and shows a small message on the page saying that it's saving, with a Pause button. It runs on no other sites.
+https://claude.ai/*, https://chatgpt.com/* and https://hark.com/*: reading the user's chats on these three sites is the extension's purpose. It asks each site for the chats that changed, from a tab where the user is already signed in, as the site's own page does, and shows a small message on the page saying that it's saving, with a Pause button. It runs on no other sites.
 
 http://127.0.0.1/*: the only place the extension sends anything, the Interlatch dashboard, an app on the user's own computer. A page on https can't call it, so the service worker does. The port is the user's setting (11524 by default), so no single port can be named. Nothing leaves the computer on this connection, which is why it is plain HTTP.
 ```
